@@ -959,27 +959,78 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   margin: 4px 0;
 }
 
-/* ===== Tela de carregando ===== */
+/* ===== Tela de carregando (tema colmeia) ===== */
 .board-loading {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 400px;
+  border-radius: 20px;
+  background: linear-gradient(120deg, #FFF7D6, #FFE082, #FFC94D, #FFF3C4, #FFE9A8);
+  background-size: 300% 300%;
+  animation: colmeia-gradient 7s ease infinite;
+}
+
+.board-loading-glass {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 25% 30%, rgba(255,255,255,0.55), transparent 55%),
+    radial-gradient(circle at 75% 65%, rgba(255,255,255,0.35), transparent 55%),
+    radial-gradient(circle at 50% 90%, rgba(255,255,255,0.25), transparent 60%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: colmeia-glass-move 9s ease-in-out infinite;
+}
+
+.board-loading-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 80px 20px;
-  width: 100%;
-  opacity: 0.7;
+  gap: 14px;
 }
-.board-loading-spinner {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 3px solid var(--border-color, #e2e2e2);
-  border-top-color: #0000FB;
-  animation: colmeia-spin 0.8s linear infinite;
+
+.board-loading-bee {
+  font-size: 40px;
+  animation: colmeia-bee-float 2.4s ease-in-out infinite;
 }
-@keyframes colmeia-spin {
-  to { transform: rotate(360deg); }
+
+.board-loading-text {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: #7A5B00;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+}
+
+.board-loading-text.fade-in {
+  animation: colmeia-text-fade 0.4s ease;
+}
+
+@keyframes colmeia-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes colmeia-glass-move {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6%, -6%) scale(1.08); }
+}
+
+@keyframes colmeia-bee-float {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-10px) rotate(4deg); }
+}
+
+@keyframes colmeia-text-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ===== Tarefa atrasada ===== */
@@ -1079,3 +1130,99 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .wf-line.done { background: #2F9E44; }
 
 .tipo-tag-icon { font-size: 16px; }
+
+.nav-arrow.nav-deliver {
+  color: #2F9E44;
+  border-color: #2F9E44;
+}
+.nav-arrow.nav-deliver:hover {
+  background: #2F9E44;
+  color: #fff;
+}
+
+/* ===== Modal "Ver regra" ===== */
+.rule-modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(10,10,20,0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.rule-modal-overlay[hidden] { display: none; }
+.rule-modal {
+  width: 420px; max-height: 80vh;
+  background: var(--card-bg);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(10,10,20,0.3);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.rule-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; border-bottom: 1px solid var(--border);
+}
+.rule-modal-header h3 { font-family: var(--font-display); font-size: 15px; }
+.rule-modal-header button {
+  border: none; background: transparent; cursor: pointer; color: var(--text-muted);
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+}
+.rule-modal-header button svg { width: 16px; height: 16px; }
+.rule-modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+
+.rule-list { display: flex; flex-direction: column; gap: 8px; }
+.rule-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 10px;
+  background: var(--page-bg);
+}
+.rule-row.current { box-shadow: 0 0 0 1.5px #0000FB; }
+.rule-row-order {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--border-color, #e2e2e2);
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.rule-row-name { flex: 1; font-size: 13px; font-weight: 500; }
+.rule-row-status { font-size: 11px; font-weight: 600; opacity: 0.6; }
+.rule-row-status.done { color: #2F9E44; opacity: 1; }
+.rule-row-status.current { color: #0000FB; opacity: 1; }
+
+.rule-add-section { display: flex; flex-direction: column; gap: 8px; }
+.rule-add-search {
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 12px; font-family: inherit; font-size: 13px;
+  background: var(--page-bg); color: var(--text-primary);
+}
+.rule-add-list {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 180px; overflow-y: auto;
+}
+.rule-add-list button {
+  display: flex; align-items: center; gap: 8px;
+  border: none; background: transparent; text-align: left;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 7px 8px; border-radius: 8px; cursor: pointer;
+}
+.rule-add-list button:hover { background: var(--page-bg); }
+.rule-add-list .avatar { width: 24px; height: 24px; font-size: 10px; }
+
+/* ===== Modal "Card mãe" ===== */
+.mother-link {
+  font-size: 12.5px;
+  color: #0000FB;
+  font-weight: 600;
+  text-decoration: none;
+}
+.mother-link:hover { text-decoration: underline; }
+.mother-subtasks-list {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 12px;
+}
+.mother-subtask-row {
+  display: flex; align-items: center; gap: 10px;
+  border: none; background: var(--page-bg);
+  border-radius: 10px; padding: 10px 12px;
+  cursor: pointer; text-align: left;
+  font-family: inherit;
+}
+.mother-subtask-row.done { opacity: 0.55; }
+.mother-subtask-title { flex: 1; font-size: 13px; font-weight: 500; }
