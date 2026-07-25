@@ -91,8 +91,7 @@ async function carregarDadosPainelBeeon() {
  */
 function fotoDoDesigner(nomeDesigner) {
   if (!painelBeeonData || !painelBeeonData.photos) return null;
-  const alvo = normalizarParaComparar(nomeDesigner);
-  const chave = Object.keys(painelBeeonData.photos).find(d => normalizarParaComparar(d) === alvo);
+  const chave = Object.keys(painelBeeonData.photos).find(d => nomesCorrespondem(d, nomeDesigner));
   return chave ? painelBeeonData.photos[chave] : null;
 }
 
@@ -109,7 +108,8 @@ const ATENDIMENTO_PHOTOS_BEEON = {
 };
 
 function fotoDoAtendimento(nomeAtendimento) {
-  return ATENDIMENTO_PHOTOS_BEEON[nomeAtendimento] || null;
+  const chave = Object.keys(ATENDIMENTO_PHOTOS_BEEON).find(d => nomesCorrespondem(d, nomeAtendimento));
+  return chave ? ATENDIMENTO_PHOTOS_BEEON[chave] : null;
 }
 
 function avatarAtendimentoHTML(nome, sizeClass) {
@@ -799,8 +799,8 @@ function renderComentariosHTML(task) {
     return `<p class="comments-empty">Nenhum comentário ainda.</p>`;
   }
   return task.comments.map(c => `
-    <div class="comment-bubble ${c.autor === task.assignee ? "mine" : ""}">
-      <div class="comment-avatar"></div>
+    <div class="comment-bubble ${nomesCorrespondem(c.autor, task.assignee) ? "mine" : ""}">
+      ${avatarHTML(c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-author">${c.autor}</div>
         <div class="comment-text">${c.texto}</div>
@@ -1430,14 +1430,44 @@ function normalizarParaComparar(s) {
 }
 
 /**
+ * Compara dois nomes de forma flexível: reconhece "Manu" batendo com
+ * "Manuela Mendonça" (um é o começo do outro), além de acento e
+ * maiúsculas/minúsculas diferentes. Só entra em ação com pelo menos 3
+ * letras, pra não dar falso positivo com nomes muito curtos.
+ */
+function nomesCorrespondem(a, b) {
+  const na = normalizarParaComparar(a);
+  const nb = normalizarParaComparar(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.length < 3 || nb.length < 3) return false;
+  return na.startsWith(nb) || nb.startsWith(na);
+}
+
+/**
+ * Busca a foto de uma pessoa por nome, aceitando apelido/nome curto
+ * (ex: comentário do Runrun.it vem "Manuela Mendonça" mas no painel
+ * está só "Manu") — procura tanto nas fotos de designers quanto nas de
+ * atendimento.
+ */
+function buscarFotoPorNomeAproximado(nome) {
+  if (painelBeeonData && painelBeeonData.photos) {
+    const chave = Object.keys(painelBeeonData.photos).find(d => nomesCorrespondem(d, nome));
+    if (chave) return painelBeeonData.photos[chave];
+  }
+  const chaveAtend = Object.keys(ATENDIMENTO_PHOTOS_BEEON).find(d => nomesCorrespondem(d, nome));
+  if (chaveAtend) return ATENDIMENTO_PHOTOS_BEEON[chaveAtend];
+  return null;
+}
+
+/**
  * Acha a lista de clientes de um designer dentro do state do
  * painel-beeon, comparando o nome sem se importar com acento/maiúsculas
  * (ex: "Claudio" no Colmeia bate com "Cláudio" no painel).
  */
 function clientesDoDesignerNoPainel(nomeDesigner) {
   if (!painelBeeonData || !painelBeeonData.state) return [];
-  const alvo = normalizarParaComparar(nomeDesigner);
-  const chave = Object.keys(painelBeeonData.state).find(d => normalizarParaComparar(d) === alvo);
+  const chave = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, nomeDesigner));
   return chave ? (painelBeeonData.state[chave] || []) : [];
 }
 
