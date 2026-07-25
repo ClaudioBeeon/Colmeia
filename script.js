@@ -107,13 +107,77 @@ const ATENDIMENTO_PHOTOS_BEEON = {
   "Lucas": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833905/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_laranja_bem_claro_mantendo_as_372247_sdfav1.png",
 };
 
+// Pessoas cadastradas manualmente pelo coordenador (foto customizada e
+// apelidos vinculados), carregadas do backend do Colmeia.
+let pessoasSalvas = []; // [{nome, foto, aliases: [...]}]
+
+// Todo nome que o código encontra e mostra um avatar, guardado aqui pra
+// alimentar a tela de configuração de Pessoas. Chave = nome normalizado.
+const nomesVistos = new Map(); // nomeNormalizado -> { nomeOriginal, fotoAtual }
+
+function registrarNomeVisto(nome, foto) {
+  if (!nome) return;
+  const chave = normalizarParaComparar(nome);
+  if (!chave) return;
+  const existente = nomesVistos.get(chave);
+  nomesVistos.set(chave, {
+    nomeOriginal: nome,
+    fotoAtual: foto || (existente ? existente.fotoAtual : null),
+  });
+}
+
+/**
+ * Confere se o coordenador já cadastrou manualmente uma foto pra esse
+ * nome (ou um apelido dele). Tem prioridade sobre qualquer outra fonte.
+ */
+function resolverFotoManual(nome) {
+  const alvo = normalizarParaComparar(nome);
+  for (const p of pessoasSalvas) {
+    if (normalizarParaComparar(p.nome) === alvo) return p.foto || null;
+    if (p.aliases.some(a => normalizarParaComparar(a) === alvo)) return p.foto || null;
+  }
+  return null;
+}
+
+async function carregarPessoasSalvas() {
+  if (!COLMEIA_API_URL) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "listarPessoas" }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      pessoasSalvas = data.pessoas || [];
+    }
+  } catch (err) {
+    console.error("Falha ao carregar pessoas salvas:", err);
+  }
+}
+
+async function salvarPessoaNoBackend(nome, foto, aliases) {
+  if (!COLMEIA_API_URL || !nome) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "salvarPessoa", nome, foto, aliases }),
+    });
+    const data = await res.json();
+    return !!data.ok;
+  } catch (err) {
+    console.error("Falha ao salvar pessoa no backend:", err);
+    return false;
+  }
+}
+
 function fotoDoAtendimento(nomeAtendimento) {
   const chave = Object.keys(ATENDIMENTO_PHOTOS_BEEON).find(d => nomesCorrespondem(d, nomeAtendimento));
   return chave ? ATENDIMENTO_PHOTOS_BEEON[chave] : null;
 }
 
 function avatarAtendimentoHTML(nome, sizeClass) {
-  const foto = fotoDoAtendimento(nome) || fotoDoDesigner(nome);
+  const foto = resolverFotoManual(nome) || fotoDoAtendimento(nome) || fotoDoDesigner(nome);
+  registrarNomeVisto(nome, foto);
   if (foto) {
     return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nome}" alt="${nome}" title="${nome}" onerror="handleAvatarImgError(this)">`;
   }
@@ -149,10 +213,10 @@ function handleAvatarImgError(img) {
 }
 
 function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
-  // Prioridade: foto do painel-designers-beeon primeiro (é a fonte que
-  // o Claudio mantém manualmente); só usa a do Runrun.it se não achar
-  // nenhuma foto cadastrada no painel.
-  const foto = fotoDoDesigner(nomeDesigner) || avatarUrlDireto;
+  // Prioridade: 1) foto cadastrada manualmente pelo coordenador, 2) foto
+  // do painel-designers-beeon, 3) foto que veio do Runrun.it.
+  const foto = resolverFotoManual(nomeDesigner) || fotoDoDesigner(nomeDesigner) || avatarUrlDireto;
+  registrarNomeVisto(nomeDesigner, foto);
   if (foto) {
     return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nomeDesigner}" alt="${nomeDesigner}" title="${nomeDesigner}" onerror="handleAvatarImgError(this)">`;
   }
@@ -383,6 +447,90 @@ async function adicionarNaRegraNoBackend(workflowId, userId) {
     console.error("Falha ao adicionar na regra no Runrun.it:", err);
     return false;
   }
+}
+
+/**
+ * Abre o painel "Pessoas conhecidas" — lista todo nome que o Colmeia já
+ * viu na sessão atual, com a foto atual, e deixa o coordenador trocar a
+ * foto ou vincular apelidos (ex: "Manu" = "Manuela Mendonça").
+ */
+function abrirPainelPessoas() {
+  const overlay = document.getElementById("peopleModalOverlay");
+  overlay.hidden = false;
+  renderPainelPessoas();
+}
+
+function renderPainelPessoas() {
+  const body = document.getElementById("peopleModalBody");
+  const nomes = Array.from(nomesVistos.entries()).sort((a, b) => a[1].nomeOriginal.localeCompare(b[1].nomeOriginal));
+
+  if (nomes.length === 0) {
+    body.innerHTML = `<p class="workflow-seq-empty">Nenhum nome visto ainda nessa sessão — navegue pelo Colmeia (abra tarefas, veja clientes) e volte aqui.</p>`;
+    return;
+  }
+
+  body.innerHTML = nomes.map(([chave, info]) => {
+    const salvo = pessoasSalvas.find(p => normalizarParaComparar(p.nome) === chave);
+    const fotoAtual = resolverFotoManual(info.nomeOriginal) || info.fotoAtual || "";
+    const aliasesTexto = salvo ? salvo.aliases.join(", ") : "";
+    return `
+      <div class="people-row" data-chave="${chave}" data-nome-original="${info.nomeOriginal}">
+        <div class="people-row-top">
+          <div class="people-row-avatar">${avatarPreviewHTML(info.nomeOriginal, fotoAtual)}</div>
+          <span class="people-row-name">${info.nomeOriginal}</span>
+        </div>
+        <input type="text" class="people-row-input" data-campo="foto" placeholder="URL da foto" value="${fotoAtual}">
+        <input type="text" class="people-row-input" data-campo="aliases" placeholder="Apelidos, separados por vírgula (ex: Manu, Manuela)" value="${aliasesTexto}">
+        <button type="button" class="people-row-save" data-chave="${chave}">Salvar</button>
+        <span class="people-row-saved" data-chave-saved="${chave}"></span>
+      </div>
+    `;
+  }).join("");
+
+  body.querySelectorAll(".people-row-save").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const row = btn.closest(".people-row");
+      const nomeOriginal = row.dataset.nomeOriginal;
+      const foto = row.querySelector('[data-campo="foto"]').value.trim();
+      const aliasesTexto = row.querySelector('[data-campo="aliases"]').value.trim();
+      const aliases = aliasesTexto ? aliasesTexto.split(",").map(s => s.trim()).filter(Boolean) : [];
+
+      btn.disabled = true;
+      btn.textContent = "Salvando...";
+      const ok = await salvarPessoaNoBackend(nomeOriginal, foto, aliases);
+      btn.disabled = false;
+      btn.textContent = "Salvar";
+
+      if (ok) {
+        const idxSalvo = pessoasSalvas.findIndex(p => normalizarParaComparar(p.nome) === normalizarParaComparar(nomeOriginal));
+        const novoRegistro = { nome: nomeOriginal, foto, aliases };
+        if (idxSalvo !== -1) pessoasSalvas[idxSalvo] = novoRegistro;
+        else pessoasSalvas.push(novoRegistro);
+
+        const avisoEl = row.querySelector(".people-row-saved");
+        avisoEl.textContent = "✓ Salvo";
+        setTimeout(() => { avisoEl.textContent = ""; }, 2000);
+
+        // Atualiza as fotos em tudo que já está na tela agora.
+        render();
+        buildClientsPage();
+        buildAtendimentoPage();
+        buildTiposPage();
+        if (document.getElementById("taskDetail").classList.contains("visible")) renderDetail();
+      } else {
+        row.querySelector(".people-row-saved").textContent = "Erro ao salvar";
+      }
+    });
+  });
+}
+
+// Avatar simples só pra pré-visualização dentro do painel de pessoas
+// (não usa avatarHTML pra não registrar de novo o mesmo nome em loop).
+function avatarPreviewHTML(nome, foto) {
+  if (foto) {
+    return `<img class="avatar avatar-sm" src="${foto}" alt="${nome}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'avatar avatar-sm', textContent:'${initials(nome)}'}))">`;
+  }
+  return `<div class="avatar avatar-sm">${initials(nome)}</div>`;
 }
 
 /**
@@ -1094,6 +1242,9 @@ function renderSequenciaHTML(task) {
       `).join("")}
     </div>
     ${semNinguemNaFrente ? `
+      <button type="button" class="nav-arrow" id="navAddPersonBtn" title="Adicionar próxima pessoa na sequência">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
       <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Entregar tarefa (não tem mais ninguém na frente)">
         <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -1153,6 +1304,10 @@ function wireWorkflowArrows(task) {
       }
       await carregarSequencia(task);
     });
+  }
+  const addPersonBtn = document.getElementById("navAddPersonBtn");
+  if (addPersonBtn) {
+    addPersonBtn.addEventListener("click", () => abrirModalRegra(task));
   }
   const deliverBtn = document.getElementById("navDeliverBtn");
   if (deliverBtn) {
@@ -1217,7 +1372,7 @@ function renderDetail() {
           </div>
 
           <div class="status-wrap">
-            <button type="button" class="status-badge" id="statusBadge">${columnsDef.find(c => c.key === task.status)?.label || task.status}</button>
+            <button type="button" class="status-badge" id="statusBadge">${task.isMotherCard ? "Card mãe" : (columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa")}</button>
             <div class="status-menu" id="statusMenu">
               ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("")}
             </div>
@@ -1376,10 +1531,15 @@ function renderDetail() {
 
   const statusBadge = document.getElementById("statusBadge");
   const statusMenu = document.getElementById("statusMenu");
-  statusBadge.addEventListener("click", e => {
-    e.stopPropagation();
-    statusMenu.classList.toggle("open");
-  });
+  if (task.isMotherCard) {
+    statusBadge.disabled = true;
+    statusBadge.title = "Card mãe não tem coluna no Colmeia";
+  } else {
+    statusBadge.addEventListener("click", e => {
+      e.stopPropagation();
+      statusMenu.classList.toggle("open");
+    });
+  }
   statusMenu.querySelectorAll("button").forEach(opt => {
     opt.addEventListener("click", e => {
       e.stopPropagation();
@@ -1956,7 +2116,21 @@ ruleModalOverlay.addEventListener("click", e => {
   if (e.target === ruleModalOverlay) ruleModalOverlay.hidden = true;
 });
 
+// Modal "Pessoas conhecidas" (aberto clicando no perfil na barra lateral)
+const peopleModalOverlay = document.getElementById("peopleModalOverlay");
+document.getElementById("sidebarProfileLink").addEventListener("click", e => {
+  e.preventDefault();
+  abrirPainelPessoas();
+});
+document.getElementById("peopleModalClose").addEventListener("click", () => {
+  peopleModalOverlay.hidden = true;
+});
+peopleModalOverlay.addEventListener("click", e => {
+  if (e.target === peopleModalOverlay) peopleModalOverlay.hidden = true;
+});
+
 buildBoard();
 render();
 carregarTarefasReais();
 carregarDadosPainelBeeon();
+carregarPessoasSalvas();
