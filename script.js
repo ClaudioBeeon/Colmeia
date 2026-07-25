@@ -25,7 +25,7 @@ const HOJE = 24;
 // Cole aqui a URL do seu Web App do Apps Script depois de publicar o
 // Code.gs (Implantar > Nova implantação > Aplicativo da web).
 // Enquanto não colar, o Colmeia continua usando os dados fake abaixo.
-const COLMEIA_API_URL = "COLE_AQUI_A_URL_DO_APPS_SCRIPT";
+const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
 
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
