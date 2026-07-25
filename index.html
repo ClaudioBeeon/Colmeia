@@ -98,6 +98,30 @@
       </div>
     </aside>
 
+    <div class="rule-modal-overlay" id="ruleModalOverlay" hidden>
+      <div class="rule-modal">
+        <div class="rule-modal-header">
+          <h3>Sequência de responsáveis</h3>
+          <button type="button" id="ruleModalClose" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="rule-modal-body" id="ruleModalBody"></div>
+      </div>
+    </div>
+
+    <div class="rule-modal-overlay" id="motherModalOverlay" hidden>
+      <div class="rule-modal">
+        <div class="rule-modal-header">
+          <h3 id="motherModalTitle">Card mãe</h3>
+          <button type="button" id="motherModalClose" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="rule-modal-body" id="motherModalBody"></div>
+      </div>
+    </div>
+
     <section class="app-page" id="page-kanban">
       <section class="board" id="board"></section>
     </section>
