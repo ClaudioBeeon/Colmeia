@@ -90,7 +90,9 @@ async function carregarDadosPainelBeeon() {
  */
 function fotoDoDesigner(nomeDesigner) {
   if (!painelBeeonData || !painelBeeonData.photos) return null;
-  return painelBeeonData.photos[nomeDesigner] || null;
+  const alvo = normalizarParaComparar(nomeDesigner);
+  const chave = Object.keys(painelBeeonData.photos).find(d => normalizarParaComparar(d) === alvo);
+  return chave ? painelBeeonData.photos[chave] : null;
 }
 
 // Fotos de quem faz o atendimento dos clientes. No painel-designers-beeon
@@ -124,8 +126,9 @@ function avatarAtendimentoHTML(nome, sizeClass) {
  */
 function getAtendimentoDoCliente(nomeCliente) {
   if (!painelBeeonData || !painelBeeonData.state) return null;
+  const alvo = normalizarParaComparar(nomeCliente);
   for (const designer of Object.keys(painelBeeonData.state)) {
-    const cliente = (painelBeeonData.state[designer] || []).find(c => c.cliente === nomeCliente);
+    const cliente = (painelBeeonData.state[designer] || []).find(c => normalizarParaComparar(c.cliente) === alvo);
     if (cliente && cliente.atend) return cliente.atend;
   }
   return null;
@@ -163,8 +166,8 @@ function mapearTarefaDoBackend(t) {
     link: t.link,
     assignee: t.assignee,
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
-    timerSeconds: 0,
-    running: false,
+    timerSeconds: t.workedSeconds || 0,
+    running: !!t.isRunning,
     estimatePct: Math.min(95, Math.round((t.estimateMinutes || 30) / 2)),
     hasChange: false,
   };
@@ -240,6 +243,29 @@ async function pausarTarefaNoBackend(taskId) {
  * Busca os comentários reais de uma tarefa no Runrun.it. Devolve uma
  * lista (pode ser vazia) — nunca null, pra não quebrar o render.
  */
+/**
+ * Busca a descrição real de uma tarefa no Runrun.it. Devolve sempre uma
+ * string (vazia se não tiver descrição ou der erro).
+ */
+async function buscarDescricaoDoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return "";
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarDescricao", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error("Erro ao buscar descrição:", data.error);
+      return "";
+    }
+    return data.descricao || "";
+  } catch (err) {
+    console.error("Falha ao buscar descrição no Runrun.it:", err);
+    return "";
+  }
+}
+
 async function buscarComentariosDoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return [];
   try {
@@ -322,8 +348,10 @@ function initials(name) {
 }
 
 function formatTime(sec) {
-  const m = Math.floor(sec / 60).toString().padStart(2, "0");
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60).toString().padStart(2, "0");
   const s = (sec % 60).toString().padStart(2, "0");
+  if (h > 0) return `${h}:${m}:${s}`;
   return `${m}:${s}`;
 }
 
@@ -537,6 +565,19 @@ function renderComentariosHTML(task) {
  * (sem re-renderizar o pop-up inteiro, pra não perder o foco do campo
  * de texto nem fechar menus abertos).
  */
+/**
+ * Busca a descrição real no Runrun.it e atualiza só o texto na tela
+ * (sem re-renderizar o pop-up inteiro).
+ */
+async function carregarDescricao(task) {
+  if (!task.id) return;
+  const texto = await buscarDescricaoDoBackend(task.id);
+  if (tasks[detailIdx] === task) {
+    const el = document.getElementById("descTextReal");
+    if (el) el.textContent = texto || "Sem descrição cadastrada nessa tarefa.";
+  }
+}
+
 async function carregarComentarios(task) {
   if (!task.id) return;
   task.comments = await buscarComentariosDoBackend(task.id);
@@ -585,6 +626,7 @@ function openDetail(idx) {
   panel.classList.add("visible");
   requestAnimationFrame(() => panel.classList.add("open"));
   carregarComentarios(tasks[detailIdx]);
+  carregarDescricao(tasks[detailIdx]);
 }
 
 function renderDetail() {
@@ -675,6 +717,7 @@ function renderDetail() {
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
+              <p class="desc-text-real" id="descTextReal">${task.id ? "Carregando descrição..." : ""}</p>
               <div class="ai-format-boxes">
                 ${formatsByType[task.type].map(f => `<div class="format-box ${f.cls}">${f.label}</div>`).join("")}
               </div>
@@ -1022,6 +1065,30 @@ const pageTitles = {
 // Troque aqui quando tiver login de verdade — por enquanto é fixo.
 const DESIGNER_LOGADO = "Claudio";
 
+// Mesma lógica de normalização usada no painel-designers-beeon: tira
+// acento, deixa minúsculo, tira espaço extra. Assim "Claudio" (Colmeia)
+// e "Cláudio" (painel-beeon) são reconhecidos como o mesmo nome.
+function normalizarParaComparar(s) {
+  return (s || "")
+    .toString()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Acha a lista de clientes de um designer dentro do state do
+ * painel-beeon, comparando o nome sem se importar com acento/maiúsculas
+ * (ex: "Claudio" no Colmeia bate com "Cláudio" no painel).
+ */
+function clientesDoDesignerNoPainel(nomeDesigner) {
+  if (!painelBeeonData || !painelBeeonData.state) return [];
+  const alvo = normalizarParaComparar(nomeDesigner);
+  const chave = Object.keys(painelBeeonData.state).find(d => normalizarParaComparar(d) === alvo);
+  return chave ? (painelBeeonData.state[chave] || []) : [];
+}
+
 /**
  * "Meus clientes": lista só os clientes do designer logado, vindos de
  * verdade do painel-designers-beeon (state[designer]), com foto quando
@@ -1036,7 +1103,7 @@ function buildClientsPage() {
     return;
   }
 
-  const meusClientes = painelBeeonData.state[DESIGNER_LOGADO] || [];
+  const meusClientes = clientesDoDesignerNoPainel(DESIGNER_LOGADO);
   if (meusClientes.length === 0) {
     grid.innerHTML = `<div class="placeholder-box"><span>🗂️</span><p>Nenhum cliente encontrado pra ${DESIGNER_LOGADO} no painel-designers-beeon.</p></div>`;
     return;
@@ -1056,14 +1123,14 @@ function buildClientsPage() {
   `).join("");
 }
 
-// "atendimento" (agrupado por quem atende) ou "todos" (lista única)
-let atendimentoViewMode = "atendimento";
+// Guarda quais grupos de atendimento estão expandidos (mesmo padrão do
+// painel-beeon: clica no cabeçalho do grupo pra abrir/fechar a lista).
+const atendimentoExpandido = new Set();
 
 /**
- * "Clientes por atendimento": junta os clientes de TODOS os designers
- * (vindos do painel-designers-beeon) e agrupa por quem é o atendimento
- * responsável (campo "atend" de cada cliente). No modo "todos", mostra
- * a lista inteira sem agrupar.
+ * "Clientes por atendimento": mesmo padrão do painel-designers-beeon —
+ * agrupa os clientes de todos os designers pelo atendimento responsável,
+ * ordena de A a Z, e cada grupo expande/recolhe ao clicar no cabeçalho.
  */
 function buildAtendimentoPage() {
   const grid = document.getElementById("atendimentoGrid");
@@ -1074,55 +1141,58 @@ function buildAtendimentoPage() {
     return;
   }
 
-  // Junta os clientes de todos os designers numa lista só, guardando
-  // também de qual designer é cada um (útil pro card mostrar a foto).
   const todos = [];
   Object.entries(painelBeeonData.state).forEach(([designer, listaClientes]) => {
     (listaClientes || []).forEach(c => todos.push({ ...c, designer }));
   });
 
-  if (atendimentoViewMode === "todos") {
-    grid.innerHTML = todos.map(c => `
-      <div class="client-card">
-        <div class="client-card-top">
-          ${avatarHTML(c.designer, "avatar-sm")}
-          <div class="client-card-name">${c.cliente}</div>
-        </div>
-        <div class="client-card-count">${c.atend ? "Atendimento: " + c.atend : ""}</div>
-        <div class="client-card-badges">
-          ${(c.servicos || []).map(s => `<span class="badge badge-estatico">${s}</span>`).join("")}
-        </div>
-      </div>
-    `).join("");
-    return;
-  }
-
   const porAtendimento = {};
   todos.forEach(c => {
-    const responsavel = c.atend || "Sem atendimento definido";
+    const responsavel = c.atend || "Sem atendimento";
     if (!porAtendimento[responsavel]) porAtendimento[responsavel] = [];
     porAtendimento[responsavel].push(c);
   });
 
-  grid.innerHTML = Object.entries(porAtendimento).map(([responsavel, lista]) => `
-    <div class="atendimento-group">
-      <div class="atendimento-group-title">
-        ${avatarAtendimentoHTML(responsavel, "avatar-sm")}
-        <span>${responsavel}</span>
-      </div>
-      <div class="clients-grid">
-        ${lista.map(c => `
-          <div class="client-card">
-            <div class="client-card-top">
-              ${avatarHTML(c.designer, "avatar-sm")}
-              <div class="client-card-name">${c.cliente}</div>
-            </div>
-            <div class="client-card-count">${c.escopo || ""}</div>
+  const nomes = Object.keys(porAtendimento).sort((a, b) => a.localeCompare(b));
+
+  grid.innerHTML = nomes.map(responsavel => {
+    const lista = porAtendimento[responsavel];
+    const aberto = atendimentoExpandido.has(responsavel);
+    return `
+      <div class="atendimento-group ${aberto ? "expanded" : ""}">
+        <button type="button" class="atendimento-group-header" data-atend="${responsavel}">
+          ${avatarAtendimentoHTML(responsavel, "avatar-sm")}
+          <span class="atendimento-group-name">${responsavel}</span>
+          <span class="atendimento-group-count">${lista.length} cliente${lista.length > 1 ? "s" : ""}</span>
+        </button>
+        ${aberto ? `
+          <div class="clients-grid">
+            ${lista.map(c => `
+              <div class="client-card">
+                <div class="client-card-top">
+                  ${avatarHTML(c.designer, "avatar-sm")}
+                  <div class="client-card-name">${c.cliente}</div>
+                </div>
+                <div class="client-card-count">${c.escopo || ""}</div>
+                <div class="client-card-badges">
+                  ${(c.servicos || []).map(s => `<span class="badge badge-estatico">${s}</span>`).join("")}
+                </div>
+              </div>
+            `).join("")}
           </div>
-        `).join("")}
+        ` : ""}
       </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
+
+  grid.querySelectorAll(".atendimento-group-header").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const nome = btn.dataset.atend;
+      if (atendimentoExpandido.has(nome)) atendimentoExpandido.delete(nome);
+      else atendimentoExpandido.add(nome);
+      buildAtendimentoPage();
+    });
+  });
 }
 
 document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
@@ -1140,19 +1210,6 @@ document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
     if (page === "atendimento") buildAtendimentoPage();
   });
 });
-
-// Toggle "Por atendimento" / "Todos os clientes" na página de atendimento
-const atendimentoToggle = document.getElementById("atendimentoToggle");
-if (atendimentoToggle) {
-  atendimentoToggle.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", () => {
-      atendimentoToggle.querySelectorAll("button").forEach(b => b.classList.remove("on"));
-      btn.classList.add("on");
-      atendimentoViewMode = btn.dataset.view;
-      buildAtendimentoPage();
-    });
-  });
-}
 
 document.getElementById("nowPlaying").addEventListener("click", () => {
   const idx = tasks.findIndex(t => t.running);
