@@ -1291,19 +1291,34 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   transition: left 0.55s cubic-bezier(.2,.8,.3,1), top 0.55s cubic-bezier(.2,.8,.3,1), opacity 0.55s ease, transform 0.55s ease;
 }
 
-/* ===== Gerar briefing com IA (Gemini) ===== */
-.ai-briefing-btn {
+/* ===== Briefing com IA (gerado automático, via Groq) ===== */
+.ai-briefing-toggle {
   align-self: flex-start;
-  border: 1px solid #0000FB; border-radius: 10px;
-  background: transparent; color: #0000FB;
-  font-family: inherit; font-size: 12.5px; font-weight: 700;
-  padding: 8px 16px; cursor: pointer; margin-bottom: 12px;
+  border: none; background: transparent; color: var(--text-secondary);
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  text-decoration: underline; cursor: pointer;
+  padding: 0; margin: 4px 0 16px;
 }
-.ai-briefing-btn:hover { background: #EDEDFF; }
-.ai-briefing-btn:disabled { opacity: 0.6; cursor: default; }
 .ai-briefing-resumo {
-  font-size: 13.5px; line-height: 1.5; margin-bottom: 12px;
+  font-size: 14px; line-height: 1.6; margin: 12px 0;
 }
 .ai-briefing-tags {
   display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+}
+.ai-briefing-campos {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px; margin-top: 8px;
+}
+.ai-briefing-campo {
+  background: var(--page-bg); border-radius: 10px; padding: 10px 12px;
+}
+.ai-briefing-campo-label {
+  font-size: 11.5px; color: var(--text-secondary); font-weight: 600;
+  margin: 0 0 4px;
+}
+.ai-briefing-campo-valor {
+  font-size: 13px; margin: 0; white-space: pre-wrap;
+}
+.ai-briefing-campo-valor.vazio {
+  color: var(--text-muted); font-style: italic;
 }
