@@ -775,17 +775,10 @@ const CORES_FORMATO_BOX = ["fb-blue", "fb-purple", "fb-orange", "fb-teal", "fb-p
  * o resultado no lugar do botão.
  */
 async function gerarBriefingComIA(task) {
-  const btn = document.getElementById("gerarBriefingBtn");
   const resultEl = document.getElementById("briefingResult");
-  if (!btn || !resultEl) return;
-
-  btn.disabled = true;
-  btn.textContent = "✨ Gerando briefing...";
-  resultEl.innerHTML = "";
+  if (!resultEl) return;
 
   if (!COLMEIA_API_URL) {
-    btn.disabled = false;
-    btn.textContent = "✨ Gerar briefing com IA";
     resultEl.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
     return;
   }
@@ -797,8 +790,9 @@ async function gerarBriefingComIA(task) {
     });
     const data = await res.json();
 
-    btn.disabled = false;
-    btn.textContent = "✨ Gerar de novo";
+    // Se o usuário já trocou de tarefa enquanto isso carregava, não
+    // atualiza o pop-up de outra tarefa.
+    if (tasks[detailIdx] !== task) return;
 
     if (!data.ok) {
       resultEl.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui gerar o briefing."}</p>`;
@@ -814,8 +808,17 @@ async function gerarBriefingComIA(task) {
     const formatos = b.formatos || [];
     const resumo = b.resumo || "";
 
+    // Campos de texto livre — o valor vem EXATAMENTE como escrito na
+    // descrição original (pedimos pra IA nunca reescrever), então é
+    // seguro mostrar direto. Se vazio/null, mostra "Não preenchido".
+    const camposLivres = [
+      { label: "Instrução para redação", icone: "✏️", valor: b.instrucaoRedacao },
+      { label: "Referência", icone: "🔗", valor: b.referencia },
+      { label: "Texto na arte", icone: "🔤", valor: b.textoNaArte },
+      { label: "Observações", icone: "💬", valor: b.observacoes },
+    ];
+
     resultEl.innerHTML = `
-      ${resumo ? `<p class="ai-briefing-resumo">${resumo}</p>` : ""}
       ${plataformas.length ? `
         <div class="ai-briefing-tags">
           ${plataformas.map(p => `<span class="badge badge-estatico">${p}</span>`).join("")}
@@ -826,12 +829,21 @@ async function gerarBriefingComIA(task) {
           ${formatos.map((f, i) => `<div class="format-box ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${f}</div>`).join("")}
         </div>
       ` : ""}
+      ${resumo ? `<p class="ai-briefing-resumo">${resumo}</p>` : ""}
+      <div class="ai-briefing-campos">
+        ${camposLivres.map(c => `
+          <div class="ai-briefing-campo">
+            <p class="ai-briefing-campo-label">${c.icone} ${c.label}</p>
+            <p class="ai-briefing-campo-valor ${c.valor ? "" : "vazio"}">${c.valor || "Não preenchido"}</p>
+          </div>
+        `).join("")}
+      </div>
     `;
   } catch (err) {
     console.error("Falha ao gerar briefing com IA:", err);
-    btn.disabled = false;
-    btn.textContent = "✨ Gerar briefing com IA";
-    resultEl.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
+    if (tasks[detailIdx] === task) {
+      resultEl.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
+    }
   }
 }
 
@@ -1358,6 +1370,7 @@ function openDetail(idx, entradaAnimacao) {
   carregarComentarios(tasks[detailIdx]);
   carregarDescricao(tasks[detailIdx]);
   carregarSequencia(tasks[detailIdx]);
+  if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
 }
 
 /**
@@ -1557,11 +1570,13 @@ function renderDetail() {
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
-              <div class="desc-text-real" id="descTextReal">${task.id ? "Carregando descrição..." : ""}</div>
               ${task.id ? `
-                <button type="button" class="ai-briefing-btn" id="gerarBriefingBtn">✨ Gerar briefing com IA</button>
-                <div class="ai-briefing-result" id="briefingResult"></div>
+                <div class="ai-briefing-result" id="briefingResult">
+                  <p class="workflow-seq-empty">Carregando briefing...</p>
+                </div>
+                <button type="button" class="ai-briefing-toggle" id="verOriginalBtn">Ver briefing original</button>
               ` : ""}
+              <div class="desc-text-real" id="descTextReal" ${task.id ? "hidden" : ""}>${task.id ? "Carregando..." : ""}</div>
             </div>
             ${task.hasChange ? `
               <div class="change-panel" id="changePanel">
@@ -1713,9 +1728,14 @@ function renderDetail() {
     abrirModalRegra(task);
   });
 
-  const gerarBriefingBtn = document.getElementById("gerarBriefingBtn");
-  if (gerarBriefingBtn) {
-    gerarBriefingBtn.addEventListener("click", () => gerarBriefingComIA(task));
+  const verOriginalBtn = document.getElementById("verOriginalBtn");
+  if (verOriginalBtn) {
+    verOriginalBtn.addEventListener("click", () => {
+      const original = document.getElementById("descTextReal");
+      const escondido = original.hidden;
+      original.hidden = !escondido;
+      verOriginalBtn.textContent = escondido ? "Ocultar briefing original" : "Ver briefing original";
+    });
   }
 
   // ===== Abas Descrição / Comentários / Alteração (sem re-renderizar, com transição) =====
