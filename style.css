@@ -1295,7 +1295,10 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   font-size: 14px; line-height: 1.6; margin: 12px 0;
 }
 .ai-briefing-tags {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.format-box.format-box-sm {
+  padding: 6px 14px; border-radius: 999px; font-size: 13px;
 }
 .ai-briefing-plataforma-tag {
   font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
