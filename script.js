@@ -114,7 +114,7 @@ function fotoDoAtendimento(nomeAtendimento) {
 function avatarAtendimentoHTML(nome, sizeClass) {
   const foto = fotoDoAtendimento(nome) || fotoDoDesigner(nome);
   if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" alt="${nome}" title="${nome}">`;
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nome}" alt="${nome}" title="${nome}" onerror="handleAvatarImgError(this)">`;
   }
   return `<div class="avatar ${sizeClass || ""}" title="${nome}">${initials(nome)}</div>`;
 }
@@ -134,13 +134,26 @@ function getAtendimentoDoCliente(nomeCliente) {
   return null;
 }
 
+/**
+ * Se a foto não carregar (link quebrado, offline, etc), troca a imagem
+ * pelas iniciais do nome, em vez de deixar o ícone de imagem quebrada.
+ */
+function handleAvatarImgError(img) {
+  const nome = img.getAttribute("data-nome") || "";
+  const div = document.createElement("div");
+  div.className = img.className;
+  div.title = nome;
+  div.textContent = initials(nome);
+  img.replaceWith(div);
+}
+
 function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
   // Prioridade: foto do painel-designers-beeon primeiro (é a fonte que
   // o Claudio mantém manualmente); só usa a do Runrun.it se não achar
   // nenhuma foto cadastrada no painel.
   const foto = fotoDoDesigner(nomeDesigner) || avatarUrlDireto;
   if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" alt="${nomeDesigner}" title="${nomeDesigner}">`;
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nomeDesigner}" alt="${nomeDesigner}" title="${nomeDesigner}" onerror="handleAvatarImgError(this)">`;
   }
   return `<div class="avatar ${sizeClass || ""}" title="${nomeDesigner}">${initials(nomeDesigner)}</div>`;
 }
@@ -236,6 +249,77 @@ async function pausarTarefaNoBackend(taskId) {
     if (!data.ok) console.error("Runrun.it recusou o pause:", data.error);
   } catch (err) {
     console.error("Falha ao pausar no Runrun.it:", err);
+  }
+}
+
+/**
+ * Move a tarefa pra outra coluna de verdade no Runrun.it. A regra
+ * automática de transferir pro próximo responsável é do próprio
+ * Runrun.it — o Colmeia só avisa "mudou de etapa".
+ */
+/**
+ * Avança a tarefa pra próxima pessoa na Sequência de responsáveis
+ * (workflow do Runrun.it) — CONFIRMADO funcionando. Diferente de mudar
+ * a coluna no Colmeia (isso continua só visual por enquanto, o endpoint
+ * de mover coluna ainda não foi confirmado).
+ */
+async function avancarWorkflowNoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return null;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "avancarWorkflow", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error("Runrun.it recusou avançar a sequência:", data.error);
+      return null;
+    }
+    return data.novoResponsavel || null;
+  } catch (err) {
+    console.error("Falha ao avançar a sequência no Runrun.it:", err);
+    return null;
+  }
+}
+
+async function reatribuirTarefaNoBackend(taskId, responsavelId) {
+  if (!COLMEIA_API_URL || !taskId || !responsavelId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "reatribuir", taskId, responsavelId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou reatribuir:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao reatribuir no Runrun.it:", err);
+    return false;
+  }
+}
+
+// Cache com todo mundo do Runrun.it, carregado só na primeira vez que
+// alguém clicar numa foto pra reatribuir (evita buscar toda hora).
+let usuariosRunrunCache = null;
+
+async function buscarUsuariosRunrun() {
+  if (usuariosRunrunCache) return usuariosRunrunCache;
+  if (!COLMEIA_API_URL) return [];
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "listarUsuarios" }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error("Erro ao listar usuários do Runrun.it:", data.error);
+      return [];
+    }
+    usuariosRunrunCache = data.usuarios || [];
+    return usuariosRunrunCache;
+  } catch (err) {
+    console.error("Falha ao listar usuários do Runrun.it:", err);
+    return [];
   }
 }
 
@@ -380,7 +464,10 @@ function cardHTML(task, idx) {
         <div class="progress-track"><div class="progress-fill" data-idx="${idx}" style="width:${task.estimatePct}%"></div></div>
       </div>
       <div class="card-bottom">
-        ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
+        <div class="assignee-wrap" data-idx="${idx}">
+          ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
+          <div class="assignee-menu"></div>
+        </div>
         <span class="card-due-simple ${task.day === HOJE ? "overdue" : ""}">${dueIcon}${task.due}</span>
       </div>
     </div>
@@ -459,6 +546,8 @@ function setupDragAndDrop() {
       const newStatus = holder.closest(".column").dataset.status;
       if (idx !== "" && tasks[idx]) {
         tasks[idx].status = newStatus;
+        // Mudar de coluna aqui no Colmeia ainda é só visual — o endpoint
+        // de mover etapa de verdade no Runrun.it ainda não foi confirmado.
         render();
       }
     });
@@ -496,6 +585,69 @@ function attachCardDragHandlers() {
     });
   });
 
+  // ===== Foto do responsável: avançar sequência ou reatribuir manual =====
+  document.querySelectorAll(".assignee-wrap").forEach(wrap => {
+    const menu = wrap.querySelector(".assignee-menu");
+    wrap.addEventListener("click", async e => {
+      e.stopPropagation();
+      const willOpen = !menu.classList.contains("open");
+      document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
+      if (!willOpen) return;
+      menu.classList.add("open");
+
+      const idx = wrap.dataset.idx;
+      const task = tasks[idx];
+
+      menu.innerHTML = `
+        <button type="button" class="assignee-advance-btn" data-idx="${idx}">
+          ➡️ <span>Avançar sequência (próximo responsável)</span>
+        </button>
+        <div class="assignee-menu-sep"></div>
+        <div class="assignee-menu-loading">Carregando outras pessoas...</div>
+      `;
+
+      menu.querySelector(".assignee-advance-btn").addEventListener("click", async ev => {
+        ev.stopPropagation();
+        menu.classList.remove("open");
+        const novoResponsavel = await avancarWorkflowNoBackend(task.id);
+        if (novoResponsavel) {
+          task.assignee = novoResponsavel;
+          task.assigneeAvatarUrl = null;
+          render();
+        } else {
+          console.warn("Não consegui avançar a sequência — talvez essa tarefa não tenha uma Sequência de responsáveis configurada.");
+        }
+      });
+
+      const usuarios = await buscarUsuariosRunrun();
+      if (!menu.classList.contains("open")) return; // fechou enquanto carregava
+      const listaContainer = menu.querySelector(".assignee-menu-loading");
+      if (!listaContainer) return;
+      if (usuarios.length === 0) {
+        listaContainer.textContent = "Não consegui buscar a lista.";
+        return;
+      }
+      listaContainer.outerHTML = usuarios.map(u => `
+        <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
+          ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
+        </button>
+      `).join("");
+      menu.querySelectorAll("button:not(.assignee-advance-btn)").forEach(opt => {
+        opt.addEventListener("click", async ev => {
+          ev.stopPropagation();
+          const nomeEscolhido = opt.dataset.userNome;
+          menu.classList.remove("open");
+          const ok = await reatribuirTarefaNoBackend(task.id, opt.dataset.userId);
+          if (ok) {
+            task.assignee = nomeEscolhido;
+            task.assigneeAvatarUrl = null; // deixa a próxima carga real trazer a foto certa
+            render();
+          }
+        });
+      });
+    });
+  });
+
   // ===== Play / progresso =====
   document.querySelectorAll(".play-btn").forEach(btn => {
     btn.addEventListener("click", e => {
@@ -516,6 +668,7 @@ document.addEventListener("click", () => {
   document.querySelectorAll(".priority-menu").forEach(m => m.classList.remove("open"));
   document.querySelectorAll(".detail-more-menu").forEach(m => m.classList.remove("open"));
   document.querySelectorAll(".status-menu").forEach(m => m.classList.remove("open"));
+  document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
 });
 
 const clientHub = [
@@ -566,6 +719,33 @@ function renderComentariosHTML(task) {
  * de texto nem fechar menus abertos).
  */
 /**
+ * O Runrun.it devolve a descrição em HTML (editor de texto rico), com
+ * checklists no formato <ul data-checked="true/false"><li>...</li></ul>.
+ * Essa função troca isso por ☑/☐ de verdade na frente de cada item, e
+ * tira estilos/cores que vieram do editor de lá pra não conflitar com o
+ * visual do Colmeia.
+ */
+function formatarDescricaoRunrun(html) {
+  if (!html) return "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  doc.querySelectorAll("ul[data-checked]").forEach(ul => {
+    const marcado = ul.getAttribute("data-checked") === "true";
+    ul.querySelectorAll("li").forEach(li => {
+      li.textContent = (marcado ? "☑ " : "☐ ") + li.textContent;
+      li.style.listStyle = "none";
+    });
+  });
+
+  // Remove cor/estilo herdados do editor do Runrun.it (ex: texto azulado
+  // de "Legenda:"), deixando só a formatação básica (negrito, parágrafos).
+  doc.querySelectorAll("[style]").forEach(el => el.removeAttribute("style"));
+  doc.querySelectorAll("[class]").forEach(el => el.removeAttribute("class"));
+
+  return doc.body.innerHTML;
+}
+
+/**
  * Busca a descrição real no Runrun.it e atualiza só o texto na tela
  * (sem re-renderizar o pop-up inteiro).
  */
@@ -574,7 +754,7 @@ async function carregarDescricao(task) {
   const texto = await buscarDescricaoDoBackend(task.id);
   if (tasks[detailIdx] === task) {
     const el = document.getElementById("descTextReal");
-    if (el) el.textContent = texto || "Sem descrição cadastrada nessa tarefa.";
+    if (el) el.innerHTML = texto ? formatarDescricaoRunrun(texto) : "Sem descrição cadastrada nessa tarefa.";
   }
 }
 
@@ -615,6 +795,22 @@ function priorityVar(p) {
   return p === "alta" ? "danger" : p === "media" ? "warning" : "success";
 }
 
+/**
+ * Acha a tarefa anterior e a próxima na mesma coluna (mesma ordem usada
+ * em stepDetail), pra mostrar a foto de quem é cada uma nas bolinhas de
+ * navegação do pop-up.
+ */
+function getAdjacentTasks(task) {
+  const idx = tasks.indexOf(task);
+  const order = tasks.map((t, i) => i).filter(i => tasks[i].status === task.status);
+  const pos = order.indexOf(idx);
+  if (pos === -1 || order.length <= 1) return { prev: null, next: null };
+  return {
+    prev: tasks[order[(pos - 1 + order.length) % order.length]],
+    next: tasks[order[(pos + 1) % order.length]],
+  };
+}
+
 function openDetail(idx) {
   detailIdx = Number(idx);
   commentsOpen = false;
@@ -633,6 +829,7 @@ function renderDetail() {
   const task = tasks[detailIdx];
   const type = typeLabels[task.type];
   const panel = document.getElementById("taskDetail");
+  const adjacentes = getAdjacentTasks(task);
 
   panel.innerHTML = `
     <div class="detail-inner">
@@ -669,7 +866,9 @@ function renderDetail() {
         </div>
         <div class="detail-header-right">
           <div class="nav-dots-group">
-            <button type="button" class="nav-dot" id="navPrev" aria-label="Tarefa anterior"></button>
+            <button type="button" class="nav-dot" id="navPrev" aria-label="Tarefa anterior: ${adjacentes.prev ? adjacentes.prev.assignee : ""}">
+              ${adjacentes.prev ? avatarHTML(adjacentes.prev.assignee, "avatar-xs", adjacentes.prev.assigneeAvatarUrl) : ""}
+            </button>
             <button type="button" class="nav-arrow" id="navPrevArrow" aria-label="Anterior">
               <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -677,7 +876,9 @@ function renderDetail() {
             <button type="button" class="nav-arrow" id="navNextArrow" aria-label="Próxima">
               <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <button type="button" class="nav-dot" id="navNext" aria-label="Próxima tarefa"></button>
+            <button type="button" class="nav-dot" id="navNext" aria-label="Próxima tarefa: ${adjacentes.next ? adjacentes.next.assignee : ""}">
+              ${adjacentes.next ? avatarHTML(adjacentes.next.assignee, "avatar-xs", adjacentes.next.assigneeAvatarUrl) : ""}
+            </button>
           </div>
 
           <div class="status-wrap">
@@ -717,7 +918,7 @@ function renderDetail() {
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
-              <p class="desc-text-real" id="descTextReal">${task.id ? "Carregando descrição..." : ""}</p>
+              <div class="desc-text-real" id="descTextReal">${task.id ? "Carregando descrição..." : ""}</div>
               <div class="ai-format-boxes">
                 ${formatsByType[task.type].map(f => `<div class="format-box ${f.cls}">${f.label}</div>`).join("")}
               </div>
@@ -847,6 +1048,7 @@ function renderDetail() {
     opt.addEventListener("click", e => {
       e.stopPropagation();
       task.status = opt.dataset.status;
+      // Mudar de coluna aqui no Colmeia ainda é só visual — ver nota acima.
       statusMenu.classList.remove("open");
       renderDetail();
       render();
