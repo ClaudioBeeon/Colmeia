@@ -1227,3 +1227,33 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ===== Modal "Pessoas conhecidas" ===== */
+.people-modal { width: 480px; }
+.people-modal-hint {
+  font-size: 12px; opacity: 0.65;
+  padding: 0 20px 14px;
+}
+.people-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 12px; margin-bottom: 8px;
+  background: var(--page-bg); border-radius: 12px;
+}
+.people-row-top {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+}
+.people-row-name { font-size: 13px; font-weight: 600; }
+.people-row-input {
+  flex: 1; min-width: 140px;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; font-family: inherit; font-size: 12.5px;
+  background: var(--card-bg); color: var(--text-primary);
+}
+.people-row-save {
+  border: none; border-radius: 8px; padding: 7px 14px;
+  background: #0000FB; color: #fff; font-weight: 600; font-size: 12.5px;
+  cursor: pointer;
+}
+.people-row-save:disabled { opacity: 0.6; cursor: default; }
+.people-row-saved { font-size: 12px; color: #2F9E44; font-weight: 600; }
