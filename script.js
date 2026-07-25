@@ -27,7 +27,84 @@ const HOJE = 24;
 // Enquanto não colar, o Colmeia continua usando os dados fake abaixo.
 const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
 
+// URL do Web App do painel-designers-beeon (o outro painel, já publicado).
+// O Colmeia só faz leitura aqui — nunca escreve nada nesse painel.
+const PAINEL_BEEON_API_URL = "https://script.google.com/macros/s/AKfycbzzWtG4jkVpLvPwOAHaj-h9KK9k_8N6YWGUXfFtUDSXRiCj7ILDPvuSy9VJXhglTrzEQQ/exec";
+
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+// Guarda os dados lidos do painel-designers-beeon (designers, clientes,
+// atendimento, fotos) depois que carregarDadosPainelBeeon() rodar.
+// Formato: { designers: [...], roles: {...}, state: {...}, fotos: {...} }
+let painelBeeonData = null;
+
+/**
+ * Busca (só leitura, GET) o estado completo do painel-designers-beeon:
+ * lista de designers, papel/especialidade de cada um, e o mapa
+ * designer -> lista de clientes (com escopo, atendimento, serviços etc).
+ *
+ * IMPORTANTE: nunca faz POST pra esse painel — só GET. O Colmeia não
+ * altera nada lá.
+ *
+ * Na primeira vez, mostra no console do navegador (F12 > Console) a
+ * estrutura crua que veio, pra confirmarmos onde ficam as fotos de
+ * cada designer/cliente (o nome exato do campo pode variar).
+ */
+async function carregarDadosPainelBeeon() {
+  if (!PAINEL_BEEON_API_URL) return;
+  try {
+    const res = await fetch(PAINEL_BEEON_API_URL);
+    const resposta = await res.json();
+    if (!resposta.ok) {
+      console.error("Erro ao buscar dados do painel-designers-beeon:", resposta.error);
+      return;
+    }
+    if (resposta.empty) {
+      console.warn("O painel-designers-beeon respondeu, mas o estado está vazio (nada salvo lá ainda).");
+      return;
+    }
+
+    // Log de diagnóstico — só na primeira carga, pra confirmarmos os
+    // nomes exatos dos campos (principalmente onde ficam as fotos).
+    console.log("[Colmeia] Estrutura recebida do painel-designers-beeon:", resposta.data);
+
+    painelBeeonData = {
+      designers: resposta.data.designers || [],
+      roles: resposta.data.roles || {},
+      state: resposta.data.state || {},
+    };
+
+    // Depois de carregado, atualiza as páginas que dependem desses dados.
+    buildClientsPage();
+    buildAtendimentoPage();
+  } catch (err) {
+    console.error("Falha ao conectar com o painel-designers-beeon:", err);
+  }
+}
+
+/**
+ * Tenta achar a foto de um designer nos dados vindos do painel-beeon.
+ * Como não sabemos ainda o nome exato do campo de foto, checa alguns
+ * nomes comuns. Se nenhum bater, devolve null (o Colmeia usa as
+ * iniciais do nome como hoje).
+ */
+function fotoDoDesigner(nomeDesigner) {
+  if (!painelBeeonData) return null;
+  const candidatos = ["fotos", "photos", "avatars", "fotosDesigners"];
+  for (const chave of candidatos) {
+    const mapa = painelBeeonData[chave] || (painelBeeonData.state && painelBeeonData.state[chave]);
+    if (mapa && mapa[nomeDesigner]) return mapa[nomeDesigner];
+  }
+  return null;
+}
+
+function avatarHTML(nomeDesigner, sizeClass) {
+  const foto = fotoDoDesigner(nomeDesigner);
+  if (foto) {
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" alt="${nomeDesigner}" title="${nomeDesigner}">`;
+  }
+  return `<div class="avatar ${sizeClass || ""}" title="${nomeDesigner}">${initials(nomeDesigner)}</div>`;
+}
 
 function mapearTarefaDoBackend(t) {
   let day = null, due = "—";
@@ -86,6 +163,78 @@ async function salvarPrioridadeNoBackend(taskId, prioridade) {
     });
   } catch (err) {
     console.error("Não consegui salvar a prioridade no backend:", err);
+  }
+}
+
+/**
+ * Dá play numa tarefa de verdade no Runrun.it. Se der erro (ex: endpoint
+ * ainda não confirmado), avisa no console mas não trava a tela — o
+ * cronômetro local continua rodando mesmo assim.
+ */
+async function tocarTarefaNoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "tocarTarefa", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou o play:", data.error);
+  } catch (err) {
+    console.error("Falha ao dar play no Runrun.it:", err);
+  }
+}
+
+async function pausarTarefaNoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "pausarTarefa", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou o pause:", data.error);
+  } catch (err) {
+    console.error("Falha ao pausar no Runrun.it:", err);
+  }
+}
+
+/**
+ * Busca os comentários reais de uma tarefa no Runrun.it. Devolve uma
+ * lista (pode ser vazia) — nunca null, pra não quebrar o render.
+ */
+async function buscarComentariosDoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return [];
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "listarComentarios", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error("Erro ao buscar comentários:", data.error);
+      return [];
+    }
+    return data.comentarios || [];
+  } catch (err) {
+    console.error("Falha ao buscar comentários no Runrun.it:", err);
+    return [];
+  }
+}
+
+async function enviarComentarioNoBackend(taskId, texto) {
+  if (!COLMEIA_API_URL || !taskId || !texto) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "adicionarComentario", taskId, texto }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou o comentário:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao enviar comentário pro Runrun.it:", err);
+    return false;
   }
 }
 
@@ -291,6 +440,8 @@ function attachCardDragHandlers() {
       task.running = !task.running;
       btn.innerHTML = task.running ? pauseIcon : playIcon;
       btn.setAttribute("aria-label", (task.running ? "Pausar" : "Iniciar") + " tarefa");
+      if (task.running) tocarTarefaNoBackend(task.id);
+      else pausarTarefaNoBackend(task.id);
       updateNowPlaying();
     });
   });
@@ -317,6 +468,47 @@ let detailIdx = null;
 let commentsOpen = false;
 let changeOpen = false;
 let childrenOpen = false;
+
+/**
+ * Desenha a lista de comentários de uma tarefa. Enquanto ainda não
+ * carregou (task.comments === undefined), mostra "Carregando...".
+ * Tarefas sem id real (dados fake) nunca terão comentários reais.
+ */
+function renderComentariosHTML(task) {
+  if (!task.id) {
+    return `<p class="comments-empty">Essa tarefa ainda não está conectada ao Runrun.it.</p>`;
+  }
+  if (task.comments === undefined) {
+    return `<p class="comments-empty">Carregando comentários...</p>`;
+  }
+  if (task.comments.length === 0) {
+    return `<p class="comments-empty">Nenhum comentário ainda.</p>`;
+  }
+  return task.comments.map(c => `
+    <div class="comment-bubble ${c.autor === task.assignee ? "mine" : ""}">
+      <div class="comment-avatar"></div>
+      <div class="comment-body">
+        <div class="comment-author">${c.autor}</div>
+        <div class="comment-text">${c.texto}</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+/**
+ * Busca os comentários reais no Runrun.it e atualiza só a lista na tela
+ * (sem re-renderizar o pop-up inteiro, pra não perder o foco do campo
+ * de texto nem fechar menus abertos).
+ */
+async function carregarComentarios(task) {
+  if (!task.id) return;
+  task.comments = await buscarComentariosDoBackend(task.id);
+  // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa.
+  if (tasks[detailIdx] === task) {
+    const thread = document.getElementById("commentsThread");
+    if (thread) thread.innerHTML = renderComentariosHTML(task);
+  }
+}
 
 function getChildren(parentTask) {
   return tasks.filter(t => !t.isParent && t.client === parentTask.client);
@@ -355,6 +547,7 @@ function openDetail(idx) {
   if (cardEl) cardEl.classList.add("selected");
   panel.classList.add("visible");
   requestAnimationFrame(() => panel.classList.add("open"));
+  carregarComentarios(tasks[detailIdx]);
 }
 
 function renderDetail() {
@@ -465,24 +658,11 @@ function renderDetail() {
           <div class="detail-tabs">
             <button type="button" class="detail-tab active">Comentários</button>
           </div>
-          <div class="comments-thread">
-            <div class="comment-bubble">
-              <div class="comment-avatar"></div>
-              <div class="comment-body">
-                <div class="comment-author">Atendimento 01</div>
-                <div class="comment-text">Texto mensagem lorem ipsiccddddv dsfsdfsdf fdsfvds</div>
-              </div>
-            </div>
-            <div class="comment-bubble mine">
-              <div class="comment-body">
-                <div class="comment-author">${task.assignee}</div>
-                <div class="comment-text">Texto mensagem lorem ipsiccddddv dsfsdfsdf fddvsdv sdvsfvds</div>
-              </div>
-              <div class="comment-avatar"></div>
-            </div>
+          <div class="comments-thread" id="commentsThread">
+            ${renderComentariosHTML(task)}
           </div>
           <div class="comment-input">
-            <input type="text" placeholder="Mensagem">
+            <input type="text" id="commentInput" placeholder="Mensagem">
           </div>
         </div>
 
@@ -551,6 +731,8 @@ function renderDetail() {
 
   document.getElementById("detailPlay").addEventListener("click", () => {
     task.running = !task.running;
+    if (task.running) tocarTarefaNoBackend(task.id);
+    else pausarTarefaNoBackend(task.id);
     renderDetail();
     render();
     applyCommentsState();
@@ -615,6 +797,24 @@ function renderDetail() {
       changeOpen = !changeOpen;
       commentsOpen = false;
       applyCommentsState();
+    });
+  }
+
+  const commentInput = document.getElementById("commentInput");
+  if (commentInput) {
+    commentInput.addEventListener("keydown", async e => {
+      if (e.key !== "Enter") return;
+      const texto = commentInput.value.trim();
+      if (!texto) return;
+      if (!task.id) {
+        console.warn("Essa tarefa não está conectada ao Runrun.it, não dá pra comentar de verdade.");
+        return;
+      }
+      commentInput.value = "";
+      commentInput.disabled = true;
+      const ok = await enviarComentarioNoBackend(task.id, texto);
+      commentInput.disabled = false;
+      if (ok) carregarComentarios(task);
     });
   }
 
@@ -781,21 +981,105 @@ const pageTitles = {
   hoje: ["Minhas tarefas de hoje", "O que você deu play hoje"],
 };
 
+// Nome do designer logado no Colmeia hoje (mesmo usado na barra lateral).
+// Troque aqui quando tiver login de verdade — por enquanto é fixo.
+const DESIGNER_LOGADO = "Claudio";
+
+/**
+ * "Meus clientes": lista só os clientes do designer logado, vindos de
+ * verdade do painel-designers-beeon (state[designer]), com foto quando
+ * disponível. Não usa mais os dados fake do Runrun.
+ */
 function buildClientsPage() {
   const grid = document.getElementById("clientsGrid");
   if (!grid) return;
-  const mine = tasks.filter(t => !t.isParent && t.assignee === "Claudio");
-  const byClient = {};
-  mine.forEach(t => {
-    if (!byClient[t.client]) byClient[t.client] = [];
-    byClient[t.client].push(t);
-  });
-  grid.innerHTML = Object.entries(byClient).map(([client, list]) => `
+
+  if (!painelBeeonData) {
+    grid.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando clientes do painel-designers-beeon...</p></div>`;
+    return;
+  }
+
+  const meusClientes = painelBeeonData.state[DESIGNER_LOGADO] || [];
+  if (meusClientes.length === 0) {
+    grid.innerHTML = `<div class="placeholder-box"><span>🗂️</span><p>Nenhum cliente encontrado pra ${DESIGNER_LOGADO} no painel-designers-beeon.</p></div>`;
+    return;
+  }
+
+  grid.innerHTML = meusClientes.map(c => `
     <div class="client-card">
-      <div class="client-card-name">${client}</div>
-      <div class="client-card-count">${list.length} tarefa${list.length > 1 ? "s" : ""}</div>
+      <div class="client-card-top">
+        ${avatarHTML(DESIGNER_LOGADO, "avatar-sm")}
+        <div class="client-card-name">${c.cliente}</div>
+      </div>
+      <div class="client-card-count">${c.escopo || ""}</div>
       <div class="client-card-badges">
-        ${[...new Set(list.map(t => t.type))].map(ty => `<span class="badge ${typeLabels[ty].class}">${typeLabels[ty].label}</span>`).join("")}
+        ${(c.servicos || []).map(s => `<span class="badge badge-estatico">${s}</span>`).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+// "atendimento" (agrupado por quem atende) ou "todos" (lista única)
+let atendimentoViewMode = "atendimento";
+
+/**
+ * "Clientes por atendimento": junta os clientes de TODOS os designers
+ * (vindos do painel-designers-beeon) e agrupa por quem é o atendimento
+ * responsável (campo "atend" de cada cliente). No modo "todos", mostra
+ * a lista inteira sem agrupar.
+ */
+function buildAtendimentoPage() {
+  const grid = document.getElementById("atendimentoGrid");
+  if (!grid) return;
+
+  if (!painelBeeonData) {
+    grid.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando clientes do painel-designers-beeon...</p></div>`;
+    return;
+  }
+
+  // Junta os clientes de todos os designers numa lista só, guardando
+  // também de qual designer é cada um (útil pro card mostrar a foto).
+  const todos = [];
+  Object.entries(painelBeeonData.state).forEach(([designer, listaClientes]) => {
+    (listaClientes || []).forEach(c => todos.push({ ...c, designer }));
+  });
+
+  if (atendimentoViewMode === "todos") {
+    grid.innerHTML = todos.map(c => `
+      <div class="client-card">
+        <div class="client-card-top">
+          ${avatarHTML(c.designer, "avatar-sm")}
+          <div class="client-card-name">${c.cliente}</div>
+        </div>
+        <div class="client-card-count">${c.atend ? "Atendimento: " + c.atend : ""}</div>
+        <div class="client-card-badges">
+          ${(c.servicos || []).map(s => `<span class="badge badge-estatico">${s}</span>`).join("")}
+        </div>
+      </div>
+    `).join("");
+    return;
+  }
+
+  const porAtendimento = {};
+  todos.forEach(c => {
+    const responsavel = c.atend || "Sem atendimento definido";
+    if (!porAtendimento[responsavel]) porAtendimento[responsavel] = [];
+    porAtendimento[responsavel].push(c);
+  });
+
+  grid.innerHTML = Object.entries(porAtendimento).map(([responsavel, lista]) => `
+    <div class="atendimento-group">
+      <div class="atendimento-group-title">${responsavel}</div>
+      <div class="clients-grid">
+        ${lista.map(c => `
+          <div class="client-card">
+            <div class="client-card-top">
+              ${avatarHTML(c.designer, "avatar-sm")}
+              <div class="client-card-name">${c.cliente}</div>
+            </div>
+            <div class="client-card-count">${c.escopo || ""}</div>
+          </div>
+        `).join("")}
       </div>
     </div>
   `).join("");
@@ -813,8 +1097,22 @@ document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
     document.querySelector(".page-title").textContent = title;
     document.querySelector(".page-subtitle").textContent = subtitle;
     if (page === "clientes") buildClientsPage();
+    if (page === "atendimento") buildAtendimentoPage();
   });
 });
+
+// Toggle "Por atendimento" / "Todos os clientes" na página de atendimento
+const atendimentoToggle = document.getElementById("atendimentoToggle");
+if (atendimentoToggle) {
+  atendimentoToggle.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      atendimentoToggle.querySelectorAll("button").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      atendimentoViewMode = btn.dataset.view;
+      buildAtendimentoPage();
+    });
+  });
+}
 
 document.getElementById("nowPlaying").addEventListener("click", () => {
   const idx = tasks.findIndex(t => t.running);
@@ -824,3 +1122,4 @@ document.getElementById("nowPlaying").addEventListener("click", () => {
 buildBoard();
 render();
 carregarTarefasReais();
+carregarDadosPainelBeeon();
