@@ -557,16 +557,22 @@ function renderModalRegra(task) {
   const listaHtml = seq.length === 0
     ? `<p class="workflow-seq-empty">Sem sequência configurada nessa tarefa.</p>`
     : seq.map((s, i) => `
-        <div class="rule-row ${s.atual ? "current" : ""}">
+        <div class="rule-row ${s.atual ? "current" : ""}" data-element-id="${s.id}">
           <span class="rule-row-order">${i + 1}</span>
           ${avatarHTML(s.nome, "avatar-sm", s.foto)}
           <span class="rule-row-name">${s.nome}</span>
           ${s.concluido ? `<span class="rule-row-status done">Concluído</span>` : s.atual ? `<span class="rule-row-status current">Atual</span>` : `<span class="rule-row-status">Aguardando</span>`}
+          ${(!s.concluido && !s.atual) ? `
+            <button type="button" class="rule-row-remove" data-element-id="${s.id}" title="Remover da sequência">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          ` : ""}
         </div>
       `).join("");
 
   body.innerHTML = `
-    <div class="rule-list">${listaHtml}</div>
+    <div class="rule-status-msg" id="ruleStatusMsg" hidden></div>
+    <div class="rule-list" id="ruleList">${listaHtml}</div>
     <div class="rule-add-section">
       <span class="side-label">Adicionar próxima pessoa</span>
       <input type="text" class="rule-add-search" id="ruleAddSearch" placeholder="Buscar pessoa...">
@@ -576,6 +582,15 @@ function renderModalRegra(task) {
     </div>
   `;
 
+  body.querySelectorAll(".rule-row-remove").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      await executarAcaoNaRegra(task, async () => {
+        return removerDaRegraNoBackend(task.workflowId, btn.dataset.elementId);
+      }, "Removendo da sequência...");
+    });
+  });
+
   document.getElementById("ruleAddSearch").addEventListener("input", e => {
     renderizarListaAdicionarRegra(task, usuariosParaAdicionarRegra, e.target.value);
   });
@@ -584,6 +599,44 @@ function renderModalRegra(task) {
     usuariosParaAdicionarRegra = usuarios;
     renderizarListaAdicionarRegra(task, usuarios, "");
   });
+}
+
+// Enquanto true, o modal "Ver regra" não pode ser fechado (tem uma
+// ação em andamento no Runrun.it).
+let regraAtualizando = false;
+
+/**
+ * Roda uma ação de mudar a regra (adicionar/remover pessoa), mostrando
+ * uma mensaginha de "Atualizando..." e travando o fechamento do modal
+ * até terminar de verdade.
+ */
+async function executarAcaoNaRegra(task, acaoFn, mensagem) {
+  regraAtualizando = true;
+  const msgEl = document.getElementById("ruleStatusMsg");
+  if (msgEl) {
+    msgEl.hidden = false;
+    msgEl.textContent = mensagem;
+  }
+  await acaoFn();
+  await carregarSequencia(task);
+  regraAtualizando = false;
+  renderModalRegra(task);
+}
+
+async function removerDaRegraNoBackend(workflowId, elementId) {
+  if (!COLMEIA_API_URL || !workflowId || !elementId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "removerDaRegra", workflowId, elementId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou remover da regra:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao remover da regra no Runrun.it:", err);
+    return false;
+  }
 }
 
 // Guarda a lista de usuários carregada, pra filtrar sem buscar de novo
@@ -600,22 +653,48 @@ function renderizarListaAdicionarRegra(task, usuarios, filtro) {
   const alvo = normalizarParaComparar(filtro);
   const filtrados = alvo ? usuarios.filter(u => normalizarParaComparar(u.nome).includes(alvo)) : usuarios;
   listEl.innerHTML = filtrados.map(u => `
-    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
+    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}" data-user-foto="${u.foto || ""}">
       ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
     </button>
   `).join("");
   listEl.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", async e => {
+      if (regraAtualizando) return;
+      animarPessoaSubindo(btn, e);
       btn.disabled = true;
-      const ok = await adicionarNaRegraNoBackend(task.workflowId, btn.dataset.userId);
-      if (ok) {
-        await carregarSequencia(task);
-        renderModalRegra(task);
-      } else {
-        btn.disabled = false;
-      }
+      await executarAcaoNaRegra(task, async () => {
+        return adicionarNaRegraNoBackend(task.workflowId, btn.dataset.userId);
+      }, "Adicionando na sequência...");
     });
   });
+}
+
+/**
+ * Efeito visual: clona a fotinho de quem foi clicado e faz ela "subir"
+ * do botão até a lista da sequência, dando a sensação de que a pessoa
+ * está entrando ali de verdade.
+ */
+function animarPessoaSubindo(btn) {
+  const lista = document.getElementById("ruleList");
+  if (!lista) return;
+  const origemRect = btn.getBoundingClientRect();
+  const destinoRect = lista.getBoundingClientRect();
+
+  const clone = btn.querySelector(".avatar")?.cloneNode(true);
+  if (!clone) return;
+  clone.classList.add("avatar-flying");
+  clone.style.left = origemRect.left + "px";
+  clone.style.top = origemRect.top + "px";
+  document.body.appendChild(clone);
+
+  requestAnimationFrame(() => {
+    clone.style.left = destinoRect.left + 16 + "px";
+    clone.style.top = destinoRect.bottom - 30 + "px";
+    clone.style.opacity = "0";
+    clone.style.transform = "scale(0.6)";
+  });
+
+  setTimeout(() => clone.remove(), 650);
 }
 
 async function entregarTarefaNoBackend(taskId) {
@@ -686,6 +765,76 @@ async function buscarUsuariosRunrun() {
  * Busca a descrição real de uma tarefa no Runrun.it. Devolve sempre uma
  * string (vazia se não tiver descrição ou der erro).
  */
+// Cores pra alternar entre os formatos gerados pela IA (mesmo estilo
+// visual dos boxes que já existiam, só que agora com dados reais).
+const CORES_FORMATO_BOX = ["fb-blue", "fb-purple", "fb-orange", "fb-teal", "fb-pink"];
+
+/**
+ * Chama o Gemini (via backend) pra organizar a descrição real da
+ * tarefa em plataformas + formatos + um resumo do briefing, e desenha
+ * o resultado no lugar do botão.
+ */
+async function gerarBriefingComIA(task) {
+  const btn = document.getElementById("gerarBriefingBtn");
+  const resultEl = document.getElementById("briefingResult");
+  if (!btn || !resultEl) return;
+
+  btn.disabled = true;
+  btn.textContent = "✨ Gerando briefing...";
+  resultEl.innerHTML = "";
+
+  if (!COLMEIA_API_URL) {
+    btn.disabled = false;
+    btn.textContent = "✨ Gerar briefing com IA";
+    resultEl.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
+    return;
+  }
+
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "gerarBriefing", taskId: task.id }),
+    });
+    const data = await res.json();
+
+    btn.disabled = false;
+    btn.textContent = "✨ Gerar de novo";
+
+    if (!data.ok) {
+      resultEl.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui gerar o briefing."}</p>`;
+      return;
+    }
+    if (data.semDescricao) {
+      resultEl.innerHTML = `<p class="workflow-seq-empty">Essa tarefa não tem descrição pra organizar.</p>`;
+      return;
+    }
+
+    const b = data.briefing || {};
+    const plataformas = b.plataformas || [];
+    const formatos = b.formatos || [];
+    const resumo = b.resumo || "";
+
+    resultEl.innerHTML = `
+      ${resumo ? `<p class="ai-briefing-resumo">${resumo}</p>` : ""}
+      ${plataformas.length ? `
+        <div class="ai-briefing-tags">
+          ${plataformas.map(p => `<span class="badge badge-estatico">${p}</span>`).join("")}
+        </div>
+      ` : ""}
+      ${formatos.length ? `
+        <div class="ai-format-boxes">
+          ${formatos.map((f, i) => `<div class="format-box ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${f}</div>`).join("")}
+        </div>
+      ` : ""}
+    `;
+  } catch (err) {
+    console.error("Falha ao gerar briefing com IA:", err);
+    btn.disabled = false;
+    btn.textContent = "✨ Gerar briefing com IA";
+    resultEl.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
+  }
+}
+
 async function buscarDescricaoDoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return "";
   try {
@@ -1409,9 +1558,10 @@ function renderDetail() {
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
               <div class="desc-text-real" id="descTextReal">${task.id ? "Carregando descrição..." : ""}</div>
-              <div class="ai-format-boxes">
-                ${formatsByType[task.type].map(f => `<div class="format-box ${f.cls}">${f.label}</div>`).join("")}
-              </div>
+              ${task.id ? `
+                <button type="button" class="ai-briefing-btn" id="gerarBriefingBtn">✨ Gerar briefing com IA</button>
+                <div class="ai-briefing-result" id="briefingResult"></div>
+              ` : ""}
             </div>
             ${task.hasChange ? `
               <div class="change-panel" id="changePanel">
@@ -1562,6 +1712,11 @@ function renderDetail() {
     moreMenu.classList.remove("open");
     abrirModalRegra(task);
   });
+
+  const gerarBriefingBtn = document.getElementById("gerarBriefingBtn");
+  if (gerarBriefingBtn) {
+    gerarBriefingBtn.addEventListener("click", () => gerarBriefingComIA(task));
+  }
 
   // ===== Abas Descrição / Comentários / Alteração (sem re-renderizar, com transição) =====
   document.getElementById("tabDesc").addEventListener("click", () => {
@@ -2110,9 +2265,11 @@ document.getElementById("quickAccessClose").addEventListener("click", () => {
 // Modal "Ver regra"
 const ruleModalOverlay = document.getElementById("ruleModalOverlay");
 document.getElementById("ruleModalClose").addEventListener("click", () => {
+  if (regraAtualizando) return;
   ruleModalOverlay.hidden = true;
 });
 ruleModalOverlay.addEventListener("click", e => {
+  if (regraAtualizando) return;
   if (e.target === ruleModalOverlay) ruleModalOverlay.hidden = true;
 });
 
