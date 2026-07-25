@@ -1205,24 +1205,4 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .rule-add-list button:hover { background: var(--page-bg); }
 .rule-add-list .avatar { width: 24px; height: 24px; font-size: 10px; }
 
-/* ===== Modal "Card mãe" ===== */
-.mother-link {
-  font-size: 12.5px;
-  color: #0000FB;
-  font-weight: 600;
-  text-decoration: none;
-}
-.mother-link:hover { text-decoration: underline; }
-.mother-subtasks-list {
-  display: flex; flex-direction: column; gap: 6px;
-  margin-top: 12px;
-}
-.mother-subtask-row {
-  display: flex; align-items: center; gap: 10px;
-  border: none; background: var(--page-bg);
-  border-radius: 10px; padding: 10px 12px;
-  cursor: pointer; text-align: left;
-  font-family: inherit;
-}
-.mother-subtask-row.done { opacity: 0.55; }
-.mother-subtask-title { flex: 1; font-size: 13px; font-weight: 500; }
+/* (modal antigo do card mãe removido — agora usa o painel flutuante, seta pra baixo) */
