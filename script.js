@@ -1148,9 +1148,14 @@ function wireWorkflowArrows(task) {
   if (deliverBtn) {
     deliverBtn.addEventListener("click", async () => {
       deliverBtn.disabled = true;
+      // Primeiro fecha a etapa da última pessoa da sequência (sem
+      // transferir pra ninguém, já que não tem próximo) — confirmado
+      // que o Runrun.it só deixa entregar depois disso.
+      await avancarWorkflowNoBackend(task.id);
       const ok = await entregarTarefaNoBackend(task.id);
       if (ok) {
         console.log("Tarefa entregue no Runrun.it.");
+        await carregarSequencia(task);
       } else {
         deliverBtn.disabled = false;
       }
