@@ -860,33 +860,34 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 }
 
 /* ===== Clientes por atendimento (Colmeia) ===== */
-.atendimento-toggle {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.atendimento-toggle button {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color, #e2e2e2);
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-}
-.atendimento-toggle button.on {
-  background: #0000FB;
-  color: #fff;
-  border-color: #0000FB;
-}
 .atendimento-group {
-  margin-bottom: 24px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-color, #e2e2e2);
+  border-radius: 12px;
+  overflow: hidden;
 }
-.atendimento-group-title {
+.atendimento-group-header {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--card-bg, #fff);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.atendimento-group-name {
   font-weight: 600;
-  margin-bottom: 10px;
+  flex: 1;
+}
+.atendimento-group-count {
+  font-size: 13px;
+  opacity: 0.6;
+}
+.atendimento-group .clients-grid {
+  padding: 0 16px 16px;
 }
 .client-card-top {
   display: flex;
@@ -898,4 +899,11 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   opacity: 0.6;
   font-size: 14px;
   padding: 12px 0;
+}
+
+.desc-text-real {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+  white-space: pre-wrap;
 }
