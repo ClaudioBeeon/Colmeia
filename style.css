@@ -1260,17 +1260,18 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .rule-row-remove svg { width: 14px; height: 14px; }
 .rule-row-remove:hover { background: #FFE3E3; color: #E03131; }
 
-.rule-status-msg {
-  font-size: 12.5px; font-weight: 600; color: #0000FB;
-  background: #EDEDFF; border-radius: 8px;
-  padding: 8px 12px; margin-bottom: 10px;
-  display: flex; align-items: center; gap: 8px;
+.rule-row {
+  transition: opacity 0.18s ease, transform 0.18s ease, max-height 0.2s ease;
+  max-height: 60px; overflow: hidden;
 }
-.rule-status-msg::before {
-  content: "";
+.rule-row.saindo { opacity: 0; transform: translateX(6px); max-height: 0; padding-top: 0; padding-bottom: 0; }
+.rule-row.pendente { opacity: 0.6; }
+
+.rule-row-spinner {
   width: 12px; height: 12px; border-radius: 50%;
-  border: 2px solid #0000FB; border-top-color: transparent;
-  animation: colmeia-spin 0.7s linear infinite;
+  border: 1.5px solid var(--border-color, #e2e2e2); border-top-color: #0000FB;
+  animation: colmeia-spin 0.6s linear infinite;
+  flex-shrink: 0;
 }
 @keyframes colmeia-spin { to { transform: rotate(360deg); } }
 
