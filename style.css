@@ -1297,6 +1297,10 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .ai-briefing-tags {
   display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
 }
+.ai-briefing-plataforma-tag {
+  font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+  background: #FBEAF0; color: #72243E; white-space: nowrap;
+}
 .ai-briefing-preenchidos {
   display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px;
 }
