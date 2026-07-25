@@ -72,6 +72,7 @@ async function carregarDadosPainelBeeon() {
       designers: resposta.data.designers || [],
       roles: resposta.data.roles || {},
       state: resposta.data.state || {},
+      photos: resposta.data.photos || {}, // designer -> URL da foto, confirmado no script.js do painel
     };
 
     // Depois de carregado, atualiza as páginas que dependem desses dados.
@@ -84,22 +85,57 @@ async function carregarDadosPainelBeeon() {
 
 /**
  * Tenta achar a foto de um designer nos dados vindos do painel-beeon.
- * Como não sabemos ainda o nome exato do campo de foto, checa alguns
- * nomes comuns. Se nenhum bater, devolve null (o Colmeia usa as
- * iniciais do nome como hoje).
+ * Confirmado no código-fonte do painel: o campo se chama "photos"
+ * (designer -> URL da foto).
  */
 function fotoDoDesigner(nomeDesigner) {
-  if (!painelBeeonData) return null;
-  const candidatos = ["fotos", "photos", "avatars", "fotosDesigners"];
-  for (const chave of candidatos) {
-    const mapa = painelBeeonData[chave] || (painelBeeonData.state && painelBeeonData.state[chave]);
-    if (mapa && mapa[nomeDesigner]) return mapa[nomeDesigner];
+  if (!painelBeeonData || !painelBeeonData.photos) return null;
+  return painelBeeonData.photos[nomeDesigner] || null;
+}
+
+// Fotos de quem faz o atendimento dos clientes. No painel-designers-beeon
+// essa lista é fixa dentro do próprio código (não vem do backend), então
+// copiei ela de lá — se alguém novo entrar no atendimento ou uma foto
+// mudar, é só atualizar aqui também.
+const ATENDIMENTO_PHOTOS_BEEON = {
+  "Manu": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833487/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_amarelo_claro_mantendo_as_mes_372247_biwncc.png",
+  "Laura": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833986/Firefly_gpt-image_Altere_o_fundo_para_roxo_bem_claro_22904_s2j7cx.png",
+  "Giovanna": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833487/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_azul_claro_mantendo_as_mesmas_372247_1_eroaek.png",
+  "João Teles": "https://link-da-foto-do-joao.jpg",
+  "Lucas": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833905/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_laranja_bem_claro_mantendo_as_372247_sdfav1.png",
+};
+
+function fotoDoAtendimento(nomeAtendimento) {
+  return ATENDIMENTO_PHOTOS_BEEON[nomeAtendimento] || null;
+}
+
+function avatarAtendimentoHTML(nome, sizeClass) {
+  const foto = fotoDoAtendimento(nome) || fotoDoDesigner(nome);
+  if (foto) {
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" alt="${nome}" title="${nome}">`;
+  }
+  return `<div class="avatar ${sizeClass || ""}" title="${nome}">${initials(nome)}</div>`;
+}
+
+/**
+ * Acha quem é o atendimento responsável (c.atend) de um cliente,
+ * procurando nos clientes de todos os designers no painel-beeon.
+ * Devolve null se o cliente não for encontrado lá (ex: dados fake).
+ */
+function getAtendimentoDoCliente(nomeCliente) {
+  if (!painelBeeonData || !painelBeeonData.state) return null;
+  for (const designer of Object.keys(painelBeeonData.state)) {
+    const cliente = (painelBeeonData.state[designer] || []).find(c => c.cliente === nomeCliente);
+    if (cliente && cliente.atend) return cliente.atend;
   }
   return null;
 }
 
-function avatarHTML(nomeDesigner, sizeClass) {
-  const foto = fotoDoDesigner(nomeDesigner);
+function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
+  // Prioridade: foto do painel-designers-beeon primeiro (é a fonte que
+  // o Claudio mantém manualmente); só usa a do Runrun.it se não achar
+  // nenhuma foto cadastrada no painel.
+  const foto = fotoDoDesigner(nomeDesigner) || avatarUrlDireto;
   if (foto) {
     return `<img class="avatar ${sizeClass || ""}" src="${foto}" alt="${nomeDesigner}" title="${nomeDesigner}">`;
   }
@@ -126,6 +162,7 @@ function mapearTarefaDoBackend(t) {
     isOutraEtapa: t.isOutraEtapa,
     link: t.link,
     assignee: t.assignee,
+    assigneeAvatarUrl: t.assigneeAvatarUrl || null,
     timerSeconds: 0,
     running: false,
     estimatePct: Math.min(95, Math.round((t.estimateMinutes || 30) / 2)),
@@ -315,7 +352,7 @@ function cardHTML(task, idx) {
         <div class="progress-track"><div class="progress-fill" data-idx="${idx}" style="width:${task.estimatePct}%"></div></div>
       </div>
       <div class="card-bottom">
-        <div class="avatar avatar-sm" title="${task.assignee}">${initials(task.assignee)}</div>
+        ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
         <span class="card-due-simple ${task.day === HOJE ? "overdue" : ""}">${dueIcon}${task.due}</span>
       </div>
     </div>
@@ -688,8 +725,8 @@ function renderDetail() {
           <div class="side-block">
             <span class="side-label">Atendimento responsável</span>
             <div class="side-person">
-              <div class="avatar avatar-sm">${initials(task.assignee)}</div>
-              <span>${task.assignee}</span>
+              ${avatarAtendimentoHTML(getAtendimentoDoCliente(task.client) || task.assignee, "avatar-sm")}
+              <span>${getAtendimentoDoCliente(task.client) || task.assignee}</span>
             </div>
             <div class="discord-ctas">
               <a href="#" class="discord-cta" onclick="return false">
@@ -1069,7 +1106,10 @@ function buildAtendimentoPage() {
 
   grid.innerHTML = Object.entries(porAtendimento).map(([responsavel, lista]) => `
     <div class="atendimento-group">
-      <div class="atendimento-group-title">${responsavel}</div>
+      <div class="atendimento-group-title">
+        ${avatarAtendimentoHTML(responsavel, "avatar-sm")}
+        <span>${responsavel}</span>
+      </div>
       <div class="clients-grid">
         ${lista.map(c => `
           <div class="client-card">
