@@ -765,6 +765,80 @@ async function buscarUsuariosRunrun() {
  * Busca a descrição real de uma tarefa no Runrun.it. Devolve sempre uma
  * string (vazia se não tiver descrição ou der erro).
  */
+/**
+ * Identifica se uma pergunta é sobre o texto que vai dentro da arte
+ * (varia de redação entre tarefas: "informações textuais", "texto na
+ * arte" etc.) — não depende de vir sempre com as mesmas palavras exatas,
+ * só que tenha "texto" e "arte" nela.
+ */
+function ehCampoTextoNaArte(pergunta) {
+  const p = normalizarParaComparar(pergunta);
+  return (p.includes("texto") || p.includes("textu")) && p.includes("arte");
+}
+
+// Serviços conhecidos pra reconhecer o link e mostrar "Ver no X" em vez
+// da URL crua. Se não reconhecer o domínio, usa o próprio domínio como
+// nome (ex: "Ver no meusite.com").
+const SERVICOS_LINK = {
+  "docs.google.com": "Docs",
+  "drive.google.com": "Drive",
+  "sheets.google.com": "Planilhas",
+  "slides.google.com": "Slides",
+  "forms.google.com": "Formulários",
+  "youtube.com": "YouTube",
+  "youtu.be": "YouTube",
+  "figma.com": "Figma",
+  "notion.so": "Notion",
+  "canva.com": "Canva",
+  "trello.com": "Trello",
+  "dropbox.com": "Dropbox",
+};
+
+function detectarServicoDoLink(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    for (const dominio in SERVICOS_LINK) {
+      if (host.includes(dominio)) return SERVICOS_LINK[dominio];
+    }
+    return host;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Desenha o valor de um campo do briefing: se o valor inteiro for só um
+ * link, mostra uma etiqueta "Ver no Docs ↗" (ou o serviço que for) em
+ * vez da URL crua. Senão, usa o texto normal com qualquer link dentro
+ * dele virando clicável.
+ */
+function renderValorCampo(valor) {
+  const soLink = /^https?:\/\/\S+$/.test(valor.trim());
+  if (soLink) {
+    const url = valor.trim();
+    const servico = detectarServicoDoLink(url) || "link";
+    return `<a href="${url}" target="_blank" rel="noopener" class="ai-briefing-link-pill">Ver no ${servico} ↗</a>`;
+  }
+  return linkificarTexto(valor);
+}
+
+/**
+ * Escapa HTML (evita que o texto quebre a página se tiver < ou &, por
+ * exemplo) e transforma links (http/https) em links clicáveis de
+ * verdade — usado nos campos do briefing gerado pela IA, já que um
+ * deles pode ser um link do Google Drive ou de referência.
+ */
+function escaparHTML(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function linkificarTexto(texto) {
+  const escapado = escaparHTML(texto);
+  return escapado.replace(/(https?:\/\/[^\s<]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+}
+
 // Cores pra alternar entre os formatos gerados pela IA (mesmo estilo
 // visual dos boxes que já existiam, só que agora com dados reais).
 const CORES_FORMATO_BOX = ["fb-blue", "fb-purple", "fb-orange", "fb-teal", "fb-pink"];
@@ -807,16 +881,17 @@ async function gerarBriefingComIA(task) {
     const plataformas = b.plataformas || [];
     const formatos = b.formatos || [];
     const resumo = b.resumo || "";
+    // Campos dinâmicos — a IA identifica sozinha quais perguntas existem
+    // na descrição (varia de tarefa pra tarefa) e devolve a resposta de
+    // cada uma, exatamente como está escrita (nunca reescrita).
+    const campos = b.campos || [];
 
-    // Campos de texto livre — o valor vem EXATAMENTE como escrito na
-    // descrição original (pedimos pra IA nunca reescrever), então é
-    // seguro mostrar direto. Se vazio/null, mostra "Não preenchido".
-    const camposLivres = [
-      { label: "Instrução para redação", icone: "✏️", valor: b.instrucaoRedacao },
-      { label: "Referência", icone: "🔗", valor: b.referencia },
-      { label: "Texto na arte", icone: "🔤", valor: b.textoNaArte },
-      { label: "Observações", icone: "💬", valor: b.observacoes },
-    ];
+    // O campo de "texto na arte" ganha destaque especial (o designer vai
+    // copiar isso direto pra peça) — identificado pela pergunta conter
+    // as palavras "texto" e "arte", não importa a redação exata.
+    const idxDestaque = campos.findIndex(c => ehCampoTextoNaArte(c.pergunta) && c.resposta);
+    const campoDestaque = idxDestaque !== -1 ? campos[idxDestaque] : null;
+    const camposSecundarios = campos.filter((c, i) => i !== idxDestaque);
 
     resultEl.innerHTML = `
       ${plataformas.length ? `
@@ -830,15 +905,38 @@ async function gerarBriefingComIA(task) {
         </div>
       ` : ""}
       ${resumo ? `<p class="ai-briefing-resumo">${resumo}</p>` : ""}
-      <div class="ai-briefing-campos">
-        ${camposLivres.map(c => `
-          <div class="ai-briefing-campo">
-            <p class="ai-briefing-campo-label">${c.icone} ${c.label}</p>
-            <p class="ai-briefing-campo-valor ${c.valor ? "" : "vazio"}">${c.valor || "Não preenchido"}</p>
+      ${campoDestaque ? `
+        <div class="ai-briefing-destaque">
+          <div>
+            <p class="ai-briefing-destaque-label">${campoDestaque.pergunta}</p>
+            <p class="ai-briefing-destaque-valor">${escaparHTML(campoDestaque.resposta)}</p>
           </div>
-        `).join("")}
-      </div>
+          <button type="button" class="ai-briefing-copy-btn" data-texto="${escaparHTML(campoDestaque.resposta).replace(/"/g, "&quot;")}" title="Copiar texto">
+            <svg viewBox="0 0 24 24" fill="none" width="15" height="15"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>
+          </button>
+        </div>
+      ` : ""}
+      ${camposSecundarios.length ? `
+        <div class="ai-briefing-campos">
+          ${camposSecundarios.map(c => `
+            <div class="ai-briefing-campo">
+              <p class="ai-briefing-campo-label">${c.pergunta}</p>
+              <p class="ai-briefing-campo-valor ${c.resposta ? "" : "vazio"}">${c.resposta ? renderValorCampo(c.resposta) : "Não preenchido"}</p>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
     `;
+
+    resultEl.querySelectorAll(".ai-briefing-copy-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        navigator.clipboard.writeText(btn.dataset.texto).then(() => {
+          const original = btn.innerHTML;
+          btn.innerHTML = "✓";
+          setTimeout(() => { btn.innerHTML = original; }, 1200);
+        });
+      });
+    });
   } catch (err) {
     console.error("Falha ao gerar briefing com IA:", err);
     if (tasks[detailIdx] === task) {
@@ -1015,7 +1113,7 @@ function buildBoard() {
       <div class="board-loading">
         <div class="board-loading-glass"></div>
         <div class="board-loading-content">
-          <span class="board-loading-bee">🐝</span>
+          <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Icone_ifelxw.png" class="board-loading-bee" alt="Colmeia">
           <p class="board-loading-text" id="loadingMsg">${mensagensCarregando[0]}</p>
         </div>
       </div>
@@ -1865,7 +1963,7 @@ function mostrarCardEmBranco(mensagem) {
   const panel = document.getElementById("taskDetail");
   panel.innerHTML = `
     <div class="detail-inner detail-loading-blank">
-      <span class="detail-loading-bee">🐝</span>
+      <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Icone_ifelxw.png" class="detail-loading-bee" alt="Colmeia">
       <p class="workflow-seq-empty">${mensagem || "Carregando..."}</p>
     </div>
   `;
