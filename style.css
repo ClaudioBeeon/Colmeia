@@ -1,1962 +1,1229 @@
-// ============================================
-// DADOS FAKE — só para visualização do protótipo.
-// Nenhuma conexão real com planilha, Drive ou Runrun.it ainda.
-// ============================================
+:root {
+  --page-bg: #F3F4F6;
+  --sidebar-bg: #FFFFFF;
+  --card-bg: #FFFFFF;
+  --border: #ECEDF2;
+  --text-primary: #16181D;
+  --text-secondary: #6E7180;
+  --text-muted: #9A9DAE;
 
-const dueIcon = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
-const playIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg>`;
-const pauseIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
-const discordIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 6.3a15 15 0 00-3.6-1.1l-.2.4a13 13 0 013.1 1.1 12.6 12.6 0 00-11.9 0 13 13 0 013.1-1.1l-.2-.4A15 15 0 005.6 6.3C3.6 9.3 3 12.2 3.2 15a15 15 0 004.4 2.2l.6-1a9.6 9.6 0 01-1.7-.8l.4-.3a11.3 11.3 0 009.8 0l.4.3c-.5.3-1.1.6-1.7.8l.6 1A15 15 0 0020.8 15c.3-3.2-.5-6.1-1.9-8.7zM9.7 13.4c-.7 0-1.3-.7-1.3-1.5s.6-1.5 1.3-1.5 1.4.7 1.3 1.5c0 .8-.6 1.5-1.3 1.5zm4.6 0c-.7 0-1.3-.7-1.3-1.5s.6-1.5 1.3-1.5 1.4.7 1.3 1.5c0 .8-.6 1.5-1.3 1.5z"/></svg>`;
+  --accent: #0000FB;
+  --accent-soft: #E6E6FE;
+  --danger: #E5484D;
+  --danger-soft: #FDECEC;
+  --warning: #F5A623;
+  --warning-soft: #FEF3E0;
+  --success: #22B07D;
+  --purple: #8B5CF6;
+  --purple-soft: #F1EBFE;
 
-const columnsDef = [
-  { key: "pendentes", label: "Pendentes" },
-  { key: "prioridades", label: "Prioridades" },
-  { key: "fazendo", label: "Fazendo" },
-  { key: "revisao", label: "Revisão" },
-  { key: "ajustes", label: "Ajustes" },
-];
+  --radius-lg: 16px;
+  --radius-md: 12px;
 
-// dia 24 = "hoje" na simulação
-// (o "hoje" de verdade agora vem de hojeISO(), calculado dinamicamente)
+  --shadow-card: 0 1px 3px rgba(20,20,30,0.07), 0 4px 14px rgba(20,20,30,0.06);
+  --shadow-hover: 0 8px 24px rgba(20,20,30,0.12);
+  --shadow-sidebar: 0 4px 20px rgba(20,20,30,0.08);
 
-// ============================================
-// INTEGRAÇÃO REAL — Google Apps Script (Code.gs) + Runrun.it
-// ============================================
-// Cole aqui a URL do seu Web App do Apps Script depois de publicar o
-// Code.gs (Implantar > Nova implantação > Aplicativo da web).
-// Enquanto não colar, o Colmeia continua usando os dados fake abaixo.
-const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
-
-// URL do Web App do painel-designers-beeon (o outro painel, já publicado).
-// O Colmeia só faz leitura aqui — nunca escreve nada nesse painel.
-const PAINEL_BEEON_API_URL = "https://script.google.com/macros/s/AKfycbzzWtG4jkVpLvPwOAHaj-h9KK9k_8N6YWGUXfFtUDSXRiCj7ILDPvuSy9VJXhglTrzEQQ/exec";
-
-const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-
-// Guarda os dados lidos do painel-designers-beeon (designers, clientes,
-// atendimento, fotos) depois que carregarDadosPainelBeeon() rodar.
-// Formato: { designers: [...], roles: {...}, state: {...}, fotos: {...} }
-let painelBeeonData = null;
-
-/**
- * Busca (só leitura, GET) o estado completo do painel-designers-beeon:
- * lista de designers, papel/especialidade de cada um, e o mapa
- * designer -> lista de clientes (com escopo, atendimento, serviços etc).
- *
- * IMPORTANTE: nunca faz POST pra esse painel — só GET. O Colmeia não
- * altera nada lá.
- *
- * Na primeira vez, mostra no console do navegador (F12 > Console) a
- * estrutura crua que veio, pra confirmarmos onde ficam as fotos de
- * cada designer/cliente (o nome exato do campo pode variar).
- */
-async function carregarDadosPainelBeeon() {
-  if (!PAINEL_BEEON_API_URL) return;
-  try {
-    const res = await fetch(PAINEL_BEEON_API_URL);
-    const resposta = await res.json();
-    if (!resposta.ok) {
-      console.error("Erro ao buscar dados do painel-designers-beeon:", resposta.error);
-      return;
-    }
-    if (resposta.empty) {
-      console.warn("O painel-designers-beeon respondeu, mas o estado está vazio (nada salvo lá ainda).");
-      return;
-    }
-
-    // Log de diagnóstico — só na primeira carga, pra confirmarmos os
-    // nomes exatos dos campos (principalmente onde ficam as fotos).
-    console.log("[Colmeia] Estrutura recebida do painel-designers-beeon:", resposta.data);
-
-    painelBeeonData = {
-      designers: resposta.data.designers || [],
-      roles: resposta.data.roles || {},
-      state: resposta.data.state || {},
-      photos: resposta.data.photos || {}, // designer -> URL da foto, confirmado no script.js do painel
-    };
-
-    // Depois de carregado, atualiza as páginas que dependem desses dados.
-    buildClientsPage();
-    buildAtendimentoPage();
-    buildTiposPage();
-  } catch (err) {
-    console.error("Falha ao conectar com o painel-designers-beeon:", err);
-  }
+  --font-display: 'Heebo', sans-serif;
+  --font-body: 'Heebo', sans-serif;
 }
 
-/**
- * Tenta achar a foto de um designer nos dados vindos do painel-beeon.
- * Confirmado no código-fonte do painel: o campo se chama "photos"
- * (designer -> URL da foto).
- */
-function fotoDoDesigner(nomeDesigner) {
-  if (!painelBeeonData || !painelBeeonData.photos) return null;
-  const chave = Object.keys(painelBeeonData.photos).find(d => nomesCorrespondem(d, nomeDesigner));
-  return chave ? painelBeeonData.photos[chave] : null;
+[data-theme="dark"] {
+  --page-bg: #16121F;
+  --sidebar-bg: rgba(30, 26, 46, 0.55);
+  --card-bg: rgba(255, 255, 255, 0.045);
+  --border: rgba(255, 255, 255, 0.09);
+  --text-primary: #F5F3FA;
+  --text-secondary: #ADA8C2;
+  --text-muted: #7C7793;
+
+  --accent: #5C5CFF;
+  --accent-soft: rgba(92, 92, 255, 0.18);
+  --danger: #FF8A8D;
+  --danger-soft: rgba(255, 138, 141, 0.14);
+  --warning: #FFC069;
+  --warning-soft: rgba(255, 192, 105, 0.14);
+  --success: #5FE0AE;
+  --purple: #C4B5FD;
+  --purple-soft: rgba(196, 181, 253, 0.16);
 }
 
-// Fotos de quem faz o atendimento dos clientes. No painel-designers-beeon
-// essa lista é fixa dentro do próprio código (não vem do backend), então
-// copiei ela de lá — se alguém novo entrar no atendimento ou uma foto
-// mudar, é só atualizar aqui também.
-const ATENDIMENTO_PHOTOS_BEEON = {
-  "Manu": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833487/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_amarelo_claro_mantendo_as_mes_372247_biwncc.png",
-  "Laura": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833986/Firefly_gpt-image_Altere_o_fundo_para_roxo_bem_claro_22904_s2j7cx.png",
-  "Giovanna": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833487/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_azul_claro_mantendo_as_mesmas_372247_1_eroaek.png",
-  "João Teles": "https://link-da-foto-do-joao.jpg",
-  "Lucas": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833905/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_laranja_bem_claro_mantendo_as_372247_sdfav1.png",
-};
-
-function fotoDoAtendimento(nomeAtendimento) {
-  const chave = Object.keys(ATENDIMENTO_PHOTOS_BEEON).find(d => nomesCorrespondem(d, nomeAtendimento));
-  return chave ? ATENDIMENTO_PHOTOS_BEEON[chave] : null;
+[data-theme="dark"] body {
+  background:
+    radial-gradient(ellipse 900px 500px at 20% -5%, rgba(124, 58, 237, 0.35), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 10%, rgba(79, 95, 247, 0.25), transparent 55%),
+    #0F0C17;
 }
 
-function avatarAtendimentoHTML(nome, sizeClass) {
-  const foto = fotoDoAtendimento(nome) || fotoDoDesigner(nome);
-  if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nome}" alt="${nome}" title="${nome}" onerror="handleAvatarImgError(this)">`;
-  }
-  return `<div class="avatar ${sizeClass || ""}" title="${nome}">${initials(nome)}</div>`;
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] .task-card {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-/**
- * Acha quem é o atendimento responsável (c.atend) de um cliente,
- * procurando nos clientes de todos os designers no painel-beeon.
- * Devolve null se o cliente não for encontrado lá (ex: dados fake).
- */
-function getAtendimentoDoCliente(nomeCliente) {
-  if (!painelBeeonData || !painelBeeonData.state) return null;
-  const alvo = normalizarParaComparar(nomeCliente);
-  for (const designer of Object.keys(painelBeeonData.state)) {
-    const cliente = (painelBeeonData.state[designer] || []).find(c => normalizarParaComparar(c.cliente) === alvo);
-    if (cliente && cliente.atend) return cliente.atend;
-  }
-  return null;
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body { background: var(--page-bg); transition: background 0.2s ease; overflow: hidden; }
+
+.page {
+  display: flex;
+  gap: 18px;
+  height: 100vh;
+  padding: 22px;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
 }
 
-/**
- * Se a foto não carregar (link quebrado, offline, etc), troca a imagem
- * pelas iniciais do nome, em vez de deixar o ícone de imagem quebrada.
- */
-function handleAvatarImgError(img) {
-  const nome = img.getAttribute("data-nome") || "";
-  const div = document.createElement("div");
-  div.className = img.className;
-  div.title = nome;
-  div.textContent = initials(nome);
-  img.replaceWith(div);
+/* ===== SIDEBAR ===== */
+.sidebar {
+  width: 64px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 18px 10px;
+  height: 100%;
+  box-shadow: var(--shadow-sidebar);
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.22s cubic-bezier(.4,0,.2,1);
 }
 
-function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
-  // Prioridade: foto do painel-designers-beeon primeiro (é a fonte que
-  // o Claudio mantém manualmente); só usa a do Runrun.it se não achar
-  // nenhuma foto cadastrada no painel.
-  const foto = fotoDoDesigner(nomeDesigner) || avatarUrlDireto;
-  if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nomeDesigner}" alt="${nomeDesigner}" title="${nomeDesigner}" onerror="handleAvatarImgError(this)">`;
-  }
-  return `<div class="avatar ${sizeClass || ""}" title="${nomeDesigner}">${initials(nomeDesigner)}</div>`;
+.sidebar:hover { width: 248px; }
+
+.sidebar-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+
+.sidebar-profile-link {
+  margin-top: auto;
+  cursor: pointer;
 }
 
-// Frases divertidas do tema colmeia, mostradas em rodízio na tela de
-// carregando (em vez de "Atualizando informações do Runrun.it...").
-const mensagensCarregando = [
-  "Preparando o melzinho...",
-  "Ajeitando os favos...",
-  "Organizando as abelhinhas...",
-  "Polinizando as tarefas...",
-  "Zunzunzum no Runrun.it...",
-  "Arrumando a colmeia...",
-];
-let intervalMsgCarregando = null;
-
-function iniciarMensagensCarregando() {
-  clearInterval(intervalMsgCarregando);
-  let indice = 0;
-  intervalMsgCarregando = setInterval(() => {
-    indice = (indice + 1) % mensagensCarregando.length;
-    const el = document.getElementById("loadingMsg");
-    if (!el) { clearInterval(intervalMsgCarregando); return; }
-    el.classList.remove("fade-in");
-    void el.offsetWidth; // reinicia a animação CSS
-    el.textContent = mensagensCarregando[indice];
-    el.classList.add("fade-in");
-  }, 1800);
+.theme-switch {
+  display: flex;
+  gap: 2px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
 }
 
-function hojeISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+.theme-switch button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
-function mapearTarefaDoBackend(t) {
-  let day = null, due = "—";
-  if (t.due) {
-    const [ano, mes, dia] = t.due.split("-").map(Number);
-    day = dia;
-    due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
-  }
-  return {
-    id: t.id,
-    title: t.title,
-    client: t.client,
-    type: t.type,
-    priority: t.priority,
-    day,
-    due,
-    dueISO: t.due || null, // data completa (ano-mês-dia), usada pra ordenar e saber se está atrasada
-    status: t.status,
-    runrunStage: t.runrunStage,
-    isOutraEtapa: t.isOutraEtapa,
-    link: t.link,
-    assignee: t.assignee,
-    assigneeAvatarUrl: t.assigneeAvatarUrl || null,
-    timerSeconds: t.workedSeconds || 0,
-    running: !!t.isRunning,
-    estimatePct: Math.min(95, Math.round((t.estimateMinutes || 30) / 2)),
-    hasChange: false,
-  };
+.theme-switch button svg { width: 15px; height: 15px; }
+
+.theme-switch button.on {
+  background: var(--accent);
+  color: #fff;
 }
 
-async function carregarTarefasReais() {
-  if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1) {
-    // Web App ainda não configurado — usa os dados fake só nesse caso.
-    tasks = tasksFake;
-    carregandoTarefas = false;
-    buildBoard();
-    render();
-    return;
-  }
-  try {
-    const res = await fetch(COLMEIA_API_URL + "?tipo=tarefas");
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Erro ao buscar tarefas do Colmeia:", data.error);
-      tasks = tasksFake;
-      carregandoTarefas = false;
-      buildBoard();
-      render();
-      return;
-    }
-    const doKanban = data.tarefas.filter(t => !t.isOutraEtapa).map(mapearTarefaDoBackend);
-    tasks = doKanban;
-    tasks.forEach(t => { t.estimatePct = t.estimatePct || 0; });
-    carregandoTarefas = false;
-    buildBoard();
-    render();
-  } catch (err) {
-    console.error("Falha ao conectar com o backend do Colmeia:", err);
-    tasks = tasksFake;
-    carregandoTarefas = false;
-    buildBoard();
-    render();
-  }
+.nav-ic {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s ease;
 }
 
-async function salvarPrioridadeNoBackend(taskId, prioridade) {
-  if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1 || !taskId) return;
-  try {
-    await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "definirPrioridade", taskId, prioridade }),
-    });
-  } catch (err) {
-    console.error("Não consegui salvar a prioridade no backend:", err);
-  }
+.nav-icon-circle {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--page-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-/**
- * Dá play numa tarefa de verdade no Runrun.it. Se der erro (ex: endpoint
- * ainda não confirmado), avisa no console mas não trava a tela — o
- * cronômetro local continua rodando mesmo assim.
- */
-async function tocarTarefaNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "tocarTarefa", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) console.error("Runrun.it recusou o play:", data.error);
-  } catch (err) {
-    console.error("Falha ao dar play no Runrun.it:", err);
-  }
+.nav-icon-circle svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+.nav-ic:hover .nav-icon-circle { background: var(--border); color: var(--text-primary); }
+
+.nav-ic { outline: none; }
+.nav-ic:focus-visible .nav-icon-circle { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--accent); }
+
+.nav-ic.active .nav-icon-circle { background: var(--accent); color: #fff; }
+
+.nav-icon-circle.avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
 }
 
-async function pausarTarefaNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "pausarTarefa", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) console.error("Runrun.it recusou o pause:", data.error);
-  } catch (err) {
-    console.error("Falha ao pausar no Runrun.it:", err);
-  }
+.nav-label {
+  font-size: 13.5px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
-/**
- * Move a tarefa pra outra coluna de verdade no Runrun.it. A regra
- * automática de transferir pro próximo responsável é do próprio
- * Runrun.it — o Colmeia só avisa "mudou de etapa".
- */
-/**
- * Avança a tarefa pra próxima pessoa na Sequência de responsáveis
- * (workflow do Runrun.it) — CONFIRMADO funcionando. Diferente de mudar
- * a coluna no Colmeia (isso continua só visual por enquanto, o endpoint
- * de mover coluna ainda não foi confirmado).
- */
-async function avancarWorkflowNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return null;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "avancarWorkflow", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Runrun.it recusou avançar a sequência:", data.error);
-      return null;
-    }
-    return data.novoResponsavel || null;
-  } catch (err) {
-    console.error("Falha ao avançar a sequência no Runrun.it:", err);
-    return null;
-  }
+.sidebar:hover .nav-label { opacity: 1; transition-delay: 0.08s; }
+
+.nav-ic:hover { color: var(--text-primary); }
+
+/* ===== MAIN ===== */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+.app-page { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+
+.app-page[hidden] { display: none; }
+
+.placeholder-page { align-items: center; justify-content: center; }
+
+.placeholder-box { text-align: center; color: var(--text-muted); }
+.placeholder-box span { font-size: 34px; display: block; margin-bottom: 10px; }
+.placeholder-box p { font-size: 14px; font-weight: 500; }
+
+.clients-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px; overflow-y: auto; padding-bottom: 8px;
 }
 
-async function reatribuirTarefaNoBackend(taskId, responsavelId) {
-  if (!COLMEIA_API_URL || !taskId || !responsavelId) return false;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "reatribuir", taskId, responsavelId }),
-    });
-    const data = await res.json();
-    if (!data.ok) console.error("Runrun.it recusou reatribuir:", data.error);
-    return data.ok;
-  } catch (err) {
-    console.error("Falha ao reatribuir no Runrun.it:", err);
-    return false;
-  }
+.client-card {
+  background: var(--card-bg); border-radius: 14px; padding: 18px;
+  box-shadow: var(--shadow-card);
 }
 
-/**
- * Busca a Sequência de responsáveis real de uma tarefa (a aba "Regras"
- * no Runrun.it). Devolve uma lista (vazia se não tiver sequência
- * configurada) — nunca null, pra não quebrar o render.
- */
-async function buscarSequenciaDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { sequencia: [], workflowId: null };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarSequencia", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Erro ao buscar sequência de responsáveis:", data.error);
-      return { sequencia: [], workflowId: null };
-    }
-    return { sequencia: data.sequencia || [], workflowId: data.workflowId || null };
-  } catch (err) {
-    console.error("Falha ao buscar sequência no Runrun.it:", err);
-    return { sequencia: [], workflowId: null };
-  }
+.client-card-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.client-card-count { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px; }
+
+.client-card-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
-async function adicionarNaRegraNoBackend(workflowId, userId) {
-  if (!COLMEIA_API_URL || !workflowId || !userId) return false;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "adicionarNaRegra", workflowId, userId }),
-    });
-    const data = await res.json();
-    if (!data.ok) console.error("Runrun.it recusou adicionar na regra:", data.error);
-    return data.ok;
-  } catch (err) {
-    console.error("Falha ao adicionar na regra no Runrun.it:", err);
-    return false;
-  }
+.now-playing {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--accent-soft); border: none; border-radius: 999px;
+  padding: 8px 16px 8px 12px; margin: 0 auto; cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s ease;
+}
+.now-playing:hover { background: var(--border); }
+
+.now-playing-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  animation: nowPlayingPulse 1.4s ease-in-out infinite;
 }
 
-/**
- * Abre o modal "Ver regra", mostrando a sequência completa da tarefa
- * e a opção de adicionar mais uma pessoa no final dela.
- */
-async function abrirModalRegra(task) {
-  const overlay = document.getElementById("ruleModalOverlay");
-  const body = document.getElementById("ruleModalBody");
-  overlay.hidden = false;
-  body.innerHTML = `<p class="workflow-seq-empty">Carregando...</p>`;
-
-  // Reaproveita a sequência já carregada no header, ou busca de novo
-  // se por algum motivo ainda não tiver.
-  if (task.sequencia === undefined) await carregarSequencia(task);
-
-  renderModalRegra(task);
+@keyframes nowPlayingPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
 }
 
-function renderModalRegra(task) {
-  const body = document.getElementById("ruleModalBody");
-  const seq = task.sequencia || [];
+.now-playing-title { font-size: 13px; font-weight: 600; color: var(--accent); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  const listaHtml = seq.length === 0
-    ? `<p class="workflow-seq-empty">Sem sequência configurada nessa tarefa.</p>`
-    : seq.map((s, i) => `
-        <div class="rule-row ${s.atual ? "current" : ""}">
-          <span class="rule-row-order">${i + 1}</span>
-          ${avatarHTML(s.nome, "avatar-sm", s.foto)}
-          <span class="rule-row-name">${s.nome}</span>
-          ${s.concluido ? `<span class="rule-row-status done">Concluído</span>` : s.atual ? `<span class="rule-row-status current">Atual</span>` : `<span class="rule-row-status">Aguardando</span>`}
-        </div>
-      `).join("");
+.now-playing-time { font-size: 12.5px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; opacity: 0.8; }
 
-  body.innerHTML = `
-    <div class="rule-list">${listaHtml}</div>
-    <div class="rule-add-section">
-      <span class="side-label">Adicionar próxima pessoa</span>
-      <input type="text" class="rule-add-search" id="ruleAddSearch" placeholder="Buscar pessoa...">
-      <div class="rule-add-list" id="ruleAddList">
-        <div class="assignee-menu-loading">Carregando pessoas...</div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("ruleAddSearch").addEventListener("input", e => {
-    renderizarListaAdicionarRegra(task, usuariosParaAdicionarRegra, e.target.value);
-  });
-
-  buscarUsuariosRunrun().then(usuarios => {
-    usuariosParaAdicionarRegra = usuarios;
-    renderizarListaAdicionarRegra(task, usuarios, "");
-  });
+.page-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-// Guarda a lista de usuários carregada, pra filtrar sem buscar de novo
-// a cada letra digitada na busca do modal.
-let usuariosParaAdicionarRegra = [];
+.page-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
 
-function renderizarListaAdicionarRegra(task, usuarios, filtro) {
-  const listEl = document.getElementById("ruleAddList");
-  if (!listEl) return;
-  if (usuarios.length === 0) {
-    listEl.innerHTML = `<div class="assignee-menu-loading">Não consegui buscar a lista.</div>`;
-    return;
-  }
-  const alvo = normalizarParaComparar(filtro);
-  const filtrados = alvo ? usuarios.filter(u => normalizarParaComparar(u.nome).includes(alvo)) : usuarios;
-  listEl.innerHTML = filtrados.map(u => `
-    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
-      ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
-    </button>
-  `).join("");
-  listEl.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      const ok = await adicionarNaRegraNoBackend(task.workflowId, btn.dataset.userId);
-      if (ok) {
-        await carregarSequencia(task);
-        renderModalRegra(task);
-      } else {
-        btn.disabled = false;
-      }
-    });
-  });
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  height: 40px;
+  padding: 0 14px;
+  color: var(--text-muted);
+  width: 220px;
 }
 
-async function entregarTarefaNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return false;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "entregarTarefa", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) console.error("Runrun.it recusou entregar a tarefa:", data.error);
-    return data.ok;
-  } catch (err) {
-    console.error("Falha ao entregar a tarefa no Runrun.it:", err);
-    return false;
-  }
+.search-box svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.search-box input {
+  border: none; outline: none; font-family: var(--font-body); font-size: 14px;
+  width: 100%; color: var(--text-primary); background: transparent;
 }
 
-async function desfazerWorkflowNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return null;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "desfazerWorkflow", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Runrun.it recusou desfazer a sequência:", data.error);
-      return null;
-    }
-    return data.novoResponsavel || null;
-  } catch (err) {
-    console.error("Falha ao desfazer a sequência no Runrun.it:", err);
-    return null;
-  }
+.view-toggle {
+  display: flex;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
 }
 
-// Cache com todo mundo do Runrun.it, carregado só na primeira vez que
-// alguém clicar numa foto pra reatribuir (evita buscar toda hora).
-let usuariosRunrunCache = null;
-
-async function buscarUsuariosRunrun() {
-  if (usuariosRunrunCache) return usuariosRunrunCache;
-  if (!COLMEIA_API_URL) return [];
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarUsuarios" }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Erro ao listar usuários do Runrun.it:", data.error);
-      return [];
-    }
-    usuariosRunrunCache = data.usuarios || [];
-    return usuariosRunrunCache;
-  } catch (err) {
-    console.error("Falha ao listar usuários do Runrun.it:", err);
-    return [];
-  }
+.toggle-btn {
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  border: none; background: transparent; color: var(--text-secondary);
+  padding: 8px 14px; border-radius: 8px; cursor: pointer;
 }
 
-/**
- * Busca os comentários reais de uma tarefa no Runrun.it. Devolve uma
- * lista (pode ser vazia) — nunca null, pra não quebrar o render.
- */
-/**
- * Busca a descrição real de uma tarefa no Runrun.it. Devolve sempre uma
- * string (vazia se não tiver descrição ou der erro).
- */
-async function buscarDescricaoDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return "";
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarDescricao", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Erro ao buscar descrição:", data.error);
-      return "";
-    }
-    return data.descricao || "";
-  } catch (err) {
-    console.error("Falha ao buscar descrição no Runrun.it:", err);
-    return "";
-  }
+.toggle-btn.active { background: var(--text-primary); color: var(--sidebar-bg); }
+
+.user-chip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 12px 4px 4px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card-bg);
 }
 
-async function buscarComentariosDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return [];
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarComentarios", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Erro ao buscar comentários:", data.error);
-      return [];
-    }
-    return data.comentarios || [];
-  } catch (err) {
-    console.error("Falha ao buscar comentários no Runrun.it:", err);
-    return [];
-  }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
+  color: #fff; font-family: var(--font-display); font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 
-async function enviarComentarioNoBackend(taskId, texto) {
-  if (!COLMEIA_API_URL || !taskId || !texto) return false;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "adicionarComentario", taskId, texto }),
-    });
-    const data = await res.json();
-    if (!data.ok) console.error("Runrun.it recusou o comentário:", data.error);
-    return data.ok;
-  } catch (err) {
-    console.error("Falha ao enviar comentário pro Runrun.it:", err);
-    return false;
-  }
+.avatar-sm { width: 22px; height: 22px; font-size: 9.5px; }
+
+.user-name { font-size: 13.5px; font-weight: 600; }
+
+/* ===== BOARD ===== */
+.board { display: flex; gap: 18px; overflow-x: auto; align-items: stretch; flex: 1; min-height: 0; }
+
+.column {
+  min-width: 254px;
+  flex: 1;
+  background: transparent;
+  border-radius: 16px;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-// Dados fake usados só se o backend falhar de verdade (ver
-// carregarTarefasReais) — nunca aparecem enquanto está carregando.
-const tasksFake = [
-  { title: "Post carrossel — Lançamento coleção inverno", client: "Ateliê Nova", type: "estatico", priority: "media", day: 26, due: "26 Jul", status: "pendentes", assignee: "Claudio" },
-  { title: "Vídeo reels — Bastidores da produção", client: "Grão Café", type: "video", priority: "baixa", day: 28, due: "28 Jul", status: "pendentes", assignee: "Bruna" },
-  { title: "E-mail marketing — Promoção de aniversário", client: "Vitrine Modas", type: "email", priority: "baixa", day: 30, due: "30 Jul", status: "pendentes", assignee: "Erick" },
-  { title: "Stories animados — Enquete de produto", client: "Ateliê Nova", type: "video", priority: "media", day: 29, due: "29 Jul", status: "pendentes", assignee: "Gustavo" },
-
-  { title: "Arte anúncio — Campanha Dia dos Pais", client: "Vitrine Modas", type: "estatico", priority: "alta", day: 24, due: "24 Jul", status: "prioridades", assignee: "Gustavo" },
-  { title: "Vídeo institucional — Reels 30s", client: "Loja Ferra", type: "video", priority: "alta", day: 24, due: "24 Jul", status: "prioridades", assignee: "Claudio" },
-  { title: "Newsletter semanal", client: "Vitrine Modas", type: "email", priority: "alta", day: 24, due: "24 Jul", status: "prioridades", assignee: "Erick" },
-
-  { title: "Post estático — Dica de uso do produto", client: "Grão Café", type: "estatico", priority: "media", day: 25, due: "25 Jul", status: "fazendo", assignee: "Gustavo" },
-  { title: "Sequência de e-mails — Boas-vindas", client: "Loja Ferra", type: "email", priority: "baixa", day: 27, due: "27 Jul", status: "fazendo", assignee: "Claudio" },
-  { title: "Stories animados — Enquete", client: "Ateliê Nova", type: "video", priority: "media", day: 24, due: "24 Jul", status: "fazendo", assignee: "Bruna" },
-  { title: "Animação logo — Abertura de vídeo", client: "Ateliê Nova", type: "video", priority: "baixa", day: 26, due: "26 Jul", status: "fazendo", assignee: "Bruna" },
-
-  { title: "Banner site — Nova coleção", client: "Loja Ferra", type: "estatico", priority: "baixa", day: 29, due: "29 Jul", status: "revisao", assignee: "Gustavo" },
-  { title: "E-mail — Confirmação de pedido (template)", client: "Loja Ferra", type: "email", priority: "baixa", day: 25, due: "25 Jul", status: "revisao", assignee: "Claudio" },
-  { title: "Vídeo — Tutorial de produto", client: "Grão Café", type: "video", priority: "media", day: 24, due: "24 Jul", status: "revisao", assignee: "Erick" },
-
-  { title: "Reels — Making of coleção", client: "Loja Ferra", type: "video", priority: "media", day: 24, due: "24 Jul", status: "ajustes", assignee: "Claudio" },
-  { title: "E-mail — Pesquisa de satisfação", client: "Vitrine Modas", type: "email", priority: "baixa", day: 22, due: "22 Jul", status: "ajustes", assignee: "Gustavo" },
-  { title: "Arte stories — Novidade da semana", client: "Grão Café", type: "estatico", priority: "baixa", day: 22, due: "22 Jul", status: "ajustes", assignee: "Erick" },
-];
-
-tasksFake.forEach(t => {
-  const now = new Date();
-  t.dueISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(t.day).padStart(2, "0")}`;
-});
-tasksFake.forEach((t, i) => { t.timerSeconds = 0; t.running = false; t.estimatePct = [12, 35, 48, 60, 20, 75, 30, 55, 18, 42, 65, 25, 50][i % 13]; t.hasChange = i % 4 === 1; });
-
-// Começa vazio de propósito — mostra tela de carregando até o backend
-// responder (ou, em último caso, cair pros dados fake).
-let tasks = [];
-let carregandoTarefas = true;
-
-const typeLabels = {
-  estatico: { label: "Estático", class: "badge-estatico" },
-  video: { label: "Vídeo", class: "badge-video" },
-  email: { label: "E-mail", class: "badge-email" },
-};
-
-const priorityLabels = { alta: "Alta", media: "Média", baixa: "Baixa" };
-
-// modo de visualização por coluna: "entrega" (padrão) ou "hoje"
-const columnMode = {};
-columnsDef.forEach(c => columnMode[c.key] = "entrega");
-
-const boardEl = document.getElementById("board");
-
-function initials(name) {
-  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+.column-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
-function formatTime(sec) {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60).toString().padStart(2, "0");
-  const s = (sec % 60).toString().padStart(2, "0");
-  if (h > 0) return `${h}:${m}:${s}`;
-  return `${m}:${s}`;
+.column-header h2 { font-family: var(--font-display); font-size: 14px; font-weight: 600; }
+
+.column-sort-ic {
+  display: flex;
+  gap: 2px;
 }
 
-function cardHTML(task, idx) {
-  const type = typeLabels[task.type];
-  const atrasada = task.dueISO && task.dueISO < hojeISO();
-  return `
-    <div class="task-card priority-${task.priority} ${atrasada ? "task-overdue" : ""}" draggable="true" data-idx="${idx}">
-      <div class="card-top">
-        <span class="badge ${type.class}">${type.label}</span>
-        <div class="priority-wrap" data-idx="${idx}">
-          <button type="button" class="card-priority-tag priority-btn">${priorityLabels[task.priority]}</button>
-          <div class="priority-menu">
-            <button type="button" data-p="alta" class="pm-alta">Alta</button>
-            <button type="button" data-p="media" class="pm-media">Média</button>
-            <button type="button" data-p="baixa" class="pm-baixa">Baixa</button>
-          </div>
-        </div>
-      </div>
-      <div class="card-title">${task.title}</div>
-      <div class="card-client">${task.client}</div>
-      <div class="card-progress">
-        <div class="progress-head">
-          <button type="button" class="play-btn" data-idx="${idx}" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
-          <span class="timer-text" data-idx="${idx}">${formatTime(task.timerSeconds)}</span>
-        </div>
-        <div class="progress-track"><div class="progress-fill" data-idx="${idx}" style="width:${task.estimatePct}%"></div></div>
-      </div>
-      <div class="card-bottom">
-        <div class="assignee-wrap" data-idx="${idx}">
-          ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
-          <div class="assignee-menu"></div>
-        </div>
-        <span class="card-due-simple ${atrasada ? "overdue" : ""}">${dueIcon}${task.due}</span>
-      </div>
-    </div>
-  `;
+.column-sort-ic button {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
-const iconEntrega = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
-const iconHoje = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+.column-sort-ic button svg { width: 13px; height: 13px; }
 
-function buildBoard() {
-  boardEl.innerHTML = "";
-
-  if (!carregandoTarefas) {
-    clearInterval(intervalMsgCarregando);
-  }
-
-  if (carregandoTarefas) {
-    boardEl.innerHTML = `
-      <div class="board-loading">
-        <div class="board-loading-glass"></div>
-        <div class="board-loading-content">
-          <span class="board-loading-bee">🐝</span>
-          <p class="board-loading-text" id="loadingMsg">${mensagensCarregando[0]}</p>
-        </div>
-      </div>
-    `;
-    iniciarMensagensCarregando();
-    return;
-  }
-
-  columnsDef.forEach(({ key, label }) => {
-    const col = document.createElement("div");
-    col.className = "column";
-    col.dataset.status = key;
-    col.innerHTML = `
-      <div class="column-header">
-        <h2>${label}</h2>
-        <div class="column-sort-ic" data-col="${key}">
-          <button class="on" data-mode="entrega" title="Ordem de entrega desejada">${iconEntrega}</button>
-          <button data-mode="hoje" title="Tarefas de hoje">${iconHoje}</button>
-        </div>
-        <span class="column-count"></span>
-      </div>
-      <div class="column-cards" id="col-${key}"></div>
-    `;
-    boardEl.appendChild(col);
-  });
-
-  const panel = document.createElement("div");
-  panel.className = "task-detail";
-  panel.id = "taskDetail";
-  boardEl.appendChild(panel);
-
-  boardEl.querySelectorAll(".column-sort-ic").forEach(group => {
-    const key = group.dataset.col;
-    group.querySelectorAll("button").forEach(btn => {
-      btn.addEventListener("click", () => {
-        group.querySelectorAll("button").forEach(b => b.classList.remove("on"));
-        btn.classList.add("on");
-        columnMode[key] = btn.dataset.mode;
-        render();
-      });
-    });
-  });
-
-  setupDragAndDrop();
+.column-sort-ic button.on {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
-let searchQuery = "";
-
-function render() {
-  if (carregandoTarefas) return;
-  columnsDef.forEach(({ key }) => {
-    let list = tasks.filter(t => t.status === key);
-    if (searchQuery) {
-      const alvo = normalizarParaComparar(searchQuery);
-      list = list.filter(t =>
-        normalizarParaComparar(t.title).includes(alvo) ||
-        normalizarParaComparar(t.client).includes(alvo)
-      );
-    }
-    if (columnMode[key] === "hoje") {
-      list = list.filter(t => t.dueISO === hojeISO());
-    }
-    // Sempre da mais atrasada pra mais na frente, nos dois modos —
-    // usa a data completa (ano-mês-dia), não só o número do dia.
-    list = list.slice().sort((a, b) => (a.dueISO || "9999-99-99").localeCompare(b.dueISO || "9999-99-99"));
-    const holder = document.getElementById("col-" + key);
-    holder.innerHTML = list.map(t => cardHTML(t, tasks.indexOf(t))).join("");
-    document.querySelector(`.column[data-status="${key}"] .column-count`).textContent = list.length;
-  });
-  attachCardDragHandlers();
+.column-count {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 999px; padding: 1px 8px; margin-left: auto;
 }
 
-function setupDragAndDrop() {
-  document.querySelectorAll(".column-cards").forEach(holder => {
-    holder.addEventListener("dragover", e => {
-      e.preventDefault();
-      holder.classList.add("drag-over");
-    });
-    holder.addEventListener("dragleave", () => holder.classList.remove("drag-over"));
-    holder.addEventListener("drop", e => {
-      e.preventDefault();
-      holder.classList.remove("drag-over");
-      const idx = e.dataTransfer.getData("text/plain");
-      const newStatus = holder.closest(".column").dataset.status;
-      if (idx !== "" && tasks[idx]) {
-        tasks[idx].status = newStatus;
-        // Mudar de coluna aqui no Colmeia ainda é só visual — o endpoint
-        // de mover etapa de verdade no Runrun.it ainda não foi confirmado.
-        render();
-      }
-    });
-  });
+.column-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 2px 6px;
 }
 
-function attachCardDragHandlers() {
-  document.querySelectorAll(".task-card").forEach(card => {
-    card.addEventListener("dragstart", e => {
-      e.dataTransfer.setData("text/plain", card.dataset.idx);
-      card.classList.add("dragging");
-    });
-    card.addEventListener("dragend", () => card.classList.remove("dragging"));
-    card.addEventListener("click", () => openDetail(card.dataset.idx));
-  });
+.column-cards::-webkit-scrollbar { width: 6px; }
+.column-cards::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 
-  // ===== Menu de prioridade =====
-  document.querySelectorAll(".priority-wrap").forEach(wrap => {
-    const btn = wrap.querySelector(".priority-btn");
-    const menu = wrap.querySelector(".priority-menu");
-    btn.addEventListener("click", e => {
-      e.stopPropagation();
-      const willOpen = !menu.classList.contains("open");
-      document.querySelectorAll(".priority-menu").forEach(m => m.classList.remove("open"));
-      if (willOpen) menu.classList.add("open");
-    });
-    menu.querySelectorAll("button").forEach(opt => {
-      opt.addEventListener("click", e => {
-        e.stopPropagation();
-        const idx = wrap.dataset.idx;
-        tasks[idx].priority = opt.dataset.p;
-        salvarPrioridadeNoBackend(tasks[idx].id, opt.dataset.p);
-        render();
-      });
-    });
-  });
+.column-cards.drag-over { background: rgba(79,95,247,0.06); border-radius: 10px; }
 
-  // ===== Foto do responsável: avançar sequência ou reatribuir manual =====
-  document.querySelectorAll(".assignee-wrap").forEach(wrap => {
-    const menu = wrap.querySelector(".assignee-menu");
-    wrap.addEventListener("click", async e => {
-      e.stopPropagation();
-      const willOpen = !menu.classList.contains("open");
-      document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
-      if (!willOpen) return;
-      menu.classList.add("open");
-
-      const idx = wrap.dataset.idx;
-      const task = tasks[idx];
-
-      menu.innerHTML = `
-        <button type="button" class="assignee-advance-btn" data-idx="${idx}">
-          ➡️ <span>Avançar sequência (próximo responsável)</span>
-        </button>
-        <div class="assignee-menu-sep"></div>
-        <div class="assignee-menu-loading">Carregando outras pessoas...</div>
-      `;
-
-      menu.querySelector(".assignee-advance-btn").addEventListener("click", async ev => {
-        ev.stopPropagation();
-        menu.classList.remove("open");
-        const novoResponsavel = await avancarWorkflowNoBackend(task.id);
-        if (novoResponsavel) {
-          task.assignee = novoResponsavel;
-          task.assigneeAvatarUrl = null;
-          render();
-        } else {
-          console.warn("Não consegui avançar a sequência — talvez essa tarefa não tenha uma Sequência de responsáveis configurada.");
-        }
-      });
-
-      const usuarios = await buscarUsuariosRunrun();
-      if (!menu.classList.contains("open")) return; // fechou enquanto carregava
-      const listaContainer = menu.querySelector(".assignee-menu-loading");
-      if (!listaContainer) return;
-      if (usuarios.length === 0) {
-        listaContainer.textContent = "Não consegui buscar a lista.";
-        return;
-      }
-      listaContainer.outerHTML = usuarios.map(u => `
-        <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
-          ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
-        </button>
-      `).join("");
-      menu.querySelectorAll("button:not(.assignee-advance-btn)").forEach(opt => {
-        opt.addEventListener("click", async ev => {
-          ev.stopPropagation();
-          const nomeEscolhido = opt.dataset.userNome;
-          menu.classList.remove("open");
-          const ok = await reatribuirTarefaNoBackend(task.id, opt.dataset.userId);
-          if (ok) {
-            task.assignee = nomeEscolhido;
-            task.assigneeAvatarUrl = null; // deixa a próxima carga real trazer a foto certa
-            render();
-          }
-        });
-      });
-    });
-  });
-
-  // ===== Play / progresso =====
-  document.querySelectorAll(".play-btn").forEach(btn => {
-    btn.addEventListener("click", e => {
-      e.stopPropagation();
-      const idx = btn.dataset.idx;
-      const task = tasks[idx];
-      task.running = !task.running;
-      btn.innerHTML = task.running ? pauseIcon : playIcon;
-      btn.setAttribute("aria-label", (task.running ? "Pausar" : "Iniciar") + " tarefa");
-      if (task.running) tocarTarefaNoBackend(task.id);
-      else pausarTarefaNoBackend(task.id);
-      updateNowPlaying();
-    });
-  });
+/* ===== TASK CARD ===== */
+.task-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 18px 18px 16px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid transparent;
+  cursor: grab;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 
-document.addEventListener("click", () => {
-  document.querySelectorAll(".priority-menu").forEach(m => m.classList.remove("open"));
-  document.querySelectorAll(".detail-more-menu").forEach(m => m.classList.remove("open"));
-  document.querySelectorAll(".status-menu").forEach(m => m.classList.remove("open"));
-  document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
-});
+[data-theme="dark"] .task-card { border-color: var(--border); }
+[data-theme="dark"] .sidebar { border-color: var(--border); }
 
-const clientHub = [
-  { label: "Drive do cliente", cls: "hub-purple" },
-  { label: "Banco de imagens", cls: "hub-pink" },
-  { label: "Biblioteca Adobe", cls: "hub-blue" },
-  { label: "Pasta publicações", cls: "hub-teal" },
-  { label: "Site", cls: "hub-orange" },
-  { label: "Instagram", cls: "hub-teal" },
-];
+.task-card:active { cursor: grabbing; }
 
-const attachments = ["Anexo 01", "Anexo 02", "Anexo 03", "Anexo 04"];
+.task-card.dragging { opacity: 0.4; }
 
-let detailIdx = null;
-let commentsOpen = false;
-let changeOpen = false;
-let childrenOpen = false;
+.task-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
 
-/**
- * Desenha a lista de comentários de uma tarefa. Enquanto ainda não
- * carregou (task.comments === undefined), mostra "Carregando...".
- * Tarefas sem id real (dados fake) nunca terão comentários reais.
- */
-function renderComentariosHTML(task) {
-  if (!task.id) {
-    return `<p class="comments-empty">Essa tarefa ainda não está conectada ao Runrun.it.</p>`;
-  }
-  if (task.comments === undefined) {
-    return `<p class="comments-empty">Carregando comentários...</p>`;
-  }
-  if (task.comments.length === 0) {
-    return `<p class="comments-empty">Nenhum comentário ainda.</p>`;
-  }
-  return task.comments.map(c => `
-    <div class="comment-bubble ${nomesCorrespondem(c.autor, task.assignee) ? "mine" : ""}">
-      ${avatarHTML(c.autor, "avatar-sm comment-avatar")}
-      <div class="comment-body">
-        <div class="comment-author">${c.autor}</div>
-        <div class="comment-text">${c.texto}</div>
-      </div>
-    </div>
-  `).join("");
+.card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 6px; }
+
+.badge { font-size: 12px; font-weight: 600; padding: 4px 15px; border-radius: 999px; white-space: nowrap; }
+
+.badge-estatico { background: var(--accent-soft); color: var(--accent); }
+.badge-video { background: var(--purple-soft); color: var(--purple); }
+.badge-email { background: var(--warning-soft); color: var(--warning); }
+
+.card-priority-tag { font-size: 11px; font-weight: 600; white-space: nowrap; padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; }
+
+.priority-alta .card-priority-tag { color: var(--danger); border-color: var(--danger); }
+.priority-media .card-priority-tag { color: var(--warning); border-color: var(--warning); }
+.priority-baixa .card-priority-tag { color: var(--success); border-color: var(--success); }
+
+.card-title { font-size: 15px; font-weight: 500; line-height: 1.4; margin-bottom: 6px; }
+.card-client { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 18px; }
+
+.card-bottom { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border); }
+
+.card-progress { margin-bottom: 14px; }
+
+.progress-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+
+.progress-track { height: 6px; border-radius: 999px; background: var(--page-bg); overflow: hidden; }
+
+[data-theme="dark"] .progress-track { background: rgba(255,255,255,0.08); }
+
+.progress-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.4s ease; }
+
+.play-btn {
+  width: 20px; height: 20px; border-radius: 4px;
+  border: none; background: transparent; color: var(--accent);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  flex-shrink: 0; padding: 0;
 }
 
-/**
- * Busca os comentários reais no Runrun.it e atualiza só a lista na tela
- * (sem re-renderizar o pop-up inteiro, pra não perder o foco do campo
- * de texto nem fechar menus abertos).
- */
-/**
- * O Runrun.it devolve a descrição em HTML (editor de texto rico), com
- * checklists no formato <ul data-checked="true/false"><li>...</li></ul>.
- * Essa função troca isso por ☑/☐ de verdade na frente de cada item, e
- * tira estilos/cores que vieram do editor de lá pra não conflitar com o
- * visual do Colmeia.
- */
-function formatarDescricaoRunrun(html) {
-  if (!html) return "";
-  const doc = new DOMParser().parseFromString(html, "text/html");
+.timer-text { font-size: 12px; color: var(--text-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 
-  doc.querySelectorAll("ul[data-checked]").forEach(ul => {
-    const marcado = ul.getAttribute("data-checked") === "true";
-    ul.querySelectorAll("li").forEach(li => {
-      li.textContent = (marcado ? "☑ " : "☐ ") + li.textContent;
-      li.style.listStyle = "none";
-    });
-  });
+.play-btn svg { width: 13px; height: 13px; }
 
-  // Remove cor/estilo herdados do editor do Runrun.it (ex: texto azulado
-  // de "Legenda:"), deixando só a formatação básica (negrito, parágrafos).
-  doc.querySelectorAll("[style]").forEach(el => el.removeAttribute("style"));
-  doc.querySelectorAll("[class]").forEach(el => el.removeAttribute("class"));
+.card-due-simple { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.card-due-simple svg { width: 13px; height: 13px; }
+.card-due-simple.overdue { color: var(--danger); }
 
-  return doc.body.innerHTML;
+.priority-wrap { position: relative; }
+
+.priority-btn { background: none; cursor: pointer; font-family: var(--font-body); }
+
+.priority-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 4px; box-shadow: var(--shadow-hover);
+  display: none; flex-direction: column; gap: 2px; min-width: 88px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
 }
 
-/**
- * Busca a descrição real no Runrun.it e atualiza só o texto na tela
- * (sem re-renderizar o pop-up inteiro).
- */
-async function carregarDescricao(task) {
-  if (!task.id) return;
-  const texto = await buscarDescricaoDoBackend(task.id);
-  if (tasks[detailIdx] === task) {
-    const el = document.getElementById("descTextReal");
-    if (el) el.innerHTML = texto ? formatarDescricaoRunrun(texto) : "Sem descrição cadastrada nessa tarefa.";
-  }
+.priority-menu.open { display: flex; }
+
+.priority-menu button {
+  border: none; background: transparent; text-align: left;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 500;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
 }
 
-async function carregarComentarios(task) {
-  if (!task.id) return;
-  task.comments = await buscarComentariosDoBackend(task.id);
-  // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa.
-  if (tasks[detailIdx] === task) {
-    const thread = document.getElementById("commentsThread");
-    if (thread) thread.innerHTML = renderComentariosHTML(task);
-  }
+.priority-menu button:hover { background: var(--page-bg); }
+
+.pm-alta { color: var(--danger); }
+.pm-media { color: var(--warning); }
+.pm-baixa { color: var(--success); }
+
+/* ===== Card selecionado ===== */
+.task-card.selected {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-hover);
 }
 
-function taskDescription(task) {
-  return `Produção de conteúdo do tipo ${typeLabels[task.type].label.toLowerCase()} para o cliente ${task.client}. Seguir o briefing combinado com o time de atendimento, manter a identidade visual do cliente e alinhar qualquer dúvida antes da entrega final.`;
+/* ===== Painel de detalhes da tarefa (overlay quase tela cheia) ===== */
+.task-detail {
+  display: none;
+  position: fixed;
+  top: 22px; right: 22px; bottom: 22px; left: 106px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(10,10,20,0.28);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(40px);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+  z-index: 100;
 }
 
-const formatsByType = {
-  estatico: [
-    { label: "Feed 1x1", cls: "fb-purple" },
-    { label: "Stories 9:16", cls: "fb-pink" },
-  ],
-  video: [
-    { label: "Vídeo Feed 1x1", cls: "fb-blue" },
-    { label: "Vídeo Stories 9:16", cls: "fb-teal" },
-  ],
-  email: [
-    { label: "Banner desktop", cls: "fb-orange" },
-    { label: "Banner mobile", cls: "fb-purple" },
-  ],
-};
+.task-detail.visible { display: flex; }
 
-function priorityVar(p) {
-  return p === "alta" ? "danger" : p === "media" ? "warning" : "success";
+[data-theme="dark"] .task-detail,
+[data-theme="dark"] .priority-menu,
+[data-theme="dark"] .status-menu,
+[data-theme="dark"] .detail-more-menu {
+  background: #0C0B12;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-function openDetail(idx, entradaAnimacao) {
-  detailIdx = Number(idx);
-  commentsOpen = false;
-  childrenOpen = false;
-  renderDetail();
-  const panel = document.getElementById("taskDetail");
-  document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
-  const cardEl = document.querySelector(`.task-card[data-idx="${idx}"]`);
-  if (cardEl) cardEl.classList.add("selected");
-  panel.classList.add("visible");
-  requestAnimationFrame(() => panel.classList.add("open"));
-  if (entradaAnimacao) {
-    const inner = panel.querySelector(".detail-inner");
-    if (inner) {
-      inner.classList.add(entradaAnimacao);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => inner.classList.remove(entradaAnimacao));
-      });
-    }
-  }
-  carregarComentarios(tasks[detailIdx]);
-  carregarDescricao(tasks[detailIdx]);
-  carregarSequencia(tasks[detailIdx]);
+[data-theme="dark"] .desc-pane,
+[data-theme="dark"] .comments-pane,
+[data-theme="dark"] .detail-side {
+  background: #0C0B12;
+}
+.task-detail.open { opacity: 1; transform: translateX(0); }
+
+.detail-inner {
+  display: flex; flex-direction: column; width: 100%; min-height: 0;
+  transition: transform 0.26s ease, opacity 0.26s ease;
 }
 
-/**
- * Desenha a Sequência de responsáveis (Lucas → Cláudio → Laura, por
- * exemplo) no lugar dos pontinhos de navegação. Enquanto ainda não
- * carregou (task.sequencia === undefined), mostra "Carregando...".
- */
-function renderSequenciaHTML(task) {
-  if (!task.id) {
-    return `<span class="workflow-seq-empty">—</span>`;
-  }
-  if (task.sequencia === undefined) {
-    return `<span class="workflow-seq-empty">Carregando sequência...</span>`;
-  }
-  if (task.sequencia.length === 0) {
-    return `<span class="workflow-seq-empty">Sem sequência configurada</span>`;
-  }
-  const atualIdx = task.sequencia.findIndex(s => s.atual);
-  const semNinguemNaFrente = atualIdx !== -1 && task.sequencia[atualIdx].ultimo;
-  return `
-    <button type="button" class="nav-arrow" id="navPrevArrow" title="Desfazer (voltar etapa)">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <div class="workflow-seq-dots">
-      ${task.sequencia.map((s, i) => `
-        ${i > 0 ? `<div class="wf-line ${task.sequencia[i - 1].concluido ? "done" : ""}"></div>` : ""}
-        <div class="wf-dot ${s.atual ? "current" : ""} ${s.concluido ? "completed" : ""}" title="${s.nome}">
-          ${avatarHTML(s.nome, "avatar-xs", s.foto)}
-          ${s.concluido ? `<span class="wf-check">✓</span>` : ""}
-        </div>
-      `).join("")}
-    </div>
-    ${semNinguemNaFrente ? `
-      <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Entregar tarefa (não tem mais ninguém na frente)">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-    ` : `
-      <button type="button" class="nav-arrow" id="navNextArrow" title="Avançar (próximo responsável)">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-    `}
-  `;
+.detail-inner.panel-exit-up { transform: translateY(-26px); opacity: 0; }
+
+.detail-inner.panel-enter-below { transform: translateY(26px); opacity: 0; }
+
+.detail-inner.panel-exit-down { transform: translateY(26px); opacity: 0; }
+
+.detail-inner.panel-enter-above { transform: translateY(-26px); opacity: 0; }
+
+.detail-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
 
-/**
- * Busca a sequência real no Runrun.it e atualiza só essa parte da tela
- * (sem re-renderizar o pop-up inteiro).
- */
-async function carregarSequencia(task) {
-  if (!task.id) return;
-  const resultado = await buscarSequenciaDoBackend(task.id);
-  task.sequencia = resultado.sequencia;
-  task.workflowId = resultado.workflowId;
-  if (tasks[detailIdx] !== task) return; // usuário já trocou de tarefa
-  const el = document.getElementById("workflowSeqGroup");
-  if (el) {
-    el.innerHTML = renderSequenciaHTML(task);
-    wireWorkflowArrows(task);
-  }
+.detail-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+.detail-header .play-btn {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+}
+.detail-header .play-btn svg { width: 15px; height: 15px; }
+
+.detail-sep { color: var(--border); }
+
+.detail-taskname { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 40px; }
+
+.detail-header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.nav-dot { width: 26px; height: 26px; border-radius: 50%; border: none; background: var(--page-bg); cursor: pointer; overflow: hidden; padding: 0; display: flex; align-items: center; justify-content: center; }
+.nav-dot.active { background: var(--accent); }
+.nav-dot .avatar-xs { width: 100%; height: 100%; font-size: 10px; }
+
+.nav-arrow {
+  width: 26px; height: 26px; border-radius: 50%; border: none; background: transparent;
+  color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.nav-arrow svg { width: 16px; height: 16px; }
+.nav-arrow:hover { background: var(--page-bg); }
+
+.status-wrap { position: relative; margin-left: 8px; }
+
+.status-badge {
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  color: var(--text-secondary); background: var(--page-bg); border: none;
+  padding: 7px 13px; border-radius: 999px; cursor: pointer;
+}
+.status-badge:hover { color: var(--text-primary); }
+
+.status-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 6px; box-shadow: var(--shadow-hover);
+  display: none; flex-direction: column; gap: 2px; min-width: 150px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.status-menu.open { display: flex; }
+
+.status-menu button {
+  border: none; background: transparent; text-align: left;
+  font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--text-primary);
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+}
+.status-menu button:hover { background: var(--page-bg); }
+.status-menu button.active { color: var(--accent); font-weight: 700; }
+
+.detail-more-wrap { position: relative; margin-left: 22px; }
+
+.nav-dots-group { display: flex; align-items: center; gap: 6px; }
+
+.detail-more {
+  width: 28px; height: 28px; border-radius: 8px; border: none;
+  background: var(--page-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.detail-more svg { width: 16px; height: 16px; }
+.detail-more:hover { color: var(--text-primary); }
+
+.detail-more-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 6px; box-shadow: var(--shadow-hover);
+  display: none; flex-direction: column; gap: 2px; min-width: 160px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.detail-more-menu.open { display: flex; }
+
+.detail-more-menu button {
+  border: none; background: transparent; text-align: left;
+  font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+}
+.detail-more-menu button:hover { background: var(--page-bg); }
+
+.detail-close {
+  width: 28px; height: 28px; border-radius: 8px; border: none;
+  background: var(--page-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  margin-left: 6px;
+}
+.detail-close svg { width: 14px; height: 14px; }
+
+.detail-body { display: flex; flex: 1; min-height: 0; }
+
+.desc-pane {
+  display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--border);
+  flex: 1 1 100%; transition: flex-basis 0.32s ease;
 }
 
-/**
- * Liga as setas de desfazer/avançar a sequência de verdade no
- * Runrun.it. Precisa ser chamado de novo toda vez que o HTML da
- * sequência é redesenhado (as setas são recriadas do zero).
- */
-function wireWorkflowArrows(task) {
-  const prevBtn = document.getElementById("navPrevArrow");
-  const nextBtn = document.getElementById("navNextArrow");
-  if (prevBtn) {
-    prevBtn.addEventListener("click", async () => {
-      prevBtn.disabled = true;
-      const novoResponsavel = await desfazerWorkflowNoBackend(task.id);
-      if (novoResponsavel) {
-        task.assignee = novoResponsavel;
-        task.assigneeAvatarUrl = null;
-        render();
-      }
-      await carregarSequencia(task);
-    });
-  }
-  if (nextBtn) {
-    nextBtn.addEventListener("click", async () => {
-      nextBtn.disabled = true;
-      const novoResponsavel = await avancarWorkflowNoBackend(task.id);
-      if (novoResponsavel) {
-        task.assignee = novoResponsavel;
-        task.assigneeAvatarUrl = null;
-        render();
-      }
-      await carregarSequencia(task);
-    });
-  }
-  const deliverBtn = document.getElementById("navDeliverBtn");
-  if (deliverBtn) {
-    deliverBtn.addEventListener("click", async () => {
-      deliverBtn.disabled = true;
-      // Primeiro fecha a etapa da última pessoa da sequência (sem
-      // transferir pra ninguém, já que não tem próximo) — confirmado
-      // que o Runrun.it só deixa entregar depois disso.
-      await avancarWorkflowNoBackend(task.id);
-      const ok = await entregarTarefaNoBackend(task.id);
-      if (ok) {
-        console.log("Tarefa entregue no Runrun.it.");
-        await carregarSequencia(task);
-      } else {
-        deliverBtn.disabled = false;
-      }
-    });
-  }
+.comments-pane {
+  display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--border);
+  flex: 1 1 0%; overflow: hidden; opacity: 0; transition: flex-basis 0.32s ease, opacity 0.25s ease;
 }
 
-function renderDetail() {
-  const task = tasks[detailIdx];
-  const type = typeLabels[task.type];
-  const panel = document.getElementById("taskDetail");
+.detail-body.split .desc-pane { flex-basis: 34%; }
+.detail-body.split .comments-pane { flex-basis: 66%; opacity: 1; }
 
-  panel.innerHTML = `
-    <div class="detail-inner">
-      <div class="detail-header">
-        <div class="detail-header-left">
-          <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
-          <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
-          <span class="detail-sep">|</span>
-          ${task.isMotherCard ? `
-            <div class="children-btn-wrap">
-              <button type="button" class="mother-card-btn" id="childrenBtn" title="Ver subtarefas">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <div class="children-float" id="childrenPanel">
-                <div class="children-float-head">Subtarefas</div>
-                <div class="children-list">
-                  ${(task.subtarefasResumo || []).map(s => `
-                    <button type="button" class="child-item ${s.fechada ? "done" : ""}" data-child-id="${s.id}">
-                      ${avatarHTML(s.responsavel, "avatar-sm child-avatar", s.foto)}
-                      <span class="child-title">${s.title}</span>
-                      ${s.fechada ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
-                    </button>
-                  `).join("")}
-                </div>
-              </div>
-            </div>
-          ` : `
-            <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          `}
-          <span class="detail-taskname">${task.title}</span>
-          <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
-        </div>
-        <div class="detail-header-right">
-          <div class="nav-dots-group" id="workflowSeqGroup">
-            ${renderSequenciaHTML(task)}
-          </div>
+.detail-tabs { display: flex; gap: 8px; padding: 16px 20px 0; flex-shrink: 0; }
 
-          <div class="status-wrap">
-            <button type="button" class="status-badge" id="statusBadge">${columnsDef.find(c => c.key === task.status)?.label || task.status}</button>
-            <div class="status-menu" id="statusMenu">
-              ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("")}
-            </div>
-          </div>
-
-          <div class="detail-more-wrap">
-            <button type="button" class="detail-more" id="detailMore" aria-label="Mais opções">
-              <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
-            </button>
-            <div class="detail-more-menu" id="detailMoreMenu">
-              <button type="button" id="verRegraBtn">Ver regra</button>
-              <button type="button">Reabrir tarefa</button>
-              <button type="button">Ajustar horas</button>
-            </div>
-          </div>
-
-          <button type="button" class="detail-close" id="detailClose" aria-label="Fechar">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="detail-body" id="detailBody">
-        <div class="detail-pane desc-pane">
-          <div class="detail-tabs">
-            <button type="button" class="detail-tab" id="tabDesc">Descrição</button>
-            <button type="button" class="detail-tab" id="tabComments">Comentários</button>
-            ${task.hasChange ? `
-              <button type="button" class="detail-tab change-tab" id="tabChange" title="Alteração 01">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
-              </button>
-            ` : ""}
-          </div>
-          <div class="desc-stack">
-            <div class="desc-content" id="descContent">
-              <div class="desc-text-real" id="descTextReal">${task.id ? "Carregando descrição..." : ""}</div>
-              <div class="ai-format-boxes">
-                ${formatsByType[task.type].map(f => `<div class="format-box ${f.cls}">${f.label}</div>`).join("")}
-              </div>
-            </div>
-            ${task.hasChange ? `
-              <div class="change-panel" id="changePanel">
-                <div class="change-panel-head">
-                  <span class="change-dot"></span>
-                  <span>Alteração 01</span>
-                </div>
-                <p class="change-summary">✨ Resumo por IA: cliente pediu pra trocar a cor de fundo pra tons mais claros e ajustar o texto do CTA — pedido feito nos comentários e reforçado na descrição.</p>
-              </div>
-            ` : ""}
-          </div>
-        </div>
-
-        <div class="detail-pane comments-pane" id="commentsPane">
-          <div class="detail-tabs">
-            <button type="button" class="detail-tab active">Comentários</button>
-          </div>
-          <div class="comments-thread" id="commentsThread">
-            ${renderComentariosHTML(task)}
-          </div>
-          <div class="comment-input">
-            <input type="text" id="commentInput" placeholder="Mensagem">
-          </div>
-        </div>
-
-        <div class="detail-side">
-          <div class="side-block">
-            <span class="side-label">Entrega desejada</span>
-            <div class="side-date">${task.due}</div>
-          </div>
-          <div class="side-block">
-            <span class="side-label">Tipo de tarefa</span>
-            <span class="badge ${type.class}">${type.label}</span>
-          </div>
-          <div class="side-block">
-            <span class="side-label">Cliente</span>
-            <span class="badge badge-estatico">${task.client}</span>
-          </div>
-          <div class="side-block">
-            <span class="side-label">Hub do cliente</span>
-            <div class="hub-grid">
-              ${clientHub.map(h => `<a href="#" class="hub-pill ${h.cls}" onclick="return false">${h.label}</a>`).join("")}
-            </div>
-          </div>
-          <div class="side-block">
-            <span class="side-label">Atendimento responsável</span>
-            <div class="side-person">
-              ${avatarAtendimentoHTML(getAtendimentoDoCliente(task.client) || task.assignee, "avatar-sm")}
-              <span>${getAtendimentoDoCliente(task.client) || task.assignee}</span>
-            </div>
-            <div class="discord-ctas">
-              <a href="#" class="discord-cta" onclick="return false">
-                <span class="discord-cta-icon">${discordIcon}</span>
-                <span>Chamar no Discord</span>
-              </a>
-              <a href="#" class="discord-cta ghost" onclick="return false">
-                <span class="discord-cta-icon">${discordIcon}</span>
-                <span>Canal do cliente</span>
-              </a>
-            </div>
-          </div>
-          <div class="side-block attach-block">
-            <div class="side-label-row">
-              <span class="side-label">Anexos</span>
-              <button type="button" class="download-all-btn" onclick="return false">Baixar todos</button>
-            </div>
-            <div class="attach-box">
-              <div class="attach-list">
-                ${attachments.map(a => `
-                  <div class="attach-item">
-                    <span>${a}</span>
-                    <button type="button" class="attach-toggle" aria-label="Expandir">
-                      <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                  </div>
-                `).join("")}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("detailClose").addEventListener("click", closeDetail);
-  wireWorkflowArrows(task);
-
-  document.getElementById("detailPlay").addEventListener("click", () => {
-    task.running = !task.running;
-    if (task.running) tocarTarefaNoBackend(task.id);
-    else pausarTarefaNoBackend(task.id);
-    renderDetail();
-    render();
-    applyCommentsState();
-    updateNowPlaying();
-  });
-
-  // ===== Menu de mais opções (⋮) =====
-  const motherBtn = document.getElementById("motherCardBtn");
-  if (motherBtn) motherBtn.addEventListener("click", () => abrirCardMae(task));
-
-  const childrenBtn = document.getElementById("childrenBtn");
-  if (childrenBtn) {
-    childrenBtn.addEventListener("click", e => {
-      e.stopPropagation();
-      childrenOpen = !childrenOpen;
-      applyCommentsState();
-    });
-  }
-  document.querySelectorAll(".child-item").forEach(item => {
-    item.addEventListener("click", () => {
-      childrenOpen = false;
-      applyCommentsState();
-      abrirTarefaPorId(Number(item.dataset.childId));
-    });
-  });
-
-  const statusBadge = document.getElementById("statusBadge");
-  const statusMenu = document.getElementById("statusMenu");
-  statusBadge.addEventListener("click", e => {
-    e.stopPropagation();
-    statusMenu.classList.toggle("open");
-  });
-  statusMenu.querySelectorAll("button").forEach(opt => {
-    opt.addEventListener("click", e => {
-      e.stopPropagation();
-      task.status = opt.dataset.status;
-      // Mudar de coluna aqui no Colmeia ainda é só visual — ver nota acima.
-      statusMenu.classList.remove("open");
-      renderDetail();
-      render();
-    });
-  });
-
-  const moreBtn = document.getElementById("detailMore");
-  const moreMenu = document.getElementById("detailMoreMenu");
-  moreBtn.addEventListener("click", e => {
-    e.stopPropagation();
-    moreMenu.classList.toggle("open");
-  });
-
-  document.getElementById("verRegraBtn").addEventListener("click", () => {
-    moreMenu.classList.remove("open");
-    abrirModalRegra(task);
-  });
-
-  // ===== Abas Descrição / Comentários / Alteração (sem re-renderizar, com transição) =====
-  document.getElementById("tabDesc").addEventListener("click", () => {
-    commentsOpen = false;
-    changeOpen = false;
-    applyCommentsState();
-  });
-  document.getElementById("tabComments").addEventListener("click", () => {
-    commentsOpen = true;
-    changeOpen = false;
-    applyCommentsState();
-  });
-  const tabChange = document.getElementById("tabChange");
-  if (tabChange) {
-    tabChange.addEventListener("click", () => {
-      changeOpen = !changeOpen;
-      commentsOpen = false;
-      applyCommentsState();
-    });
-  }
-
-  const commentInput = document.getElementById("commentInput");
-  if (commentInput) {
-    commentInput.addEventListener("keydown", async e => {
-      if (e.key !== "Enter") return;
-      const texto = commentInput.value.trim();
-      if (!texto) return;
-      if (!task.id) {
-        console.warn("Essa tarefa não está conectada ao Runrun.it, não dá pra comentar de verdade.");
-        return;
-      }
-      commentInput.value = "";
-      commentInput.disabled = true;
-      const ok = await enviarComentarioNoBackend(task.id, texto);
-      commentInput.disabled = false;
-      if (ok) carregarComentarios(task);
-    });
-  }
-
-  applyCommentsState();
+.detail-tab {
+  font-family: var(--font-body); font-size: 13.5px; font-weight: 600;
+  border: none; background: var(--page-bg); color: var(--text-secondary);
+  padding: 10px 16px; border-radius: 10px 10px 0 0; cursor: pointer;
 }
 
-function applyCommentsState() {
-  const body = document.getElementById("detailBody");
-  const tabDesc = document.getElementById("tabDesc");
-  const tabComments = document.getElementById("tabComments");
-  const tabChange = document.getElementById("tabChange");
-  const changePanel = document.getElementById("changePanel");
-  const childrenPanel = document.getElementById("childrenPanel");
-  if (!body) return;
-  body.classList.toggle("split", commentsOpen);
-  if (tabDesc) tabDesc.classList.toggle("active", !commentsOpen);
-  if (tabComments) {
-    tabComments.classList.toggle("active", commentsOpen);
-    tabComments.style.display = commentsOpen ? "none" : "";
-  }
-  if (tabChange) tabChange.classList.toggle("active", changeOpen);
-  if (changePanel) changePanel.classList.toggle("open", changeOpen);
-  if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
+.detail-tab.active { background: var(--card-bg); color: var(--accent); box-shadow: 0 -1px 0 var(--border) inset; }
+
+.change-tab {
+  padding: 10px 12px;
+  display: flex; align-items: center;
+  color: var(--danger);
+  position: relative;
+}
+.change-tab svg { width: 17px; height: 17px; }
+.change-tab.active { color: var(--danger); background: var(--card-bg); }
+.change-tab::after {
+  content: ""; position: absolute; top: 7px; right: 7px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--danger);
 }
 
-/**
- * Abre o modal do Card Mãe real (buscado no Runrun.it a partir do
- * parent_task_id da subtarefa que está aberta), mostrando a lista de
- * todas as subtarefas — igual a aba "Subtarefas" do Runrun.it.
- */
-/**
- * Abre uma tarefa qualquer pelo ID, como uma tarefa normal do Colmeia
- * (mesmo pop-up de sempre, com descrição/comentários/sequência). Se ela
- * já estiver carregada (uma subtarefa do quadro, por exemplo), só abre;
- * senão busca ela avulsa no Runrun.it primeiro.
- */
-async function abrirTarefaPorId(taskId) {
-  const panel = document.getElementById("taskDetail");
-  const inner = panel.querySelector(".detail-inner");
-  if (inner) inner.classList.add("panel-exit-down");
-  await esperar(200);
+.desc-stack { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
-  const idxExistente = tasks.findIndex(t => t.id === taskId);
-  if (idxExistente !== -1) {
-    openDetail(idxExistente, "panel-enter-above");
-    return;
-  }
+.desc-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; transition: flex-basis 0.32s ease; }
 
-  mostrarCardEmBranco("Buscando a tarefa...");
-  const resultado = await buscarTarefaCompletaDoBackend(taskId);
-  if (!resultado.ok) {
-    mostrarCardEmBranco(resultado.error || "Não consegui abrir essa tarefa.");
-    return;
-  }
-  const nova = mapearTarefaDoBackend(resultado.tarefa);
-  tasks.push(nova);
-  openDetail(tasks.length - 1, "panel-enter-above");
+.change-panel {
+  flex: 0 0 0%; overflow: hidden; opacity: 0;
+  border-top: 1px solid var(--border);
+  background: var(--page-bg);
+  transition: flex-basis 0.32s ease, opacity 0.25s ease;
 }
 
-async function buscarTarefaCompletaDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarTarefaCompleta", taskId }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Falha ao buscar tarefa no Runrun.it:", err);
-    return { ok: false, error: "Falha de conexão com o Runrun.it." };
-  }
+[data-theme="dark"] .change-panel { background: rgba(255,255,255,0.03); }
+
+.change-panel.open { flex-basis: 55%; opacity: 1; }
+.desc-stack:has(.change-panel.open) .desc-content { flex-basis: 45%; }
+
+.change-panel-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; color: var(--danger);
+  padding: 16px 20px 8px;
+}
+.change-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
+
+.change-summary { font-size: 13.5px; color: var(--text-primary); line-height: 1.6; padding: 0 20px 20px; }
+
+.children-btn-wrap { position: relative; }
+
+.children-float {
+  position: absolute; top: calc(100% + 10px); left: 0; z-index: 40;
+  width: 300px; max-height: 340px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-hover);
+  padding: 10px;
+  display: none;
+  flex-direction: column;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
 }
 
-/**
- * Abre o card mãe de verdade de uma subtarefa (seta pra cima), como uma
- * tarefa normal — já marcada como isMotherCard, com o resumo das
- * subtarefas guardado nela pra alimentar o painel flutuante (seta pra
- * baixo) sem precisar buscar de novo.
- */
-function esperar(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+[data-theme="dark"] .children-float { background: #0C0B12; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+.children-float.open { display: flex; }
+
+.children-float-head { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); padding: 4px 6px 8px; }
+
+.children-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+
+.child-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--page-bg); border: 2px solid transparent;
+  border-radius: 10px; padding: 9px 10px; cursor: pointer; width: 100%; text-align: left;
+  font-family: var(--font-body);
 }
 
-/**
- * Mostra um card vazio (só a abelhinha) dentro do pop-up enquanto busca
- * os dados de verdade — evita a sensação de "travado" durante a troca
- * de card mãe/subtarefa.
- */
-function mostrarCardEmBranco(mensagem) {
-  const panel = document.getElementById("taskDetail");
-  panel.innerHTML = `
-    <div class="detail-inner detail-loading-blank">
-      <span class="detail-loading-bee">🐝</span>
-      <p class="workflow-seq-empty">${mensagem || "Carregando..."}</p>
-    </div>
-  `;
+.child-item.done { border-color: var(--success); }
+
+.child-avatar { flex-shrink: 0; }
+
+.child-title { flex: 1; font-size: 12.5px; font-weight: 500; color: var(--text-primary); }
+
+.child-priority,
+.header-priority {
+  font-size: 10px; font-weight: 700; color: #fff; padding: 3px 8px;
+  border-radius: 999px; flex-shrink: 0; white-space: nowrap;
 }
 
-async function abrirCardMae(task) {
-  if (!task.id) {
-    console.warn("Essa tarefa não está conectada ao Runrun.it, não tem card mãe pra abrir.");
-    return;
-  }
+.header-priority { font-size: 11px; padding: 4px 10px; }
 
-  const panel = document.getElementById("taskDetail");
-  const inner = panel.querySelector(".detail-inner");
-  if (inner) inner.classList.add("panel-exit-up");
-  await esperar(200);
-  mostrarCardEmBranco("Buscando o card mãe...");
+.pv-alta { background: var(--danger); }
+.pv-media { background: var(--warning); }
+.pv-baixa { background: var(--success); }
 
-  const resultado = await buscarCardMaeDoBackend(task.id);
-  if (!resultado.ok) {
-    mostrarCardEmBranco(resultado.error || "Não consegui buscar o card mãe.");
-    return;
-  }
-  if (!resultado.temPai) {
-    mostrarCardEmBranco("Essa tarefa não tem card mãe.");
-    return;
-  }
+.child-check { width: 16px; height: 16px; color: var(--success); flex-shrink: 0; }
 
-  let idx = tasks.findIndex(t => t.id === resultado.cardMae.id);
-  if (idx === -1) {
-    const novaMae = mapearTarefaDoBackend(resultado.cardMae);
-    tasks.push(novaMae);
-    idx = tasks.length - 1;
-  }
-  tasks[idx].isMotherCard = true;
-  tasks[idx].subtarefasResumo = resultado.subtarefas || [];
+.detail-desc { font-size: 14px; color: var(--text-primary); line-height: 1.7; margin-bottom: 20px; }
 
-  openDetail(idx, "panel-enter-below");
+.ai-format-boxes { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.format-box {
+  border-radius: 12px; padding: 14px 20px;
+  font-size: 13.5px; font-weight: 700; color: #fff;
 }
 
-async function buscarCardMaeDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarCardMae", taskId }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Falha ao buscar o card mãe no Runrun.it:", err);
-    return { ok: false, error: "Falha de conexão com o Runrun.it." };
-  }
+.fb-purple { background: var(--purple); }
+.fb-pink { background: var(--danger); }
+.fb-blue { background: var(--accent); }
+.fb-teal { background: var(--success); }
+.fb-orange { background: var(--warning); }
+
+.comments-thread { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+.comment-bubble { display: flex; gap: 10px; max-width: 80%; }
+.comment-bubble.mine { align-self: flex-end; text-align: right; }
+
+.comment-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--page-bg); flex-shrink: 0; }
+
+.comment-body { background: var(--page-bg); border-radius: 12px; padding: 10px 14px; }
+[data-theme="dark"] .comment-body { background: rgba(255,255,255,0.05); }
+
+.comment-author { font-size: 12.5px; font-weight: 600; margin-bottom: 3px; }
+.comment-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+
+.comment-input { padding: 14px 20px; border-top: 1px solid var(--border); }
+.comment-input input {
+  width: 100%; height: 40px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--page-bg); padding: 0 14px; font-family: var(--font-body); font-size: 13.5px; color: var(--text-primary);
 }
 
-function stepDetail(dir) {
-  const order = tasks.map((t, i) => i).filter(i => tasks[i].status === tasks[detailIdx].status);
-  const pos = order.indexOf(detailIdx);
-  const next = order[(pos + dir + order.length) % order.length];
-  detailIdx = next;
-  renderDetail();
-  document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
-  const cardEl = document.querySelector(`.task-card[data-idx="${detailIdx}"]`);
-  if (cardEl) cardEl.classList.add("selected");
+.detail-side {
+  flex: 1;
+  min-width: 320px;
+  max-width: 360px;
+  background: var(--card-bg);
+  padding: 24px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 20px;
 }
 
-function closeDetail() {
-  const panel = document.getElementById("taskDetail");
-  panel.classList.remove("open");
-  document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
-  setTimeout(() => panel.classList.remove("visible"), 250);
+[data-theme="dark"] .detail-side { background: rgba(255,255,255,0.03); }
+
+.side-block { display: flex; flex-direction: column; gap: 8px; }
+
+.side-block.attach-block { flex: 1; min-height: 0; }
+
+.side-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.side-label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+
+.mother-card-btn {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  color: var(--accent); background: var(--accent-soft); border: none;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.mother-card-btn svg { width: 14px; height: 14px; }
+
+.side-date { font-size: 15px; font-weight: 600; }
+
+.side-block .badge { align-self: flex-start; }
+
+.hub-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.hub-pill { font-size: 11.5px; font-weight: 600; color: #fff; padding: 5px 11px; border-radius: 999px; text-decoration: none; }
+.hub-purple { background: var(--purple); }
+.hub-pink { background: var(--danger); }
+.hub-blue { background: var(--accent); }
+.hub-orange { background: var(--warning); }
+.hub-teal { background: var(--success); }
+
+.side-person { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+
+.discord-ctas { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+
+.discord-cta {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--accent); color: #fff;
+  font-size: 12.5px; font-weight: 600; text-decoration: none;
+  padding: 9px 12px; border-radius: 10px;
+}
+.discord-cta:hover { opacity: 0.9; }
+
+.discord-cta.ghost { background: var(--accent-soft); color: var(--accent); }
+
+.discord-cta-icon { width: 16px; height: 16px; flex-shrink: 0; display: flex; }
+.discord-cta-icon svg { width: 100%; height: 100%; }
+
+.download-all-btn {
+  font-size: 10.5px; font-weight: 600; color: var(--accent);
+  background: var(--accent-soft); border: none; border-radius: 999px;
+  padding: 4px 9px; cursor: pointer; white-space: nowrap;
 }
 
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeDetail();
-});
-
-function updateNowPlaying() {
-  const el = document.getElementById("nowPlaying");
-  if (!el) return;
-  const running = tasks.find(t => t.running);
-  if (running) {
-    el.hidden = false;
-    document.getElementById("nowPlayingTitle").textContent = running.title;
-    document.getElementById("nowPlayingTime").textContent = formatTime(running.timerSeconds);
-  } else {
-    el.hidden = true;
-  }
+.attach-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  flex: 1;
+  min-height: 90px;
+  overflow-y: auto;
 }
 
-// avança a barra de progresso e o cronômetro das tarefas em execução
-setInterval(() => {
-  tasks.forEach((task, idx) => {
-    if (task.running) {
-      task.timerSeconds++;
-      const timerEl = document.querySelector(`.timer-text[data-idx="${idx}"]`);
-      if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
-      if (task.estimatePct < 100) {
-        task.estimatePct++;
-        const fill = document.querySelector(`.progress-fill[data-idx="${idx}"]`);
-        if (fill) fill.style.width = task.estimatePct + "%";
-      }
-    }
-  });
-  updateNowPlaying();
-}, 1000);
+.attach-list { display: flex; flex-direction: column; gap: 6px; }
 
-// ===== Dark mode =====
-document.querySelectorAll("#themeSwitch button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll("#themeSwitch button").forEach(b => b.classList.remove("on"));
-    btn.classList.add("on");
-    if (btn.dataset.mode === "dark") {
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      document.documentElement.removeAttribute("data-theme");
-    }
-  });
-});
-
-const pageTitles = {
-  kanban: ["Quadro de tarefas", "Time de design · Beeon"],
-  clientes: ["Meus clientes", "Clientes atribuídos a você"],
-  atendimento: ["Clientes por atendimento", "Agrupados por atendimento responsável"],
-  tipos: ["Tipos de tarefas", "Visão por categoria"],
-  runrun: ["Runrun completo", "Todas as abas e tarefas do time"],
-  hoje: ["Minhas tarefas de hoje", "O que você deu play hoje"],
-};
-
-// Nome do designer logado no Colmeia hoje (mesmo usado na barra lateral).
-// Troque aqui quando tiver login de verdade — por enquanto é fixo.
-const DESIGNER_LOGADO = "Claudio";
-
-// Mesma lógica de normalização usada no painel-designers-beeon: tira
-// acento, deixa minúsculo, tira espaço extra. Assim "Claudio" (Colmeia)
-// e "Cláudio" (painel-beeon) são reconhecidos como o mesmo nome.
-function normalizarParaComparar(s) {
-  return (s || "")
-    .toString()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+.attach-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--page-bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-weight: 500;
 }
 
-/**
- * Compara dois nomes de forma flexível: reconhece "Manu" batendo com
- * "Manuela Mendonça" (um é o começo do outro), além de acento e
- * maiúsculas/minúsculas diferentes. Só entra em ação com pelo menos 3
- * letras, pra não dar falso positivo com nomes muito curtos.
- */
-function nomesCorrespondem(a, b) {
-  const na = normalizarParaComparar(a);
-  const nb = normalizarParaComparar(b);
-  if (!na || !nb) return false;
-  if (na === nb) return true;
-  if (na.length < 3 || nb.length < 3) return false;
-  return na.startsWith(nb) || nb.startsWith(na);
+.attach-toggle {
+  width: 20px; height: 20px; border-radius: 50%; border: none;
+  background: var(--text-primary); color: var(--card-bg);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.attach-toggle svg { width: 11px; height: 11px; }
+
+@media (max-width: 720px) {
+  .page { padding: 14px; gap: 10px; }
+  .search-box { display: none; }
+  .task-detail { left: 14px; right: 14px; top: 14px; bottom: 14px; }
+  .detail-side { display: none; }
 }
 
-/**
- * Busca a foto de uma pessoa por nome, aceitando apelido/nome curto
- * (ex: comentário do Runrun.it vem "Manuela Mendonça" mas no painel
- * está só "Manu") — procura tanto nas fotos de designers quanto nas de
- * atendimento.
- */
-function buscarFotoPorNomeAproximado(nome) {
-  if (painelBeeonData && painelBeeonData.photos) {
-    const chave = Object.keys(painelBeeonData.photos).find(d => nomesCorrespondem(d, nome));
-    if (chave) return painelBeeonData.photos[chave];
-  }
-  const chaveAtend = Object.keys(ATENDIMENTO_PHOTOS_BEEON).find(d => nomesCorrespondem(d, nome));
-  if (chaveAtend) return ATENDIMENTO_PHOTOS_BEEON[chaveAtend];
-  return null;
+/* ===== Clientes por atendimento (Colmeia) ===== */
+.atendimento-group {
+  margin-bottom: 12px;
+  border: 1px solid var(--border-color, #e2e2e2);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.atendimento-group-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--card-bg, #fff);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.atendimento-group-name {
+  font-weight: 600;
+  flex: 1;
+}
+.atendimento-group-count {
+  font-size: 13px;
+  opacity: 0.6;
+}
+.atendimento-group .clients-grid {
+  padding: 0 16px 16px;
+}
+.client-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.comments-empty {
+  opacity: 0.6;
+  font-size: 14px;
+  padding: 12px 0;
 }
 
-/**
- * Acha a lista de clientes de um designer dentro do state do
- * painel-beeon, comparando o nome sem se importar com acento/maiúsculas
- * (ex: "Claudio" no Colmeia bate com "Cláudio" no painel).
- */
-function clientesDoDesignerNoPainel(nomeDesigner) {
-  if (!painelBeeonData || !painelBeeonData.state) return [];
-  const chave = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, nomeDesigner));
-  return chave ? (painelBeeonData.state[chave] || []) : [];
+.desc-text-real {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.desc-text-real p {
+  margin: 0 0 8px;
+}
+.desc-text-real ul {
+  margin: 0 0 8px;
+  padding-left: 4px;
+}
+.desc-text-real li {
+  list-style: none;
+  margin-bottom: 2px;
 }
 
-/**
- * "Meus clientes": lista só os clientes do designer logado, vindos de
- * verdade do painel-designers-beeon (state[designer]), com foto quando
- * disponível. Não usa mais os dados fake do Runrun.
- */
-function buildClientsPage() {
-  const grid = document.getElementById("clientsGrid");
-  if (!grid) return;
+/* ===== Reatribuir (clicar na foto do responsável no card) ===== */
+.assignee-wrap { position: relative; cursor: pointer; }
 
-  if (!painelBeeonData) {
-    grid.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando clientes do painel-designers-beeon...</p></div>`;
-    return;
-  }
+.assignee-menu {
+  position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 20;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 4px; box-shadow: var(--shadow-hover);
+  display: none; flex-direction: column; gap: 2px; min-width: 160px;
+  max-height: 220px; overflow-y: auto;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.assignee-menu.open { display: flex; }
+.assignee-menu button {
+  display: flex; align-items: center; gap: 8px;
+  border: none; background: transparent; text-align: left;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 500;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+}
+.assignee-menu button:hover { background: var(--page-bg); }
+.assignee-menu button .avatar { width: 20px; height: 20px; font-size: 9px; }
+.assignee-menu-loading { font-size: 12px; opacity: 0.6; padding: 8px; }
 
-  const meusClientes = clientesDoDesignerNoPainel(DESIGNER_LOGADO);
-  if (meusClientes.length === 0) {
-    grid.innerHTML = `<div class="placeholder-box"><span>🗂️</span><p>Nenhum cliente encontrado pra ${DESIGNER_LOGADO} no painel-designers-beeon.</p></div>`;
-    return;
-  }
-
-  grid.innerHTML = meusClientes.map(c => `
-    <div class="client-card">
-      <div class="client-card-top">
-        ${avatarHTML(DESIGNER_LOGADO, "avatar-sm")}
-        <div class="client-card-name">${c.cliente}</div>
-      </div>
-      <div class="client-card-count">${c.escopo || ""}</div>
-      <div class="client-card-badges">
-        ${(c.servicos || []).map(s => `<span class="badge badge-estatico">${s}</span>`).join("")}
-      </div>
-    </div>
-  `).join("");
+.assignee-advance-btn {
+  font-weight: 600;
+  color: #0000FB;
+}
+.assignee-menu-sep {
+  height: 1px;
+  background: var(--border-color, #e2e2e2);
+  margin: 4px 0;
 }
 
-// Guarda quais grupos de atendimento estão expandidos (mesmo padrão do
-// painel-beeon: clica no cabeçalho do grupo pra abrir/fechar a lista).
-const atendimentoExpandido = new Set();
-
-/**
- * "Clientes por atendimento": mesmo padrão do painel-designers-beeon —
- * agrupa os clientes de todos os designers pelo atendimento responsável,
- * ordena de A a Z, e cada grupo expande/recolhe ao clicar no cabeçalho.
- */
-function buildAtendimentoPage() {
-  const grid = document.getElementById("atendimentoGrid");
-  if (!grid) return;
-
-  if (!painelBeeonData) {
-    grid.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando clientes do painel-designers-beeon...</p></div>`;
-    return;
-  }
-
-  const todos = [];
-  const vistosPorGrupo = new Set(); // evita o mesmo cliente aparecer 2x no mesmo grupo
-  Object.entries(painelBeeonData.state).forEach(([designer, listaClientes]) => {
-    (listaClientes || []).forEach(c => {
-      if (!c.atend) return; // sem atendimento definido — não entra nessa aba
-      const chave = normalizarParaComparar(c.atend) + "|" + normalizarParaComparar(c.cliente);
-      if (vistosPorGrupo.has(chave)) return; // já apareceu nesse grupo, pula
-      vistosPorGrupo.add(chave);
-      todos.push({ ...c, designer });
-    });
-  });
-
-  const porAtendimento = {};
-  todos.forEach(c => {
-    if (!porAtendimento[c.atend]) porAtendimento[c.atend] = [];
-    porAtendimento[c.atend].push(c);
-  });
-
-  const nomes = Object.keys(porAtendimento).sort((a, b) => a.localeCompare(b));
-
-  grid.innerHTML = nomes.map(responsavel => {
-    const lista = porAtendimento[responsavel];
-    const aberto = atendimentoExpandido.has(responsavel);
-    return `
-      <div class="atendimento-group ${aberto ? "expanded" : ""}">
-        <button type="button" class="atendimento-group-header" data-atend="${responsavel}">
-          ${avatarAtendimentoHTML(responsavel, "avatar-sm")}
-          <span class="atendimento-group-name">${responsavel}</span>
-          <span class="atendimento-group-count">${lista.length} cliente${lista.length > 1 ? "s" : ""}</span>
-        </button>
-        ${aberto ? `
-          <div class="clients-grid">
-            ${lista.map(c => `
-              <div class="client-card">
-                <div class="client-card-top">
-                  ${avatarHTML(c.designer, "avatar-sm")}
-                  <div class="client-card-name">${c.cliente}</div>
-                </div>
-                <div class="client-card-count">${c.escopo || ""}</div>
-                <div class="client-card-badges">
-                  ${(c.servicos || []).map(s => `<span class="badge badge-estatico">${s}</span>`).join("")}
-                </div>
-              </div>
-            `).join("")}
-          </div>
-        ` : ""}
-      </div>
-    `;
-  }).join("");
-
-  grid.querySelectorAll(".atendimento-group-header").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const nome = btn.dataset.atend;
-      if (atendimentoExpandido.has(nome)) atendimentoExpandido.delete(nome);
-      else atendimentoExpandido.add(nome);
-      buildAtendimentoPage();
-    });
-  });
+/* ===== Tela de carregando (tema colmeia) ===== */
+.board-loading {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 400px;
+  border-radius: 20px;
+  background: linear-gradient(120deg, #FFF7D6, #FFE082, #FFC94D, #FFF3C4, #FFE9A8);
+  background-size: 300% 300%;
+  animation: colmeia-gradient 7s ease infinite;
 }
 
-// Guarda quais grupos de serviço estão expandidos.
-const tiposExpandido = new Set();
-
-/**
- * "Tipos de tarefas": agrupa os clientes de todos os designers pelos
- * serviços que cada um presta (campo "servicos", array — um cliente
- * pode aparecer em mais de um grupo), vindos do painel-designers-beeon.
- * Mesmo padrão de grupos expansíveis usado em "Clientes por atendimento".
- */
-function buildTiposPage() {
-  const grid = document.getElementById("tiposGrid");
-  if (!grid) return;
-
-  if (!painelBeeonData) {
-    grid.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando do painel-designers-beeon...</p></div>`;
-    return;
-  }
-
-  const porServico = {};
-  const vistosPorServico = new Set(); // evita duplicar o mesmo cliente no mesmo serviço
-  Object.entries(painelBeeonData.state).forEach(([designer, listaClientes]) => {
-    (listaClientes || []).forEach(c => {
-      const servicos = (c.servicos && c.servicos.length) ? c.servicos : ["Sem serviço definido"];
-      servicos.forEach(servico => {
-        const chave = normalizarParaComparar(servico) + "|" + normalizarParaComparar(c.cliente);
-        if (vistosPorServico.has(chave)) return;
-        vistosPorServico.add(chave);
-        if (!porServico[servico]) porServico[servico] = [];
-        porServico[servico].push({ ...c, designer });
-      });
-    });
-  });
-
-  const nomes = Object.keys(porServico).sort((a, b) => a.localeCompare(b));
-
-  if (nomes.length === 0) {
-    grid.innerHTML = `<div class="placeholder-box"><span>🏷️</span><p>Nenhum serviço cadastrado no painel-designers-beeon ainda.</p></div>`;
-    return;
-  }
-
-  grid.innerHTML = nomes.map(servico => {
-    const lista = porServico[servico];
-    const aberto = tiposExpandido.has(servico);
-    return `
-      <div class="atendimento-group ${aberto ? "expanded" : ""}">
-        <button type="button" class="atendimento-group-header" data-tipo="${servico}">
-          <span class="tipo-tag-icon">🏷️</span>
-          <span class="atendimento-group-name">${servico}</span>
-          <span class="atendimento-group-count">${lista.length} cliente${lista.length > 1 ? "s" : ""}</span>
-        </button>
-        ${aberto ? `
-          <div class="clients-grid">
-            ${lista.map(c => `
-              <div class="client-card">
-                <div class="client-card-top">
-                  ${avatarHTML(c.designer, "avatar-sm")}
-                  <div class="client-card-name">${c.cliente}</div>
-                </div>
-                <div class="client-card-count">${c.escopo || ""}</div>
-              </div>
-            `).join("")}
-          </div>
-        ` : ""}
-      </div>
-    `;
-  }).join("");
-
-  grid.querySelectorAll(".atendimento-group-header").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const nome = btn.dataset.tipo;
-      if (tiposExpandido.has(nome)) tiposExpandido.delete(nome);
-      else tiposExpandido.add(nome);
-      buildTiposPage();
-    });
-  });
+.board-loading-glass {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 25% 30%, rgba(255,255,255,0.55), transparent 55%),
+    radial-gradient(circle at 75% 65%, rgba(255,255,255,0.35), transparent 55%),
+    radial-gradient(circle at 50% 90%, rgba(255,255,255,0.25), transparent 60%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: colmeia-glass-move 9s ease-in-out infinite;
 }
 
-document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
-  link.addEventListener("click", e => {
-    e.preventDefault();
-    const page = link.dataset.page;
-    document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.remove("active"));
-    link.classList.add("active");
-    document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
-    document.getElementById("page-" + page).hidden = false;
-    const [title, subtitle] = pageTitles[page];
-    document.querySelector(".page-title").textContent = title;
-    document.querySelector(".page-subtitle").textContent = subtitle;
-    if (page === "clientes") buildClientsPage();
-    if (page === "atendimento") buildAtendimentoPage();
-    if (page === "tipos") buildTiposPage();
-  });
-});
+.board-loading-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
 
-// Busca por tarefa ou cliente
-document.getElementById("searchInput").addEventListener("input", e => {
-  searchQuery = e.target.value;
-  render();
-});
+.board-loading-bee {
+  font-size: 40px;
+  animation: colmeia-bee-float 2.4s ease-in-out infinite;
+}
 
-document.getElementById("nowPlaying").addEventListener("click", () => {
-  const idx = tasks.findIndex(t => t.running);
-  if (idx !== -1) openDetail(idx);
-});
+.board-loading-text {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: #7A5B00;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+}
 
-// Notificações do Runrun.it — ainda não integrado, só o botão por enquanto.
-document.getElementById("notificationsBtn").addEventListener("click", () => {
-  console.log("Notificações do Runrun.it: integração ainda não feita.");
-});
+.board-loading-text.fade-in {
+  animation: colmeia-text-fade 0.4s ease;
+}
 
-// Acesso rápido — painel lateral recolhível
-const quickAccessPanel = document.getElementById("quickAccessPanel");
-document.getElementById("quickAccessBtn").addEventListener("click", () => {
-  quickAccessPanel.classList.toggle("open");
-});
-document.getElementById("quickAccessClose").addEventListener("click", () => {
-  quickAccessPanel.classList.remove("open");
-});
+@keyframes colmeia-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
 
-// Modal "Ver regra"
-const ruleModalOverlay = document.getElementById("ruleModalOverlay");
-document.getElementById("ruleModalClose").addEventListener("click", () => {
-  ruleModalOverlay.hidden = true;
-});
-ruleModalOverlay.addEventListener("click", e => {
-  if (e.target === ruleModalOverlay) ruleModalOverlay.hidden = true;
-});
+@keyframes colmeia-glass-move {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6%, -6%) scale(1.08); }
+}
 
-buildBoard();
-render();
-carregarTarefasReais();
-carregarDadosPainelBeeon();
+@keyframes colmeia-bee-float {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-10px) rotate(4deg); }
+}
+
+@keyframes colmeia-text-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== Tarefa atrasada ===== */
+.task-card.task-overdue {
+  border: 1.5px solid #E03131;
+}
+.task-card.task-overdue .card-title {
+  color: #E03131;
+}
+.task-card.task-overdue .badge {
+  background: #f75961;
+  color: #fff;
+}
+.card-due-simple.overdue {
+  color: #E03131;
+  font-weight: 600;
+}
+
+/* ===== Botões de ícone do topo (notificações, acesso rápido) ===== */
+.icon-btn {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn:hover { color: var(--text-primary); }
+
+/* ===== Acesso rápido (painel lateral recolhível) ===== */
+.quick-access-panel {
+  position: fixed;
+  top: 22px; right: 22px; bottom: 22px;
+  width: 320px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(10,10,20,0.28);
+  z-index: 90;
+  display: flex; flex-direction: column;
+  transform: translateX(calc(100% + 22px));
+  transition: transform 0.28s ease;
+}
+.quick-access-panel.open { transform: translateX(0); }
+.quick-access-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; border-bottom: 1px solid var(--border);
+}
+.quick-access-header h3 { font-family: var(--font-display); font-size: 15px; }
+.quick-access-header button {
+  border: none; background: transparent; cursor: pointer; color: var(--text-muted);
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+}
+.quick-access-header button svg { width: 16px; height: 16px; }
+.quick-access-body { padding: 20px; overflow-y: auto; flex: 1; }
+.quick-access-empty { font-size: 13px; opacity: 0.6; }
+
+/* ===== Sequência de responsáveis (workflow real do Runrun.it) ===== */
+.workflow-seq-empty {
+  font-size: 12px;
+  opacity: 0.6;
+  white-space: nowrap;
+  padding: 0 8px;
+}
+.workflow-seq-dots {
+  display: flex;
+  align-items: center;
+}
+.wf-dot {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+.wf-dot .avatar-xs { width: 100%; height: 100%; font-size: 10px; }
+.wf-dot.current { box-shadow: 0 0 0 2px #0000FB; border-radius: 50%; }
+.wf-dot.completed { opacity: 0.85; }
+.wf-check {
+  position: absolute;
+  bottom: -2px; right: -2px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #2F9E44;
+  color: #fff;
+  font-size: 8px;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+}
+.wf-line {
+  width: 14px;
+  height: 2px;
+  background: var(--border-color, #e2e2e2);
+  margin: 0 2px;
+}
+.wf-line.done { background: #2F9E44; }
+
+.tipo-tag-icon { font-size: 16px; }
+
+.nav-arrow.nav-deliver {
+  color: #2F9E44;
+  border-color: #2F9E44;
+}
+.nav-arrow.nav-deliver:hover {
+  background: #2F9E44;
+  color: #fff;
+}
+
+/* ===== Modal "Ver regra" ===== */
+.rule-modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(10,10,20,0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.rule-modal-overlay[hidden] { display: none; }
+.rule-modal {
+  width: 420px; max-height: 80vh;
+  background: var(--card-bg);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(10,10,20,0.3);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.rule-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; border-bottom: 1px solid var(--border);
+}
+.rule-modal-header h3 { font-family: var(--font-display); font-size: 15px; }
+.rule-modal-header button {
+  border: none; background: transparent; cursor: pointer; color: var(--text-muted);
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+}
+.rule-modal-header button svg { width: 16px; height: 16px; }
+.rule-modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+
+.rule-list { display: flex; flex-direction: column; gap: 8px; }
+.rule-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 10px;
+  background: var(--page-bg);
+}
+.rule-row.current { box-shadow: 0 0 0 1.5px #0000FB; }
+.rule-row-order {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--border-color, #e2e2e2);
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.rule-row-name { flex: 1; font-size: 13px; font-weight: 500; }
+.rule-row-status { font-size: 11px; font-weight: 600; opacity: 0.6; }
+.rule-row-status.done { color: #2F9E44; opacity: 1; }
+.rule-row-status.current { color: #0000FB; opacity: 1; }
+
+.rule-add-section { display: flex; flex-direction: column; gap: 8px; }
+.rule-add-search {
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 12px; font-family: inherit; font-size: 13px;
+  background: var(--page-bg); color: var(--text-primary);
+}
+.rule-add-list {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 180px; overflow-y: auto;
+}
+.rule-add-list button {
+  display: flex; align-items: center; gap: 8px;
+  border: none; background: transparent; text-align: left;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 7px 8px; border-radius: 8px; cursor: pointer;
+}
+.rule-add-list button:hover { background: var(--page-bg); }
+.rule-add-list .avatar { width: 24px; height: 24px; font-size: 10px; }
+
+/* (modal antigo do card mãe removido — agora usa o painel flutuante, seta pra baixo) */
+
+/* ===== Card em branco (transição card mãe/subtarefa) ===== */
+.detail-loading-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  width: 100%;
+  opacity: 0;
+  animation: colmeia-blank-fade 0.3s ease forwards;
+}
+.detail-loading-bee {
+  font-size: 30px;
+  animation: colmeia-bee-float 1.6s ease-in-out infinite;
+}
+@keyframes colmeia-blank-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
