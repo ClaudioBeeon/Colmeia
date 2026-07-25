@@ -606,6 +606,18 @@ function renderModalRegra(task) {
  * Remove a linha na hora (otimista, sem esperar o servidor responder)
  * e só depois confirma de verdade com o Runrun.it em segundo plano.
  */
+/**
+ * Depois que a resposta de verdade do Runrun.it chega, atualiza tanto o
+ * cabeçalho quanto a lista dentro do modal "Ver regra" (se ele ainda
+ * estiver aberto) — sem isso, a linha otimista ficava presa girando
+ * pra sempre, mesmo depois de já ter confirmado de verdade.
+ */
+async function atualizarSequenciaEModal(task) {
+  await carregarSequencia(task);
+  const overlay = document.getElementById("ruleModalOverlay");
+  if (overlay && !overlay.hidden) renderModalRegra(task);
+}
+
 function removerPessoaOtimista(task, elementId) {
   const row = document.querySelector(`.rule-row[data-element-id="${elementId}"]`);
   if (row) {
@@ -613,7 +625,7 @@ function removerPessoaOtimista(task, elementId) {
     setTimeout(() => row.remove(), 200);
   }
   task.sequencia = task.sequencia.filter(s => String(s.id) !== String(elementId));
-  removerDaRegraNoBackend(task.workflowId, elementId).then(() => carregarSequencia(task));
+  removerDaRegraNoBackend(task.workflowId, elementId).then(() => atualizarSequenciaEModal(task));
 }
 
 async function removerDaRegraNoBackend(workflowId, elementId) {
@@ -684,7 +696,7 @@ function adicionarPessoaOtimista(task, usuario) {
   renderModalRegra(task);
   renderSequenciaNoHeaderSeAberta(task);
 
-  adicionarNaRegraNoBackend(task.workflowId, usuario.id).then(() => carregarSequencia(task));
+  adicionarNaRegraNoBackend(task.workflowId, usuario.id).then(() => atualizarSequenciaEModal(task));
 }
 
 /**
