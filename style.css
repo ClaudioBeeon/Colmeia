@@ -969,18 +969,15 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   width: 100%;
   min-height: 400px;
   border-radius: 20px;
-  background: linear-gradient(120deg, #FFF7D6, #FFE082, #FFC94D, #FFF3C4, #FFE9A8);
-  background-size: 300% 300%;
-  animation: colmeia-gradient 7s ease infinite;
+  background: var(--card-bg);
 }
 
 .board-loading-glass {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 25% 30%, rgba(255,255,255,0.55), transparent 55%),
-    radial-gradient(circle at 75% 65%, rgba(255,255,255,0.35), transparent 55%),
-    radial-gradient(circle at 50% 90%, rgba(255,255,255,0.25), transparent 60%);
+    radial-gradient(circle at 25% 30%, rgba(120,110,255,0.10), transparent 55%),
+    radial-gradient(circle at 75% 65%, rgba(120,110,255,0.07), transparent 55%);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   animation: colmeia-glass-move 9s ease-in-out infinite;
@@ -996,7 +993,8 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 }
 
 .board-loading-bee {
-  font-size: 40px;
+  width: 44px;
+  height: 44px;
   animation: colmeia-bee-float 2.4s ease-in-out infinite;
 }
 
@@ -1004,18 +1002,11 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 700;
-  color: #7A5B00;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  color: var(--text-secondary);
 }
 
 .board-loading-text.fade-in {
   animation: colmeia-text-fade 0.4s ease;
-}
-
-@keyframes colmeia-gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
 }
 
 @keyframes colmeia-glass-move {
@@ -1220,7 +1211,8 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   animation: colmeia-blank-fade 0.3s ease forwards;
 }
 .detail-loading-bee {
-  font-size: 30px;
+  width: 34px;
+  height: 34px;
   animation: colmeia-bee-float 1.6s ease-in-out infinite;
 }
 @keyframes colmeia-blank-fade {
@@ -1307,14 +1299,13 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 }
 .ai-briefing-campos {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px; margin-top: 8px;
+  gap: 6px; margin-top: 8px;
 }
 .ai-briefing-campo {
-  background: var(--page-bg); border-radius: 10px; padding: 10px 12px;
+  background: var(--page-bg); border-radius: 8px; padding: 8px 10px;
 }
 .ai-briefing-campo-label {
-  font-size: 11.5px; color: var(--text-secondary); font-weight: 600;
-  margin: 0 0 4px;
+  font-size: 11px; color: var(--text-secondary); margin: 0 0 4px;
 }
 .ai-briefing-campo-valor {
   font-size: 13px; margin: 0; white-space: pre-wrap;
@@ -1322,3 +1313,62 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .ai-briefing-campo-valor.vazio {
   color: var(--text-muted); font-style: italic;
 }
+.ai-briefing-campo-valor a { color: #0000FB; font-weight: 600; }
+
+.ai-briefing-link-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 600; color: #0C447C;
+  background: #E6F1FB; padding: 4px 10px; border-radius: 999px;
+  text-decoration: none;
+}
+
+.ai-briefing-destaque {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; background: #FAEEDA; border-left: 3px solid #EF9F27;
+  border-radius: 8px; padding: 12px 14px; margin: 12px 0;
+}
+.ai-briefing-destaque-label {
+  font-size: 12px; font-weight: 600; color: #633806; margin: 0 0 6px;
+}
+.ai-briefing-destaque-valor {
+  font-size: 14px; color: #412402; margin: 0; line-height: 1.5;
+  white-space: pre-wrap;
+}
+.ai-briefing-copy-btn {
+  flex-shrink: 0; background: transparent; border: 1px solid #EF9F27;
+  color: #633806; border-radius: 8px; width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.ai-briefing-copy-btn:hover { background: #FAC775; }
+
+/* ===== Logo oficial na barra lateral ===== */
+.sidebar-logo {
+  position: relative;
+  height: 32px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.sidebar-logo-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  transition: opacity 0.16s ease;
+}
+.sidebar-logo-full {
+  position: absolute;
+  left: 0;
+  height: 26px;
+  object-fit: contain;
+  object-position: left center;
+  max-width: 200px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+.sidebar:hover .sidebar-logo-icon { opacity: 0; }
+.sidebar:hover .sidebar-logo-full { opacity: 1; transition-delay: 0.08s; }
+.logo-dark { display: none; }
+[data-theme="dark"] .logo-light { display: none; }
+[data-theme="dark"] .logo-dark { display: block; }
