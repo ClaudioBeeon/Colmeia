@@ -273,6 +273,7 @@ function mapearTarefaDoBackend(t) {
     status: t.status,
     runrunStage: t.runrunStage,
     isOutraEtapa: t.isOutraEtapa,
+    parentTaskId: t.parentTaskId || null,
     link: t.link,
     assignee: t.assignee,
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
@@ -908,14 +909,10 @@ async function gerarBriefingComIA(task) {
     const camposSecundarios = campos.filter((c, i) => i !== idxDestaque);
 
     resultEl.innerHTML = `
-      ${plataformas.length ? `
+      ${(plataformas.length || formatos.length) ? `
         <div class="ai-briefing-tags">
           ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${p}</span>`).join("")}
-        </div>
-      ` : ""}
-      ${formatos.length ? `
-        <div class="ai-format-boxes">
-          ${formatos.map((f, i) => `<div class="format-box ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${f}</div>`).join("")}
+          ${formatos.map((f, i) => `<div class="format-box format-box-sm ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${f}</div>`).join("")}
         </div>
       ` : ""}
       ${resumo ? `<p class="ai-briefing-resumo">${resumo}</p>` : ""}
@@ -1647,11 +1644,11 @@ function renderDetail() {
                 </div>
               </div>
             </div>
-          ` : `
+          ` : task.parentTaskId ? `
             <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-          `}
+          ` : ""}
           <span class="detail-taskname">${task.title}</span>
           <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
         </div>
