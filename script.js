@@ -17,7 +17,7 @@ const columnsDef = [
 ];
 
 // dia 24 = "hoje" na simulação
-const HOJE = 24;
+// (o "hoje" de verdade agora vem de hojeISO(), calculado dinamicamente)
 
 // ============================================
 // INTEGRAÇÃO REAL — Google Apps Script (Code.gs) + Runrun.it
@@ -78,6 +78,7 @@ async function carregarDadosPainelBeeon() {
     // Depois de carregado, atualiza as páginas que dependem desses dados.
     buildClientsPage();
     buildAtendimentoPage();
+    buildTiposPage();
   } catch (err) {
     console.error("Falha ao conectar com o painel-designers-beeon:", err);
   }
@@ -158,6 +159,11 @@ function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
   return `<div class="avatar ${sizeClass || ""}" title="${nomeDesigner}">${initials(nomeDesigner)}</div>`;
 }
 
+function hojeISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function mapearTarefaDoBackend(t) {
   let day = null, due = "—";
   if (t.due) {
@@ -173,6 +179,7 @@ function mapearTarefaDoBackend(t) {
     priority: t.priority,
     day,
     due,
+    dueISO: t.due || null, // data completa (ano-mês-dia), usada pra ordenar e saber se está atrasada
     status: t.status,
     runrunStage: t.runrunStage,
     isOutraEtapa: t.isOutraEtapa,
@@ -188,22 +195,36 @@ function mapearTarefaDoBackend(t) {
 
 async function carregarTarefasReais() {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1) {
-    return; // Web App ainda não configurado — mantém os dados fake
+    // Web App ainda não configurado — usa os dados fake só nesse caso.
+    tasks = tasksFake;
+    carregandoTarefas = false;
+    buildBoard();
+    render();
+    return;
   }
   try {
     const res = await fetch(COLMEIA_API_URL + "?tipo=tarefas");
     const data = await res.json();
     if (!data.ok) {
       console.error("Erro ao buscar tarefas do Colmeia:", data.error);
+      tasks = tasksFake;
+      carregandoTarefas = false;
+      buildBoard();
+      render();
       return;
     }
     const doKanban = data.tarefas.filter(t => !t.isOutraEtapa).map(mapearTarefaDoBackend);
     tasks = doKanban;
     tasks.forEach(t => { t.estimatePct = t.estimatePct || 0; });
+    carregandoTarefas = false;
     buildBoard();
     render();
   } catch (err) {
     console.error("Falha ao conectar com o backend do Colmeia:", err);
+    tasks = tasksFake;
+    carregandoTarefas = false;
+    buildBoard();
+    render();
   }
 }
 
@@ -298,6 +319,49 @@ async function reatribuirTarefaNoBackend(taskId, responsavelId) {
   }
 }
 
+/**
+ * Busca a Sequência de responsáveis real de uma tarefa (a aba "Regras"
+ * no Runrun.it). Devolve uma lista (vazia se não tiver sequência
+ * configurada) — nunca null, pra não quebrar o render.
+ */
+async function buscarSequenciaDoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return [];
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarSequencia", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error("Erro ao buscar sequência de responsáveis:", data.error);
+      return [];
+    }
+    return data.sequencia || [];
+  } catch (err) {
+    console.error("Falha ao buscar sequência no Runrun.it:", err);
+    return [];
+  }
+}
+
+async function desfazerWorkflowNoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return null;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "desfazerWorkflow", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error("Runrun.it recusou desfazer a sequência:", data.error);
+      return null;
+    }
+    return data.novoResponsavel || null;
+  } catch (err) {
+    console.error("Falha ao desfazer a sequência no Runrun.it:", err);
+    return null;
+  }
+}
+
 // Cache com todo mundo do Runrun.it, carregado só na primeira vez que
 // alguém clicar numa foto pra reatribuir (evita buscar toda hora).
 let usuariosRunrunCache = null;
@@ -385,9 +449,9 @@ async function enviarComentarioNoBackend(taskId, texto) {
   }
 }
 
-// Dados fake usados enquanto COLMEIA_API_URL não estiver configurada
-// (ver carregarTarefasReais acima) — servem só pra visualização.
-let tasks = [
+// Dados fake usados só se o backend falhar de verdade (ver
+// carregarTarefasReais) — nunca aparecem enquanto está carregando.
+const tasksFake = [
   { title: "Post carrossel — Lançamento coleção inverno", client: "Ateliê Nova", type: "estatico", priority: "media", day: 26, due: "26 Jul", status: "pendentes", assignee: "Claudio" },
   { title: "Vídeo reels — Bastidores da produção", client: "Grão Café", type: "video", priority: "baixa", day: 28, due: "28 Jul", status: "pendentes", assignee: "Bruna" },
   { title: "E-mail marketing — Promoção de aniversário", client: "Vitrine Modas", type: "email", priority: "baixa", day: 30, due: "30 Jul", status: "pendentes", assignee: "Erick" },
@@ -411,7 +475,16 @@ let tasks = [
   { title: "Arte stories — Novidade da semana", client: "Grão Café", type: "estatico", priority: "baixa", day: 22, due: "22 Jul", status: "ajustes", assignee: "Erick" },
 ];
 
-tasks.forEach((t, i) => { t.timerSeconds = 0; t.running = false; t.estimatePct = [12, 35, 48, 60, 20, 75, 30, 55, 18, 42, 65, 25, 50][i % 13]; t.hasChange = i % 4 === 1; });
+tasksFake.forEach(t => {
+  const now = new Date();
+  t.dueISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(t.day).padStart(2, "0")}`;
+});
+tasksFake.forEach((t, i) => { t.timerSeconds = 0; t.running = false; t.estimatePct = [12, 35, 48, 60, 20, 75, 30, 55, 18, 42, 65, 25, 50][i % 13]; t.hasChange = i % 4 === 1; });
+
+// Começa vazio de propósito — mostra tela de carregando até o backend
+// responder (ou, em último caso, cair pros dados fake).
+let tasks = [];
+let carregandoTarefas = true;
 
 const typeLabels = {
   estatico: { label: "Estático", class: "badge-estatico" },
@@ -441,8 +514,9 @@ function formatTime(sec) {
 
 function cardHTML(task, idx) {
   const type = typeLabels[task.type];
+  const atrasada = task.dueISO && task.dueISO < hojeISO();
   return `
-    <div class="task-card priority-${task.priority}" draggable="true" data-idx="${idx}">
+    <div class="task-card priority-${task.priority} ${atrasada ? "task-overdue" : ""}" draggable="true" data-idx="${idx}">
       <div class="card-top">
         <span class="badge ${type.class}">${type.label}</span>
         <div class="priority-wrap" data-idx="${idx}">
@@ -468,7 +542,7 @@ function cardHTML(task, idx) {
           ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
           <div class="assignee-menu"></div>
         </div>
-        <span class="card-due-simple ${task.day === HOJE ? "overdue" : ""}">${dueIcon}${task.due}</span>
+        <span class="card-due-simple ${atrasada ? "overdue" : ""}">${dueIcon}${task.due}</span>
       </div>
     </div>
   `;
@@ -479,6 +553,17 @@ const iconHoje = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r
 
 function buildBoard() {
   boardEl.innerHTML = "";
+
+  if (carregandoTarefas) {
+    boardEl.innerHTML = `
+      <div class="board-loading">
+        <div class="board-loading-spinner"></div>
+        <p>Carregando tarefas do Runrun.it...</p>
+      </div>
+    `;
+    return;
+  }
+
   columnsDef.forEach(({ key, label }) => {
     const col = document.createElement("div");
     col.className = "column";
@@ -517,14 +602,25 @@ function buildBoard() {
   setupDragAndDrop();
 }
 
+let searchQuery = "";
+
 function render() {
+  if (carregandoTarefas) return;
   columnsDef.forEach(({ key }) => {
     let list = tasks.filter(t => t.status === key);
-    if (columnMode[key] === "hoje") {
-      list = list.filter(t => t.day === HOJE);
-    } else {
-      list = list.slice().sort((a, b) => a.day - b.day);
+    if (searchQuery) {
+      const alvo = normalizarParaComparar(searchQuery);
+      list = list.filter(t =>
+        normalizarParaComparar(t.title).includes(alvo) ||
+        normalizarParaComparar(t.client).includes(alvo)
+      );
     }
+    if (columnMode[key] === "hoje") {
+      list = list.filter(t => t.dueISO === hojeISO());
+    }
+    // Sempre da mais atrasada pra mais na frente, nos dois modos —
+    // usa a data completa (ano-mês-dia), não só o número do dia.
+    list = list.slice().sort((a, b) => (a.dueISO || "9999-99-99").localeCompare(b.dueISO || "9999-99-99"));
     const holder = document.getElementById("col-" + key);
     holder.innerHTML = list.map(t => cardHTML(t, tasks.indexOf(t))).join("");
     document.querySelector(`.column[data-status="${key}"] .column-count`).textContent = list.length;
@@ -795,22 +891,6 @@ function priorityVar(p) {
   return p === "alta" ? "danger" : p === "media" ? "warning" : "success";
 }
 
-/**
- * Acha a tarefa anterior e a próxima na mesma coluna (mesma ordem usada
- * em stepDetail), pra mostrar a foto de quem é cada uma nas bolinhas de
- * navegação do pop-up.
- */
-function getAdjacentTasks(task) {
-  const idx = tasks.indexOf(task);
-  const order = tasks.map((t, i) => i).filter(i => tasks[i].status === task.status);
-  const pos = order.indexOf(idx);
-  if (pos === -1 || order.length <= 1) return { prev: null, next: null };
-  return {
-    prev: tasks[order[(pos - 1 + order.length) % order.length]],
-    next: tasks[order[(pos + 1) % order.length]],
-  };
-}
-
 function openDetail(idx) {
   detailIdx = Number(idx);
   commentsOpen = false;
@@ -823,13 +903,96 @@ function openDetail(idx) {
   requestAnimationFrame(() => panel.classList.add("open"));
   carregarComentarios(tasks[detailIdx]);
   carregarDescricao(tasks[detailIdx]);
+  carregarSequencia(tasks[detailIdx]);
+}
+
+/**
+ * Desenha a Sequência de responsáveis (Lucas → Cláudio → Laura, por
+ * exemplo) no lugar dos pontinhos de navegação. Enquanto ainda não
+ * carregou (task.sequencia === undefined), mostra "Carregando...".
+ */
+function renderSequenciaHTML(task) {
+  if (!task.id) {
+    return `<span class="workflow-seq-empty">—</span>`;
+  }
+  if (task.sequencia === undefined) {
+    return `<span class="workflow-seq-empty">Carregando sequência...</span>`;
+  }
+  if (task.sequencia.length === 0) {
+    return `<span class="workflow-seq-empty">Sem sequência configurada</span>`;
+  }
+  return `
+    <button type="button" class="nav-arrow" id="navPrevArrow" title="Desfazer (voltar etapa)">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="workflow-seq-dots">
+      ${task.sequencia.map((s, i) => `
+        ${i > 0 ? `<div class="wf-line ${task.sequencia[i - 1].concluido ? "done" : ""}"></div>` : ""}
+        <div class="wf-dot ${s.atual ? "current" : ""} ${s.concluido ? "completed" : ""}" title="${s.nome}">
+          ${avatarHTML(s.nome, "avatar-xs", s.foto)}
+          ${s.concluido ? `<span class="wf-check">✓</span>` : ""}
+        </div>
+      `).join("")}
+    </div>
+    <button type="button" class="nav-arrow" id="navNextArrow" title="Avançar (próximo responsável)">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  `;
+}
+
+/**
+ * Busca a sequência real no Runrun.it e atualiza só essa parte da tela
+ * (sem re-renderizar o pop-up inteiro).
+ */
+async function carregarSequencia(task) {
+  if (!task.id) return;
+  task.sequencia = await buscarSequenciaDoBackend(task.id);
+  if (tasks[detailIdx] !== task) return; // usuário já trocou de tarefa
+  const el = document.getElementById("workflowSeqGroup");
+  if (el) {
+    el.innerHTML = renderSequenciaHTML(task);
+    wireWorkflowArrows(task);
+  }
+}
+
+/**
+ * Liga as setas de desfazer/avançar a sequência de verdade no
+ * Runrun.it. Precisa ser chamado de novo toda vez que o HTML da
+ * sequência é redesenhado (as setas são recriadas do zero).
+ */
+function wireWorkflowArrows(task) {
+  const prevBtn = document.getElementById("navPrevArrow");
+  const nextBtn = document.getElementById("navNextArrow");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", async () => {
+      prevBtn.disabled = true;
+      const novoResponsavel = await desfazerWorkflowNoBackend(task.id);
+      if (novoResponsavel) {
+        task.assignee = novoResponsavel;
+        task.assigneeAvatarUrl = null;
+        render();
+      }
+      await carregarSequencia(task);
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener("click", async () => {
+      nextBtn.disabled = true;
+      const novoResponsavel = await avancarWorkflowNoBackend(task.id);
+      if (novoResponsavel) {
+        task.assignee = novoResponsavel;
+        task.assigneeAvatarUrl = null;
+        render();
+      }
+      await carregarSequencia(task);
+    });
+  }
 }
 
 function renderDetail() {
   const task = tasks[detailIdx];
   const type = typeLabels[task.type];
   const panel = document.getElementById("taskDetail");
-  const adjacentes = getAdjacentTasks(task);
 
   panel.innerHTML = `
     <div class="detail-inner">
@@ -865,20 +1028,8 @@ function renderDetail() {
           <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
         </div>
         <div class="detail-header-right">
-          <div class="nav-dots-group">
-            <button type="button" class="nav-dot" id="navPrev" aria-label="Tarefa anterior: ${adjacentes.prev ? adjacentes.prev.assignee : ""}">
-              ${adjacentes.prev ? avatarHTML(adjacentes.prev.assignee, "avatar-xs", adjacentes.prev.assigneeAvatarUrl) : ""}
-            </button>
-            <button type="button" class="nav-arrow" id="navPrevArrow" aria-label="Anterior">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-            <button type="button" class="nav-dot active"></button>
-            <button type="button" class="nav-arrow" id="navNextArrow" aria-label="Próxima">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-            <button type="button" class="nav-dot" id="navNext" aria-label="Próxima tarefa: ${adjacentes.next ? adjacentes.next.assignee : ""}">
-              ${adjacentes.next ? avatarHTML(adjacentes.next.assignee, "avatar-xs", adjacentes.next.assigneeAvatarUrl) : ""}
-            </button>
+          <div class="nav-dots-group" id="workflowSeqGroup">
+            ${renderSequenciaHTML(task)}
           </div>
 
           <div class="status-wrap">
@@ -1007,8 +1158,7 @@ function renderDetail() {
   `;
 
   document.getElementById("detailClose").addEventListener("click", closeDetail);
-  document.getElementById("navPrevArrow").addEventListener("click", () => stepDetail(-1));
-  document.getElementById("navNextArrow").addEventListener("click", () => stepDetail(1));
+  wireWorkflowArrows(task);
 
   document.getElementById("detailPlay").addEventListener("click", () => {
     task.running = !task.running;
@@ -1344,15 +1494,21 @@ function buildAtendimentoPage() {
   }
 
   const todos = [];
+  const vistosPorGrupo = new Set(); // evita o mesmo cliente aparecer 2x no mesmo grupo
   Object.entries(painelBeeonData.state).forEach(([designer, listaClientes]) => {
-    (listaClientes || []).forEach(c => todos.push({ ...c, designer }));
+    (listaClientes || []).forEach(c => {
+      if (!c.atend) return; // sem atendimento definido — não entra nessa aba
+      const chave = normalizarParaComparar(c.atend) + "|" + normalizarParaComparar(c.cliente);
+      if (vistosPorGrupo.has(chave)) return; // já apareceu nesse grupo, pula
+      vistosPorGrupo.add(chave);
+      todos.push({ ...c, designer });
+    });
   });
 
   const porAtendimento = {};
   todos.forEach(c => {
-    const responsavel = c.atend || "Sem atendimento";
-    if (!porAtendimento[responsavel]) porAtendimento[responsavel] = [];
-    porAtendimento[responsavel].push(c);
+    if (!porAtendimento[c.atend]) porAtendimento[c.atend] = [];
+    porAtendimento[c.atend].push(c);
   });
 
   const nomes = Object.keys(porAtendimento).sort((a, b) => a.localeCompare(b));
@@ -1397,6 +1553,83 @@ function buildAtendimentoPage() {
   });
 }
 
+// Guarda quais grupos de serviço estão expandidos.
+const tiposExpandido = new Set();
+
+/**
+ * "Tipos de tarefas": agrupa os clientes de todos os designers pelos
+ * serviços que cada um presta (campo "servicos", array — um cliente
+ * pode aparecer em mais de um grupo), vindos do painel-designers-beeon.
+ * Mesmo padrão de grupos expansíveis usado em "Clientes por atendimento".
+ */
+function buildTiposPage() {
+  const grid = document.getElementById("tiposGrid");
+  if (!grid) return;
+
+  if (!painelBeeonData) {
+    grid.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando do painel-designers-beeon...</p></div>`;
+    return;
+  }
+
+  const porServico = {};
+  const vistosPorServico = new Set(); // evita duplicar o mesmo cliente no mesmo serviço
+  Object.entries(painelBeeonData.state).forEach(([designer, listaClientes]) => {
+    (listaClientes || []).forEach(c => {
+      const servicos = (c.servicos && c.servicos.length) ? c.servicos : ["Sem serviço definido"];
+      servicos.forEach(servico => {
+        const chave = normalizarParaComparar(servico) + "|" + normalizarParaComparar(c.cliente);
+        if (vistosPorServico.has(chave)) return;
+        vistosPorServico.add(chave);
+        if (!porServico[servico]) porServico[servico] = [];
+        porServico[servico].push({ ...c, designer });
+      });
+    });
+  });
+
+  const nomes = Object.keys(porServico).sort((a, b) => a.localeCompare(b));
+
+  if (nomes.length === 0) {
+    grid.innerHTML = `<div class="placeholder-box"><span>🏷️</span><p>Nenhum serviço cadastrado no painel-designers-beeon ainda.</p></div>`;
+    return;
+  }
+
+  grid.innerHTML = nomes.map(servico => {
+    const lista = porServico[servico];
+    const aberto = tiposExpandido.has(servico);
+    return `
+      <div class="atendimento-group ${aberto ? "expanded" : ""}">
+        <button type="button" class="atendimento-group-header" data-tipo="${servico}">
+          <span class="tipo-tag-icon">🏷️</span>
+          <span class="atendimento-group-name">${servico}</span>
+          <span class="atendimento-group-count">${lista.length} cliente${lista.length > 1 ? "s" : ""}</span>
+        </button>
+        ${aberto ? `
+          <div class="clients-grid">
+            ${lista.map(c => `
+              <div class="client-card">
+                <div class="client-card-top">
+                  ${avatarHTML(c.designer, "avatar-sm")}
+                  <div class="client-card-name">${c.cliente}</div>
+                </div>
+                <div class="client-card-count">${c.escopo || ""}</div>
+              </div>
+            `).join("")}
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }).join("");
+
+  grid.querySelectorAll(".atendimento-group-header").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const nome = btn.dataset.tipo;
+      if (tiposExpandido.has(nome)) tiposExpandido.delete(nome);
+      else tiposExpandido.add(nome);
+      buildTiposPage();
+    });
+  });
+}
+
 document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
   link.addEventListener("click", e => {
     e.preventDefault();
@@ -1410,12 +1643,33 @@ document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
     document.querySelector(".page-subtitle").textContent = subtitle;
     if (page === "clientes") buildClientsPage();
     if (page === "atendimento") buildAtendimentoPage();
+    if (page === "tipos") buildTiposPage();
   });
+});
+
+// Busca por tarefa ou cliente
+document.getElementById("searchInput").addEventListener("input", e => {
+  searchQuery = e.target.value;
+  render();
 });
 
 document.getElementById("nowPlaying").addEventListener("click", () => {
   const idx = tasks.findIndex(t => t.running);
   if (idx !== -1) openDetail(idx);
+});
+
+// Notificações do Runrun.it — ainda não integrado, só o botão por enquanto.
+document.getElementById("notificationsBtn").addEventListener("click", () => {
+  console.log("Notificações do Runrun.it: integração ainda não feita.");
+});
+
+// Acesso rápido — painel lateral recolhível
+const quickAccessPanel = document.getElementById("quickAccessPanel");
+document.getElementById("quickAccessBtn").addEventListener("click", () => {
+  quickAccessPanel.classList.toggle("open");
+});
+document.getElementById("quickAccessClose").addEventListener("click", () => {
+  quickAccessPanel.classList.remove("open");
 });
 
 buildBoard();
