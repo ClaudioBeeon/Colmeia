@@ -41,7 +41,7 @@
       </a>
     </nav>
 
-    <a href="#" class="nav-ic sidebar-profile-link" title="Claudio">
+    <a href="#" class="nav-ic sidebar-profile-link" id="sidebarProfileLink" title="Claudio · Configurações">
       <span class="nav-icon-circle avatar">CL</span>
       <span class="nav-label">Claudio</span>
     </a>
@@ -97,6 +97,19 @@
         <p class="quick-access-empty">Nenhum link cadastrado ainda.</p>
       </div>
     </aside>
+
+    <div class="rule-modal-overlay" id="peopleModalOverlay" hidden>
+      <div class="rule-modal people-modal">
+        <div class="rule-modal-header">
+          <h3>Pessoas conhecidas</h3>
+          <button type="button" id="peopleModalClose" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <p class="people-modal-hint">Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.</p>
+        <div class="rule-modal-body" id="peopleModalBody"></div>
+      </div>
+    </div>
 
     <div class="rule-modal-overlay" id="ruleModalOverlay" hidden>
       <div class="rule-modal">
