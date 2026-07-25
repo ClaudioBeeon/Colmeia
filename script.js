@@ -1038,7 +1038,7 @@ function priorityVar(p) {
   return p === "alta" ? "danger" : p === "media" ? "warning" : "success";
 }
 
-function openDetail(idx) {
+function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   commentsOpen = false;
   childrenOpen = false;
@@ -1049,6 +1049,15 @@ function openDetail(idx) {
   if (cardEl) cardEl.classList.add("selected");
   panel.classList.add("visible");
   requestAnimationFrame(() => panel.classList.add("open"));
+  if (entradaAnimacao) {
+    const inner = panel.querySelector(".detail-inner");
+    if (inner) {
+      inner.classList.add(entradaAnimacao);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => inner.classList.remove(entradaAnimacao));
+      });
+    }
+  }
   carregarComentarios(tasks[detailIdx]);
   carregarDescricao(tasks[detailIdx]);
   carregarSequencia(tasks[detailIdx]);
@@ -1466,19 +1475,26 @@ function applyCommentsState() {
  * senão busca ela avulsa no Runrun.it primeiro.
  */
 async function abrirTarefaPorId(taskId) {
+  const panel = document.getElementById("taskDetail");
+  const inner = panel.querySelector(".detail-inner");
+  if (inner) inner.classList.add("panel-exit-down");
+  await esperar(200);
+
   const idxExistente = tasks.findIndex(t => t.id === taskId);
   if (idxExistente !== -1) {
-    openDetail(idxExistente);
+    openDetail(idxExistente, "panel-enter-above");
     return;
   }
+
+  mostrarCardEmBranco("Buscando a tarefa...");
   const resultado = await buscarTarefaCompletaDoBackend(taskId);
   if (!resultado.ok) {
-    console.error("Não consegui abrir essa tarefa:", resultado.error);
+    mostrarCardEmBranco(resultado.error || "Não consegui abrir essa tarefa.");
     return;
   }
   const nova = mapearTarefaDoBackend(resultado.tarefa);
   tasks.push(nova);
-  openDetail(tasks.length - 1);
+  openDetail(tasks.length - 1, "panel-enter-above");
 }
 
 async function buscarTarefaCompletaDoBackend(taskId) {
@@ -1501,18 +1517,44 @@ async function buscarTarefaCompletaDoBackend(taskId) {
  * subtarefas guardado nela pra alimentar o painel flutuante (seta pra
  * baixo) sem precisar buscar de novo.
  */
+function esperar(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Mostra um card vazio (só a abelhinha) dentro do pop-up enquanto busca
+ * os dados de verdade — evita a sensação de "travado" durante a troca
+ * de card mãe/subtarefa.
+ */
+function mostrarCardEmBranco(mensagem) {
+  const panel = document.getElementById("taskDetail");
+  panel.innerHTML = `
+    <div class="detail-inner detail-loading-blank">
+      <span class="detail-loading-bee">🐝</span>
+      <p class="workflow-seq-empty">${mensagem || "Carregando..."}</p>
+    </div>
+  `;
+}
+
 async function abrirCardMae(task) {
   if (!task.id) {
     console.warn("Essa tarefa não está conectada ao Runrun.it, não tem card mãe pra abrir.");
     return;
   }
+
+  const panel = document.getElementById("taskDetail");
+  const inner = panel.querySelector(".detail-inner");
+  if (inner) inner.classList.add("panel-exit-up");
+  await esperar(200);
+  mostrarCardEmBranco("Buscando o card mãe...");
+
   const resultado = await buscarCardMaeDoBackend(task.id);
   if (!resultado.ok) {
-    console.error("Não consegui buscar o card mãe:", resultado.error);
+    mostrarCardEmBranco(resultado.error || "Não consegui buscar o card mãe.");
     return;
   }
   if (!resultado.temPai) {
-    console.warn("Essa tarefa não tem card mãe.");
+    mostrarCardEmBranco("Essa tarefa não tem card mãe.");
     return;
   }
 
@@ -1525,7 +1567,7 @@ async function abrirCardMae(task) {
   tasks[idx].isMotherCard = true;
   tasks[idx].subtarefasResumo = resultado.subtarefas || [];
 
-  openDetail(idx);
+  openDetail(idx, "panel-enter-below");
 }
 
 async function buscarCardMaeDoBackend(taskId) {
