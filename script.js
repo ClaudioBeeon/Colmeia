@@ -1041,6 +1041,7 @@ function priorityVar(p) {
 function openDetail(idx) {
   detailIdx = Number(idx);
   commentsOpen = false;
+  childrenOpen = false;
   renderDetail();
   const panel = document.getElementById("taskDetail");
   document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
@@ -1175,9 +1176,29 @@ function renderDetail() {
           <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
           <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
           <span class="detail-sep">|</span>
-          <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
+          ${task.isMotherCard ? `
+            <div class="children-btn-wrap">
+              <button type="button" class="mother-card-btn" id="childrenBtn" title="Ver subtarefas">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="children-float" id="childrenPanel">
+                <div class="children-float-head">Subtarefas</div>
+                <div class="children-list">
+                  ${(task.subtarefasResumo || []).map(s => `
+                    <button type="button" class="child-item ${s.fechada ? "done" : ""}" data-child-id="${s.id}">
+                      ${avatarHTML(s.responsavel, "avatar-sm child-avatar", s.foto)}
+                      <span class="child-title">${s.title}</span>
+                      ${s.fechada ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
+                    </button>
+                  `).join("")}
+                </div>
+              </div>
+            </div>
+          ` : `
+            <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          `}
           <span class="detail-taskname">${task.title}</span>
           <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
         </div>
@@ -1328,6 +1349,22 @@ function renderDetail() {
   const motherBtn = document.getElementById("motherCardBtn");
   if (motherBtn) motherBtn.addEventListener("click", () => abrirCardMae(task));
 
+  const childrenBtn = document.getElementById("childrenBtn");
+  if (childrenBtn) {
+    childrenBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      childrenOpen = !childrenOpen;
+      applyCommentsState();
+    });
+  }
+  document.querySelectorAll(".child-item").forEach(item => {
+    item.addEventListener("click", () => {
+      childrenOpen = false;
+      applyCommentsState();
+      abrirTarefaPorId(Number(item.dataset.childId));
+    });
+  });
+
   const statusBadge = document.getElementById("statusBadge");
   const statusMenu = document.getElementById("statusMenu");
   statusBadge.addEventListener("click", e => {
@@ -1422,57 +1459,73 @@ function applyCommentsState() {
  * parent_task_id da subtarefa que está aberta), mostrando a lista de
  * todas as subtarefas — igual a aba "Subtarefas" do Runrun.it.
  */
-async function abrirCardMae(task) {
-  const overlay = document.getElementById("motherModalOverlay");
-  const body = document.getElementById("motherModalBody");
-  const titleEl = document.getElementById("motherModalTitle");
-  overlay.hidden = false;
-  titleEl.textContent = "Card mãe";
-  body.innerHTML = `<p class="workflow-seq-empty">Carregando...</p>`;
-
-  if (!task.id) {
-    body.innerHTML = `<p class="workflow-seq-empty">Essa tarefa não está conectada ao Runrun.it.</p>`;
+/**
+ * Abre uma tarefa qualquer pelo ID, como uma tarefa normal do Colmeia
+ * (mesmo pop-up de sempre, com descrição/comentários/sequência). Se ela
+ * já estiver carregada (uma subtarefa do quadro, por exemplo), só abre;
+ * senão busca ela avulsa no Runrun.it primeiro.
+ */
+async function abrirTarefaPorId(taskId) {
+  const idxExistente = tasks.findIndex(t => t.id === taskId);
+  if (idxExistente !== -1) {
+    openDetail(idxExistente);
     return;
   }
+  const resultado = await buscarTarefaCompletaDoBackend(taskId);
+  if (!resultado.ok) {
+    console.error("Não consegui abrir essa tarefa:", resultado.error);
+    return;
+  }
+  const nova = mapearTarefaDoBackend(resultado.tarefa);
+  tasks.push(nova);
+  openDetail(tasks.length - 1);
+}
 
+async function buscarTarefaCompletaDoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarTarefaCompleta", taskId }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("Falha ao buscar tarefa no Runrun.it:", err);
+    return { ok: false, error: "Falha de conexão com o Runrun.it." };
+  }
+}
+
+/**
+ * Abre o card mãe de verdade de uma subtarefa (seta pra cima), como uma
+ * tarefa normal — já marcada como isMotherCard, com o resumo das
+ * subtarefas guardado nela pra alimentar o painel flutuante (seta pra
+ * baixo) sem precisar buscar de novo.
+ */
+async function abrirCardMae(task) {
+  if (!task.id) {
+    console.warn("Essa tarefa não está conectada ao Runrun.it, não tem card mãe pra abrir.");
+    return;
+  }
   const resultado = await buscarCardMaeDoBackend(task.id);
   if (!resultado.ok) {
-    body.innerHTML = `<p class="workflow-seq-empty">${resultado.error || "Não consegui buscar o card mãe."}</p>`;
+    console.error("Não consegui buscar o card mãe:", resultado.error);
     return;
   }
   if (!resultado.temPai) {
-    body.innerHTML = `<p class="workflow-seq-empty">Essa tarefa não tem card mãe.</p>`;
+    console.warn("Essa tarefa não tem card mãe.");
     return;
   }
 
-  titleEl.textContent = resultado.cardMae.title;
-  const subtarefas = resultado.subtarefas || [];
-  body.innerHTML = `
-    <a href="${resultado.cardMae.link}" target="_blank" rel="noopener" class="mother-link">Abrir card mãe no Runrun.it ↗</a>
-    <div class="mother-subtasks-list">
-      ${subtarefas.map(s => `
-        <button type="button" class="mother-subtask-row ${s.fechada ? "done" : ""}" data-subtask-id="${s.id}">
-          <span class="mother-subtask-title">${s.title}</span>
-          <span class="badge badge-estatico">${s.etapa}</span>
-          ${avatarHTML(s.responsavel, "avatar-sm", s.foto)}
-        </button>
-      `).join("")}
-    </div>
-  `;
+  let idx = tasks.findIndex(t => t.id === resultado.cardMae.id);
+  if (idx === -1) {
+    const novaMae = mapearTarefaDoBackend(resultado.cardMae);
+    tasks.push(novaMae);
+    idx = tasks.length - 1;
+  }
+  tasks[idx].isMotherCard = true;
+  tasks[idx].subtarefasResumo = resultado.subtarefas || [];
 
-  body.querySelectorAll(".mother-subtask-row").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const subtaskId = Number(btn.dataset.subtaskId);
-      const idxLocal = tasks.findIndex(t => t.id === subtaskId);
-      overlay.hidden = true;
-      if (idxLocal !== -1) {
-        openDetail(idxLocal);
-      } else {
-        const s = subtarefas.find(x => x.id === subtaskId);
-        if (s) window.open(s.link, "_blank");
-      }
-    });
-  });
+  openDetail(idx);
 }
 
 async function buscarCardMaeDoBackend(taskId) {
@@ -1859,15 +1912,6 @@ document.getElementById("ruleModalClose").addEventListener("click", () => {
 });
 ruleModalOverlay.addEventListener("click", e => {
   if (e.target === ruleModalOverlay) ruleModalOverlay.hidden = true;
-});
-
-// Modal "Card mãe"
-const motherModalOverlay = document.getElementById("motherModalOverlay");
-document.getElementById("motherModalClose").addEventListener("click", () => {
-  motherModalOverlay.hidden = true;
-});
-motherModalOverlay.addEventListener("click", e => {
-  if (e.target === motherModalOverlay) motherModalOverlay.hidden = true;
 });
 
 buildBoard();
