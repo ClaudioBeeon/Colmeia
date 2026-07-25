@@ -558,12 +558,15 @@ function renderModalRegra(task) {
   const listaHtml = seq.length === 0
     ? `<p class="workflow-seq-empty">Sem sequência configurada nessa tarefa.</p>`
     : seq.map((s, i) => `
-        <div class="rule-row ${s.atual ? "current" : ""}" data-element-id="${s.id}">
+        <div class="rule-row ${s.atual ? "current" : ""} ${s.pendente ? "pendente" : ""}" data-element-id="${s.id}">
           <span class="rule-row-order">${i + 1}</span>
           ${avatarHTML(s.nome, "avatar-sm", s.foto)}
           <span class="rule-row-name">${s.nome}</span>
-          ${s.concluido ? `<span class="rule-row-status done">Concluído</span>` : s.atual ? `<span class="rule-row-status current">Atual</span>` : `<span class="rule-row-status">Aguardando</span>`}
-          ${(!s.concluido && !s.atual) ? `
+          ${s.pendente ? `<span class="rule-row-spinner"></span>` :
+            s.concluido ? `<span class="rule-row-status done">Concluído</span>` :
+            s.atual ? `<span class="rule-row-status current">Atual</span>` :
+            `<span class="rule-row-status">Aguardando</span>`}
+          ${(!s.concluido && !s.atual && !s.pendente) ? `
             <button type="button" class="rule-row-remove" data-element-id="${s.id}" title="Remover da sequência">
               <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
@@ -572,7 +575,6 @@ function renderModalRegra(task) {
       `).join("");
 
   body.innerHTML = `
-    <div class="rule-status-msg" id="ruleStatusMsg" hidden></div>
     <div class="rule-list" id="ruleList">${listaHtml}</div>
     <div class="rule-add-section">
       <span class="side-label">Adicionar próxima pessoa</span>
@@ -584,11 +586,9 @@ function renderModalRegra(task) {
   `;
 
   body.querySelectorAll(".rule-row-remove").forEach(btn => {
-    btn.addEventListener("click", async e => {
+    btn.addEventListener("click", e => {
       e.stopPropagation();
-      await executarAcaoNaRegra(task, async () => {
-        return removerDaRegraNoBackend(task.workflowId, btn.dataset.elementId);
-      }, "Removendo da sequência...");
+      removerPessoaOtimista(task, btn.dataset.elementId);
     });
   });
 
@@ -602,26 +602,18 @@ function renderModalRegra(task) {
   });
 }
 
-// Enquanto true, o modal "Ver regra" não pode ser fechado (tem uma
-// ação em andamento no Runrun.it).
-let regraAtualizando = false;
-
 /**
- * Roda uma ação de mudar a regra (adicionar/remover pessoa), mostrando
- * uma mensaginha de "Atualizando..." e travando o fechamento do modal
- * até terminar de verdade.
+ * Remove a linha na hora (otimista, sem esperar o servidor responder)
+ * e só depois confirma de verdade com o Runrun.it em segundo plano.
  */
-async function executarAcaoNaRegra(task, acaoFn, mensagem) {
-  regraAtualizando = true;
-  const msgEl = document.getElementById("ruleStatusMsg");
-  if (msgEl) {
-    msgEl.hidden = false;
-    msgEl.textContent = mensagem;
+function removerPessoaOtimista(task, elementId) {
+  const row = document.querySelector(`.rule-row[data-element-id="${elementId}"]`);
+  if (row) {
+    row.classList.add("saindo");
+    setTimeout(() => row.remove(), 200);
   }
-  await acaoFn();
-  await carregarSequencia(task);
-  regraAtualizando = false;
-  renderModalRegra(task);
+  task.sequencia = task.sequencia.filter(s => String(s.id) !== String(elementId));
+  removerDaRegraNoBackend(task.workflowId, elementId).then(() => carregarSequencia(task));
 }
 
 async function removerDaRegraNoBackend(workflowId, elementId) {
@@ -659,15 +651,51 @@ function renderizarListaAdicionarRegra(task, usuarios, filtro) {
     </button>
   `).join("");
   listEl.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", async e => {
-      if (regraAtualizando) return;
+    btn.addEventListener("click", e => {
       animarPessoaSubindo(btn, e);
-      btn.disabled = true;
-      await executarAcaoNaRegra(task, async () => {
-        return adicionarNaRegraNoBackend(task.workflowId, btn.dataset.userId);
-      }, "Adicionando na sequência...");
+      adicionarPessoaOtimista(task, {
+        id: btn.dataset.userId,
+        nome: btn.dataset.userNome,
+        foto: btn.dataset.userFoto || null,
+      });
     });
   });
+}
+
+/**
+ * Adiciona a pessoa na hora na lista (otimista, com um spinner bem
+ * discreto na linha dela), sem esperar o Runrun.it responder. Confirma
+ * de verdade em segundo plano e substitui pela sequência real quando
+ * a resposta chegar.
+ */
+function adicionarPessoaOtimista(task, usuario) {
+  const seq = task.sequencia || [];
+  seq.forEach(s => { s.ultimo = false; });
+  seq.push({
+    id: "pendente-" + Date.now(),
+    nome: usuario.nome,
+    foto: usuario.foto,
+    atual: false,
+    concluido: false,
+    ultimo: true,
+    pendente: true,
+  });
+  task.sequencia = seq;
+  renderModalRegra(task);
+  renderSequenciaNoHeaderSeAberta(task);
+
+  adicionarNaRegraNoBackend(task.workflowId, usuario.id).then(() => carregarSequencia(task));
+}
+
+/**
+ * Se o pop-up da tarefa ainda estiver aberto nela, atualiza também a
+ * sequência mostrada no cabeçalho (fora do modal), pra não ficar
+ * desatualizada enquanto o modal está aberto por cima.
+ */
+function renderSequenciaNoHeaderSeAberta(task) {
+  if (tasks[detailIdx] !== task) return;
+  const el = document.getElementById("workflowSeqGroup");
+  if (el) el.innerHTML = renderSequenciaHTML(task);
 }
 
 /**
@@ -2409,11 +2437,9 @@ document.getElementById("quickAccessClose").addEventListener("click", () => {
 // Modal "Ver regra"
 const ruleModalOverlay = document.getElementById("ruleModalOverlay");
 document.getElementById("ruleModalClose").addEventListener("click", () => {
-  if (regraAtualizando) return;
   ruleModalOverlay.hidden = true;
 });
 ruleModalOverlay.addEventListener("click", e => {
-  if (regraAtualizando) return;
   if (e.target === ruleModalOverlay) ruleModalOverlay.hidden = true;
 });
 
