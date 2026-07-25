@@ -86,11 +86,12 @@
       <div class="clients-grid" id="clientsGrid"></div>
     </section>
 
-    <section class="app-page placeholder-page" id="page-atendimento" hidden>
-      <div class="placeholder-box">
-        <span>🗂️</span>
-        <p>Em breve: clientes agrupados por atendimento</p>
+    <section class="app-page" id="page-atendimento" hidden>
+      <div class="atendimento-toggle" id="atendimentoToggle">
+        <button type="button" class="on" data-view="atendimento">Por atendimento</button>
+        <button type="button" data-view="todos">Todos os clientes</button>
       </div>
+      <div class="clients-grid" id="atendimentoGrid"></div>
     </section>
 
     <section class="app-page placeholder-page" id="page-tipos" hidden>
