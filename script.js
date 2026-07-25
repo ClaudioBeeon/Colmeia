@@ -910,7 +910,7 @@ async function gerarBriefingComIA(task) {
     resultEl.innerHTML = `
       ${plataformas.length ? `
         <div class="ai-briefing-tags">
-          ${plataformas.map(p => `<span class="badge badge-estatico">${p}</span>`).join("")}
+          ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${p}</span>`).join("")}
         </div>
       ` : ""}
       ${formatos.length ? `
