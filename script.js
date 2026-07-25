@@ -766,6 +766,20 @@ async function buscarUsuariosRunrun() {
  * string (vazia se não tiver descrição ou der erro).
  */
 /**
+ * Categoriza um campo do briefing por cor, baseado em palavras-chave na
+ * própria pergunta (funciona mesmo com perguntas diferentes de tarefa
+ * pra tarefa, já que olha só se tem certas palavras, não o texto exato).
+ */
+function categoriaCampoBriefing(pergunta) {
+  const p = normalizarParaComparar(pergunta);
+  if (p.includes("referencia") || p.includes("link")) return "cat-blue";
+  if (p.includes("instrucao") || p.includes("redacao")) return "cat-purple";
+  if (p.includes("observa") || p.includes("expectativa")) return "cat-pink";
+  if (p.includes("comentario") || p.includes("legenda") || p.includes("arte")) return "cat-teal";
+  return "cat-gray";
+}
+
+/**
  * Identifica se uma pergunta é sobre o texto que vai dentro da arte
  * (varia de redação entre tarefas: "informações textuais", "texto na
  * arte" etc.) — não depende de vir sempre com as mesmas palavras exatas,
@@ -916,16 +930,31 @@ async function gerarBriefingComIA(task) {
           </button>
         </div>
       ` : ""}
-      ${camposSecundarios.length ? `
-        <div class="ai-briefing-campos">
-          ${camposSecundarios.map(c => `
-            <div class="ai-briefing-campo">
-              <p class="ai-briefing-campo-label">${c.pergunta}</p>
-              <p class="ai-briefing-campo-valor ${c.resposta ? "" : "vazio"}">${c.resposta ? renderValorCampo(c.resposta) : "Não preenchido"}</p>
+      ${(() => {
+        const preenchidos = camposSecundarios.filter(c => c.resposta);
+        const vazios = camposSecundarios.filter(c => !c.resposta);
+        return `
+          ${preenchidos.length ? `
+            <div class="ai-briefing-preenchidos">
+              ${preenchidos.map(c => `
+                <div class="ai-briefing-cat ${categoriaCampoBriefing(c.pergunta)}">
+                  <div class="ai-briefing-cat-head">
+                    <span class="ai-briefing-cat-icon">${c.pergunta.trim().charAt(0).toUpperCase()}</span>
+                    <span class="ai-briefing-cat-label">${c.pergunta}</span>
+                  </div>
+                  <div class="ai-briefing-cat-valor">${renderValorCampo(c.resposta)}</div>
+                </div>
+              `).join("")}
             </div>
-          `).join("")}
-        </div>
-      ` : ""}
+          ` : ""}
+          ${vazios.length ? `
+            <div class="ai-briefing-vazios">
+              <span class="ai-briefing-vazios-label">Vazios</span>
+              ${vazios.map(c => `<span class="ai-briefing-vazio-bolha" title="${c.pergunta}">${c.pergunta.trim().charAt(0).toUpperCase()}</span>`).join("")}
+            </div>
+          ` : ""}
+        `;
+      })()}
     `;
 
     resultEl.querySelectorAll(".ai-briefing-copy-btn").forEach(btn => {
