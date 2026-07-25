@@ -159,6 +159,32 @@ function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
   return `<div class="avatar ${sizeClass || ""}" title="${nomeDesigner}">${initials(nomeDesigner)}</div>`;
 }
 
+// Frases divertidas do tema colmeia, mostradas em rodízio na tela de
+// carregando (em vez de "Atualizando informações do Runrun.it...").
+const mensagensCarregando = [
+  "Preparando o melzinho...",
+  "Ajeitando os favos...",
+  "Organizando as abelhinhas...",
+  "Polinizando as tarefas...",
+  "Zunzunzum no Runrun.it...",
+  "Arrumando a colmeia...",
+];
+let intervalMsgCarregando = null;
+
+function iniciarMensagensCarregando() {
+  clearInterval(intervalMsgCarregando);
+  let indice = 0;
+  intervalMsgCarregando = setInterval(() => {
+    indice = (indice + 1) % mensagensCarregando.length;
+    const el = document.getElementById("loadingMsg");
+    if (!el) { clearInterval(intervalMsgCarregando); return; }
+    el.classList.remove("fade-in");
+    void el.offsetWidth; // reinicia a animação CSS
+    el.textContent = mensagensCarregando[indice];
+    el.classList.add("fade-in");
+  }, 1800);
+}
+
 function hojeISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -325,7 +351,7 @@ async function reatribuirTarefaNoBackend(taskId, responsavelId) {
  * configurada) — nunca null, pra não quebrar o render.
  */
 async function buscarSequenciaDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return [];
+  if (!COLMEIA_API_URL || !taskId) return { sequencia: [], workflowId: null };
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
@@ -334,12 +360,129 @@ async function buscarSequenciaDoBackend(taskId) {
     const data = await res.json();
     if (!data.ok) {
       console.error("Erro ao buscar sequência de responsáveis:", data.error);
-      return [];
+      return { sequencia: [], workflowId: null };
     }
-    return data.sequencia || [];
+    return { sequencia: data.sequencia || [], workflowId: data.workflowId || null };
   } catch (err) {
     console.error("Falha ao buscar sequência no Runrun.it:", err);
-    return [];
+    return { sequencia: [], workflowId: null };
+  }
+}
+
+async function adicionarNaRegraNoBackend(workflowId, userId) {
+  if (!COLMEIA_API_URL || !workflowId || !userId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "adicionarNaRegra", workflowId, userId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou adicionar na regra:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao adicionar na regra no Runrun.it:", err);
+    return false;
+  }
+}
+
+/**
+ * Abre o modal "Ver regra", mostrando a sequência completa da tarefa
+ * e a opção de adicionar mais uma pessoa no final dela.
+ */
+async function abrirModalRegra(task) {
+  const overlay = document.getElementById("ruleModalOverlay");
+  const body = document.getElementById("ruleModalBody");
+  overlay.hidden = false;
+  body.innerHTML = `<p class="workflow-seq-empty">Carregando...</p>`;
+
+  // Reaproveita a sequência já carregada no header, ou busca de novo
+  // se por algum motivo ainda não tiver.
+  if (task.sequencia === undefined) await carregarSequencia(task);
+
+  renderModalRegra(task);
+}
+
+function renderModalRegra(task) {
+  const body = document.getElementById("ruleModalBody");
+  const seq = task.sequencia || [];
+
+  const listaHtml = seq.length === 0
+    ? `<p class="workflow-seq-empty">Sem sequência configurada nessa tarefa.</p>`
+    : seq.map((s, i) => `
+        <div class="rule-row ${s.atual ? "current" : ""}">
+          <span class="rule-row-order">${i + 1}</span>
+          ${avatarHTML(s.nome, "avatar-sm", s.foto)}
+          <span class="rule-row-name">${s.nome}</span>
+          ${s.concluido ? `<span class="rule-row-status done">Concluído</span>` : s.atual ? `<span class="rule-row-status current">Atual</span>` : `<span class="rule-row-status">Aguardando</span>`}
+        </div>
+      `).join("");
+
+  body.innerHTML = `
+    <div class="rule-list">${listaHtml}</div>
+    <div class="rule-add-section">
+      <span class="side-label">Adicionar próxima pessoa</span>
+      <input type="text" class="rule-add-search" id="ruleAddSearch" placeholder="Buscar pessoa...">
+      <div class="rule-add-list" id="ruleAddList">
+        <div class="assignee-menu-loading">Carregando pessoas...</div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("ruleAddSearch").addEventListener("input", e => {
+    renderizarListaAdicionarRegra(task, usuariosParaAdicionarRegra, e.target.value);
+  });
+
+  buscarUsuariosRunrun().then(usuarios => {
+    usuariosParaAdicionarRegra = usuarios;
+    renderizarListaAdicionarRegra(task, usuarios, "");
+  });
+}
+
+// Guarda a lista de usuários carregada, pra filtrar sem buscar de novo
+// a cada letra digitada na busca do modal.
+let usuariosParaAdicionarRegra = [];
+
+function renderizarListaAdicionarRegra(task, usuarios, filtro) {
+  const listEl = document.getElementById("ruleAddList");
+  if (!listEl) return;
+  if (usuarios.length === 0) {
+    listEl.innerHTML = `<div class="assignee-menu-loading">Não consegui buscar a lista.</div>`;
+    return;
+  }
+  const alvo = normalizarParaComparar(filtro);
+  const filtrados = alvo ? usuarios.filter(u => normalizarParaComparar(u.nome).includes(alvo)) : usuarios;
+  listEl.innerHTML = filtrados.map(u => `
+    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
+      ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
+    </button>
+  `).join("");
+  listEl.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const ok = await adicionarNaRegraNoBackend(task.workflowId, btn.dataset.userId);
+      if (ok) {
+        await carregarSequencia(task);
+        renderModalRegra(task);
+      } else {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+async function entregarTarefaNoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "entregarTarefa", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou entregar a tarefa:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao entregar a tarefa no Runrun.it:", err);
+    return false;
   }
 }
 
@@ -554,13 +697,21 @@ const iconHoje = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r
 function buildBoard() {
   boardEl.innerHTML = "";
 
+  if (!carregandoTarefas) {
+    clearInterval(intervalMsgCarregando);
+  }
+
   if (carregandoTarefas) {
     boardEl.innerHTML = `
       <div class="board-loading">
-        <div class="board-loading-spinner"></div>
-        <p>Carregando tarefas do Runrun.it...</p>
+        <div class="board-loading-glass"></div>
+        <div class="board-loading-content">
+          <span class="board-loading-bee">🐝</span>
+          <p class="board-loading-text" id="loadingMsg">${mensagensCarregando[0]}</p>
+        </div>
       </div>
     `;
+    iniciarMensagensCarregando();
     return;
   }
 
@@ -864,10 +1015,6 @@ async function carregarComentarios(task) {
   }
 }
 
-function getChildren(parentTask) {
-  return tasks.filter(t => !t.isParent && t.client === parentTask.client);
-}
-
 function taskDescription(task) {
   return `Produção de conteúdo do tipo ${typeLabels[task.type].label.toLowerCase()} para o cliente ${task.client}. Seguir o briefing combinado com o time de atendimento, manter a identidade visual do cliente e alinhar qualquer dúvida antes da entrega final.`;
 }
@@ -921,6 +1068,8 @@ function renderSequenciaHTML(task) {
   if (task.sequencia.length === 0) {
     return `<span class="workflow-seq-empty">Sem sequência configurada</span>`;
   }
+  const atualIdx = task.sequencia.findIndex(s => s.atual);
+  const semNinguemNaFrente = atualIdx !== -1 && task.sequencia[atualIdx].ultimo;
   return `
     <button type="button" class="nav-arrow" id="navPrevArrow" title="Desfazer (voltar etapa)">
       <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -934,9 +1083,15 @@ function renderSequenciaHTML(task) {
         </div>
       `).join("")}
     </div>
-    <button type="button" class="nav-arrow" id="navNextArrow" title="Avançar (próximo responsável)">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
+    ${semNinguemNaFrente ? `
+      <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Entregar tarefa (não tem mais ninguém na frente)">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    ` : `
+      <button type="button" class="nav-arrow" id="navNextArrow" title="Avançar (próximo responsável)">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    `}
   `;
 }
 
@@ -946,7 +1101,9 @@ function renderSequenciaHTML(task) {
  */
 async function carregarSequencia(task) {
   if (!task.id) return;
-  task.sequencia = await buscarSequenciaDoBackend(task.id);
+  const resultado = await buscarSequenciaDoBackend(task.id);
+  task.sequencia = resultado.sequencia;
+  task.workflowId = resultado.workflowId;
   if (tasks[detailIdx] !== task) return; // usuário já trocou de tarefa
   const el = document.getElementById("workflowSeqGroup");
   if (el) {
@@ -987,6 +1144,18 @@ function wireWorkflowArrows(task) {
       await carregarSequencia(task);
     });
   }
+  const deliverBtn = document.getElementById("navDeliverBtn");
+  if (deliverBtn) {
+    deliverBtn.addEventListener("click", async () => {
+      deliverBtn.disabled = true;
+      const ok = await entregarTarefaNoBackend(task.id);
+      if (ok) {
+        console.log("Tarefa entregue no Runrun.it.");
+      } else {
+        deliverBtn.disabled = false;
+      }
+    });
+  }
 }
 
 function renderDetail() {
@@ -1001,29 +1170,9 @@ function renderDetail() {
           <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
           <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
           <span class="detail-sep">|</span>
-          ${!task.isParent ? `
-            <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          ` : `
-            <div class="children-btn-wrap">
-              <button type="button" class="mother-card-btn" id="childrenBtn" title="Ver subtarefas">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <div class="children-float" id="childrenPanel">
-                <div class="children-float-head">Subtarefas</div>
-                <div class="children-list">
-                  ${getChildren(task).map((c, i) => `
-                    <button type="button" class="child-item ${i % 3 === 0 ? "done" : ""}" data-child-idx="${tasks.indexOf(c)}">
-                      <div class="avatar avatar-sm child-avatar">${initials(c.assignee)}</div>
-                      <span class="child-title">${c.title}</span>
-                      ${i % 3 === 0 ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
-                    </button>
-                  `).join("")}
-                </div>
-              </div>
-            </div>
-          `}
+          <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <span class="detail-taskname">${task.title}</span>
           <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
         </div>
@@ -1044,7 +1193,7 @@ function renderDetail() {
               <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
             </button>
             <div class="detail-more-menu" id="detailMoreMenu">
-              <button type="button">Ver regra</button>
+              <button type="button" id="verRegraBtn">Ver regra</button>
               <button type="button">Reabrir tarefa</button>
               <button type="button">Ajustar horas</button>
             </div>
@@ -1172,21 +1321,7 @@ function renderDetail() {
 
   // ===== Menu de mais opções (⋮) =====
   const motherBtn = document.getElementById("motherCardBtn");
-  if (motherBtn) motherBtn.addEventListener("click", () => goToParent(task));
-
-  const childrenBtn = document.getElementById("childrenBtn");
-  if (childrenBtn) {
-    childrenBtn.addEventListener("click", () => {
-      childrenOpen = !childrenOpen;
-      commentsOpen = false;
-      changeOpen = false;
-      applyCommentsState();
-    });
-  }
-
-  document.querySelectorAll(".child-item").forEach(item => {
-    item.addEventListener("click", () => goToChild(tasks[item.dataset.childIdx]));
-  });
+  if (motherBtn) motherBtn.addEventListener("click", () => abrirCardMae(task));
 
   const statusBadge = document.getElementById("statusBadge");
   const statusMenu = document.getElementById("statusMenu");
@@ -1210,6 +1345,11 @@ function renderDetail() {
   moreBtn.addEventListener("click", e => {
     e.stopPropagation();
     moreMenu.classList.toggle("open");
+  });
+
+  document.getElementById("verRegraBtn").addEventListener("click", () => {
+    moreMenu.classList.remove("open");
+    abrirModalRegra(task);
   });
 
   // ===== Abas Descrição / Comentários / Alteração (sem re-renderizar, com transição) =====
@@ -1272,71 +1412,76 @@ function applyCommentsState() {
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
 }
 
-function getOrCreateParent(task) {
-  const existing = tasks.findIndex(t => t.isParent && t.client === task.client);
-  if (existing !== -1) return existing;
-  tasks.push({
-    title: `Card mãe — ${task.client}`,
-    client: task.client,
-    type: task.type,
-    priority: "media",
-    day: task.day,
-    due: task.due,
-    status: task.status,
-    assignee: task.assignee,
-    timerSeconds: 0,
-    running: false,
-    estimatePct: 40,
-    hasChange: false,
-    isParent: true,
+/**
+ * Abre o modal do Card Mãe real (buscado no Runrun.it a partir do
+ * parent_task_id da subtarefa que está aberta), mostrando a lista de
+ * todas as subtarefas — igual a aba "Subtarefas" do Runrun.it.
+ */
+async function abrirCardMae(task) {
+  const overlay = document.getElementById("motherModalOverlay");
+  const body = document.getElementById("motherModalBody");
+  const titleEl = document.getElementById("motherModalTitle");
+  overlay.hidden = false;
+  titleEl.textContent = "Card mãe";
+  body.innerHTML = `<p class="workflow-seq-empty">Carregando...</p>`;
+
+  if (!task.id) {
+    body.innerHTML = `<p class="workflow-seq-empty">Essa tarefa não está conectada ao Runrun.it.</p>`;
+    return;
+  }
+
+  const resultado = await buscarCardMaeDoBackend(task.id);
+  if (!resultado.ok) {
+    body.innerHTML = `<p class="workflow-seq-empty">${resultado.error || "Não consegui buscar o card mãe."}</p>`;
+    return;
+  }
+  if (!resultado.temPai) {
+    body.innerHTML = `<p class="workflow-seq-empty">Essa tarefa não tem card mãe.</p>`;
+    return;
+  }
+
+  titleEl.textContent = resultado.cardMae.title;
+  const subtarefas = resultado.subtarefas || [];
+  body.innerHTML = `
+    <a href="${resultado.cardMae.link}" target="_blank" rel="noopener" class="mother-link">Abrir card mãe no Runrun.it ↗</a>
+    <div class="mother-subtasks-list">
+      ${subtarefas.map(s => `
+        <button type="button" class="mother-subtask-row ${s.fechada ? "done" : ""}" data-subtask-id="${s.id}">
+          <span class="mother-subtask-title">${s.title}</span>
+          <span class="badge badge-estatico">${s.etapa}</span>
+          ${avatarHTML(s.responsavel, "avatar-sm", s.foto)}
+        </button>
+      `).join("")}
+    </div>
+  `;
+
+  body.querySelectorAll(".mother-subtask-row").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const subtaskId = Number(btn.dataset.subtaskId);
+      const idxLocal = tasks.findIndex(t => t.id === subtaskId);
+      overlay.hidden = true;
+      if (idxLocal !== -1) {
+        openDetail(idxLocal);
+      } else {
+        const s = subtarefas.find(x => x.id === subtaskId);
+        if (s) window.open(s.link, "_blank");
+      }
+    });
   });
-  return tasks.length - 1;
 }
 
-function goToParent(task) {
-  const panel = document.getElementById("taskDetail");
-  const inner = panel.querySelector(".detail-inner");
-  if (!inner) return;
-  inner.classList.add("panel-exit-up");
-  setTimeout(() => {
-    detailIdx = getOrCreateParent(task);
-    commentsOpen = false;
-    changeOpen = false;
-    childrenOpen = false;
-    renderDetail();
-    const newInner = panel.querySelector(".detail-inner");
-    newInner.classList.add("panel-enter-below");
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => newInner.classList.remove("panel-enter-below"));
+async function buscarCardMaeDoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarCardMae", taskId }),
     });
-    const cardEl2 = document.querySelector(`.task-card[data-idx="${detailIdx}"]`);
-    if (cardEl2) {
-      document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
-      cardEl2.classList.add("selected");
-    }
-  }, 260);
-}
-
-function goToChild(childTask) {
-  const panel = document.getElementById("taskDetail");
-  const inner = panel.querySelector(".detail-inner");
-  if (!inner || !childTask) return;
-  inner.classList.add("panel-exit-down");
-  setTimeout(() => {
-    detailIdx = tasks.indexOf(childTask);
-    commentsOpen = false;
-    changeOpen = false;
-    childrenOpen = false;
-    renderDetail();
-    const newInner = panel.querySelector(".detail-inner");
-    newInner.classList.add("panel-enter-above");
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => newInner.classList.remove("panel-enter-above"));
-    });
-    document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
-    const cardEl2 = document.querySelector(`.task-card[data-idx="${detailIdx}"]`);
-    if (cardEl2) cardEl2.classList.add("selected");
-  }, 260);
+    return await res.json();
+  } catch (err) {
+    console.error("Falha ao buscar o card mãe no Runrun.it:", err);
+    return { ok: false, error: "Falha de conexão com o Runrun.it." };
+  }
 }
 
 function stepDetail(dir) {
@@ -1700,6 +1845,24 @@ document.getElementById("quickAccessBtn").addEventListener("click", () => {
 });
 document.getElementById("quickAccessClose").addEventListener("click", () => {
   quickAccessPanel.classList.remove("open");
+});
+
+// Modal "Ver regra"
+const ruleModalOverlay = document.getElementById("ruleModalOverlay");
+document.getElementById("ruleModalClose").addEventListener("click", () => {
+  ruleModalOverlay.hidden = true;
+});
+ruleModalOverlay.addEventListener("click", e => {
+  if (e.target === ruleModalOverlay) ruleModalOverlay.hidden = true;
+});
+
+// Modal "Card mãe"
+const motherModalOverlay = document.getElementById("motherModalOverlay");
+document.getElementById("motherModalClose").addEventListener("click", () => {
+  motherModalOverlay.hidden = true;
+});
+motherModalOverlay.addEventListener("click", e => {
+  if (e.target === motherModalOverlay) motherModalOverlay.hidden = true;
 });
 
 buildBoard();
