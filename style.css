@@ -858,3 +858,44 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   .task-detail { left: 14px; right: 14px; top: 14px; bottom: 14px; }
   .detail-side { display: none; }
 }
+
+/* ===== Clientes por atendimento (Colmeia) ===== */
+.atendimento-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.atendimento-toggle button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e2e2e2);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+.atendimento-toggle button.on {
+  background: #0000FB;
+  color: #fff;
+  border-color: #0000FB;
+}
+.atendimento-group {
+  margin-bottom: 24px;
+}
+.atendimento-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.client-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.comments-empty {
+  opacity: 0.6;
+  font-size: 14px;
+  padding: 12px 0;
+}
