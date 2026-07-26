@@ -10,11 +10,11 @@ const discordIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9
 const chatIcon = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1112.6 6.5L4 21l1.9-6.1A7.96 7.96 0 014 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const columnsDef = [
-  { key: "pendentes", label: "Pendentes" },
-  { key: "prioridades", label: "Prioridades" },
-  { key: "fazendo", label: "Fazendo" },
-  { key: "revisao", label: "Revisão" },
-  { key: "ajustes", label: "Ajustes" },
+  { key: "pendentes", label: "Pendentes", hex: "var(--text-muted)" },
+  { key: "prioridades", label: "Prioridades", hex: "var(--danger)" },
+  { key: "fazendo", label: "Fazendo", hex: "var(--accent)" },
+  { key: "revisao", label: "Revisão", hex: "var(--purple)" },
+  { key: "ajustes", label: "Ajustes", hex: "var(--warning)" },
 ];
 
 // dia 24 = "hoje" na simulação
@@ -1683,15 +1683,18 @@ function cardHTML(task, idx) {
 
 const iconEntrega = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const iconHoje = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const hexIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.3l8.5 4.9v9.6L12 21.7l-8.5-4.9V7.2L12 2.3z"/></svg>`;
 
 function buildBoard() {
   boardEl.innerHTML = "";
+  const headersEl = document.getElementById("boardHeaders");
 
   if (!carregandoTarefas) {
     clearInterval(intervalMsgCarregando);
   }
 
   if (carregandoTarefas) {
+    if (headersEl) headersEl.innerHTML = "";
     boardEl.innerHTML = `
       <div class="board-loading">
         <div class="board-loading-glass"></div>
@@ -1705,12 +1708,10 @@ function buildBoard() {
     return;
   }
 
-  columnsDef.forEach(({ key, label }) => {
-    const col = document.createElement("div");
-    col.className = "column";
-    col.dataset.status = key;
-    col.innerHTML = `
-      <div class="column-header">
+  if (headersEl) {
+    headersEl.innerHTML = columnsDef.map(({ key, label, hex }) => `
+      <div class="column-header-item" data-status="${key}">
+        <span class="column-hex" style="color:${hex};">${hexIcon}</span>
         <h2>${label}</h2>
         <div class="column-sort-ic" data-col="${key}">
           <button class="on" data-mode="entrega" title="Ordem de entrega desejada">${iconEntrega}</button>
@@ -1718,8 +1719,14 @@ function buildBoard() {
         </div>
         <span class="column-count"></span>
       </div>
-      <div class="column-cards" id="col-${key}"></div>
-    `;
+    `).join("");
+  }
+
+  columnsDef.forEach(({ key }) => {
+    const col = document.createElement("div");
+    col.className = "column";
+    col.dataset.status = key;
+    col.innerHTML = `<div class="column-cards" id="col-${key}"></div>`;
     boardEl.appendChild(col);
   });
 
@@ -1728,7 +1735,7 @@ function buildBoard() {
   panel.id = "taskDetail";
   boardEl.appendChild(panel);
 
-  boardEl.querySelectorAll(".column-sort-ic").forEach(group => {
+  (headersEl || boardEl).querySelectorAll(".column-sort-ic").forEach(group => {
     const key = group.dataset.col;
     group.querySelectorAll("button").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -1767,7 +1774,7 @@ function render() {
     list = list.slice().sort((a, b) => (a.dueISO || "9999-99-99").localeCompare(b.dueISO || "9999-99-99"));
     const holder = document.getElementById("col-" + key);
     holder.innerHTML = list.map(t => cardHTML(t, tasks.indexOf(t))).join("");
-    document.querySelector(`.column[data-status="${key}"] .column-count`).textContent = list.length;
+    document.querySelector(`.column-header-item[data-status="${key}"] .column-count`).textContent = list.length;
   });
   attachCardDragHandlers();
 }
