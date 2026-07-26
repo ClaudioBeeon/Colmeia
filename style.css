@@ -206,7 +206,8 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 
 .clients-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px; overflow-y: auto; padding-bottom: 8px;
+  gap: 16px; padding-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .client-card {
@@ -870,6 +871,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 
 /* ===== Clientes por atendimento (Colmeia) ===== */
 .atendimento-group {
+  grid-column: 1 / -1;
   margin-bottom: 12px;
   border: 1px solid var(--border-color, #e2e2e2);
   border-radius: 12px;
