@@ -2082,18 +2082,73 @@ const MESES_PT_JS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
  * tarefa no Drive, dentro de Clientes > cliente > Publicações > ano >
  * mês > nome da tarefa.
  */
+/**
+ * Abre o modal de confirmação de verdade (não é mais o alerta feio do
+ * navegador) e devolve true/false conforme o que a pessoa escolher.
+ */
+function confirmarCriacaoDePasta(mensagemHtml) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById("confirmPastaModalOverlay");
+    document.getElementById("confirmPastaModalTexto").innerHTML = mensagemHtml;
+    overlay.hidden = false;
+
+    const btnConfirmar = document.getElementById("confirmPastaConfirmar");
+    const btnCancelar = document.getElementById("confirmPastaCancelar");
+    const btnFechar = document.getElementById("confirmPastaModalClose");
+
+    function fechar(valor) {
+      overlay.hidden = true;
+      btnConfirmar.removeEventListener("click", onConfirmar);
+      btnCancelar.removeEventListener("click", onCancelar);
+      btnFechar.removeEventListener("click", onCancelar);
+      resolve(valor);
+    }
+    function onConfirmar() { fechar(true); }
+    function onCancelar() { fechar(false); }
+
+    btnConfirmar.addEventListener("click", onConfirmar);
+    btnCancelar.addEventListener("click", onCancelar);
+    btnFechar.addEventListener("click", onCancelar);
+  });
+}
+
+/**
+ * Anima a troca do texto do botão (o texto antigo sobe e some, o novo
+ * entra de baixo) — usado quando a pasta é criada com sucesso.
+ */
+function trocarTextoBotaoPasta(novoTexto) {
+  const label = document.querySelector("#criarPastaDriveBtn .pasta-drive-btn-label");
+  if (!label) return;
+  label.classList.add("saindo");
+  setTimeout(() => {
+    label.textContent = novoTexto;
+    label.classList.remove("saindo");
+    label.classList.add("entrando");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => label.classList.remove("entrando"));
+    });
+  }, 260);
+}
+
 async function confirmarECriarPastaDoCard(task) {
+  const btn = document.getElementById("criarPastaDriveBtn");
+
+  // Se a pasta já foi criada nessa sessão, o botão vira link de acesso.
+  if (btn.dataset.pastaUrl) {
+    window.open(btn.dataset.pastaUrl, "_blank");
+    return;
+  }
+
   const agora = new Date();
   const ano = agora.getFullYear();
   const mes = MESES_PT_JS[agora.getMonth()];
-  const caminho = `Clientes > ${task.client} > Publicações > ${ano} > ${mes} > ${task.title}`;
+  const caminho = `${task.client} &gt; Publicações &gt; ${ano} &gt; ${mes} &gt; ${task.title}`;
 
-  if (!confirm(`Deseja criar a pasta "${task.title}" em ${caminho}?`)) return;
+  const confirmado = await confirmarCriacaoDePasta(`Deseja criar a pasta <strong>"${task.title}"</strong> em<br>${caminho}?`);
+  if (!confirmado) return;
 
-  const btn = document.getElementById("criarPastaDriveBtn");
-  const statusEl = document.getElementById("criarPastaDriveStatus");
   btn.disabled = true;
-  statusEl.textContent = "Criando pasta...";
+  trocarTextoBotaoPasta("Criando pasta...");
 
   try {
     const res = await fetch(COLMEIA_API_URL, {
@@ -2104,16 +2159,18 @@ async function confirmarECriarPastaDoCard(task) {
     btn.disabled = false;
 
     if (!data.ok) {
-      statusEl.textContent = data.error || "Não consegui criar a pasta.";
+      trocarTextoBotaoPasta(data.error ? data.error.slice(0, 40) : "Não consegui criar a pasta");
       return;
     }
-    statusEl.innerHTML = `${data.jaExistia ? "✓ Pasta já existia" : "✓ Pasta criada"} — <a href="${data.url}" target="_blank" rel="noopener">Ver</a>`;
+    btn.dataset.pastaUrl = data.url;
+    trocarTextoBotaoPasta("Acessar pasta do card");
   } catch (err) {
     console.error("Falha ao criar pasta do card no Drive:", err);
     btn.disabled = false;
-    statusEl.textContent = "Falha de conexão.";
+    trocarTextoBotaoPasta("Falha de conexão");
   }
 }
+
 
 function wireExcluirComentario(task) {
   document.querySelectorAll(".comment-delete-btn").forEach(btn => {
@@ -2446,6 +2503,18 @@ function renderDetail() {
             <span class="side-label">Entrega desejada</span>
             <div class="side-date">${task.due}</div>
           </div>
+          ${task.id ? `
+            <div class="side-block">
+              <button type="button" class="pasta-drive-btn" id="criarPastaDriveBtn">
+                <span class="pasta-drive-btn-icon">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <span class="pasta-drive-btn-label-wrap">
+                  <span class="pasta-drive-btn-label">Criar pasta do card</span>
+                </span>
+              </button>
+            </div>
+          ` : ""}
           <div class="side-block">
             <span class="side-label">Tipo de tarefa</span>
             <span class="badge ${type.class}">${type.label}</span>
@@ -2459,10 +2528,6 @@ function renderDetail() {
             <div class="hub-grid">
               ${renderHubDoClienteHTML(task.client)}
             </div>
-            ${task.id ? `
-              <button type="button" class="criar-pasta-drive-btn" id="criarPastaDriveBtn">📁 Criar pasta do card no Drive</button>
-              <span class="people-row-saved" id="criarPastaDriveStatus"></span>
-            ` : ""}
           </div>
           <div class="side-block">
             <span class="side-label">Atendimento responsável</span>
