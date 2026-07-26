@@ -24,8 +24,8 @@
   --shadow-hover: 0 8px 24px rgba(20,20,30,0.12);
   --shadow-sidebar: 0 4px 20px rgba(20,20,30,0.08);
 
-  --font-display: 'Heebo', sans-serif;
-  --font-body: 'Heebo', sans-serif;
+  --font-display: 'Questrial', sans-serif;
+  --font-body: 'Questrial', sans-serif;
 }
 
 [data-theme="dark"] {
@@ -1730,64 +1730,84 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 
 /* ===== Visual idêntico ao painel-designers-beeon (Atendimento, Serviço, Clientes) ===== */
 /* ===== MEUS CLIENTES — card fiel ao Figma (Card.fig / Card.png) ===== */
-.mc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start; }
+.mc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: stretch; }
 
 .mc-card {
   background: var(--card-bg); border-radius: 24px; padding: 26px;
   box-shadow: var(--shadow-card); cursor: pointer;
   transition: box-shadow .15s ease, transform .15s ease;
+  display: flex; flex-direction: column; height: 360px; overflow: hidden;
 }
 .mc-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
 
 .mc-badge {
   display: inline-block; font-family: 'Questrial', var(--font-body); font-size: 15px;
   font-weight: 400; color: #000; padding: 8px 20px; border-radius: 999px; margin-bottom: 20px;
+  align-self: flex-start; flex-shrink: 0;
 }
 [data-theme="dark"] .mc-badge { color: #16181D; }
 
 .mc-title {
   font-family: 'Questrial', var(--font-body); font-size: 28px; line-height: 1.15;
-  color: var(--text-primary); margin-bottom: 10px;
+  color: var(--text-primary); margin-bottom: 10px; flex-shrink: 0;
+  min-height: 66px; max-height: 66px; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 
 .mc-desc {
   font-family: 'Questrial', var(--font-body); font-size: 14px; line-height: 1.4;
-  color: var(--text-muted); margin-bottom: 22px;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  color: var(--text-muted); margin-bottom: 22px; flex-shrink: 0;
+  min-height: 40px; max-height: 40px; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 
-.mc-progress-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.mc-progress-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-shrink: 0; }
 .mc-progress-head span { font-family: 'Questrial', var(--font-body); font-size: 15px; color: var(--text-primary); }
 .mc-progress-head .mc-pct { font-weight: 500; }
 
-.mc-progress-track { height: 18px; border-radius: 999px; background: var(--page-bg); overflow: hidden; margin-bottom: 22px; }
+.mc-progress-track { height: 18px; border-radius: 999px; background: var(--page-bg); overflow: hidden; margin-bottom: 22px; flex-shrink: 0; }
 .mc-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFDF00, #FFA200); transition: width .4s ease; }
 
-.mc-bottom { display: flex; align-items: center; gap: 12px; }
+.mc-bottom { display: flex; align-items: center; gap: 12px; margin-top: auto; flex-shrink: 0; }
 .mc-avatar { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; background: #D9D9D9; flex-shrink: 0; }
 .mc-avatar-fallback { width: 46px; height: 46px; border-radius: 50%; background: #D9D9D9; flex-shrink: 0; }
-.mc-name { font-family: 'Questrial', var(--font-body); font-size: 17px; color: var(--text-primary); }
+.mc-name { font-family: 'Questrial', var(--font-body); font-size: 17px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc-name-sub { font-family: 'Questrial', var(--font-body); font-size: 12px; color: var(--text-muted); margin-top: 1px; }
 
 .mc-empty { grid-column: 1 / -1; }
 
 /* ===== MODAL — Hub do cliente (abre ao clicar no card de Meus clientes) ===== */
-.client-hub-modal { width: 480px; }
+.client-hub-modal { width: 480px; border-radius: 24px; }
+.client-hub-modal .rule-modal-header { font-family: 'Questrial', var(--font-body); }
 .ch-modal-title-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .ch-modal-icon { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
-.ch-modal-title-wrap h3 { font-size: 15px; font-family: var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ch-modal-body { gap: 16px; }
+.ch-modal-title-wrap h3 { font-size: 20px; font-family: 'Questrial', var(--font-body); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-modal-body { gap: 16px; font-family: 'Questrial', var(--font-body); }
 .ch-section-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: -6px; }
-.ch-atend-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--page-bg); border-radius: 12px; }
+.ch-atend-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--page-bg); border-radius: 14px; }
 .ch-atend-foto { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #D9D9D9; }
 .ch-atend-label { font-size: 11px; color: var(--text-muted); }
-.ch-atend-nome { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.ch-atend-nome { font-size: 14px; color: var(--text-primary); }
 .ch-tarefas-lista { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
-.ch-tarefa-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; background: var(--page-bg); border-radius: 10px; }
-.ch-tarefa-titulo { font-size: 12.5px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-tarefa-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 14px; background: var(--page-bg); border-radius: 14px;
+  cursor: pointer; transition: background .12s ease;
+}
+.ch-tarefa-item:hover { background: var(--border); }
+.ch-tarefa-titulo { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-tarefa-due { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
 .ch-tarefa-due.overdue { color: var(--danger); }
 .ch-tarefas-vazio { font-size: 12px; color: var(--text-muted); font-style: italic; }
+
+/* Pills do hub dentro do modal — mesmo padrão pastel + texto escuro do mc-badge */
+.ch-modal-body .hub-pill { color: #000; font-family: 'Questrial', var(--font-body); font-weight: 400; }
+.ch-modal-body .hub-purple { background: #E9E4FC; }
+.ch-modal-body .hub-pink { background: #FBE2E9; }
+.ch-modal-body .hub-blue { background: #E6EDFC; }
+.ch-modal-body .hub-orange { background: #FDECD2; }
+.ch-modal-body .hub-teal { background: #DCF3EA; }
+[data-theme="dark"] .ch-modal-body .hub-pill { color: #16181D; }
 
 .pd-designers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; align-items: start; }
 .pd-designer-card { background: #fff; border-radius: 16px; padding: 16px 15px; transition: box-shadow .15s; position: relative; box-shadow: 0 1px 3px rgba(20,20,18,0.06); }
