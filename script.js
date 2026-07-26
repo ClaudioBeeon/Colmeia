@@ -455,10 +455,27 @@ async function adicionarNaRegraNoBackend(workflowId, userId) {
  * viu na sessão atual, com a foto atual, e deixa o coordenador trocar a
  * foto ou vincular apelidos (ex: "Manu" = "Manuela Mendonça").
  */
+// Qual aba do painel do coordenador está ativa agora.
+let configTabAtiva = "pessoas";
+
 function abrirPainelPessoas() {
   const overlay = document.getElementById("peopleModalOverlay");
   overlay.hidden = false;
-  renderPainelPessoas();
+  configTabAtiva = "pessoas";
+  atualizarAbasConfig();
+}
+
+function atualizarAbasConfig() {
+  document.getElementById("configTabPessoas").classList.toggle("active", configTabAtiva === "pessoas");
+  document.getElementById("configTabClientes").classList.toggle("active", configTabAtiva === "clientes");
+  const hint = document.getElementById("configHint");
+  if (configTabAtiva === "pessoas") {
+    hint.textContent = "Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.";
+    renderPainelPessoas();
+  } else {
+    hint.textContent = "Cadastre os links de cada cliente (Drive, banco de imagens etc) — eles aparecem no Hub do Cliente pros designers.";
+    renderPainelClientes();
+  }
 }
 
 function renderPainelPessoas() {
@@ -520,6 +537,165 @@ function renderPainelPessoas() {
         if (document.getElementById("taskDetail").classList.contains("visible")) renderDetail();
       } else {
         row.querySelector(".people-row-saved").textContent = "Erro ao salvar";
+      }
+    });
+  });
+}
+
+// Grupos de clientes expandidos no painel de configuração (igual ao
+// padrão das outras listas expansíveis do Colmeia).
+const clientesConfigExpandido = new Set();
+let clientesConfigFiltro = "";
+
+/**
+ * Junta os nomes de clientes de todos os designers no painel-beeon,
+ * sem duplicar, ordenados de A a Z.
+ */
+function listarTodosClientesConhecidos() {
+  if (!painelBeeonData || !painelBeeonData.state) return [];
+  const vistos = new Set();
+  const nomes = [];
+  Object.values(painelBeeonData.state).forEach(lista => {
+    (lista || []).forEach(c => {
+      const chave = normalizarParaComparar(c.cliente);
+      if (vistos.has(chave)) return;
+      vistos.add(chave);
+      nomes.push(c.cliente);
+    });
+  });
+  return nomes.sort((a, b) => a.localeCompare(b));
+}
+
+function renderPainelClientes() {
+  const body = document.getElementById("peopleModalBody");
+
+  if (!painelBeeonData) {
+    body.innerHTML = `<p class="workflow-seq-empty">Carregando clientes do painel-designers-beeon...</p>`;
+    return;
+  }
+
+  const todosClientes = listarTodosClientesConhecidos();
+  const alvo = normalizarParaComparar(clientesConfigFiltro);
+  const clientesFiltrados = alvo ? todosClientes.filter(c => normalizarParaComparar(c).includes(alvo)) : todosClientes;
+
+  body.innerHTML = `
+    <input type="text" class="rule-add-search" id="clientesConfigSearch" placeholder="Buscar cliente..." value="${clientesConfigFiltro}">
+    <div class="config-clientes-list">
+      ${clientesFiltrados.map(cliente => {
+        const dados = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [] };
+        const aberto = clientesConfigExpandido.has(cliente);
+        return `
+          <div class="atendimento-group ${aberto ? "expanded" : ""}">
+            <button type="button" class="atendimento-group-header" data-cliente="${cliente}">
+              <span class="atendimento-group-name">${cliente}</span>
+            </button>
+            ${aberto ? `
+              <div class="cliente-links-form" data-cliente-form="${cliente}">
+                <label class="cliente-link-field">
+                  <span>Drive do cliente</span>
+                  <input type="text" data-campo="drive" value="${dados.drive || ""}" placeholder="https://drive.google.com/...">
+                </label>
+                <label class="cliente-link-field">
+                  <span>Banco de imagens</span>
+                  <input type="text" data-campo="bancoImagens" value="${dados.bancoImagens || ""}" placeholder="https://...">
+                </label>
+                <label class="cliente-link-field">
+                  <span>Biblioteca Adobe</span>
+                  <input type="text" data-campo="bibliotecaAdobe" value="${dados.bibliotecaAdobe || ""}" placeholder="https://...">
+                </label>
+                <label class="cliente-link-field">
+                  <span>Pasta de publicações</span>
+                  <input type="text" data-campo="pastaPublicacoes" value="${dados.pastaPublicacoes || ""}" placeholder="https://...">
+                </label>
+                <div class="cliente-links-extras" data-extras-lista>
+                  ${(dados.extras || []).map((e, i) => `
+                    <div class="cliente-link-extra" data-extra-idx="${i}">
+                      <input type="text" data-extra-campo="nome" value="${e.nome || ""}" placeholder="Nome do link">
+                      <input type="text" data-extra-campo="url" value="${e.url || ""}" placeholder="https://...">
+                      <button type="button" class="cliente-link-extra-remove" data-extra-idx="${i}" title="Remover">×</button>
+                    </div>
+                  `).join("")}
+                </div>
+                <button type="button" class="cliente-link-add-extra">+ Adicionar link extra</button>
+                <div class="cliente-links-footer">
+                  <button type="button" class="people-row-save" data-cliente-salvar="${cliente}">Salvar</button>
+                  <span class="people-row-saved" data-cliente-saved="${cliente}"></span>
+                </div>
+              </div>
+            ` : ""}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+
+  document.getElementById("clientesConfigSearch").addEventListener("input", e => {
+    clientesConfigFiltro = e.target.value;
+    renderPainelClientes();
+  });
+
+  body.querySelectorAll(".atendimento-group-header").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const cliente = btn.dataset.cliente;
+      if (clientesConfigExpandido.has(cliente)) clientesConfigExpandido.delete(cliente);
+      else clientesConfigExpandido.add(cliente);
+      renderPainelClientes();
+    });
+  });
+
+  body.querySelectorAll(".cliente-link-add-extra").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const form = btn.closest(".cliente-links-form");
+      const lista = form.querySelector("[data-extras-lista]");
+      const idx = lista.children.length;
+      const div = document.createElement("div");
+      div.className = "cliente-link-extra";
+      div.dataset.extraIdx = idx;
+      div.innerHTML = `
+        <input type="text" data-extra-campo="nome" placeholder="Nome do link">
+        <input type="text" data-extra-campo="url" placeholder="https://...">
+        <button type="button" class="cliente-link-extra-remove" data-extra-idx="${idx}" title="Remover">×</button>
+      `;
+      lista.appendChild(div);
+      div.querySelector(".cliente-link-extra-remove").addEventListener("click", () => div.remove());
+    });
+  });
+
+  body.querySelectorAll(".cliente-link-extra-remove").forEach(btn => {
+    btn.addEventListener("click", () => btn.closest(".cliente-link-extra").remove());
+  });
+
+  body.querySelectorAll("[data-cliente-salvar]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const cliente = btn.dataset.clienteSalvar;
+      const form = body.querySelector(`[data-cliente-form="${CSS.escape(cliente)}"]`);
+      const dados = {
+        drive: form.querySelector('[data-campo="drive"]').value.trim(),
+        bancoImagens: form.querySelector('[data-campo="bancoImagens"]').value.trim(),
+        bibliotecaAdobe: form.querySelector('[data-campo="bibliotecaAdobe"]').value.trim(),
+        pastaPublicacoes: form.querySelector('[data-campo="pastaPublicacoes"]').value.trim(),
+        extras: Array.from(form.querySelectorAll(".cliente-link-extra")).map(div => ({
+          nome: div.querySelector('[data-extra-campo="nome"]').value.trim(),
+          url: div.querySelector('[data-extra-campo="url"]').value.trim(),
+        })).filter(e => e.nome && e.url),
+      };
+
+      btn.disabled = true;
+      btn.textContent = "Salvando...";
+      const ok = await salvarLinksClienteNoBackend(cliente, dados);
+      btn.disabled = false;
+      btn.textContent = "Salvar";
+
+      const avisoEl = form.querySelector(`[data-cliente-saved="${CSS.escape(cliente)}"]`);
+      if (ok) {
+        const idxExistente = linksClientes.findIndex(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(cliente));
+        const novoRegistro = { cliente, ...dados };
+        if (idxExistente !== -1) linksClientes[idxExistente] = novoRegistro;
+        else linksClientes.push(novoRegistro);
+        avisoEl.textContent = "✓ Salvo";
+        setTimeout(() => { avisoEl.textContent = ""; }, 2000);
+      } else {
+        avisoEl.textContent = "Erro ao salvar";
       }
     });
   });
@@ -1232,6 +1408,9 @@ function render() {
   if (carregandoTarefas) return;
   columnsDef.forEach(({ key }) => {
     let list = tasks.filter(t => t.status === key);
+    if (PAPEL_LOGADO === "designer") {
+      list = list.filter(t => nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+    }
     if (searchQuery) {
       const alvo = normalizarParaComparar(searchQuery);
       list = list.filter(t =>
@@ -1391,14 +1570,73 @@ document.addEventListener("click", () => {
   document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
 });
 
-const clientHub = [
-  { label: "Drive do cliente", cls: "hub-purple" },
-  { label: "Banco de imagens", cls: "hub-pink" },
-  { label: "Biblioteca Adobe", cls: "hub-blue" },
-  { label: "Pasta publicações", cls: "hub-teal" },
-  { label: "Site", cls: "hub-orange" },
-  { label: "Instagram", cls: "hub-teal" },
+// Links de clientes cadastrados pelo coordenador (Drive, Banco de
+// imagens, Biblioteca Adobe, Pasta de publicações + extras avulsos),
+// carregados do backend do Colmeia.
+let linksClientes = []; // [{cliente, drive, bancoImagens, bibliotecaAdobe, pastaPublicacoes, extras:[{nome,url}]}]
+
+async function carregarLinksClientes() {
+  if (!COLMEIA_API_URL) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "listarLinksClientes" }),
+    });
+    const data = await res.json();
+    if (data.ok) linksClientes = data.links || [];
+  } catch (err) {
+    console.error("Falha ao carregar links de clientes:", err);
+  }
+}
+
+async function salvarLinksClienteNoBackend(cliente, dados) {
+  if (!COLMEIA_API_URL || !cliente) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "salvarLinksCliente", cliente, dados }),
+    });
+    const data = await res.json();
+    return !!data.ok;
+  } catch (err) {
+    console.error("Falha ao salvar links do cliente:", err);
+    return false;
+  }
+}
+
+function getLinksDoCliente(nomeCliente) {
+  return linksClientes.find(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(nomeCliente)) || null;
+}
+
+const HUB_FIXOS = [
+  { chave: "drive", label: "Drive do cliente", cls: "hub-purple" },
+  { chave: "bancoImagens", label: "Banco de imagens", cls: "hub-pink" },
+  { chave: "bibliotecaAdobe", label: "Biblioteca Adobe", cls: "hub-blue" },
+  { chave: "pastaPublicacoes", label: "Pasta publicações", cls: "hub-teal" },
 ];
+
+/**
+ * Desenha o Hub do Cliente com os links reais cadastrados pelo
+ * coordenador. Um link só aparece clicável se tiver URL cadastrada —
+ * senão some (não mostra pill vazia/quebrada pro designer).
+ */
+function renderHubDoClienteHTML(nomeCliente) {
+  const dados = getLinksDoCliente(nomeCliente);
+  if (!dados) {
+    return `<span class="hub-empty">Nenhum link cadastrado ainda pra esse cliente.</span>`;
+  }
+  const fixos = HUB_FIXOS.filter(h => dados[h.chave]).map(h =>
+    `<a href="${dados[h.chave]}" target="_blank" rel="noopener" class="hub-pill ${h.cls}">${h.label}</a>`
+  );
+  const extras = (dados.extras || []).filter(e => e.url).map((e, i) =>
+    `<a href="${e.url}" target="_blank" rel="noopener" class="hub-pill ${HUB_FIXOS[i % HUB_FIXOS.length].cls}">${e.nome}</a>`
+  );
+  const todos = [...fixos, ...extras];
+  if (todos.length === 0) {
+    return `<span class="hub-empty">Nenhum link cadastrado ainda pra esse cliente.</span>`;
+  }
+  return todos.join("");
+}
 
 const attachments = ["Anexo 01", "Anexo 02", "Anexo 03", "Anexo 04"];
 
@@ -1782,7 +2020,7 @@ function renderDetail() {
           <div class="side-block">
             <span class="side-label">Hub do cliente</span>
             <div class="hub-grid">
-              ${clientHub.map(h => `<a href="#" class="hub-pill ${h.cls}" onclick="return false">${h.label}</a>`).join("")}
+              ${renderHubDoClienteHTML(task.client)}
             </div>
           </div>
           <div class="side-block">
@@ -2159,7 +2397,10 @@ const pageTitles = {
 
 // Nome do designer logado no Colmeia hoje (mesmo usado na barra lateral).
 // Troque aqui quando tiver login de verdade — por enquanto é fixo.
-const DESIGNER_LOGADO = "Claudio";
+// Preenchido de verdade depois do login (ver bloco de login lá embaixo).
+// Antes disso fica null — nenhuma tela usa isso até o login acontecer.
+let DESIGNER_LOGADO = null;
+let PAPEL_LOGADO = null; // 'coordenador' ou 'designer'
 
 // Mesma lógica de normalização usada no painel-designers-beeon: tira
 // acento, deixa minúsculo, tira espaço extra. Assim "Claudio" (Colmeia)
@@ -2459,6 +2700,7 @@ ruleModalOverlay.addEventListener("click", e => {
 const peopleModalOverlay = document.getElementById("peopleModalOverlay");
 document.getElementById("sidebarProfileLink").addEventListener("click", e => {
   e.preventDefault();
+  if (PAPEL_LOGADO !== "coordenador") return; // só o coordenador mexe nessas configurações
   abrirPainelPessoas();
 });
 document.getElementById("peopleModalClose").addEventListener("click", () => {
@@ -2467,9 +2709,111 @@ document.getElementById("peopleModalClose").addEventListener("click", () => {
 peopleModalOverlay.addEventListener("click", e => {
   if (e.target === peopleModalOverlay) peopleModalOverlay.hidden = true;
 });
+document.getElementById("configTabPessoas").addEventListener("click", () => {
+  configTabAtiva = "pessoas";
+  atualizarAbasConfig();
+});
+document.getElementById("configTabClientes").addEventListener("click", () => {
+  configTabAtiva = "clientes";
+  atualizarAbasConfig();
+});
 
-buildBoard();
-render();
-carregarTarefasReais();
-carregarDadosPainelBeeon();
-carregarPessoasSalvas();
+/**
+ * Roda tudo que o Colmeia precisa pra funcionar de verdade — só chamada
+ * depois que o login (ou uma sessão salva) confirma quem está usando.
+ */
+function iniciarAppPosLogin() {
+  document.getElementById("loginScreen").hidden = true;
+  document.getElementById("page").hidden = false;
+
+  document.getElementById("sidebarNomeUsuario").textContent = DESIGNER_LOGADO;
+  document.getElementById("sidebarAvatarIniciais").textContent = initials(DESIGNER_LOGADO);
+  document.getElementById("sidebarProfileLink").title = PAPEL_LOGADO === "coordenador" ? "Configurações" : DESIGNER_LOGADO;
+
+  buildBoard();
+  render();
+  carregarTarefasReais();
+  carregarDadosPainelBeeon();
+  carregarPessoasSalvas();
+  carregarLinksClientes();
+}
+
+// ===== Login e sessão =====
+// Guarda {nome, papel} no navegador depois de logar, pra não pedir
+// senha de novo toda vez que abrir o Colmeia nesse computador.
+const SESSAO_CHAVE = "colmeia_sessao";
+
+function lerSessaoSalva() {
+  try {
+    const bruto = localStorage.getItem(SESSAO_CHAVE);
+    return bruto ? JSON.parse(bruto) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function salvarSessao(nome, papel) {
+  try {
+    localStorage.setItem(SESSAO_CHAVE, JSON.stringify({ nome, papel }));
+  } catch (err) {
+    console.error("Não consegui salvar a sessão:", err);
+  }
+}
+
+function sairDoColmeia() {
+  try { localStorage.removeItem(SESSAO_CHAVE); } catch (err) { /* sem problema */ }
+  location.reload();
+}
+
+document.getElementById("sidebarLogout").addEventListener("click", sairDoColmeia);
+
+document.getElementById("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const nome = document.getElementById("loginNome").value.trim();
+  const senha = document.getElementById("loginSenha").value;
+  const btn = document.getElementById("loginSubmit");
+  const erroEl = document.getElementById("loginErro");
+  erroEl.hidden = true;
+
+  if (!nome || !senha) return;
+  btn.disabled = true;
+  btn.textContent = "Entrando...";
+
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "login", nome, senha }),
+    });
+    const data = await res.json();
+    btn.disabled = false;
+    btn.textContent = "Entrar";
+
+    if (!data.ok) {
+      erroEl.textContent = data.error || "Não consegui entrar.";
+      erroEl.hidden = false;
+      return;
+    }
+
+    DESIGNER_LOGADO = data.nome;
+    PAPEL_LOGADO = data.papel;
+    salvarSessao(data.nome, data.papel);
+    iniciarAppPosLogin();
+  } catch (err) {
+    console.error("Falha ao tentar logar:", err);
+    btn.disabled = false;
+    btn.textContent = "Entrar";
+    erroEl.textContent = "Falha de conexão. Tente de novo.";
+    erroEl.hidden = false;
+  }
+});
+
+// Se já tiver uma sessão salva nesse navegador, entra direto sem pedir
+// senha de novo.
+const sessaoSalva = lerSessaoSalva();
+if (sessaoSalva && sessaoSalva.nome && sessaoSalva.papel) {
+  DESIGNER_LOGADO = sessaoSalva.nome;
+  PAPEL_LOGADO = sessaoSalva.papel;
+  iniciarAppPosLogin();
+}
+// Senão, a tela de login (já visível por padrão no HTML) fica esperando
+// o formulário ser enviado — o resto acontece no listener do submit acima.
