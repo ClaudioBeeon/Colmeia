@@ -8,6 +8,7 @@ const playIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v1
 const pauseIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
 const discordIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 6.3a15 15 0 00-3.6-1.1l-.2.4a13 13 0 013.1 1.1 12.6 12.6 0 00-11.9 0 13 13 0 013.1-1.1l-.2-.4A15 15 0 005.6 6.3C3.6 9.3 3 12.2 3.2 15a15 15 0 004.4 2.2l.6-1a9.6 9.6 0 01-1.7-.8l.4-.3a11.3 11.3 0 009.8 0l.4.3c-.5.3-1.1.6-1.7.8l.6 1A15 15 0 0020.8 15c.3-3.2-.5-6.1-1.9-8.7zM9.7 13.4c-.7 0-1.3-.7-1.3-1.5s.6-1.5 1.3-1.5 1.4.7 1.3 1.5c0 .8-.6 1.5-1.3 1.5zm4.6 0c-.7 0-1.3-.7-1.3-1.5s.6-1.5 1.3-1.5 1.4.7 1.3 1.5c0 .8-.6 1.5-1.3 1.5z"/></svg>`;
 const chatIcon = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1112.6 6.5L4 21l1.9-6.1A7.96 7.96 0 014 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const reopenIcon = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 4v5h5M20 20v-5h-5M4.5 15a8 8 0 0014.5 3.5M19.5 9A8 8 0 005 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const columnsDef = [
   { key: "pendentes", label: "Pendentes", hex: "var(--text-muted)" },
@@ -1195,6 +1196,22 @@ async function entregarTarefaNoBackend(taskId) {
     return data.ok;
   } catch (err) {
     console.error("Falha ao entregar a tarefa no Runrun.it:", err);
+    return false;
+  }
+}
+
+async function reabrirTarefaNoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "reabrirTarefa", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou reabrir a tarefa:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao reabrir a tarefa no Runrun.it:", err);
     return false;
   }
 }
@@ -2553,7 +2570,11 @@ function renderSequenciaHTML(task) {
         </div>
       `).join("")}
     </div>
-    ${semNinguemNaFrente ? `
+    ${task.entregue ? `
+      <button type="button" class="nav-arrow nav-deliver delivered" id="navDeliverBtn" title="Reabrir tarefa">
+        ${reopenIcon}
+      </button>
+    ` : semNinguemNaFrente ? `
       <button type="button" class="nav-arrow" id="navAddPersonBtn" title="Adicionar próxima pessoa na sequência">
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
@@ -2623,20 +2644,39 @@ function wireWorkflowArrows(task) {
   }
   const deliverBtn = document.getElementById("navDeliverBtn");
   if (deliverBtn) {
-    deliverBtn.addEventListener("click", async () => {
-      deliverBtn.disabled = true;
-      // Primeiro fecha a etapa da última pessoa da sequência (sem
-      // transferir pra ninguém, já que não tem próximo) — confirmado
-      // que o Runrun.it só deixa entregar depois disso.
-      await avancarWorkflowNoBackend(task.id);
-      const ok = await entregarTarefaNoBackend(task.id);
-      if (ok) {
-        console.log("Tarefa entregue no Runrun.it.");
-        await carregarSequencia(task);
-      } else {
-        deliverBtn.disabled = false;
-      }
-    });
+    if (task.entregue) {
+      deliverBtn.addEventListener("click", async () => {
+        deliverBtn.disabled = true;
+        const ok = await reabrirTarefaNoBackend(task.id);
+        if (ok) {
+          task.entregue = false;
+          await carregarSequencia(task);
+        } else {
+          deliverBtn.disabled = false;
+          alert("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.");
+        }
+      });
+    } else {
+      deliverBtn.addEventListener("click", async () => {
+        deliverBtn.disabled = true;
+        // Primeiro fecha a etapa da última pessoa da sequência (sem
+        // transferir pra ninguém, já que não tem próximo) — confirmado
+        // que o Runrun.it só deixa entregar depois disso.
+        await avancarWorkflowNoBackend(task.id);
+        const ok = await entregarTarefaNoBackend(task.id);
+        if (ok) {
+          task.entregue = true;
+          // Anima o círculo virando verde antes de trocar pro ícone de
+          // reabrir (senão a troca de ícone acontece de repente, sem o
+          // usuário ver a confirmação visual).
+          deliverBtn.classList.add("delivered");
+          await esperar(450);
+          await carregarSequencia(task);
+        } else {
+          deliverBtn.disabled = false;
+        }
+      });
+    }
   }
 }
 
@@ -2696,7 +2736,7 @@ function renderDetail() {
             </button>
             <div class="detail-more-menu" id="detailMoreMenu">
               <button type="button" id="verRegraBtn">Ver regra</button>
-              <button type="button">Reabrir tarefa</button>
+              <button type="button" id="reabrirTarefaMenuBtn">Reabrir tarefa</button>
               <button type="button">Ajustar horas</button>
               ${task.id ? `<a href="${task.link}" target="_blank" rel="noopener" id="verNoRunrunBtn">Ver tarefa no Runrun</a>` : ""}
             </div>
@@ -2937,6 +2977,23 @@ function renderDetail() {
     moreMenu.classList.remove("open");
     abrirModalRegra(task);
   });
+
+  const reabrirMenuBtn = document.getElementById("reabrirTarefaMenuBtn");
+  if (reabrirMenuBtn) {
+    reabrirMenuBtn.addEventListener("click", async () => {
+      moreMenu.classList.remove("open");
+      if (!task.id) return;
+      reabrirMenuBtn.disabled = true;
+      const ok = await reabrirTarefaNoBackend(task.id);
+      reabrirMenuBtn.disabled = false;
+      if (ok) {
+        task.entregue = false;
+        await carregarSequencia(task);
+      } else {
+        alert("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.");
+      }
+    });
+  }
 
   const verOriginalBtn = document.getElementById("verOriginalBtn");
   if (verOriginalBtn) {
