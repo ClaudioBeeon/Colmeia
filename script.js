@@ -50,6 +50,123 @@ let painelBeeonData = null;
  * estrutura crua que veio, pra confirmarmos onde ficam as fotos de
  * cada designer/cliente (o nome exato do campo pode variar).
  */
+/**
+ * Busca as atividades recentes do Drive (uploads de arquivo) que já
+ * existem no painel-designers-beeon — mesmo cache que alimenta o card
+ * "Atividade recente" de lá.
+ */
+async function buscarAtividadesPainelBeeon() {
+  if (!PAINEL_BEEON_API_URL) return [];
+  try {
+    const res = await fetch(PAINEL_BEEON_API_URL + "?tipo=atividades");
+    const data = await res.json();
+    return data.ok ? (data.atividades || []) : [];
+  } catch (err) {
+    console.error("Falha ao buscar atividades do painel-beeon:", err);
+    return [];
+  }
+}
+
+// Só avisa sobre upload que aconteceu nas últimas 3 horas — depois
+// disso não faz mais sentido como "notificação" do momento.
+const JANELA_NOTIFICACAO_UPLOAD_MS = 3 * 60 * 60 * 1000;
+
+function chaveUploadVisto(link) {
+  return "colmeia_upload_visto_" + link;
+}
+function uploadJaVisto(link) {
+  try { return localStorage.getItem(chaveUploadVisto(link)) === "1"; } catch (err) { return false; }
+}
+function marcarUploadVisto(link) {
+  try { localStorage.setItem(chaveUploadVisto(link), "1"); } catch (err) { /* sem problema */ }
+}
+
+/**
+ * Mostra, dentro da aba Comentários, um aviso pra cada pasta onde o
+ * designer logado subiu arquivo recentemente pro cliente dessa tarefa
+ * — junto com "Copiar link" e "Ver", pra não precisar catar a pasta
+ * certa no Drive na mão. Pode aparecer mais de um (ex: PSD numa pasta,
+ * PNG em outra).
+ */
+async function renderNotificacoesUpload(task) {
+  const container = document.getElementById("uploadNotifs");
+  if (!container) return;
+
+  const atividades = await buscarAtividadesPainelBeeon();
+  if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
+
+  const agora = Date.now();
+  const relevantes = atividades.filter(a =>
+    normalizarParaComparar(a.cliente) === normalizarParaComparar(task.client) &&
+    nomesCorrespondem(a.quem, DESIGNER_LOGADO) &&
+    (agora - a.quando) < JANELA_NOTIFICACAO_UPLOAD_MS &&
+    !uploadJaVisto(a.link)
+  );
+
+  const porPasta = {};
+  relevantes.forEach(a => {
+    if (!porPasta[a.link]) porPasta[a.link] = { pasta: a.pasta, link: a.link, arquivos: [] };
+    porPasta[a.link].arquivos.push(a.arquivo);
+  });
+  const grupos = Object.values(porPasta);
+
+  if (grupos.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = grupos.map(g => `
+    <div class="upload-notif" data-link="${g.link}">
+      <button type="button" class="upload-notif-dismiss" data-link="${g.link}" aria-label="Dispensar">×</button>
+      <p class="upload-notif-text">Você adicionou ${g.arquivos.length} arquivo${g.arquivos.length > 1 ? "s" : ""} na pasta <strong>${g.pasta}</strong></p>
+      <div class="upload-notif-actions">
+        <button type="button" class="upload-notif-copy" data-link="${g.link}">Copiar link</button>
+        <a href="${g.link}" target="_blank" rel="noopener" class="upload-notif-ver">Ver</a>
+      </div>
+    </div>
+  `).join("");
+
+  container.querySelectorAll(".upload-notif-copy").forEach(btn => {
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(btn.dataset.link).then(() => {
+        const original = btn.textContent;
+        btn.textContent = "Copiado!";
+        setTimeout(() => { btn.textContent = original; }, 1200);
+      });
+    });
+  });
+  container.querySelectorAll(".upload-notif-dismiss").forEach(btn => {
+    btn.addEventListener("click", () => {
+      marcarUploadVisto(btn.dataset.link);
+      const el = container.querySelector(`.upload-notif[data-link="${CSS.escape(btn.dataset.link)}"]`);
+      if (el) el.remove();
+    });
+  });
+}
+
+/**
+ * Depois de comentar numa subtarefa, pergunta se quer repetir o mesmo
+ * comentário no card mãe também (evita ter que escrever duas vezes a
+ * mesma coisa pro atendimento acompanhar).
+ */
+function mostrarPromptRepetirComentario(task, texto) {
+  const el = document.getElementById("repetirComentarioPrompt");
+  if (!el) return;
+  el.hidden = false;
+  el.innerHTML = `
+    <span>Repetir esse comentário no card mãe?</span>
+    <button type="button" class="repetir-sim">Sim</button>
+    <button type="button" class="repetir-nao">Não</button>
+  `;
+  el.querySelector(".repetir-nao").addEventListener("click", () => { el.hidden = true; });
+  el.querySelector(".repetir-sim").addEventListener("click", async () => {
+    el.innerHTML = `<span>Enviando pro card mãe...</span>`;
+    const ok = await enviarComentarioNoBackend(task.parentTaskId, texto);
+    el.innerHTML = ok ? `<span>✓ Repetido no card mãe.</span>` : `<span>Não consegui enviar pro card mãe.</span>`;
+    setTimeout(() => { el.hidden = true; }, 2000);
+  });
+}
+
 async function carregarDadosPainelBeeon() {
   if (!PAINEL_BEEON_API_URL) return;
   try {
@@ -1905,6 +2022,7 @@ function openDetail(idx, entradaAnimacao) {
   carregarComentarios(tasks[detailIdx]);
   carregarDescricao(tasks[detailIdx]);
   carregarSequencia(tasks[detailIdx]);
+  renderNotificacoesUpload(tasks[detailIdx]);
   if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
 }
 
@@ -2129,9 +2247,11 @@ function renderDetail() {
           <div class="detail-tabs">
             <button type="button" class="detail-tab active">Comentários</button>
           </div>
+          <div class="upload-notifs" id="uploadNotifs"></div>
           <div class="comments-thread" id="commentsThread">
             ${renderComentariosHTML(task)}
           </div>
+          <div class="repetir-comentario-prompt" id="repetirComentarioPrompt" hidden></div>
           <div class="comment-input">
             <input type="text" id="commentInput" placeholder="Mensagem">
           </div>
@@ -2307,7 +2427,10 @@ function renderDetail() {
       commentInput.disabled = true;
       const ok = await enviarComentarioNoBackend(task.id, texto);
       commentInput.disabled = false;
-      if (ok) carregarComentarios(task);
+      if (ok) {
+        carregarComentarios(task);
+        if (task.parentTaskId) mostrarPromptRepetirComentario(task, texto);
+      }
     });
   }
 
