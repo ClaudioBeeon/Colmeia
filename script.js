@@ -1883,8 +1883,24 @@ function attachCardDragHandlers() {
       opt.addEventListener("click", e => {
         e.stopPropagation();
         const idx = wrap.dataset.idx;
-        tasks[idx].priority = opt.dataset.p;
-        salvarPrioridadeNoBackend(tasks[idx].id, opt.dataset.p);
+        const task = tasks[idx];
+        task.priority = opt.dataset.p;
+        salvarPrioridadeNoBackend(task.id, opt.dataset.p);
+
+        // "Alta" também move a tarefa de verdade pra coluna Prioridades
+        // no Runrun.it (não só no Colmeia).
+        if (opt.dataset.p === "alta" && task.status !== "prioridades") {
+          const statusAntigo = task.status;
+          task.status = "prioridades";
+          render();
+          moverEtapaNoBackend(task.id, "prioridades").then(ok => {
+            if (!ok) {
+              task.status = statusAntigo;
+              render();
+            }
+          });
+          return;
+        }
         render();
       });
     });
