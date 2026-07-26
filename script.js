@@ -821,7 +821,7 @@ function renderPainelClientes() {
     <input type="text" class="rule-add-search" id="clientesConfigSearch" placeholder="Buscar cliente..." value="${clientesConfigFiltro}">
     <div class="config-clientes-list">
       ${clientesFiltrados.map(cliente => {
-        const dados = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [], pastaDriveVinculada: "" };
+        const dados = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [], pastaDriveVinculada: "", descricao: "" };
         const aberto = clientesConfigExpandido.has(cliente);
         return `
           <div class="atendimento-group ${aberto ? "expanded" : ""}">
@@ -830,6 +830,10 @@ function renderPainelClientes() {
             </button>
             ${aberto ? `
               <div class="cliente-links-form" data-cliente-form="${cliente}">
+                <label class="cliente-link-field">
+                  <span>Descrição (aparece no card de "Meus clientes")</span>
+                  <textarea data-campo="descricao" placeholder="Ex: Açougue frigorífico em Passos, Itaú e SSP" rows="2">${dados.descricao || ""}</textarea>
+                </label>
                 <label class="cliente-link-field">
                   <span>Vincular pasta do Drive (se o nome vier diferente)</span>
                   <select class="cliente-drive-vinculo" data-campo="pastaDriveVinculada">
@@ -931,6 +935,7 @@ function renderPainelClientes() {
       const cliente = btn.dataset.clienteSalvar;
       const form = body.querySelector(`[data-cliente-form="${CSS.escape(cliente)}"]`);
       const dados = {
+        descricao: form.querySelector('[data-campo="descricao"]').value.trim(),
         drive: form.querySelector('[data-campo="drive"]').value.trim(),
         bancoImagens: form.querySelector('[data-campo="bancoImagens"]').value.trim(),
         bibliotecaAdobe: form.querySelector('[data-campo="bibliotecaAdobe"]').value.trim(),
@@ -1938,6 +1943,30 @@ async function salvarLinksClienteNoBackend(cliente, dados) {
     console.error("Falha ao salvar links do cliente:", err);
     return false;
   }
+}
+
+let progressoClientes = []; // [{designer, cliente, entregues, total}]
+
+async function carregarProgressoClientes() {
+  if (!COLMEIA_API_URL) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarProgressoClientes" }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      progressoClientes = data.progresso || [];
+      if (!document.getElementById("page-clientes").hidden) buildClientsPage();
+    }
+  } catch (err) {
+    console.error("Falha ao carregar progresso mensal de clientes:", err);
+  }
+}
+
+function getProgressoCliente(designer, cliente) {
+  const reg = progressoClientes.find(p => nomesCorrespondem(p.designer, designer) && normalizarParaComparar(p.cliente) === normalizarParaComparar(cliente));
+  return reg ? { entregues: reg.entregues, total: reg.total } : { entregues: 0, total: 0 };
 }
 
 function getLinksDoCliente(nomeCliente) {
@@ -3193,10 +3222,72 @@ function clientesDoDesignerNoPainel(nomeDesigner) {
   return chave ? (painelBeeonData.state[chave] || []) : [];
 }
 
+// Paleta dos badges de serviço nos cards de "Meus clientes" — cor de
+// fundo pastel saturada com texto sempre preto, igual à referência do
+// Figma (Card.fig: badge "E-mail" azul #7FA5EA com texto preto).
+const MC_CORES_SERVICO = {
+  "e-mail": "#7FA5EA",
+  "email": "#7FA5EA",
+  "estatico": "#FFD666",
+  "vídeo": "#C9BFF5",
+  "video": "#C9BFF5",
+  "animação": "#A8E6B0",
+  "animacao": "#A8E6B0",
+  "story": "#F5A9C9",
+  "reels": "#F5A2A2",
+  "banner": "#8FE0D0",
+  "tráfego": "#FFD666",
+  "trafego": "#FFD666",
+};
+function mcCorServico(label) {
+  const chave = normalizarParaComparar(label || "");
+  if (MC_CORES_SERVICO[chave]) return MC_CORES_SERVICO[chave];
+  let hash = 0;
+  for (let i = 0; i < chave.length; i++) hash = chave.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 75%)`;
+}
+
+/**
+ * Card de cliente da aba "Meus clientes" — visual fiel ao Card.fig que
+ * o Cláudio mandou: badge do serviço em cima, nome, descrição (campo
+ * livre cadastrado em Links de clientes), barra de progresso das
+ * entregas do mês (degradê amarelo → laranja) e o atendimento
+ * responsável embaixo. Clicável: abre o hub do cliente.
+ */
+function mcClientCardHTML(cliente, designer, servicos) {
+  const servico = (servicos && servicos[0]) || "Cliente";
+  const corBadge = mcCorServico(servico);
+  const dadosLinks = getLinksDoCliente(cliente);
+  const descricao = (dadosLinks && dadosLinks.descricao) ? dadosLinks.descricao : "Sem descrição cadastrada ainda.";
+  const atend = getAtendimentoDoCliente(cliente) || "Sem atendimento";
+  const fotoAtend = resolverFotoManual(atend) || fotoDoAtendimento(atend);
+  const { entregues, total } = getProgressoCliente(designer, cliente);
+  const pct = total === 0 ? 100 : Math.round((entregues / total) * 100);
+  const labelBarra = total === 0 ? "Sem tarefas neste mês" : "Tarefas entregues";
+
+  return `
+    <div class="mc-card" data-cliente="${cliente}" data-designer="${designer}">
+      <span class="mc-badge" style="background:${corBadge};">${servico}</span>
+      <div class="mc-title">${cliente}</div>
+      <div class="mc-desc">${descricao}</div>
+      <div class="mc-progress-head"><span>${labelBarra}</span><span class="mc-pct">${pct}%</span></div>
+      <div class="mc-progress-track"><div class="mc-progress-fill" style="width:${pct}%;"></div></div>
+      <div class="mc-bottom">
+        ${fotoAtend ? `<img src="${fotoAtend}" class="mc-avatar" alt="${atend}">` : `<div class="mc-avatar-fallback"></div>`}
+        <div>
+          <div class="mc-name">${atend}</div>
+          <div class="mc-name-sub">Atendimento responsável</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 /**
  * "Meus clientes": lista só os clientes do designer logado, vindos de
  * verdade do painel-designers-beeon (state[designer]), com foto quando
- * disponível. Não usa mais os dados fake do Runrun.
+ * disponível. Clicar num card abre o hub do cliente (abrirHubDoCliente).
  */
 function buildClientsPage() {
   const grid = document.getElementById("clientsGrid");
@@ -3207,20 +3298,78 @@ function buildClientsPage() {
     return;
   }
 
-  // "Meus clientes" = mesma tela "Todos os clientes" do painel, só que
-  // filtrada pro designer logado (visual idêntico ao painel: sem
-  // agrupamento, cliente que aparece em mais de um designer vira 1 card).
   const chaveDesigner = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, DESIGNER_LOGADO));
   const meusItens = chaveDesigner ? (painelBeeonData.state[chaveDesigner] || []).map(c => ({ c, designer: chaveDesigner })) : [];
 
   if (meusItens.length === 0) {
-    grid.innerHTML = `<div class="placeholder-box"><span>🗂️</span><p>Nenhum cliente encontrado pra ${DESIGNER_LOGADO} no painel-designers-beeon.</p></div>`;
+    grid.innerHTML = `<div class="mc-empty placeholder-box"><span>🗂️</span><p>Nenhum cliente encontrado pra ${DESIGNER_LOGADO} no painel-designers-beeon.</p></div>`;
     return;
   }
 
   const grupos = pdMesclarPorCliente(meusItens);
-  grid.innerHTML = grupos.map(g => pdClientCardHTML(g)).join("");
+  grid.innerHTML = grupos.map(g => mcClientCardHTML(g.clienteName, chaveDesigner, g.entries[0].c.servicos)).join("");
+
+  grid.querySelectorAll(".mc-card").forEach(card => {
+    card.addEventListener("click", () => abrirHubDoCliente(card.dataset.cliente, card.dataset.designer));
+  });
 }
+
+const clientHubModalOverlay = document.getElementById("clientHubModalOverlay");
+
+/**
+ * Abre o pop-up do hub do cliente: links cadastrados, atendimento
+ * responsável, e as tarefas em aberto desse cliente com ESSE designer,
+ * ordenadas da entrega desejada mais antiga pra mais distante.
+ */
+function abrirHubDoCliente(cliente, designer) {
+  const col = pdCorPor(cliente);
+  document.getElementById("chModalIcon").style.background = col.bg;
+  document.getElementById("chModalIcon").style.color = col.fg;
+  document.getElementById("chModalIcon").textContent = initials(cliente);
+  document.getElementById("chModalNome").textContent = cliente;
+
+  document.getElementById("chModalHub").innerHTML = renderHubDoClienteHTML(cliente);
+
+  const atend = getAtendimentoDoCliente(cliente) || "Sem atendimento";
+  const fotoAtend = resolverFotoManual(atend) || fotoDoAtendimento(atend);
+  const atendRow = document.getElementById("chModalAtendRow");
+  if (atend === "Sem atendimento") {
+    atendRow.hidden = true;
+  } else {
+    atendRow.hidden = false;
+    document.getElementById("chModalAtendFoto").src = fotoAtend || "";
+    document.getElementById("chModalAtendNome").textContent = atend;
+  }
+
+  const tarefasDoCliente = tasks
+    .filter(t => normalizarParaComparar(t.client) === normalizarParaComparar(cliente) && nomesCorrespondem(t.assignee, designer))
+    .sort((a, b) => (a.dueISO || "9999-99-99").localeCompare(b.dueISO || "9999-99-99"));
+
+  const listaEl = document.getElementById("chModalTarefas");
+  if (tarefasDoCliente.length === 0) {
+    listaEl.innerHTML = `<span class="ch-tarefas-vazio">Nenhuma tarefa em aberto pra esse cliente agora.</span>`;
+  } else {
+    const hoje = hojeISO();
+    listaEl.innerHTML = tarefasDoCliente.map(t => {
+      const atrasada = t.dueISO && t.dueISO < hoje;
+      return `
+        <div class="ch-tarefa-item">
+          <span class="ch-tarefa-titulo">${t.title}</span>
+          <span class="ch-tarefa-due ${atrasada ? "overdue" : ""}">${t.dueISO ? t.due : "Sem data"}</span>
+        </div>
+      `;
+    }).join("");
+  }
+
+  clientHubModalOverlay.hidden = false;
+}
+
+document.getElementById("clientHubModalClose").addEventListener("click", () => {
+  clientHubModalOverlay.hidden = true;
+});
+clientHubModalOverlay.addEventListener("click", e => {
+  if (e.target === clientHubModalOverlay) clientHubModalOverlay.hidden = true;
+});
 
 // Guarda quais grupos de atendimento estão expandidos (mesmo padrão do
 // painel-beeon: clica no cabeçalho do grupo pra abrir/fechar a lista).
@@ -3254,7 +3403,6 @@ function buildAtendimentoPage() {
   grid.innerHTML = nomes.map(atend => {
     const itens = porAtendimento[atend];
     const merged = pdMesclarPorCliente(itens);
-    const totalCriat = itens.reduce((s, i) => s + (i.c.criativos || 0), 0);
     const col = pdCorPor(atend);
     const foto = resolverFotoManual(atend) || fotoDoAtendimento(atend);
     const aberto = atendimentoExpandido.has(atend);
@@ -3264,10 +3412,6 @@ function buildAtendimentoPage() {
           <div class="pd-avatar-wrap"><div class="pd-avatar" style="background:${col.bg};color:${col.fg};">${foto ? `<img src="${foto}">` : initials(atend)}</div></div>
           <div class="pd-dcard-name">${atend}</div>
           <div class="pd-dcard-top-spacer"></div>
-          <div class="pd-designer-stats-row">
-            <div class="pd-dstat"><div class="pd-dstat-num">${merged.length}</div><div class="pd-dstat-label">Clientes</div></div>
-            <div class="pd-dstat"><div class="pd-dstat-num">${totalCriat}</div><div class="pd-dstat-label">Criativos</div></div>
-          </div>
         </div>
         <div class="pd-clients-inner">
           ${merged.map(g => pdClientCardHTML(g)).join("")}
@@ -3445,6 +3589,7 @@ function iniciarAppPosLogin() {
   carregarDadosPainelBeeon();
   carregarPessoasSalvas();
   carregarLinksClientes();
+  carregarProgressoClientes();
 }
 
 // ===== Login e sessão =====
