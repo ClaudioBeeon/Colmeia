@@ -1515,6 +1515,50 @@ async function enviarComentarioNoBackend(taskId, texto) {
   }
 }
 
+async function excluirComentarioNoBackend(commentId) {
+  if (!COLMEIA_API_URL || !commentId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "excluirComentario", commentId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou excluir o comentário:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao excluir comentário no Runrun.it:", err);
+    return false;
+  }
+}
+
+async function enviarComentarioComAnexoNoBackend(taskId, texto, arquivo) {
+  if (!COLMEIA_API_URL || !taskId || !arquivo) return false;
+  try {
+    const base64Dados = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = () => reject(new Error("Falha ao ler o arquivo"));
+      reader.readAsDataURL(arquivo);
+    });
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        acao: "adicionarComentarioComAnexo",
+        taskId, texto,
+        nomeArquivo: arquivo.name,
+        mimeType: arquivo.type || "application/octet-stream",
+        base64Dados,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou o anexo:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao enviar anexo pro Runrun.it:", err);
+    return false;
+  }
+}
+
 // Dados fake usados só se o backend falhar de verdade (ver
 // carregarTarefasReais) — nunca aparecem enquanto está carregando.
 const tasksFake = [
@@ -1842,6 +1886,8 @@ document.addEventListener("click", () => {
   document.querySelectorAll(".detail-more-menu").forEach(m => m.classList.remove("open"));
   document.querySelectorAll(".status-menu").forEach(m => m.classList.remove("open"));
   document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
+  const emojiPicker = document.getElementById("emojiPicker");
+  if (emojiPicker) emojiPicker.hidden = true;
 });
 
 // Links de clientes cadastrados pelo coordenador (Drive, Banco de
@@ -1935,12 +1981,15 @@ function renderComentariosHTML(task) {
     return `<p class="comments-empty">Nenhum comentário ainda.</p>`;
   }
   return task.comments.map(c => `
-    <div class="comment-bubble ${nomesCorrespondem(c.autor, task.assignee) ? "mine" : ""}">
+    <div class="comment-bubble ${nomesCorrespondem(c.autor, task.assignee) ? "mine" : ""}" data-comment-id="${c.id}">
       ${avatarHTML(c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-author">${c.autor}</div>
         <div class="comment-text">${c.texto}</div>
       </div>
+      <button type="button" class="comment-delete-btn" data-comment-id="${c.id}" title="Excluir comentário" aria-label="Excluir comentário">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
     </div>
   `).join("");
 }
@@ -1996,8 +2045,24 @@ async function carregarComentarios(task) {
   // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa.
   if (tasks[detailIdx] === task) {
     const thread = document.getElementById("commentsThread");
-    if (thread) thread.innerHTML = renderComentariosHTML(task);
+    if (thread) {
+      thread.innerHTML = renderComentariosHTML(task);
+      wireExcluirComentario(task);
+    }
   }
+}
+
+function wireExcluirComentario(task) {
+  document.querySelectorAll(".comment-delete-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Excluir esse comentário?")) return;
+      const bolha = btn.closest(".comment-bubble");
+      if (bolha) bolha.style.opacity = "0.4";
+      const ok = await excluirComentarioNoBackend(btn.dataset.commentId);
+      if (ok) carregarComentarios(task);
+      else if (bolha) bolha.style.opacity = "1";
+    });
+  });
 }
 
 function taskDescription(task) {
@@ -2277,8 +2342,19 @@ function renderDetail() {
           </div>
           <div class="repetir-comentario-prompt" id="repetirComentarioPrompt" hidden></div>
           <div class="comment-input">
+            <div class="comment-mention-list" id="mentionList" hidden></div>
+            <button type="button" class="comment-tool-btn" id="emojiBtn" title="Emoji" aria-label="Emoji">😊</button>
+            <button type="button" class="comment-tool-btn" id="attachBtn" title="Anexar arquivo" aria-label="Anexar arquivo">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M21 11.5l-9 9a4 4 0 01-5.7-5.7l9-9a2.7 2.7 0 013.8 3.8l-8.5 8.5a1.3 1.3 0 01-1.9-1.9L16.2 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <input type="file" id="attachFileInput" hidden>
+            <div class="emoji-picker" id="emojiPicker" hidden></div>
             <input type="text" id="commentInput" placeholder="Mensagem">
+            <button type="button" class="comment-send-btn" id="commentSendBtn" aria-label="Enviar">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
           </div>
+          <div class="comment-attach-preview" id="attachPreview" hidden></div>
         </div>
 
         <div class="detail-side">
@@ -2459,23 +2535,122 @@ function renderDetail() {
   }
 
   const commentInput = document.getElementById("commentInput");
+  let arquivoParaAnexar = null;
+
+  async function enviarComentarioAtual() {
+    const texto = commentInput.value.trim();
+    if (!texto && !arquivoParaAnexar) return;
+    if (!task.id) {
+      console.warn("Essa tarefa não está conectada ao Runrun.it, não dá pra comentar de verdade.");
+      return;
+    }
+    const arquivoAtual = arquivoParaAnexar;
+    commentInput.value = "";
+    commentInput.disabled = true;
+    limparAnexoSelecionado();
+
+    const ok = arquivoAtual
+      ? await enviarComentarioComAnexoNoBackend(task.id, texto, arquivoAtual)
+      : await enviarComentarioNoBackend(task.id, texto);
+
+    commentInput.disabled = false;
+    if (ok) {
+      carregarComentarios(task);
+      if (task.parentTaskId && texto) mostrarPromptRepetirComentario(task, texto);
+    }
+  }
+
+  function limparAnexoSelecionado() {
+    arquivoParaAnexar = null;
+    const preview = document.getElementById("attachPreview");
+    if (preview) { preview.hidden = true; preview.innerHTML = ""; }
+    const fileInput = document.getElementById("attachFileInput");
+    if (fileInput) fileInput.value = "";
+  }
+
   if (commentInput) {
-    commentInput.addEventListener("keydown", async e => {
-      if (e.key !== "Enter") return;
-      const texto = commentInput.value.trim();
-      if (!texto) return;
-      if (!task.id) {
-        console.warn("Essa tarefa não está conectada ao Runrun.it, não dá pra comentar de verdade.");
+    commentInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !mentionListAberta()) enviarComentarioAtual();
+    });
+  }
+
+  const sendBtn = document.getElementById("commentSendBtn");
+  if (sendBtn) sendBtn.addEventListener("click", enviarComentarioAtual);
+
+  // ===== Anexar arquivo =====
+  const attachBtn = document.getElementById("attachBtn");
+  const attachFileInput = document.getElementById("attachFileInput");
+  if (attachBtn && attachFileInput) {
+    attachBtn.addEventListener("click", () => attachFileInput.click());
+    attachFileInput.addEventListener("change", () => {
+      const arquivo = attachFileInput.files[0];
+      if (!arquivo) return;
+      arquivoParaAnexar = arquivo;
+      const preview = document.getElementById("attachPreview");
+      preview.hidden = false;
+      preview.innerHTML = `
+        <span class="attach-preview-nome">📎 ${arquivo.name}</span>
+        <button type="button" id="attachPreviewRemove" aria-label="Remover anexo">×</button>
+      `;
+      document.getElementById("attachPreviewRemove").addEventListener("click", limparAnexoSelecionado);
+    });
+  }
+
+  // ===== Emoji =====
+  const emojiBtn = document.getElementById("emojiBtn");
+  const emojiPicker = document.getElementById("emojiPicker");
+  const EMOJIS_COMUNS = ["😀","😂","😍","👍","🙏","🎉","🔥","👀","✅","❌","😅","😢","🚀","💡","⚠️","❤️"];
+  if (emojiBtn && emojiPicker) {
+    emojiPicker.innerHTML = EMOJIS_COMUNS.map(e => `<button type="button" class="emoji-opt">${e}</button>`).join("");
+    emojiBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      emojiPicker.hidden = !emojiPicker.hidden;
+    });
+    emojiPicker.querySelectorAll(".emoji-opt").forEach(btn => {
+      btn.addEventListener("click", () => {
+        commentInput.value += btn.textContent;
+        commentInput.focus();
+        emojiPicker.hidden = true;
+      });
+    });
+  }
+
+  // ===== Mencionar pessoa (@) =====
+  const mentionList = document.getElementById("mentionList");
+  function mentionListAberta() {
+    return mentionList && !mentionList.hidden;
+  }
+  function todosNomesParaMencao() {
+    const nomes = new Set();
+    pessoasSalvas.forEach(p => nomes.add(p.nome));
+    if (painelBeeonData) {
+      Object.keys(painelBeeonData.state || {}).forEach(d => nomes.add(d));
+      (painelBeeonData.state ? Object.values(painelBeeonData.state) : []).forEach(lista =>
+        (lista || []).forEach(c => { if (c.atend) nomes.add(c.atend); })
+      );
+    }
+    return Array.from(nomes);
+  }
+  if (commentInput && mentionList) {
+    commentInput.addEventListener("input", () => {
+      const valor = commentInput.value;
+      const posArroba = valor.lastIndexOf("@");
+      if (posArroba === -1 || /\s/.test(valor.slice(posArroba + 1))) {
+        mentionList.hidden = true;
         return;
       }
-      commentInput.value = "";
-      commentInput.disabled = true;
-      const ok = await enviarComentarioNoBackend(task.id, texto);
-      commentInput.disabled = false;
-      if (ok) {
-        carregarComentarios(task);
-        if (task.parentTaskId) mostrarPromptRepetirComentario(task, texto);
-      }
+      const busca = normalizarParaComparar(valor.slice(posArroba + 1));
+      const opcoes = todosNomesParaMencao().filter(n => !busca || normalizarParaComparar(n).includes(busca)).slice(0, 6);
+      if (opcoes.length === 0) { mentionList.hidden = true; return; }
+      mentionList.hidden = false;
+      mentionList.innerHTML = opcoes.map(n => `<button type="button" class="mention-opt">${n}</button>`).join("");
+      mentionList.querySelectorAll(".mention-opt").forEach(btn => {
+        btn.addEventListener("click", () => {
+          commentInput.value = valor.slice(0, posArroba) + "@" + btn.textContent + " ";
+          mentionList.hidden = true;
+          commentInput.focus();
+        });
+      });
     });
   }
 
