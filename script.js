@@ -3248,6 +3248,13 @@ function mcCorServico(label) {
   return `hsl(${hue}, 65%, 75%)`;
 }
 
+// Deixa o nome do cliente com só a inicial de cada palavra maiúscula
+// (o painel-designers-beeon às vezes guarda em CAIXA ALTA) — só na
+// exibição, não mexe no dado original usado pra busca/comparação.
+function formatarNomeExibicao(nome) {
+  return (nome || "").toLowerCase().replace(/(^|\s|-)\S/g, c => c.toUpperCase());
+}
+
 /**
  * Card de cliente da aba "Meus clientes" — visual fiel ao Card.fig que
  * o Cláudio mandou: badge do serviço em cima, nome, descrição (campo
@@ -3269,14 +3276,14 @@ function mcClientCardHTML(cliente, designer, servicos) {
   return `
     <div class="mc-card" data-cliente="${cliente}" data-designer="${designer}">
       <span class="mc-badge" style="background:${corBadge};">${servico}</span>
-      <div class="mc-title">${cliente}</div>
+      <div class="mc-title">${formatarNomeExibicao(cliente)}</div>
       <div class="mc-desc">${descricao}</div>
       <div class="mc-progress-head"><span>${labelBarra}</span><span class="mc-pct">${pct}%</span></div>
       <div class="mc-progress-track"><div class="mc-progress-fill" style="width:${pct}%;"></div></div>
       <div class="mc-bottom">
         ${fotoAtend ? `<img src="${fotoAtend}" class="mc-avatar" alt="${atend}">` : `<div class="mc-avatar-fallback"></div>`}
         <div>
-          <div class="mc-name">${atend}</div>
+          <div class="mc-name">${formatarNomeExibicao(atend)}</div>
           <div class="mc-name-sub">Atendimento responsável</div>
         </div>
       </div>
@@ -3326,7 +3333,7 @@ function abrirHubDoCliente(cliente, designer) {
   document.getElementById("chModalIcon").style.background = col.bg;
   document.getElementById("chModalIcon").style.color = col.fg;
   document.getElementById("chModalIcon").textContent = initials(cliente);
-  document.getElementById("chModalNome").textContent = cliente;
+  document.getElementById("chModalNome").textContent = formatarNomeExibicao(cliente);
 
   document.getElementById("chModalHub").innerHTML = renderHubDoClienteHTML(cliente);
 
@@ -3338,30 +3345,52 @@ function abrirHubDoCliente(cliente, designer) {
   } else {
     atendRow.hidden = false;
     document.getElementById("chModalAtendFoto").src = fotoAtend || "";
-    document.getElementById("chModalAtendNome").textContent = atend;
+    document.getElementById("chModalAtendNome").textContent = formatarNomeExibicao(atend);
   }
 
   const tarefasDoCliente = tasks
-    .filter(t => normalizarParaComparar(t.client) === normalizarParaComparar(cliente) && nomesCorrespondem(t.assignee, designer))
-    .sort((a, b) => (a.dueISO || "9999-99-99").localeCompare(b.dueISO || "9999-99-99"));
+    .map((t, idx) => ({ t, idx }))
+    .filter(({ t }) => normalizarParaComparar(t.client) === normalizarParaComparar(cliente) && nomesCorrespondem(t.assignee, designer))
+    .sort((a, b) => (a.t.dueISO || "9999-99-99").localeCompare(b.t.dueISO || "9999-99-99"));
 
   const listaEl = document.getElementById("chModalTarefas");
   if (tarefasDoCliente.length === 0) {
     listaEl.innerHTML = `<span class="ch-tarefas-vazio">Nenhuma tarefa em aberto pra esse cliente agora.</span>`;
   } else {
     const hoje = hojeISO();
-    listaEl.innerHTML = tarefasDoCliente.map(t => {
+    listaEl.innerHTML = tarefasDoCliente.map(({ t, idx }) => {
       const atrasada = t.dueISO && t.dueISO < hoje;
       return `
-        <div class="ch-tarefa-item">
+        <div class="ch-tarefa-item" data-idx="${idx}">
           <span class="ch-tarefa-titulo">${t.title}</span>
           <span class="ch-tarefa-due ${atrasada ? "overdue" : ""}">${t.dueISO ? t.due : "Sem data"}</span>
         </div>
       `;
     }).join("");
+    listaEl.querySelectorAll(".ch-tarefa-item").forEach(item => {
+      item.addEventListener("click", () => abrirTarefaDoHub(item.dataset.idx));
+    });
   }
 
   clientHubModalOverlay.hidden = false;
+}
+
+/**
+ * Clicou numa tarefa dentro do pop-up do hub: fecha o hub, muda pra
+ * aba Kanban (o painel de detalhe da tarefa vive lá dentro) e abre a
+ * tarefa de verdade.
+ */
+function abrirTarefaDoHub(idx) {
+  clientHubModalOverlay.hidden = true;
+  const linkKanban = document.querySelector('.nav-ic[data-page="kanban"]');
+  document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.remove("active"));
+  if (linkKanban) linkKanban.classList.add("active");
+  document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
+  document.getElementById("page-kanban").hidden = false;
+  const [title, subtitle] = pageTitles.kanban;
+  document.querySelector(".page-title").textContent = title;
+  document.querySelector(".page-subtitle").textContent = subtitle;
+  openDetail(idx);
 }
 
 document.getElementById("clientHubModalClose").addEventListener("click", () => {
