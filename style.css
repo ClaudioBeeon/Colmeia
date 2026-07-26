@@ -1270,6 +1270,19 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   color: #fff;
 }
 
+.nav-arrow.nav-deliver.delivered {
+  background: #2F9E44;
+  color: #fff;
+  animation: navDeliverPop 0.45s ease;
+}
+.nav-arrow.nav-deliver.delivered:hover { background: #248037; }
+
+@keyframes navDeliverPop {
+  0% { background: var(--page-bg); color: #2F9E44; transform: scale(1); }
+  55% { background: #2F9E44; color: #fff; transform: scale(1.18); }
+  100% { background: #2F9E44; color: #fff; transform: scale(1); }
+}
+
 /* ===== Modal "Ver regra" ===== */
 .rule-modal-overlay {
   position: fixed; inset: 0; z-index: 200;
