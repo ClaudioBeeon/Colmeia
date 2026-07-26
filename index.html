@@ -12,7 +12,21 @@
 </head>
 <body>
 
-<div class="page" id="page">
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="login-logo" alt="Colmeia">
+    <h1>Colmeia</h1>
+    <p class="login-subtitle">Entre com seu nome e senha</p>
+    <form id="loginForm">
+      <input type="text" id="loginNome" placeholder="Seu nome" autocomplete="username" required>
+      <input type="password" id="loginSenha" placeholder="Senha" autocomplete="current-password" required>
+      <button type="submit" id="loginSubmit">Entrar</button>
+      <p class="login-erro" id="loginErro" hidden></p>
+    </form>
+  </div>
+</div>
+
+<div class="page" id="page" hidden>
 
   <aside class="sidebar">
     <div class="sidebar-logo">
@@ -47,10 +61,11 @@
       </a>
     </nav>
 
-    <a href="#" class="nav-ic sidebar-profile-link" id="sidebarProfileLink" title="Claudio · Configurações">
-      <span class="nav-icon-circle avatar">CL</span>
-      <span class="nav-label">Claudio</span>
+    <a href="#" class="nav-ic sidebar-profile-link" id="sidebarProfileLink" title="Configurações">
+      <span class="nav-icon-circle avatar" id="sidebarAvatarIniciais">CL</span>
+      <span class="nav-label" id="sidebarNomeUsuario">Claudio</span>
     </a>
+    <button type="button" class="sidebar-logout" id="sidebarLogout">Sair</button>
   </aside>
 
   <div class="main">
@@ -107,12 +122,16 @@
     <div class="rule-modal-overlay" id="peopleModalOverlay" hidden>
       <div class="rule-modal people-modal">
         <div class="rule-modal-header">
-          <h3>Pessoas conhecidas</h3>
+          <h3>Configurações do coordenador</h3>
           <button type="button" id="peopleModalClose" aria-label="Fechar">
             <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
         </div>
-        <p class="people-modal-hint">Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.</p>
+        <div class="config-tabs">
+          <button type="button" class="config-tab active" id="configTabPessoas">Pessoas</button>
+          <button type="button" class="config-tab" id="configTabClientes">Links de clientes</button>
+        </div>
+        <p class="people-modal-hint" id="configHint">Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.</p>
         <div class="rule-modal-body" id="peopleModalBody"></div>
       </div>
     </div>
