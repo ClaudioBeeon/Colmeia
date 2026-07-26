@@ -1179,7 +1179,7 @@ function buildBoard() {
       <div class="board-loading">
         <div class="board-loading-glass"></div>
         <div class="board-loading-content">
-          <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Icone_ifelxw.png" class="board-loading-bee" alt="Colmeia">
+          <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="board-loading-bee" alt="Colmeia">
           <p class="board-loading-text" id="loadingMsg">${mensagensCarregando[0]}</p>
         </div>
       </div>
@@ -2029,7 +2029,7 @@ function mostrarCardEmBranco(mensagem) {
   const panel = document.getElementById("taskDetail");
   panel.innerHTML = `
     <div class="detail-inner detail-loading-blank">
-      <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Icone_ifelxw.png" class="detail-loading-bee" alt="Colmeia">
+      <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="detail-loading-bee" alt="Colmeia">
       <p class="workflow-seq-empty">${mensagem || "Carregando..."}</p>
     </div>
   `;
