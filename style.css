@@ -612,12 +612,13 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 }
 .detail-more-menu.open { display: flex; }
 
-.detail-more-menu button {
+.detail-more-menu button, .detail-more-menu a {
   border: none; background: transparent; text-align: left;
   font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--text-primary);
   padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  text-decoration: none; display: block;
 }
-.detail-more-menu button:hover { background: var(--page-bg); }
+.detail-more-menu button:hover, .detail-more-menu a:hover { background: var(--page-bg); }
 
 .detail-close {
   width: 28px; height: 28px; border-radius: 8px; border: none;
@@ -917,7 +918,12 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   display: flex; align-items: center; justify-content: space-between;
   background: var(--page-bg); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-weight: 500;
+  text-decoration: none; color: var(--text-primary); transition: border-color .12s ease;
 }
+.attach-item:hover { border-color: var(--text-muted); }
+.attach-item svg { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
+
+.attach-empty { font-size: 12.5px; color: var(--text-muted); font-style: italic; padding: 4px 2px; }
 
 .attach-toggle {
   width: 20px; height: 20px; border-radius: 50%; border: none;
