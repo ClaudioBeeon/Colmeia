@@ -3019,6 +3019,109 @@ function buscarFotoPorNomeAproximado(nome) {
  * painel-beeon, comparando o nome sem se importar com acento/maiúsculas
  * (ex: "Claudio" no Colmeia bate com "Cláudio" no painel).
  */
+// Copiado exatamente do painel-designers-beeon, pra manter as mesmas
+// cores e o mesmo comportamento de "cliente aparece em mais de um
+// designer vira um card só, com uma linha por designer dentro".
+const PD_SERVICOS_PREDEFINIDOS = [
+  { label: "Estático", bg: "#E6F1FB", color: "#185FA5" },
+  { label: "Vídeo", bg: "#FAEEDA", color: "#854F0B" },
+  { label: "Animação", bg: "#EAF3DE", color: "#3B6D11" },
+  { label: "E-mail", bg: "#FBEAF0", color: "#993556" },
+  { label: "Story", bg: "#F3EEFB", color: "#6B3FA0" },
+  { label: "Reels", bg: "#FEF0F0", color: "#C0392B" },
+  { label: "Banner", bg: "#E8F8F5", color: "#1A6B55" },
+  { label: "Tráfego", bg: "#FFF3CD", color: "#856404" },
+];
+const PD_COLOR_PALETTE = [
+  { bg: "#E6F1FB", fg: "#185FA5" }, { bg: "#EAF3DE", fg: "#3B6D11" }, { bg: "#FBEAF0", fg: "#993556" },
+  { bg: "#F3EEFB", fg: "#6B3FA0" }, { bg: "#FAEEDA", fg: "#854F0B" }, { bg: "#E8F8F5", fg: "#1A6B55" },
+  { bg: "#FEF0F0", fg: "#C0392B" }, { bg: "#FFF3CD", fg: "#856404" },
+];
+function pdHashStr(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return hash;
+}
+function pdCorPor(nome) {
+  return PD_COLOR_PALETTE[Math.abs(pdHashStr(nome)) % PD_COLOR_PALETTE.length];
+}
+function pdEstiloServico(label) {
+  const pre = PD_SERVICOS_PREDEFINIDOS.find(s => s.label.toLowerCase() === label.toLowerCase());
+  if (pre) return pre;
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = label.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return { bg: `hsl(${hue},55%,92%)`, color: `hsl(${hue},45%,35%)` };
+}
+
+/**
+ * Junta todos os clientes de todos os designers numa lista só, cada
+ * item com {c, designer} — igual ao getAllClientsFlat do painel.
+ */
+function pdTodosClientesPlano() {
+  if (!painelBeeonData || !painelBeeonData.state) return [];
+  const lista = [];
+  Object.entries(painelBeeonData.state).forEach(([designer, clientes]) => {
+    (clientes || []).forEach(c => lista.push({ c, designer }));
+  });
+  return lista;
+}
+
+/**
+ * Junta entradas do mesmo cliente (mesmo nome) num grupo só — se o
+ * mesmo cliente aparece com designers diferentes, vira um card único
+ * com uma linha por designer dentro. Igual ao mergeEntriesByClient do
+ * painel.
+ */
+function pdMesclarPorCliente(items) {
+  const mapa = new Map();
+  items.forEach(item => {
+    const chave = normalizarParaComparar(item.c.cliente);
+    if (!mapa.has(chave)) mapa.set(chave, { clienteName: item.c.cliente, entries: [] });
+    mapa.get(chave).entries.push(item);
+  });
+  return [...mapa.values()].sort((a, b) => a.clienteName.localeCompare(b.clienteName));
+}
+
+/**
+ * Desenha um card de cliente exatamente igual ao do painel-designers-
+ * beeon (buildMergedCard, versão só-leitura): ícone com iniciais,
+ * nome, atendimento, e uma linha por designer com as tags de serviço.
+ */
+function pdClientCardHTML(group) {
+  const col = pdCorPor(group.clienteName);
+  const primeiroAtend = group.entries[0].c.atend || "Sem atendimento";
+
+  const linhasDesigner = group.entries.map(({ c, designer }) => {
+    const colDesigner = pdCorPor(designer);
+    const fotoDesigner = resolverFotoManual(designer) || fotoDoDesigner(designer);
+    const tags = (c.servicos || []).map(label => {
+      const st = pdEstiloServico(label);
+      return `<span class="pd-tag" style="background:${st.bg};color:${st.color};">${label}</span>`;
+    }).join("");
+    return `
+      <div class="pd-client-designer-row">
+        <div class="pd-client-designer-head">
+          ${fotoDesigner ? `<img src="${fotoDesigner}" class="pd-client-designer-photo">` : ""}
+          <span class="pd-client-designer-badge" style="background:${colDesigner.bg};color:${colDesigner.fg};">🎨 ${designer}</span>
+        </div>
+        ${tags ? `<div class="pd-client-tags-row">${tags}</div>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="pd-client-card">
+      <div class="pd-client-top-row">
+        <div class="pd-client-icon" style="background:${col.bg};color:${col.fg};">${initials(group.clienteName)}</div>
+        <div class="pd-client-name-wrap">${group.clienteName}</div>
+      </div>
+      <span class="pd-client-atend">${primeiroAtend}</span>
+      ${linhasDesigner}
+    </div>
+  `;
+}
+
 function clientesDoDesignerNoPainel(nomeDesigner) {
   if (!painelBeeonData || !painelBeeonData.state) return [];
   const chave = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, nomeDesigner));
@@ -3039,24 +3142,19 @@ function buildClientsPage() {
     return;
   }
 
-  const meusClientes = clientesDoDesignerNoPainel(DESIGNER_LOGADO);
-  if (meusClientes.length === 0) {
+  // "Meus clientes" = mesma tela "Todos os clientes" do painel, só que
+  // filtrada pro designer logado (visual idêntico ao painel: sem
+  // agrupamento, cliente que aparece em mais de um designer vira 1 card).
+  const chaveDesigner = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, DESIGNER_LOGADO));
+  const meusItens = chaveDesigner ? (painelBeeonData.state[chaveDesigner] || []).map(c => ({ c, designer: chaveDesigner })) : [];
+
+  if (meusItens.length === 0) {
     grid.innerHTML = `<div class="placeholder-box"><span>🗂️</span><p>Nenhum cliente encontrado pra ${DESIGNER_LOGADO} no painel-designers-beeon.</p></div>`;
     return;
   }
 
-  grid.innerHTML = meusClientes.map(c => `
-    <div class="client-card">
-      <div class="client-card-top">
-        ${avatarHTML(DESIGNER_LOGADO, "avatar-sm")}
-        <div class="client-card-name">${c.cliente}</div>
-      </div>
-      <div class="client-card-count">${c.escopo || ""}</div>
-      <div class="client-card-badges">
-        ${(c.servicos || []).map(s => `<span class="badge badge-estatico">${s}</span>`).join("")}
-      </div>
-    </div>
-  `).join("");
+  const grupos = pdMesclarPorCliente(meusItens);
+  grid.innerHTML = grupos.map(g => pdClientCardHTML(g)).join("");
 }
 
 // Guarda quais grupos de atendimento estão expandidos (mesmo padrão do
@@ -3064,9 +3162,10 @@ function buildClientsPage() {
 const atendimentoExpandido = new Set();
 
 /**
- * "Clientes por atendimento": mesmo padrão do painel-designers-beeon —
- * agrupa os clientes de todos os designers pelo atendimento responsável,
- * ordena de A a Z, e cada grupo expande/recolhe ao clicar no cabeçalho.
+ * "Clientes por atendimento": visual idêntico ao painel-designers-beeon
+ * — agrupa os clientes de todos os designers pelo atendimento
+ * responsável, ordena de A a Z, cada grupo expande/recolhe ao clicar
+ * no cabeçalho, e clientes com mais de um designer viram um card só.
  */
 function buildAtendimentoPage() {
   const grid = document.getElementById("atendimentoGrid");
@@ -3077,59 +3176,44 @@ function buildAtendimentoPage() {
     return;
   }
 
-  const todos = [];
-  const vistosPorGrupo = new Set(); // evita o mesmo cliente aparecer 2x no mesmo grupo
-  Object.entries(painelBeeonData.state).forEach(([designer, listaClientes]) => {
-    (listaClientes || []).forEach(c => {
-      if (!c.atend) return; // sem atendimento definido — não entra nessa aba
-      const chave = normalizarParaComparar(c.atend) + "|" + normalizarParaComparar(c.cliente);
-      if (vistosPorGrupo.has(chave)) return; // já apareceu nesse grupo, pula
-      vistosPorGrupo.add(chave);
-      todos.push({ ...c, designer });
-    });
-  });
-
+  const flat = pdTodosClientesPlano().filter(({ c }) => !!c.atend);
   const porAtendimento = {};
-  todos.forEach(c => {
-    if (!porAtendimento[c.atend]) porAtendimento[c.atend] = [];
-    porAtendimento[c.atend].push(c);
+  flat.forEach(item => {
+    const a = item.c.atend;
+    if (!porAtendimento[a]) porAtendimento[a] = [];
+    porAtendimento[a].push(item);
   });
 
   const nomes = Object.keys(porAtendimento).sort((a, b) => a.localeCompare(b));
 
-  grid.innerHTML = nomes.map(responsavel => {
-    const lista = porAtendimento[responsavel];
-    const aberto = atendimentoExpandido.has(responsavel);
+  grid.innerHTML = nomes.map(atend => {
+    const itens = porAtendimento[atend];
+    const merged = pdMesclarPorCliente(itens);
+    const totalCriat = itens.reduce((s, i) => s + (i.c.criativos || 0), 0);
+    const col = pdCorPor(atend);
+    const foto = resolverFotoManual(atend) || fotoDoAtendimento(atend);
+    const aberto = atendimentoExpandido.has(atend);
     return `
-      <div class="atendimento-group ${aberto ? "expanded" : ""}">
-        <button type="button" class="atendimento-group-header" data-atend="${responsavel}">
-          ${avatarAtendimentoHTML(responsavel, "avatar-sm")}
-          <span class="atendimento-group-name">${responsavel}</span>
-          <span class="atendimento-group-count">${lista.length} cliente${lista.length > 1 ? "s" : ""}</span>
-        </button>
-        ${aberto ? `
-          <div class="clients-grid">
-            ${lista.map(c => `
-              <div class="client-card">
-                <div class="client-card-top">
-                  ${avatarHTML(c.designer, "avatar-sm")}
-                  <div class="client-card-name">${c.cliente}</div>
-                </div>
-                <div class="client-card-count">${c.escopo || ""}</div>
-                <div class="client-card-badges">
-                  ${(c.servicos || []).map(s => `<span class="badge badge-estatico">${s}</span>`).join("")}
-                </div>
-              </div>
-            `).join("")}
+      <div class="pd-designer-card ${aberto ? "expanded" : ""}" data-atend="${atend}">
+        <div class="pd-dcard-top">
+          <div class="pd-avatar-wrap"><div class="pd-avatar" style="background:${col.bg};color:${col.fg};">${foto ? `<img src="${foto}">` : initials(atend)}</div></div>
+          <div class="pd-dcard-name">${atend}</div>
+          <div class="pd-dcard-top-spacer"></div>
+          <div class="pd-designer-stats-row">
+            <div class="pd-dstat"><div class="pd-dstat-num">${merged.length}</div><div class="pd-dstat-label">Clientes</div></div>
+            <div class="pd-dstat"><div class="pd-dstat-num">${totalCriat}</div><div class="pd-dstat-label">Criativos</div></div>
           </div>
-        ` : ""}
+        </div>
+        <div class="pd-clients-inner">
+          ${merged.map(g => pdClientCardHTML(g)).join("")}
+        </div>
       </div>
     `;
   }).join("");
 
-  grid.querySelectorAll(".atendimento-group-header").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const nome = btn.dataset.atend;
+  grid.querySelectorAll(".pd-dcard-top").forEach(top => {
+    top.addEventListener("click", () => {
+      const nome = top.closest(".pd-designer-card").dataset.atend;
       if (atendimentoExpandido.has(nome)) atendimentoExpandido.delete(nome);
       else atendimentoExpandido.add(nome);
       buildAtendimentoPage();
@@ -3141,10 +3225,9 @@ function buildAtendimentoPage() {
 const tiposExpandido = new Set();
 
 /**
- * "Tipos de tarefas": agrupa os clientes de todos os designers pelos
- * serviços que cada um presta (campo "servicos", array — um cliente
- * pode aparecer em mais de um grupo), vindos do painel-designers-beeon.
- * Mesmo padrão de grupos expansíveis usado em "Clientes por atendimento".
+ * "Tipos de tarefas": visual idêntico ao painel-designers-beeon —
+ * agrupa os clientes pelos serviços que cada um presta (campo
+ * "servicos", array — um cliente pode aparecer em mais de um grupo).
  */
 function buildTiposPage() {
   const grid = document.getElementById("tiposGrid");
@@ -3155,18 +3238,13 @@ function buildTiposPage() {
     return;
   }
 
+  const flat = pdTodosClientesPlano();
   const porServico = {};
-  const vistosPorServico = new Set(); // evita duplicar o mesmo cliente no mesmo serviço
-  Object.entries(painelBeeonData.state).forEach(([designer, listaClientes]) => {
-    (listaClientes || []).forEach(c => {
-      const servicos = (c.servicos && c.servicos.length) ? c.servicos : ["Sem serviço definido"];
-      servicos.forEach(servico => {
-        const chave = normalizarParaComparar(servico) + "|" + normalizarParaComparar(c.cliente);
-        if (vistosPorServico.has(chave)) return;
-        vistosPorServico.add(chave);
-        if (!porServico[servico]) porServico[servico] = [];
-        porServico[servico].push({ ...c, designer });
-      });
+  flat.forEach(item => {
+    const servicos = (item.c.servicos && item.c.servicos.length) ? item.c.servicos : ["Sem serviço definido"];
+    servicos.forEach(servico => {
+      if (!porServico[servico]) porServico[servico] = [];
+      porServico[servico].push(item);
     });
   });
 
@@ -3178,35 +3256,32 @@ function buildTiposPage() {
   }
 
   grid.innerHTML = nomes.map(servico => {
-    const lista = porServico[servico];
+    const itens = porServico[servico];
+    const merged = pdMesclarPorCliente(itens);
+    const totalCriat = itens.reduce((s, i) => s + (i.c.criativos || 0), 0);
+    const st = pdEstiloServico(servico);
     const aberto = tiposExpandido.has(servico);
     return `
-      <div class="atendimento-group ${aberto ? "expanded" : ""}">
-        <button type="button" class="atendimento-group-header" data-tipo="${servico}">
-          <span class="tipo-tag-icon">🏷️</span>
-          <span class="atendimento-group-name">${servico}</span>
-          <span class="atendimento-group-count">${lista.length} cliente${lista.length > 1 ? "s" : ""}</span>
-        </button>
-        ${aberto ? `
-          <div class="clients-grid">
-            ${lista.map(c => `
-              <div class="client-card">
-                <div class="client-card-top">
-                  ${avatarHTML(c.designer, "avatar-sm")}
-                  <div class="client-card-name">${c.cliente}</div>
-                </div>
-                <div class="client-card-count">${c.escopo || ""}</div>
-              </div>
-            `).join("")}
+      <div class="pd-designer-card ${aberto ? "expanded" : ""}" data-tipo="${servico}">
+        <div class="pd-dcard-top">
+          <div class="pd-avatar-wrap"><div class="pd-avatar" style="background:${st.bg};color:${st.color};">🏷️</div></div>
+          <div class="pd-dcard-name">${servico}</div>
+          <div class="pd-dcard-top-spacer"></div>
+          <div class="pd-designer-stats-row">
+            <div class="pd-dstat"><div class="pd-dstat-num">${merged.length}</div><div class="pd-dstat-label">Clientes</div></div>
+            <div class="pd-dstat"><div class="pd-dstat-num">${totalCriat}</div><div class="pd-dstat-label">Criativos</div></div>
           </div>
-        ` : ""}
+        </div>
+        <div class="pd-clients-inner">
+          ${merged.map(g => pdClientCardHTML(g)).join("")}
+        </div>
       </div>
     `;
   }).join("");
 
-  grid.querySelectorAll(".atendimento-group-header").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const nome = btn.dataset.tipo;
+  grid.querySelectorAll(".pd-dcard-top").forEach(top => {
+    top.addEventListener("click", () => {
+      const nome = top.closest(".pd-designer-card").dataset.tipo;
       if (tiposExpandido.has(nome)) tiposExpandido.delete(nome);
       else tiposExpandido.add(nome);
       buildTiposPage();
