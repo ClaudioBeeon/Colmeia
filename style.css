@@ -318,19 +318,25 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .user-name { font-size: 13.5px; font-weight: 600; }
 
 /* ===== BOARD ===== */
-.board { display: flex; gap: 18px; overflow-x: auto; align-items: stretch; flex: 1; min-height: 0; }
+.board {
+  display: flex; overflow-x: auto; align-items: stretch; flex: 1; min-height: 0;
+  background: var(--card-bg);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 6px 4px 14px;
+}
 
 .column {
   min-width: 254px;
   flex: 1;
-  background: var(--card-bg);
-  border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  padding: 6px 12px 14px;
+  background: transparent;
+  padding: 0 8px;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  border-right: 1px solid var(--border);
 }
+.column:last-child { border-right: none; }
 
 .column-header {
   display: flex;
