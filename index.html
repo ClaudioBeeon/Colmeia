@@ -13,16 +13,17 @@
 <body>
 
 <div class="login-screen" id="loginScreen">
-  <div class="login-card">
-    <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="login-logo" alt="Colmeia">
-    <h1>Colmeia</h1>
-    <p class="login-subtitle">Entre com seu nome e senha</p>
-    <form id="loginForm">
-      <input type="text" id="loginNome" placeholder="Seu nome" autocomplete="username" required>
-      <input type="password" id="loginSenha" placeholder="Senha" autocomplete="current-password" required>
-      <button type="submit" id="loginSubmit">Entrar</button>
-      <p class="login-erro" id="loginErro" hidden></p>
+  <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785079704/Firefly_gpt-image_Retirar_os_textos_deixar_apenas_a_imagem_de_fundo_500924_six5xc.png" class="login-bg" alt="">
+  <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Horiontal_texto_branco_bpfzkw.png" class="login-logo" alt="Colmeia">
+  <div class="login-content">
+    <p class="login-frase" id="loginFrase">Bom trabalho, hoje é um bom dia pra organizar tudo.</p>
+    <form id="loginForm" class="login-form">
+      <input type="password" id="loginSenha" placeholder="Acesso" autocomplete="current-password" required>
+      <button type="submit" id="loginSubmit" aria-label="Entrar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </form>
+    <p class="login-erro" id="loginErro" hidden></p>
   </div>
 </div>
 
