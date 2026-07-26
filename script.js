@@ -566,6 +566,73 @@ function listarTodosClientesConhecidos() {
   return nomes.sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Busca as pastas de cliente de verdade no Google Drive (mesma
+ * estrutura do painel-designers-beeon: Beeon > Clientes > [cliente],
+ * com a subpasta Publicações dentro), casa com os clientes já
+ * conhecidos pelo nome, e preenche/salva só os campos que ainda
+ * estiverem vazios — nunca sobrescreve um link que você já colocou
+ * na mão.
+ */
+async function preencherDriveAutomatico() {
+  const btn = document.getElementById("driveAutofillBtn");
+  const statusEl = document.getElementById("driveAutofillStatus");
+  btn.disabled = true;
+  statusEl.textContent = "Lendo o Drive...";
+
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "listarPastasClientesDrive" }),
+    });
+    const data = await res.json();
+    btn.disabled = false;
+
+    if (!data.ok) {
+      statusEl.textContent = data.error || "Não consegui ler o Drive.";
+      return;
+    }
+
+    const pastasDrive = data.clientes || [];
+    const todosClientes = listarTodosClientesConhecidos();
+    let atualizados = 0;
+
+    for (const cliente of todosClientes) {
+      const pasta = pastasDrive.find(p => normalizarParaComparar(p.nome) === normalizarParaComparar(cliente));
+      if (!pasta) continue;
+
+      const dadosAtuais = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [] };
+      const precisaDrive = !dadosAtuais.drive && pasta.driveUrl;
+      const precisaPublicacoes = !dadosAtuais.pastaPublicacoes && pasta.pastaPublicacoesUrl;
+      if (!precisaDrive && !precisaPublicacoes) continue;
+
+      const novosDados = {
+        drive: dadosAtuais.drive || pasta.driveUrl || "",
+        bancoImagens: dadosAtuais.bancoImagens || "",
+        bibliotecaAdobe: dadosAtuais.bibliotecaAdobe || "",
+        pastaPublicacoes: dadosAtuais.pastaPublicacoes || pasta.pastaPublicacoesUrl || "",
+        extras: dadosAtuais.extras || [],
+      };
+      const ok = await salvarLinksClienteNoBackend(cliente, novosDados);
+      if (ok) {
+        const idxExistente = linksClientes.findIndex(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(cliente));
+        const novoRegistro = { cliente, ...novosDados };
+        if (idxExistente !== -1) linksClientes[idxExistente] = novoRegistro;
+        else linksClientes.push(novoRegistro);
+        atualizados++;
+      }
+    }
+
+    renderPainelClientes();
+    const statusDepois = document.getElementById("driveAutofillStatus");
+    if (statusDepois) statusDepois.textContent = `✓ ${atualizados} cliente${atualizados === 1 ? "" : "s"} preenchido${atualizados === 1 ? "" : "s"}.`;
+  } catch (err) {
+    console.error("Falha ao preencher Drive automaticamente:", err);
+    btn.disabled = false;
+    statusEl.textContent = "Falha de conexão.";
+  }
+}
+
 function renderPainelClientes() {
   const body = document.getElementById("peopleModalBody");
 
@@ -579,6 +646,10 @@ function renderPainelClientes() {
   const clientesFiltrados = alvo ? todosClientes.filter(c => normalizarParaComparar(c).includes(alvo)) : todosClientes;
 
   body.innerHTML = `
+    <div class="drive-autofill-bar">
+      <button type="button" id="driveAutofillBtn">🔄 Preencher Drive automaticamente</button>
+      <span class="people-row-saved" id="driveAutofillStatus"></span>
+    </div>
     <input type="text" class="rule-add-search" id="clientesConfigSearch" placeholder="Buscar cliente..." value="${clientesConfigFiltro}">
     <div class="config-clientes-list">
       ${clientesFiltrados.map(cliente => {
@@ -633,6 +704,8 @@ function renderPainelClientes() {
     clientesConfigFiltro = e.target.value;
     renderPainelClientes();
   });
+
+  document.getElementById("driveAutofillBtn").addEventListener("click", preencherDriveAutomatico);
 
   body.querySelectorAll(".atendimento-group-header").forEach(btn => {
     btn.addEventListener("click", () => {
