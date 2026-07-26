@@ -1393,22 +1393,23 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 /* ===== Logo oficial na barra lateral ===== */
 .sidebar-logo {
   position: relative;
-  height: 32px;
+  height: 40px;
   margin-bottom: 8px;
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
 .sidebar-logo-icon {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
   object-fit: contain;
   transition: opacity 0.16s ease;
 }
 .sidebar-logo-full {
   position: absolute;
   left: 0;
-  height: 26px;
+  height: 28px;
   object-fit: contain;
   object-position: left center;
   max-width: 200px;
