@@ -866,11 +866,8 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 18px;
-  box-shadow: -16px 0 40px rgba(10,10,20,0.3), 0 20px 60px rgba(10,10,20,0.28);
+  box-shadow: 0 20px 60px rgba(10,10,20,0.28);
   overflow: hidden;
-  position: relative;
-  z-index: 5;
-  margin-left: -30px;
 }
 .task-detail.chat-open .chat-panel { display: flex; }
 
@@ -896,7 +893,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 
 @media (max-width: 900px) {
   .task-detail.chat-open .detail-inner { display: none; }
-  .task-detail.chat-open .chat-panel { flex: 1 1 100%; margin-left: 0; }
+  .task-detail.chat-open .chat-panel { flex: 1 1 100%; }
 }
 
 .detail-side {
