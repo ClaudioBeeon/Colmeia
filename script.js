@@ -420,6 +420,7 @@ function mapearTarefaDoBackend(t) {
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
     timerSeconds: t.workedSeconds || 0,
     running: !!t.isRunning,
+    estimateMinutes: t.estimateMinutes || 30,
     estimatePct: Math.min(95, Math.round((t.estimateMinutes || 30) / 2)),
     hasChange: false,
   };
@@ -451,6 +452,7 @@ async function carregarTarefasReais() {
     carregandoTarefas = false;
     buildBoard();
     render();
+    verificarNotificacoes();
   } catch (err) {
     console.error("Falha ao conectar com o backend do Colmeia:", err);
     tasks = tasksFake;
@@ -1216,6 +1218,43 @@ async function reabrirTarefaNoBackend(taskId) {
   }
 }
 
+/**
+ * Move a tarefa de verdade pra outra etapa/coluna no Runrun.it — usada
+ * tanto pelo drag-and-drop do Kanban quanto pelo menu de status do
+ * pop-up de detalhe.
+ */
+async function moverEtapaNoBackend(taskId, chaveColuna) {
+  if (!COLMEIA_API_URL || !taskId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "moverEtapa", taskId, chaveColuna }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou mover a etapa:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao mover a etapa no Runrun.it:", err);
+    return false;
+  }
+}
+
+async function ajustarEstimativaNoBackend(taskId, minutos) {
+  if (!COLMEIA_API_URL || !taskId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "ajustarEstimativa", taskId, minutos }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou ajustar a estimativa:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao ajustar a estimativa no Runrun.it:", err);
+    return false;
+  }
+}
+
 async function desfazerWorkflowNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return null;
   try {
@@ -1704,14 +1743,12 @@ const hexIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.3l8
 
 function buildBoard() {
   boardEl.innerHTML = "";
-  const headersEl = document.getElementById("boardHeaders");
 
   if (!carregandoTarefas) {
     clearInterval(intervalMsgCarregando);
   }
 
   if (carregandoTarefas) {
-    if (headersEl) headersEl.innerHTML = "";
     boardEl.innerHTML = `
       <div class="board-loading">
         <div class="board-loading-glass"></div>
@@ -1725,9 +1762,12 @@ function buildBoard() {
     return;
   }
 
-  if (headersEl) {
-    headersEl.innerHTML = columnsDef.map(({ key, label, hex }) => `
-      <div class="column-header-item" data-status="${key}">
+  columnsDef.forEach(({ key, label, hex }) => {
+    const col = document.createElement("div");
+    col.className = "column";
+    col.dataset.status = key;
+    col.innerHTML = `
+      <div class="column-header">
         <span class="column-hex" style="color:${hex};">${hexIcon}</span>
         <h2>${label}</h2>
         <div class="column-sort-ic" data-col="${key}">
@@ -1736,14 +1776,8 @@ function buildBoard() {
         </div>
         <span class="column-count"></span>
       </div>
-    `).join("");
-  }
-
-  columnsDef.forEach(({ key }) => {
-    const col = document.createElement("div");
-    col.className = "column";
-    col.dataset.status = key;
-    col.innerHTML = `<div class="column-cards" id="col-${key}"></div>`;
+      <div class="column-cards" id="col-${key}"></div>
+    `;
     boardEl.appendChild(col);
   });
 
@@ -1752,7 +1786,7 @@ function buildBoard() {
   panel.id = "taskDetail";
   boardEl.appendChild(panel);
 
-  (headersEl || boardEl).querySelectorAll(".column-sort-ic").forEach(group => {
+  boardEl.querySelectorAll(".column-sort-ic").forEach(group => {
     const key = group.dataset.col;
     group.querySelectorAll("button").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -1791,7 +1825,7 @@ function render() {
     list = list.slice().sort((a, b) => (a.dueISO || "9999-99-99").localeCompare(b.dueISO || "9999-99-99"));
     const holder = document.getElementById("col-" + key);
     holder.innerHTML = list.map(t => cardHTML(t, tasks.indexOf(t))).join("");
-    document.querySelector(`.column-header-item[data-status="${key}"] .column-count`).textContent = list.length;
+    document.querySelector(`.column[data-status="${key}"] .column-count`).textContent = list.length;
   });
   attachCardDragHandlers();
 }
@@ -1809,10 +1843,17 @@ function setupDragAndDrop() {
       const idx = e.dataTransfer.getData("text/plain");
       const newStatus = holder.closest(".column").dataset.status;
       if (idx !== "" && tasks[idx]) {
-        tasks[idx].status = newStatus;
-        // Mudar de coluna aqui no Colmeia ainda é só visual — o endpoint
-        // de mover etapa de verdade no Runrun.it ainda não foi confirmado.
+        const task = tasks[idx];
+        const statusAntigo = task.status;
+        if (statusAntigo === newStatus) return;
+        task.status = newStatus;
         render();
+        moverEtapaNoBackend(task.id, newStatus).then(ok => {
+          if (!ok) {
+            task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
+            render();
+          }
+        });
       }
     });
   });
@@ -1906,6 +1947,8 @@ function attachCardDragHandlers() {
             task.assignee = nomeEscolhido;
             task.assigneeAvatarUrl = null; // deixa a próxima carga real trazer a foto certa
             render();
+          } else {
+            alert("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.");
           }
         });
       });
@@ -2737,7 +2780,7 @@ function renderDetail() {
             <div class="detail-more-menu" id="detailMoreMenu">
               <button type="button" id="verRegraBtn">Ver regra</button>
               <button type="button" id="reabrirTarefaMenuBtn">Reabrir tarefa</button>
-              <button type="button">Ajustar horas</button>
+              <button type="button" id="ajustarHorasBtn">Ajustar horas</button>
               ${task.id ? `<a href="${task.link}" target="_blank" rel="noopener" id="verNoRunrunBtn">Ver tarefa no Runrun</a>` : ""}
             </div>
           </div>
@@ -2956,13 +2999,19 @@ function renderDetail() {
     });
   }
   statusMenu.querySelectorAll("button").forEach(opt => {
-    opt.addEventListener("click", e => {
+    opt.addEventListener("click", async e => {
       e.stopPropagation();
+      const statusAntigo = task.status;
       task.status = opt.dataset.status;
-      // Mudar de coluna aqui no Colmeia ainda é só visual — ver nota acima.
       statusMenu.classList.remove("open");
       renderDetail();
       render();
+      const ok = await moverEtapaNoBackend(task.id, opt.dataset.status);
+      if (!ok) {
+        task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
+        renderDetail();
+        render();
+      }
     });
   });
 
@@ -2991,6 +3040,30 @@ function renderDetail() {
         await carregarSequencia(task);
       } else {
         alert("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.");
+      }
+    });
+  }
+
+  const ajustarHorasBtn = document.getElementById("ajustarHorasBtn");
+  if (ajustarHorasBtn) {
+    ajustarHorasBtn.addEventListener("click", async () => {
+      moreMenu.classList.remove("open");
+      if (!task.id) return;
+      const horasAtuais = (task.estimateMinutes / 60).toFixed(1);
+      const resposta = prompt("Nova estimativa de horas pra essa tarefa (ex: 2 ou 2.5):", horasAtuais);
+      if (resposta === null) return;
+      const horas = parseFloat(resposta.replace(",", "."));
+      if (!horas || horas <= 0) {
+        alert("Digita um número de horas válido (maior que zero).");
+        return;
+      }
+      const ok = await ajustarEstimativaNoBackend(task.id, horas * 60);
+      if (ok) {
+        task.estimateMinutes = Math.round(horas * 60);
+        task.estimatePct = Math.min(95, Math.round(task.estimateMinutes / 2));
+        render();
+      } else {
+        alert("Não consegui ajustar a estimativa agora. Tenta de novo em alguns segundos.");
       }
     });
   }
@@ -3860,9 +3933,81 @@ document.getElementById("nowPlaying").addEventListener("click", () => {
   if (idx !== -1) openDetail(idx);
 });
 
-// Notificações do Runrun.it — ainda não integrado, só o botão por enquanto.
-document.getElementById("notificationsBtn").addEventListener("click", () => {
-  console.log("Notificações do Runrun.it: integração ainda não feita.");
+// ===== Notificações reais (comentários não lidos nas tarefas do designer logado) =====
+let notificacoes = []; // [{task, qtdNaoLidas, ultimoAutor, ultimoTexto}]
+
+/**
+ * Varre as tarefas em aberto do designer logado, busca os comentários
+ * de cada uma e reaproveita o mesmo controle de "visto" do chat
+ * flutuante (chaveVistoChat) pra saber quais têm comentário novo.
+ */
+async function verificarNotificacoes() {
+  if (!DESIGNER_LOGADO) return;
+  const minhasTarefas = tasks.filter(t => t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+
+  const resultados = await Promise.all(minhasTarefas.map(async t => {
+    const comentarios = await buscarComentariosDoBackend(t.id);
+    t.comments = comentarios; // aproveita e já deixa cacheado pro chat também
+    let visto = 0;
+    try { visto = Number(localStorage.getItem(chaveVistoChat(t.id))) || 0; } catch (err) { /* sem problema */ }
+    const naoLidos = comentarios.filter(c => !nomesCorrespondem(c.autor, DESIGNER_LOGADO) && (c.id || 0) > visto);
+    if (naoLidos.length === 0) return null;
+    const ultimo = naoLidos[naoLidos.length - 1];
+    return { task: t, qtd: naoLidos.length, autor: ultimo.autor, texto: ultimo.texto };
+  }));
+
+  notificacoes = resultados.filter(Boolean);
+  atualizarBadgeNotificacoes();
+}
+
+function atualizarBadgeNotificacoes() {
+  const badge = document.getElementById("notificationsBadge");
+  if (!badge) return;
+  const total = notificacoes.reduce((s, n) => s + n.qtd, 0);
+  badge.hidden = total === 0;
+  badge.textContent = total > 9 ? "9+" : String(total);
+}
+
+function renderNotificacoes() {
+  const body = document.getElementById("notificationsBody");
+  if (!body) return;
+  if (notificacoes.length === 0) {
+    body.innerHTML = `<p class="quick-access-empty">Nenhum comentário novo nas suas tarefas.</p>`;
+    return;
+  }
+  body.innerHTML = notificacoes.map((n, i) => `
+    <div class="notif-item" data-i="${i}">
+      <div class="notif-item-top">
+        <span class="notif-item-titulo">${n.task.title}</span>
+        <span class="notif-item-count">${n.qtd}</span>
+      </div>
+      <div class="notif-item-preview"><span class="notif-item-autor">${n.autor}:</span> ${n.texto}</div>
+    </div>
+  `).join("");
+  body.querySelectorAll(".notif-item").forEach(el => {
+    el.addEventListener("click", async () => {
+      const n = notificacoes[Number(el.dataset.i)];
+      document.getElementById("notificationsPanel").classList.remove("open");
+      const idxExistente = tasks.indexOf(n.task);
+      if (idxExistente !== -1) openDetail(idxExistente);
+      await esperar(150);
+      abrirChatPanel(tasks[detailIdx]);
+    });
+  });
+}
+
+// Notificações reais: comentários novos nas tarefas do designer logado.
+document.getElementById("notificationsBtn").addEventListener("click", async () => {
+  const panel = document.getElementById("notificationsPanel");
+  panel.classList.toggle("open");
+  if (panel.classList.contains("open")) {
+    document.getElementById("notificationsBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
+    await verificarNotificacoes();
+    renderNotificacoes();
+  }
+});
+document.getElementById("notificationsClose").addEventListener("click", () => {
+  document.getElementById("notificationsPanel").classList.remove("open");
 });
 
 // Acesso rápido — painel lateral recolhível
