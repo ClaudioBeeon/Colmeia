@@ -272,12 +272,12 @@ async function carregarPessoasSalvas() {
   }
 }
 
-async function salvarPessoaNoBackend(nome, foto, aliases) {
+async function salvarPessoaNoBackend(nome, foto, aliases, discord) {
   if (!COLMEIA_API_URL || !nome) return false;
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "salvarPessoa", nome, foto, aliases }),
+      body: JSON.stringify({ acao: "salvarPessoa", nome, foto, aliases, discord }),
     });
     const data = await res.json();
     return !!data.ok;
@@ -299,6 +299,27 @@ function avatarAtendimentoHTML(nome, sizeClass) {
     return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nome}" alt="${nome}" title="${nome}" onerror="handleAvatarImgError(this)">`;
   }
   return `<div class="avatar ${sizeClass || ""}" title="${nome}">${initials(nome)}</div>`;
+}
+
+/**
+ * Busca o link do Discord (DM) de uma pessoa, cadastrado manualmente
+ * no painel "Pessoas conhecidas".
+ */
+function getDiscordDaPessoa(nome) {
+  const p = pessoasSalvas.find(x => nomesCorrespondem(x.nome, nome));
+  return (p && p.discord) || null;
+}
+
+/**
+ * Busca o link do canal do Discord do cliente — procurado dentro dos
+ * links extras cadastrados pra esse cliente (basta nomear um link
+ * extra como "Discord").
+ */
+function getDiscordDoCliente(nomeCliente) {
+  const dados = getLinksDoCliente(nomeCliente);
+  if (!dados || !dados.extras) return null;
+  const extra = dados.extras.find(e => normalizarParaComparar(e.nome).includes("discord"));
+  return extra ? extra.url : null;
 }
 
 /**
@@ -611,6 +632,7 @@ function renderPainelPessoas() {
     const salvo = pessoasSalvas.find(p => normalizarParaComparar(p.nome) === chave);
     const fotoAtual = resolverFotoManual(info.nomeOriginal) || info.fotoAtual || "";
     const aliasesTexto = salvo ? salvo.aliases.join(", ") : "";
+    const discordAtual = salvo ? salvo.discord || "" : "";
     return `
       <div class="people-row" data-chave="${chave}" data-nome-original="${info.nomeOriginal}">
         <div class="people-row-top">
@@ -619,6 +641,7 @@ function renderPainelPessoas() {
         </div>
         <input type="text" class="people-row-input" data-campo="foto" placeholder="URL da foto" value="${fotoAtual}">
         <input type="text" class="people-row-input" data-campo="aliases" placeholder="Apelidos, separados por vírgula (ex: Manu, Manuela)" value="${aliasesTexto}">
+        <input type="text" class="people-row-input" data-campo="discord" placeholder="Link do Discord (DM dessa pessoa)" value="${discordAtual}">
         <button type="button" class="people-row-save" data-chave="${chave}">Salvar</button>
         <span class="people-row-saved" data-chave-saved="${chave}"></span>
       </div>
@@ -632,16 +655,17 @@ function renderPainelPessoas() {
       const foto = row.querySelector('[data-campo="foto"]').value.trim();
       const aliasesTexto = row.querySelector('[data-campo="aliases"]').value.trim();
       const aliases = aliasesTexto ? aliasesTexto.split(",").map(s => s.trim()).filter(Boolean) : [];
+      const discord = row.querySelector('[data-campo="discord"]').value.trim();
 
       btn.disabled = true;
       btn.textContent = "Salvando...";
-      const ok = await salvarPessoaNoBackend(nomeOriginal, foto, aliases);
+      const ok = await salvarPessoaNoBackend(nomeOriginal, foto, aliases, discord);
       btn.disabled = false;
       btn.textContent = "Salvar";
 
       if (ok) {
         const idxSalvo = pessoasSalvas.findIndex(p => normalizarParaComparar(p.nome) === normalizarParaComparar(nomeOriginal));
-        const novoRegistro = { nome: nomeOriginal, foto, aliases };
+        const novoRegistro = { nome: nomeOriginal, foto, aliases, discord };
         if (idxSalvo !== -1) pessoasSalvas[idxSalvo] = novoRegistro;
         else pessoasSalvas.push(novoRegistro);
 
@@ -2282,16 +2306,37 @@ function renderDetail() {
               ${avatarAtendimentoHTML(getAtendimentoDoCliente(task.client) || task.assignee, "avatar-sm")}
               <span>${getAtendimentoDoCliente(task.client) || task.assignee}</span>
             </div>
-            <div class="discord-ctas">
-              <a href="#" class="discord-cta" onclick="return false">
-                <span class="discord-cta-icon">${discordIcon}</span>
-                <span>Chamar no Discord</span>
-              </a>
-              <a href="#" class="discord-cta ghost" onclick="return false">
-                <span class="discord-cta-icon">${discordIcon}</span>
-                <span>Canal do cliente</span>
-              </a>
-            </div>
+            ${(() => {
+              const nomeAtendimento = getAtendimentoDoCliente(task.client) || task.assignee;
+              const linkPessoa = getDiscordDaPessoa(nomeAtendimento);
+              const linkCliente = getDiscordDoCliente(task.client);
+              return `
+                <div class="discord-ctas">
+                  ${linkPessoa ? `
+                    <a href="${linkPessoa}" target="_blank" rel="noopener" class="discord-cta">
+                      <span class="discord-cta-icon">${discordIcon}</span>
+                      <span>Chamar no Discord</span>
+                    </a>
+                  ` : `
+                    <span class="discord-cta disabled" title="Cadastre o Discord dessa pessoa em Configurações">
+                      <span class="discord-cta-icon">${discordIcon}</span>
+                      <span>Chamar no Discord</span>
+                    </span>
+                  `}
+                  ${linkCliente ? `
+                    <a href="${linkCliente}" target="_blank" rel="noopener" class="discord-cta ghost">
+                      <span class="discord-cta-icon">${discordIcon}</span>
+                      <span>Canal do cliente</span>
+                    </a>
+                  ` : `
+                    <span class="discord-cta ghost disabled" title="Cadastre o link 'Discord' nos links extras desse cliente">
+                      <span class="discord-cta-icon">${discordIcon}</span>
+                      <span>Canal do cliente</span>
+                    </span>
+                  `}
+                </div>
+              `;
+            })()}
           </div>
           <div class="side-block attach-block">
             <div class="side-label-row">
