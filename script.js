@@ -7,6 +7,7 @@ const dueIcon = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="1
 const playIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg>`;
 const pauseIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
 const discordIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 6.3a15 15 0 00-3.6-1.1l-.2.4a13 13 0 013.1 1.1 12.6 12.6 0 00-11.9 0 13 13 0 013.1-1.1l-.2-.4A15 15 0 005.6 6.3C3.6 9.3 3 12.2 3.2 15a15 15 0 004.4 2.2l.6-1a9.6 9.6 0 01-1.7-.8l.4-.3a11.3 11.3 0 009.8 0l.4.3c-.5.3-1.1.6-1.7.8l.6 1A15 15 0 0020.8 15c.3-3.2-.5-6.1-1.9-8.7zM9.7 13.4c-.7 0-1.3-.7-1.3-1.5s.6-1.5 1.3-1.5 1.4.7 1.3 1.5c0 .8-.6 1.5-1.3 1.5zm4.6 0c-.7 0-1.3-.7-1.3-1.5s.6-1.5 1.3-1.5 1.4.7 1.3 1.5c0 .8-.6 1.5-1.3 1.5z"/></svg>`;
+const chatIcon = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1112.6 6.5L4 21l1.9-6.1A7.96 7.96 0 014 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const columnsDef = [
   { key: "pendentes", label: "Pendentes" },
@@ -2007,15 +2008,151 @@ function renderHubDoClienteHTML(nomeCliente) {
 // (attachments fake removido — agora busca de verdade em carregarAnexos())
 
 let detailIdx = null;
-let commentsOpen = false;
 let changeOpen = false;
 let childrenOpen = false;
+
+// ===== Chat flutuante (comentários em pop-up separado, fora do card) =====
+let chatThreadAtivo = "aqui"; // "aqui" (a tarefa aberta) ou "mae" (o card mãe dela)
+let chatAlvoTaskId = null;    // id de quem recebe o próximo comentário enviado
+const chatMaeCache = new Map(); // taskId (da subtarefa) -> {id, title, comments}
+
+function chaveVistoChat(taskId) {
+  return "colmeia_chat_visto_" + taskId;
+}
+function marcarChatVisto(task) {
+  if (!task.id || !task.comments || task.comments.length === 0) return;
+  const maiorId = Math.max(...task.comments.map(c => c.id || 0));
+  try { localStorage.setItem(chaveVistoChat(task.id), String(maiorId)); } catch (err) { /* sem problema */ }
+}
+function contarComentariosNaoLidos(task) {
+  if (!task.id || !task.comments || task.comments.length === 0) return 0;
+  let visto = 0;
+  try { visto = Number(localStorage.getItem(chaveVistoChat(task.id))) || 0; } catch (err) { /* sem problema */ }
+  return task.comments.filter(c => !nomesCorrespondem(c.autor, DESIGNER_LOGADO) && (c.id || 0) > visto).length;
+}
+function atualizarBadgeChat(task) {
+  const badge = document.getElementById("chatFabBadge");
+  if (!badge) return;
+  const qtd = contarComentariosNaoLidos(task);
+  badge.hidden = qtd === 0;
+  badge.textContent = qtd > 9 ? "9+" : String(qtd);
+}
+
+/**
+ * Abre o pop-up de chat pra tarefa aberta: divide a tela (o card
+ * encolhe pra ~30%, o chat ocupa o resto), sempre começando na aba
+ * "Comentários aqui".
+ */
+function abrirChatPanel(task) {
+  const painel = document.getElementById("taskDetail");
+  const chatPanel = document.getElementById("chatPanel");
+  if (!painel || !chatPanel) return;
+  painel.classList.add("chat-open");
+  chatPanel.hidden = false;
+  abrirThreadAqui(task);
+}
+
+function fecharChatPanel() {
+  const painel = document.getElementById("taskDetail");
+  const chatPanel = document.getElementById("chatPanel");
+  if (painel) painel.classList.remove("chat-open");
+  if (chatPanel) chatPanel.hidden = true;
+}
+
+function abrirThreadAqui(task) {
+  chatThreadAtivo = "aqui";
+  chatAlvoTaskId = task.id;
+  const tabAqui = document.getElementById("chatTabAqui");
+  const tabMae = document.getElementById("chatTabMae");
+  if (tabAqui) tabAqui.classList.add("active");
+  if (tabMae) tabMae.classList.remove("active");
+  const titulo = document.getElementById("chatPanelTitle");
+  if (titulo) titulo.textContent = task.title;
+  const thread = document.getElementById("commentsThread");
+  if (thread) {
+    thread.innerHTML = renderComentariosHTML(task);
+    wireExcluirComentario();
+    thread.scrollTop = thread.scrollHeight;
+  }
+  marcarChatVisto(task);
+  atualizarBadgeChat(task);
+}
+
+/**
+ * Troca o chat pra mostrar os comentários do card mãe (só existe o
+ * botão se a tarefa tiver parentTaskId). Busca uma vez só e guarda em
+ * cache — trocar de aba de volta e pra frente não busca de novo.
+ */
+async function abrirThreadDoCardMae(task) {
+  chatThreadAtivo = "mae";
+  chatAlvoTaskId = null;
+  const tabAqui = document.getElementById("chatTabAqui");
+  const tabMae = document.getElementById("chatTabMae");
+  if (tabMae) tabMae.classList.add("active");
+  if (tabAqui) tabAqui.classList.remove("active");
+  const thread = document.getElementById("commentsThread");
+  if (thread) thread.innerHTML = `<p class="comments-empty">Carregando comentários do card mãe...</p>`;
+
+  let cache = chatMaeCache.get(task.id);
+  if (!cache) {
+    const resultado = await buscarCardMaeDoBackend(task.id);
+    if (!resultado.ok || !resultado.temPai) {
+      if (chatThreadAtivo === "mae" && tasks[detailIdx] === task && thread) {
+        thread.innerHTML = `<p class="comments-empty">Essa tarefa não tem card mãe.</p>`;
+      }
+      return;
+    }
+    const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
+    cache = { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios };
+    chatMaeCache.set(task.id, cache);
+  }
+  if (chatThreadAtivo !== "mae" || tasks[detailIdx] !== task) return; // trocou de aba/tarefa enquanto carregava
+  chatAlvoTaskId = cache.id;
+  const titulo = document.getElementById("chatPanelTitle");
+  if (titulo) titulo.textContent = cache.title;
+  if (thread) {
+    thread.innerHTML = renderComentariosHTML({ id: cache.id, comments: cache.comments });
+    wireExcluirComentario();
+    thread.scrollTop = thread.scrollHeight;
+  }
+}
+
+/**
+ * Recarrega a thread que está sendo mostrada agora no chat (a da
+ * própria tarefa ou a do card mãe) — usado depois de enviar, excluir
+ * ou reagir a um comentário.
+ */
+async function recarregarThreadAtiva() {
+  const task = tasks[detailIdx];
+  if (chatThreadAtivo === "aqui") {
+    await carregarComentarios(task);
+    return;
+  }
+  const cache = chatMaeCache.get(task.id);
+  if (!cache) return;
+  cache.comments = await buscarComentariosDoBackend(cache.id);
+  chatMaeCache.set(task.id, cache);
+  if (chatThreadAtivo !== "mae" || tasks[detailIdx] !== task) return;
+  const thread = document.getElementById("commentsThread");
+  if (thread) {
+    thread.innerHTML = renderComentariosHTML({ id: cache.id, comments: cache.comments });
+    wireExcluirComentario();
+  }
+}
 
 /**
  * Desenha a lista de comentários de uma tarefa. Enquanto ainda não
  * carregou (task.comments === undefined), mostra "Carregando...".
  * Tarefas sem id real (dados fake) nunca terão comentários reais.
  */
+function formatarHoraComentario(dataISO) {
+  if (!dataISO) return "";
+  const d = new Date(dataISO);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " às " +
+    d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 function renderComentariosHTML(task) {
   if (!task.id) {
     return `<p class="comments-empty">Essa tarefa ainda não está conectada ao Runrun.it.</p>`;
@@ -2026,11 +2163,13 @@ function renderComentariosHTML(task) {
   if (task.comments.length === 0) {
     return `<p class="comments-empty">Nenhum comentário ainda.</p>`;
   }
-  return task.comments.map(c => `
-    <div class="comment-bubble ${nomesCorrespondem(c.autor, task.assignee) ? "mine" : ""}" data-comment-id="${c.id}">
-      ${avatarHTML(c.autor, "avatar-sm comment-avatar")}
+  return task.comments.map(c => {
+    const minha = nomesCorrespondem(c.autor, DESIGNER_LOGADO);
+    return `
+    <div class="comment-bubble ${minha ? "mine" : ""}" data-comment-id="${c.id}">
+      ${minha ? "" : avatarHTML(c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
-        <div class="comment-author">${c.autor}</div>
+        <div class="comment-meta"><span class="comment-author">${minha ? "Você" : c.autor}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span></div>
         <div class="comment-text">${c.texto}</div>
         ${(c.reactions || []).length ? `
           <div class="comment-reactions">
@@ -2044,7 +2183,8 @@ function renderComentariosHTML(task) {
         <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
 /**
@@ -2097,10 +2237,17 @@ async function carregarComentarios(task) {
   task.comments = await buscarComentariosDoBackend(task.id);
   // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa.
   if (tasks[detailIdx] === task) {
-    const thread = document.getElementById("commentsThread");
-    if (thread) {
-      thread.innerHTML = renderComentariosHTML(task);
-      wireExcluirComentario(task);
+    atualizarBadgeChat(task);
+    const chatPanel = document.getElementById("chatPanel");
+    const chatAberto = chatPanel && !chatPanel.hidden;
+    if (chatAberto && chatThreadAtivo === "aqui") {
+      marcarChatVisto(task);
+      atualizarBadgeChat(task);
+      const thread = document.getElementById("commentsThread");
+      if (thread) {
+        thread.innerHTML = renderComentariosHTML(task);
+        wireExcluirComentario();
+      }
     }
   }
 }
@@ -2137,15 +2284,53 @@ async function carregarAnexos(task) {
     listaEl.innerHTML = `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`;
     return;
   }
-  // O Runrun.it não devolve link direto de download do arquivo — só
-  // nome/tamanho. Por isso cada anexo abre a tarefa lá (onde dá pra
-  // baixar de verdade) em vez de um link de arquivo inventado.
   listaEl.innerHTML = anexos.map(a => `
-    <a href="${task.link}" target="_blank" rel="noopener" class="attach-item" title="Abrir tarefa no Runrun.it pra baixar">
+    <button type="button" class="attach-item" data-doc-id="${a.id}" data-nome="${a.nome}">
       <span>${a.nome}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}</span>
-      <svg viewBox="0 0 24 24" fill="none"><path d="M18 13v6a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </a>
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
   `).join("");
+  listaEl.querySelectorAll(".attach-item").forEach(btn => {
+    btn.addEventListener("click", () => baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn));
+  });
+}
+
+/**
+ * Baixa o anexo de verdade: pede o arquivo em base64 pro backend (que
+ * busca autenticado no Runrun.it) e monta o download no navegador.
+ */
+async function baixarAnexo(documentId, nome, btnEl) {
+  const original = btnEl.innerHTML;
+  btnEl.disabled = true;
+  btnEl.innerHTML = `<span>Baixando...</span>`;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "baixarAnexo", documentId }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Falha ao baixar.");
+
+    const binario = atob(data.base64);
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+    const blob = new Blob([bytes], { type: data.mimeType || "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nome || "anexo";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Falha ao baixar anexo:", err);
+    alert("Não consegui baixar esse anexo agora. Tenta de novo em alguns segundos.");
+  } finally {
+    btnEl.disabled = false;
+    btnEl.innerHTML = original;
+  }
 }
 
 const MESES_PT_JS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -2245,14 +2430,14 @@ async function confirmarECriarPastaDoCard(task) {
 }
 
 
-function wireExcluirComentario(task) {
+function wireExcluirComentario() {
   document.querySelectorAll(".comment-delete-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (!confirm("Excluir esse comentário?")) return;
       const bolha = btn.closest(".comment-bubble");
       if (bolha) bolha.style.opacity = "0.4";
       const ok = await excluirComentarioNoBackend(btn.dataset.commentId);
-      if (ok) carregarComentarios(task);
+      if (ok) recarregarThreadAtiva();
       else if (bolha) bolha.style.opacity = "1";
     });
   });
@@ -2270,7 +2455,7 @@ function wireExcluirComentario(task) {
           emojiBtn.addEventListener("click", async () => {
             picker.hidden = true;
             const ok = await reagirComentarioNoBackend(btn.dataset.commentId, emojiBtn.textContent);
-            if (ok) carregarComentarios(task);
+            if (ok) recarregarThreadAtiva();
           });
         });
       }
@@ -2278,6 +2463,7 @@ function wireExcluirComentario(task) {
     });
   });
 }
+
 
 function taskDescription(task) {
   return `Produção de conteúdo do tipo ${typeLabels[task.type].label.toLowerCase()} para o cliente ${task.client}. Seguir o briefing combinado com o time de atendimento, manter a identidade visual do cliente e alinhar qualquer dúvida antes da entrega final.`;
@@ -2304,8 +2490,8 @@ function priorityVar(p) {
 
 function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
-  commentsOpen = false;
   childrenOpen = false;
+  fecharChatPanel();
   renderDetail();
   const panel = document.getElementById("taskDetail");
   document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
@@ -2518,8 +2704,7 @@ function renderDetail() {
       <div class="detail-body" id="detailBody">
         <div class="detail-pane desc-pane">
           <div class="detail-tabs">
-            <button type="button" class="detail-tab" id="tabDesc">Descrição</button>
-            <button type="button" class="detail-tab" id="tabComments">Comentários</button>
+            <button type="button" class="detail-tab active" id="tabDesc">Descrição</button>
             ${task.hasChange ? `
               <button type="button" class="detail-tab change-tab" id="tabChange" title="Alteração 01">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
@@ -2546,31 +2731,6 @@ function renderDetail() {
               </div>
             ` : ""}
           </div>
-        </div>
-
-        <div class="detail-pane comments-pane" id="commentsPane">
-          <div class="detail-tabs">
-            <button type="button" class="detail-tab active">Comentários</button>
-          </div>
-          <div class="upload-notifs" id="uploadNotifs"></div>
-          <div class="comments-thread" id="commentsThread">
-            ${renderComentariosHTML(task)}
-          </div>
-          <div class="repetir-comentario-prompt" id="repetirComentarioPrompt" hidden></div>
-          <div class="comment-input">
-            <div class="comment-mention-list" id="mentionList" hidden></div>
-            <button type="button" class="comment-tool-btn" id="emojiBtn" title="Emoji" aria-label="Emoji">😊</button>
-            <button type="button" class="comment-tool-btn" id="attachBtn" title="Anexar arquivo" aria-label="Anexar arquivo">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M21 11.5l-9 9a4 4 0 01-5.7-5.7l9-9a2.7 2.7 0 013.8 3.8l-8.5 8.5a1.3 1.3 0 01-1.9-1.9L16.2 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-            <input type="file" id="attachFileInput" hidden>
-            <div class="emoji-picker" id="emojiPicker" hidden></div>
-            <input type="text" id="commentInput" placeholder="Mensagem">
-            <button type="button" class="comment-send-btn" id="commentSendBtn" aria-label="Enviar">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          </div>
-          <div class="comment-attach-preview" id="attachPreview" hidden></div>
         </div>
 
         <div class="detail-side">
@@ -2659,6 +2819,43 @@ function renderDetail() {
           </div>
         </div>
       </div>
+
+      <button type="button" class="chat-fab" id="chatFabBtn" aria-label="Abrir comentários" title="Comentários">
+        ${chatIcon}
+        <span class="chat-fab-badge" id="chatFabBadge" hidden>0</span>
+      </button>
+    </div>
+
+    <div class="chat-panel" id="chatPanel" hidden>
+      <div class="chat-panel-header">
+        <div class="chat-panel-title" id="chatPanelTitle">${task.title}</div>
+        <button type="button" class="chat-panel-close" id="chatPanelClose" aria-label="Fechar chat">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="chat-panel-tabs">
+        <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
+        <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
+      </div>
+      <div class="upload-notifs" id="uploadNotifs"></div>
+      <div class="comments-thread" id="commentsThread">
+        ${renderComentariosHTML(task)}
+      </div>
+      <div class="repetir-comentario-prompt" id="repetirComentarioPrompt" hidden></div>
+      <div class="comment-input">
+        <div class="comment-mention-list" id="mentionList" hidden></div>
+        <button type="button" class="comment-tool-btn" id="emojiBtn" title="Emoji" aria-label="Emoji">😊</button>
+        <button type="button" class="comment-tool-btn" id="attachBtn" title="Anexar arquivo" aria-label="Anexar arquivo">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 11.5l-9 9a4 4 0 01-5.7-5.7l9-9a2.7 2.7 0 013.8 3.8l-8.5 8.5a1.3 1.3 0 01-1.9-1.9L16.2 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <input type="file" id="attachFileInput" hidden>
+        <div class="emoji-picker" id="emojiPicker" hidden></div>
+        <input type="text" id="commentInput" placeholder="Escreva sua mensagem...">
+        <button type="button" class="comment-send-btn" id="commentSendBtn" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="comment-attach-preview" id="attachPreview" hidden></div>
     </div>
   `;
 
@@ -2744,14 +2941,8 @@ function renderDetail() {
     });
   }
 
-  // ===== Abas Descrição / Comentários / Alteração (sem re-renderizar, com transição) =====
+  // ===== Abas Descrição / Alteração (sem re-renderizar, com transição) =====
   document.getElementById("tabDesc").addEventListener("click", () => {
-    commentsOpen = false;
-    changeOpen = false;
-    applyCommentsState();
-  });
-  document.getElementById("tabComments").addEventListener("click", () => {
-    commentsOpen = true;
     changeOpen = false;
     applyCommentsState();
   });
@@ -2759,7 +2950,6 @@ function renderDetail() {
   if (tabChange) {
     tabChange.addEventListener("click", () => {
       changeOpen = !changeOpen;
-      commentsOpen = false;
       applyCommentsState();
     });
   }
@@ -2770,23 +2960,25 @@ function renderDetail() {
   async function enviarComentarioAtual() {
     const texto = commentInput.value.trim();
     if (!texto && !arquivoParaAnexar) return;
-    if (!task.id) {
+    if (!chatAlvoTaskId) {
       console.warn("Essa tarefa não está conectada ao Runrun.it, não dá pra comentar de verdade.");
       return;
     }
+    const alvoId = chatAlvoTaskId;
+    const eraThreadAqui = chatThreadAtivo === "aqui";
     const arquivoAtual = arquivoParaAnexar;
     commentInput.value = "";
     commentInput.disabled = true;
     limparAnexoSelecionado();
 
     const ok = arquivoAtual
-      ? await enviarComentarioComAnexoNoBackend(task.id, texto, arquivoAtual)
-      : await enviarComentarioNoBackend(task.id, texto);
+      ? await enviarComentarioComAnexoNoBackend(alvoId, texto, arquivoAtual)
+      : await enviarComentarioNoBackend(alvoId, texto);
 
     commentInput.disabled = false;
     if (ok) {
-      carregarComentarios(task);
-      if (task.parentTaskId && texto) mostrarPromptRepetirComentario(task, texto);
+      recarregarThreadAtiva();
+      if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, texto);
     }
   }
 
@@ -2884,23 +3076,28 @@ function renderDetail() {
     });
   }
 
+  // ===== Chat flutuante (comentários em pop-up separado) =====
+  const chatFabBtn = document.getElementById("chatFabBtn");
+  if (chatFabBtn) chatFabBtn.addEventListener("click", () => abrirChatPanel(task));
+
+  const chatPanelClose = document.getElementById("chatPanelClose");
+  if (chatPanelClose) chatPanelClose.addEventListener("click", fecharChatPanel);
+
+  const chatTabAqui = document.getElementById("chatTabAqui");
+  if (chatTabAqui) chatTabAqui.addEventListener("click", () => abrirThreadAqui(task));
+
+  const chatTabMae = document.getElementById("chatTabMae");
+  if (chatTabMae) chatTabMae.addEventListener("click", () => abrirThreadDoCardMae(task));
+
+  atualizarBadgeChat(task);
+
   applyCommentsState();
 }
 
 function applyCommentsState() {
-  const body = document.getElementById("detailBody");
-  const tabDesc = document.getElementById("tabDesc");
-  const tabComments = document.getElementById("tabComments");
   const tabChange = document.getElementById("tabChange");
   const changePanel = document.getElementById("changePanel");
   const childrenPanel = document.getElementById("childrenPanel");
-  if (!body) return;
-  body.classList.toggle("split", commentsOpen);
-  if (tabDesc) tabDesc.classList.toggle("active", !commentsOpen);
-  if (tabComments) {
-    tabComments.classList.toggle("active", commentsOpen);
-    tabComments.style.display = commentsOpen ? "none" : "";
-  }
   if (tabChange) tabChange.classList.toggle("active", changeOpen);
   if (changePanel) changePanel.classList.toggle("open", changeOpen);
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
@@ -3032,6 +3229,7 @@ function stepDetail(dir) {
   const pos = order.indexOf(detailIdx);
   const next = order[(pos + dir + order.length) % order.length];
   detailIdx = next;
+  fecharChatPanel();
   renderDetail();
   document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
   const cardEl = document.querySelector(`.task-card[data-idx="${detailIdx}"]`);
