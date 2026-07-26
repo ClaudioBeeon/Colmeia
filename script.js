@@ -475,6 +475,9 @@ function atualizarAbasConfig() {
   } else {
     hint.textContent = "Cadastre os links de cada cliente (Drive, banco de imagens etc) — eles aparecem no Hub do Cliente pros designers.";
     renderPainelClientes();
+    carregarPastasDriveSeNecessario().then(() => {
+      if (configTabAtiva === "clientes") renderPainelClientes();
+    });
   }
 }
 
@@ -581,27 +584,31 @@ async function preencherDriveAutomatico() {
   statusEl.textContent = "Lendo o Drive...";
 
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarPastasClientesDrive" }),
-    });
-    const data = await res.json();
+    await carregarPastasDriveSeNecessario();
     btn.disabled = false;
 
-    if (!data.ok) {
-      statusEl.textContent = data.error || "Não consegui ler o Drive.";
+    if (!pastasDriveCache || pastasDriveCache.length === 0) {
+      statusEl.textContent = "Não consegui ler o Drive.";
       return;
     }
 
-    const pastasDrive = data.clientes || [];
+    const pastasDrive = pastasDriveCache;
     const todosClientes = listarTodosClientesConhecidos();
     let atualizados = 0;
 
     for (const cliente of todosClientes) {
-      const pasta = pastasDrive.find(p => normalizarParaComparar(p.nome) === normalizarParaComparar(cliente));
+      const dadosAtuais = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [], pastaDriveVinculada: "" };
+
+      // Se já tem um vínculo manual escolhido, usa ele — não tenta
+      // adivinhar pelo nome nesse caso.
+      let pasta = null;
+      if (dadosAtuais.pastaDriveVinculada) {
+        pasta = pastasDrive.find(p => p.driveUrl === dadosAtuais.pastaDriveVinculada);
+      } else {
+        pasta = pastasDrive.find(p => normalizarParaComparar(p.nome) === normalizarParaComparar(cliente));
+      }
       if (!pasta) continue;
 
-      const dadosAtuais = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [] };
       const precisaDrive = !dadosAtuais.drive && pasta.driveUrl;
       const precisaPublicacoes = !dadosAtuais.pastaPublicacoes && pasta.pastaPublicacoesUrl;
       if (!precisaDrive && !precisaPublicacoes) continue;
@@ -611,6 +618,7 @@ async function preencherDriveAutomatico() {
         bancoImagens: dadosAtuais.bancoImagens || "",
         bibliotecaAdobe: dadosAtuais.bibliotecaAdobe || "",
         pastaPublicacoes: dadosAtuais.pastaPublicacoes || pasta.pastaPublicacoesUrl || "",
+        pastaDriveVinculada: dadosAtuais.pastaDriveVinculada || "",
         extras: dadosAtuais.extras || [],
       };
       const ok = await salvarLinksClienteNoBackend(cliente, novosDados);
@@ -630,6 +638,25 @@ async function preencherDriveAutomatico() {
     console.error("Falha ao preencher Drive automaticamente:", err);
     btn.disabled = false;
     statusEl.textContent = "Falha de conexão.";
+  }
+}
+
+// Cache das pastas de cliente lidas do Drive, carregada uma vez ao
+// abrir a aba "Links de clientes" — usada pro seletor de vínculo manual.
+let pastasDriveCache = null;
+
+async function carregarPastasDriveSeNecessario() {
+  if (pastasDriveCache !== null || !COLMEIA_API_URL) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "listarPastasClientesDrive" }),
+    });
+    const data = await res.json();
+    pastasDriveCache = data.ok ? (data.clientes || []) : [];
+  } catch (err) {
+    console.error("Falha ao carregar pastas do Drive:", err);
+    pastasDriveCache = [];
   }
 }
 
@@ -653,7 +680,7 @@ function renderPainelClientes() {
     <input type="text" class="rule-add-search" id="clientesConfigSearch" placeholder="Buscar cliente..." value="${clientesConfigFiltro}">
     <div class="config-clientes-list">
       ${clientesFiltrados.map(cliente => {
-        const dados = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [] };
+        const dados = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [], pastaDriveVinculada: "" };
         const aberto = clientesConfigExpandido.has(cliente);
         return `
           <div class="atendimento-group ${aberto ? "expanded" : ""}">
@@ -662,6 +689,15 @@ function renderPainelClientes() {
             </button>
             ${aberto ? `
               <div class="cliente-links-form" data-cliente-form="${cliente}">
+                <label class="cliente-link-field">
+                  <span>Vincular pasta do Drive (se o nome vier diferente)</span>
+                  <select class="cliente-drive-vinculo" data-campo="pastaDriveVinculada">
+                    <option value="">— Escolher a pasta certa —</option>
+                    ${(pastasDriveCache || []).map(p => `
+                      <option value="${p.driveUrl}" data-pub="${p.pastaPublicacoesUrl || ""}" ${dados.pastaDriveVinculada === p.driveUrl ? "selected" : ""}>${p.nome}</option>
+                    `).join("")}
+                  </select>
+                </label>
                 <label class="cliente-link-field">
                   <span>Drive do cliente</span>
                   <input type="text" data-campo="drive" value="${dados.drive || ""}" placeholder="https://drive.google.com/...">
@@ -738,6 +774,17 @@ function renderPainelClientes() {
     btn.addEventListener("click", () => btn.closest(".cliente-link-extra").remove());
   });
 
+  body.querySelectorAll(".cliente-drive-vinculo").forEach(select => {
+    select.addEventListener("change", () => {
+      const form = select.closest(".cliente-links-form");
+      const opcao = select.options[select.selectedIndex];
+      if (!opcao.value) return;
+      form.querySelector('[data-campo="drive"]').value = opcao.value;
+      const pub = opcao.dataset.pub;
+      if (pub) form.querySelector('[data-campo="pastaPublicacoes"]').value = pub;
+    });
+  });
+
   body.querySelectorAll("[data-cliente-salvar]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const cliente = btn.dataset.clienteSalvar;
@@ -747,6 +794,7 @@ function renderPainelClientes() {
         bancoImagens: form.querySelector('[data-campo="bancoImagens"]').value.trim(),
         bibliotecaAdobe: form.querySelector('[data-campo="bibliotecaAdobe"]').value.trim(),
         pastaPublicacoes: form.querySelector('[data-campo="pastaPublicacoes"]').value.trim(),
+        pastaDriveVinculada: form.querySelector('[data-campo="pastaDriveVinculada"]').value,
         extras: Array.from(form.querySelectorAll(".cliente-link-extra")).map(div => ({
           nome: div.querySelector('[data-extra-campo="nome"]').value.trim(),
           url: div.querySelector('[data-extra-campo="url"]').value.trim(),
