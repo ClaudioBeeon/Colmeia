@@ -1556,3 +1556,9 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 }
 #driveAutofillBtn:hover { background: #EDEDFF; }
 #driveAutofillBtn:disabled { opacity: 0.6; cursor: default; }
+
+.cliente-drive-vinculo {
+  border: 1px solid #0000FB; border-radius: 8px;
+  padding: 7px 10px; font-family: inherit; font-size: 12.5px;
+  background: #EDEDFF; color: #0000FB; font-weight: 600;
+}
