@@ -826,6 +826,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   padding: 9px 12px; border-radius: 10px;
 }
 .discord-cta:hover { opacity: 0.9; }
+.discord-cta.disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 
 .discord-cta.ghost { background: var(--accent-soft); color: var(--accent); }
 
