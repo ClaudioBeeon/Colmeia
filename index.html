@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&family=Questrial&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -155,6 +155,35 @@
       </div>
     </div>
 
+    <div class="rule-modal-overlay" id="clientHubModalOverlay" hidden>
+      <div class="rule-modal client-hub-modal">
+        <div class="rule-modal-header">
+          <div class="ch-modal-title-wrap">
+            <div class="ch-modal-icon" id="chModalIcon"></div>
+            <h3 id="chModalNome"></h3>
+          </div>
+          <button type="button" id="clientHubModalClose" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="rule-modal-body ch-modal-body">
+          <div class="ch-section-label">Hub do cliente</div>
+          <div class="hub-grid" id="chModalHub"></div>
+
+          <div class="ch-atend-row" id="chModalAtendRow">
+            <img id="chModalAtendFoto" class="ch-atend-foto" alt="">
+            <div>
+              <div class="ch-atend-label">Atendimento</div>
+              <div class="ch-atend-nome" id="chModalAtendNome"></div>
+            </div>
+          </div>
+
+          <div class="ch-section-label">Tarefas em aberto (entrega mais próxima primeiro)</div>
+          <div id="chModalTarefas" class="ch-tarefas-lista"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="rule-modal-overlay" id="ruleModalOverlay" hidden>
       <div class="rule-modal">
         <div class="rule-modal-header">
@@ -172,7 +201,7 @@
     </section>
 
     <section class="app-page" id="page-clientes" hidden>
-      <div class="pd-designers-grid" id="clientsGrid"></div>
+      <div class="mc-grid" id="clientsGrid"></div>
     </section>
 
     <section class="app-page" id="page-atendimento" hidden>
