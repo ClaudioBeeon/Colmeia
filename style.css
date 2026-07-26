@@ -1687,15 +1687,45 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   padding: 4px; display: flex; gap: 2px; box-shadow: var(--shadow-hover); z-index: 15;
 }
 
-.criar-pasta-drive-btn {
-  margin-top: 8px;
-  border: 1px solid var(--border); border-radius: 8px;
-  background: transparent; color: var(--text-secondary);
-  font-family: inherit; font-size: 12px; font-weight: 600;
-  padding: 7px 10px; cursor: pointer; width: 100%; text-align: left;
+.pasta-drive-btn {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid #0000FB; border-radius: 10px;
+  background: transparent; color: #0000FB;
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 9px 12px; cursor: pointer; width: 100%; text-align: left;
 }
-.criar-pasta-drive-btn:hover { background: var(--page-bg); }
-.criar-pasta-drive-btn:disabled { opacity: 0.6; cursor: default; }
+.pasta-drive-btn:hover { background: #EDEDFF; }
+.pasta-drive-btn:disabled { opacity: 0.6; cursor: default; }
+.pasta-drive-btn-icon { flex-shrink: 0; display: flex; }
+.pasta-drive-btn-icon svg { width: 15px; height: 15px; }
+.pasta-drive-btn-label-wrap { position: relative; overflow: hidden; height: 15px; flex: 1; }
+.pasta-drive-btn-label {
+  display: block; white-space: nowrap;
+  transition: transform 0.26s ease, opacity 0.26s ease;
+}
+.pasta-drive-btn-label.saindo { transform: translateY(-16px); opacity: 0; }
+.pasta-drive-btn-label.entrando { transform: translateY(16px); opacity: 0; }
+
+/* ===== Modal de confirmação (criar pasta no Drive) ===== */
+.confirm-pasta-modal { width: 360px; }
+.confirm-pasta-texto {
+  font-size: 13.5px; line-height: 1.6; color: var(--text-primary);
+  padding: 0 20px;
+}
+.confirm-pasta-acoes {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 16px 20px 4px;
+}
+.confirm-pasta-cancelar {
+  border: none; background: var(--page-bg); color: var(--text-secondary);
+  border-radius: 8px; padding: 8px 14px; font-family: inherit; font-size: 13px;
+  font-weight: 600; cursor: pointer;
+}
+.confirm-pasta-confirmar {
+  border: none; background: #0000FB; color: #fff;
+  border-radius: 8px; padding: 8px 14px; font-family: inherit; font-size: 13px;
+  font-weight: 600; cursor: pointer;
+}
 
 /* ===== Visual idêntico ao painel-designers-beeon (Atendimento, Serviço, Clientes) ===== */
 .pd-designers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; align-items: start; }
@@ -1729,3 +1759,12 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .pd-client-designer-photo { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
 .pd-client-tags-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
 .pd-tag { font-size: 8.5px; font-weight: 600; padding: 2px 8px; border-radius: 10px; display: inline-flex; align-items: center; gap: 2px; }
+
+/* Correção: o [hidden] do navegador estava sendo sobrescrito pelo
+   display:grid/flex dessas classes, fazendo os pickers ficarem
+   sempre visíveis mesmo com o atributo hidden ativo. */
+.emoji-picker[hidden],
+.comment-mention-list[hidden],
+.comment-react-picker[hidden] {
+  display: none !important;
+}
