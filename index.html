@@ -89,8 +89,9 @@
           <input type="text" id="searchInput" placeholder="Buscar tarefa, cliente...">
         </div>
 
-        <button type="button" class="icon-btn" id="notificationsBtn" title="Notificações do Runrun.it (em breve)">
+        <button type="button" class="icon-btn" id="notificationsBtn" title="Notificações">
           <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span class="icon-btn-badge" id="notificationsBadge" hidden>0</span>
         </button>
 
         <button type="button" class="icon-btn" id="quickAccessBtn" title="Acesso rápido">
@@ -107,6 +108,18 @@
         </div>
       </div>
     </header>
+
+    <aside class="quick-access-panel" id="notificationsPanel">
+      <div class="quick-access-header">
+        <h3>Notificações</h3>
+        <button type="button" id="notificationsClose" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="quick-access-body" id="notificationsBody">
+        <p class="quick-access-empty">Carregando...</p>
+      </div>
+    </aside>
 
     <aside class="quick-access-panel" id="quickAccessPanel">
       <div class="quick-access-header">
@@ -197,10 +210,7 @@
     </div>
 
     <section class="app-page" id="page-kanban">
-      <div class="board-wrap">
-        <div class="board-headers" id="boardHeaders"></div>
-        <section class="board" id="board"></section>
-      </div>
+      <section class="board" id="board"></section>
     </section>
 
     <section class="app-page" id="page-clientes" hidden>
