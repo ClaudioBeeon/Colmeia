@@ -1515,6 +1515,22 @@ async function enviarComentarioNoBackend(taskId, texto) {
   }
 }
 
+async function reagirComentarioNoBackend(commentId, emoji) {
+  if (!COLMEIA_API_URL || !commentId || !emoji) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "reagirComentario", commentId, emoji }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou a reação:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao reagir no Runrun.it:", err);
+    return false;
+  }
+}
+
 async function excluirComentarioNoBackend(commentId) {
   if (!COLMEIA_API_URL || !commentId) return false;
   try {
@@ -1986,7 +2002,14 @@ function renderComentariosHTML(task) {
       <div class="comment-body">
         <div class="comment-author">${c.autor}</div>
         <div class="comment-text">${c.texto}</div>
+        ${(c.reactions || []).length ? `
+          <div class="comment-reactions">
+            ${c.reactions.map(r => `<span class="comment-reaction-chip" title="${(r.users || []).map(u => u.name).join(", ")}">${r.emoji} ${r.count}</span>`).join("")}
+          </div>
+        ` : ""}
       </div>
+      <button type="button" class="comment-react-btn" data-comment-id="${c.id}" title="Reagir" aria-label="Reagir">🙂</button>
+      <div class="comment-react-picker" data-comment-id="${c.id}" hidden></div>
       <button type="button" class="comment-delete-btn" data-comment-id="${c.id}" title="Excluir comentário" aria-label="Excluir comentário">
         <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
@@ -2052,6 +2075,46 @@ async function carregarComentarios(task) {
   }
 }
 
+const MESES_PT_JS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+/**
+ * Confirma com o coordenador antes de criar de verdade a pasta da
+ * tarefa no Drive, dentro de Clientes > cliente > Publicações > ano >
+ * mês > nome da tarefa.
+ */
+async function confirmarECriarPastaDoCard(task) {
+  const agora = new Date();
+  const ano = agora.getFullYear();
+  const mes = MESES_PT_JS[agora.getMonth()];
+  const caminho = `Clientes > ${task.client} > Publicações > ${ano} > ${mes} > ${task.title}`;
+
+  if (!confirm(`Deseja criar a pasta "${task.title}" em ${caminho}?`)) return;
+
+  const btn = document.getElementById("criarPastaDriveBtn");
+  const statusEl = document.getElementById("criarPastaDriveStatus");
+  btn.disabled = true;
+  statusEl.textContent = "Criando pasta...";
+
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "criarPastaDoCard", cliente: task.client, tituloCard: task.title }),
+    });
+    const data = await res.json();
+    btn.disabled = false;
+
+    if (!data.ok) {
+      statusEl.textContent = data.error || "Não consegui criar a pasta.";
+      return;
+    }
+    statusEl.innerHTML = `${data.jaExistia ? "✓ Pasta já existia" : "✓ Pasta criada"} — <a href="${data.url}" target="_blank" rel="noopener">Ver</a>`;
+  } catch (err) {
+    console.error("Falha ao criar pasta do card no Drive:", err);
+    btn.disabled = false;
+    statusEl.textContent = "Falha de conexão.";
+  }
+}
+
 function wireExcluirComentario(task) {
   document.querySelectorAll(".comment-delete-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -2061,6 +2124,27 @@ function wireExcluirComentario(task) {
       const ok = await excluirComentarioNoBackend(btn.dataset.commentId);
       if (ok) carregarComentarios(task);
       else if (bolha) bolha.style.opacity = "1";
+    });
+  });
+
+  const EMOJIS_REACAO = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+  document.querySelectorAll(".comment-react-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const picker = document.querySelector(`.comment-react-picker[data-comment-id="${CSS.escape(btn.dataset.commentId)}"]`);
+      document.querySelectorAll(".comment-react-picker").forEach(p => { if (p !== picker) p.hidden = true; });
+      if (!picker) return;
+      if (picker.innerHTML === "") {
+        picker.innerHTML = EMOJIS_REACAO.map(em => `<button type="button" class="emoji-opt">${em}</button>`).join("");
+        picker.querySelectorAll(".emoji-opt").forEach(emojiBtn => {
+          emojiBtn.addEventListener("click", async () => {
+            picker.hidden = true;
+            const ok = await reagirComentarioNoBackend(btn.dataset.commentId, emojiBtn.textContent);
+            if (ok) carregarComentarios(task);
+          });
+        });
+      }
+      picker.hidden = !picker.hidden;
     });
   });
 }
@@ -2375,6 +2459,10 @@ function renderDetail() {
             <div class="hub-grid">
               ${renderHubDoClienteHTML(task.client)}
             </div>
+            ${task.id ? `
+              <button type="button" class="criar-pasta-drive-btn" id="criarPastaDriveBtn">📁 Criar pasta do card no Drive</button>
+              <span class="people-row-saved" id="criarPastaDriveStatus"></span>
+            ` : ""}
           </div>
           <div class="side-block">
             <span class="side-label">Atendimento responsável</span>
@@ -2451,6 +2539,11 @@ function renderDetail() {
   });
 
   // ===== Menu de mais opções (⋮) =====
+  const criarPastaBtn = document.getElementById("criarPastaDriveBtn");
+  if (criarPastaBtn) {
+    criarPastaBtn.addEventListener("click", () => confirmarECriarPastaDoCard(task));
+  }
+
   const motherBtn = document.getElementById("motherCardBtn");
   if (motherBtn) motherBtn.addEventListener("click", () => abrirCardMae(task));
 
