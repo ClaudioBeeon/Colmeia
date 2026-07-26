@@ -2111,6 +2111,12 @@ async function carregarComentarios(task) {
  * chamada se a tarefa realmente tiver anexo (attachmentsCount > 0) —
  * economiza uma chamada à toa pra maioria das tarefas, que não tem.
  */
+function formatarTamanhoArquivo(bytes) {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 async function carregarAnexos(task) {
   if (!task.id || !task.attachmentsCount) return;
   let anexos = [];
@@ -2131,10 +2137,13 @@ async function carregarAnexos(task) {
     listaEl.innerHTML = `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`;
     return;
   }
+  // O Runrun.it não devolve link direto de download do arquivo — só
+  // nome/tamanho. Por isso cada anexo abre a tarefa lá (onde dá pra
+  // baixar de verdade) em vez de um link de arquivo inventado.
   listaEl.innerHTML = anexos.map(a => `
-    <a href="${a.url || "#"}" target="_blank" rel="noopener" class="attach-item" ${a.url ? "" : 'onclick="return false"'}>
-      <span>${a.nome}</span>
-      <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <a href="${task.link}" target="_blank" rel="noopener" class="attach-item" title="Abrir tarefa no Runrun.it pra baixar">
+      <span>${a.nome}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}</span>
+      <svg viewBox="0 0 24 24" fill="none"><path d="M18 13v6a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </a>
   `).join("");
 }
