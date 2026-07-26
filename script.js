@@ -987,6 +987,18 @@ async function buscarUsuariosRunrun() {
  * própria pergunta (funciona mesmo com perguntas diferentes de tarefa
  * pra tarefa, já que olha só se tem certas palavras, não o texto exato).
  */
+/**
+ * Filtro de segurança: mesmo que a IA erre e devolva de novo a
+ * pergunta de plataformas ou formatos dentro de "campos" (já mostrada
+ * separada em cima), esconde a duplicata aqui.
+ */
+function ehCampoDuplicadoDePlataformaOuFormato(pergunta) {
+  const p = normalizarParaComparar(pergunta);
+  const ehPlataforma = p.includes("publicad") || (p.includes("onde") && p.includes("conteudo"));
+  const ehFormato = p.includes("formato") && (p.includes("necess") || p.includes("quais"));
+  return ehPlataforma || ehFormato;
+}
+
 function categoriaCampoBriefing(pergunta) {
   const p = normalizarParaComparar(pergunta);
   if (p.includes("referencia") || p.includes("link")) return "cat-blue";
@@ -1115,7 +1127,7 @@ async function gerarBriefingComIA(task) {
     // Campos dinâmicos — a IA identifica sozinha quais perguntas existem
     // na descrição (varia de tarefa pra tarefa) e devolve a resposta de
     // cada uma, exatamente como está escrita (nunca reescrita).
-    const campos = b.campos || [];
+    const campos = (b.campos || []).filter(c => !ehCampoDuplicadoDePlataformaOuFormato(c.pergunta));
 
     // O campo de "texto na arte" ganha destaque especial (o designer vai
     // copiar isso direto pra peça) — identificado pela pergunta conter
