@@ -2767,26 +2767,45 @@ function sairDoColmeia() {
 
 document.getElementById("sidebarLogout").addEventListener("click", sairDoColmeia);
 
+/**
+ * Busca uma frase engraçada gerada pela IA baseada no dia/período de
+ * agora, pra mostrar na tela de login. Já deixa uma frase padrão
+ * escrita enquanto espera (a tela de login não pode ficar vazia).
+ */
+async function buscarFraseDoDia() {
+  if (!COLMEIA_API_URL) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "gerarFraseDoDia" }),
+    });
+    const data = await res.json();
+    if (data.ok && data.frase) {
+      const el = document.getElementById("loginFrase");
+      if (el) el.textContent = data.frase;
+    }
+  } catch (err) {
+    console.error("Falha ao buscar a frase do dia:", err);
+  }
+}
+
 document.getElementById("loginForm").addEventListener("submit", async e => {
   e.preventDefault();
-  const nome = document.getElementById("loginNome").value.trim();
   const senha = document.getElementById("loginSenha").value;
   const btn = document.getElementById("loginSubmit");
   const erroEl = document.getElementById("loginErro");
   erroEl.hidden = true;
 
-  if (!nome || !senha) return;
+  if (!senha) return;
   btn.disabled = true;
-  btn.textContent = "Entrando...";
 
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "login", nome, senha }),
+      body: JSON.stringify({ acao: "login", senha }),
     });
     const data = await res.json();
     btn.disabled = false;
-    btn.textContent = "Entrar";
 
     if (!data.ok) {
       erroEl.textContent = data.error || "Não consegui entrar.";
@@ -2801,7 +2820,6 @@ document.getElementById("loginForm").addEventListener("submit", async e => {
   } catch (err) {
     console.error("Falha ao tentar logar:", err);
     btn.disabled = false;
-    btn.textContent = "Entrar";
     erroEl.textContent = "Falha de conexão. Tente de novo.";
     erroEl.hidden = false;
   }
@@ -2814,6 +2832,8 @@ if (sessaoSalva && sessaoSalva.nome && sessaoSalva.papel) {
   DESIGNER_LOGADO = sessaoSalva.nome;
   PAPEL_LOGADO = sessaoSalva.papel;
   iniciarAppPosLogin();
+} else {
+  buscarFraseDoDia();
 }
 // Senão, a tela de login (já visível por padrão no HTML) fica esperando
 // o formulário ser enviado — o resto acontece no listener do submit acima.
