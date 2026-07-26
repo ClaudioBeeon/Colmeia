@@ -413,6 +413,7 @@ function mapearTarefaDoBackend(t) {
     isOutraEtapa: t.isOutraEtapa,
     parentTaskId: t.parentTaskId || null,
     link: t.link,
+    attachmentsCount: t.attachmentsCount || 0,
     assignee: t.assignee,
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
     timerSeconds: t.workedSeconds || 0,
@@ -2003,7 +2004,7 @@ function renderHubDoClienteHTML(nomeCliente) {
   return todos.join("");
 }
 
-const attachments = ["Anexo 01", "Anexo 02", "Anexo 03", "Anexo 04"];
+// (attachments fake removido — agora busca de verdade em carregarAnexos())
 
 let detailIdx = null;
 let commentsOpen = false;
@@ -2102,6 +2103,40 @@ async function carregarComentarios(task) {
       wireExcluirComentario(task);
     }
   }
+}
+
+/**
+ * Busca os anexos de verdade da tarefa (antes disso mostrava "Anexo
+ * 01, 02, 03, 04" fixos, sem vir do Runrun.it de verdade). Só faz a
+ * chamada se a tarefa realmente tiver anexo (attachmentsCount > 0) —
+ * economiza uma chamada à toa pra maioria das tarefas, que não tem.
+ */
+async function carregarAnexos(task) {
+  if (!task.id || !task.attachmentsCount) return;
+  let anexos = [];
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarAnexos", taskId: task.id }),
+    });
+    const data = await res.json();
+    if (data.ok) anexos = data.anexos || [];
+  } catch (err) {
+    console.error("Falha ao buscar anexos:", err);
+  }
+  if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
+  const listaEl = document.getElementById("attachList");
+  if (!listaEl) return;
+  if (anexos.length === 0) {
+    listaEl.innerHTML = `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`;
+    return;
+  }
+  listaEl.innerHTML = anexos.map(a => `
+    <a href="${a.url || "#"}" target="_blank" rel="noopener" class="attach-item" ${a.url ? "" : 'onclick="return false"'}>
+      <span>${a.nome}</span>
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+  `).join("");
 }
 
 const MESES_PT_JS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -2281,6 +2316,7 @@ function openDetail(idx, entradaAnimacao) {
   carregarComentarios(tasks[detailIdx]);
   carregarDescricao(tasks[detailIdx]);
   carregarSequencia(tasks[detailIdx]);
+  carregarAnexos(tasks[detailIdx]);
   renderNotificacoesUpload(tasks[detailIdx]);
   if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
 }
@@ -2460,6 +2496,7 @@ function renderDetail() {
               <button type="button" id="verRegraBtn">Ver regra</button>
               <button type="button">Reabrir tarefa</button>
               <button type="button">Ajustar horas</button>
+              ${task.id ? `<a href="${task.link}" target="_blank" rel="noopener" id="verNoRunrunBtn">Ver tarefa no Runrun</a>` : ""}
             </div>
           </div>
 
@@ -2599,18 +2636,15 @@ function renderDetail() {
           <div class="side-block attach-block">
             <div class="side-label-row">
               <span class="side-label">Anexos</span>
-              <button type="button" class="download-all-btn" onclick="return false">Baixar todos</button>
+              <button type="button" class="download-all-btn" id="downloadAllBtn" onclick="return false" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
             </div>
             <div class="attach-box">
-              <div class="attach-list">
-                ${attachments.map(a => `
-                  <div class="attach-item">
-                    <span>${a}</span>
-                    <button type="button" class="attach-toggle" aria-label="Expandir">
-                      <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                  </div>
-                `).join("")}
+              <div class="attach-list" id="attachList">
+                ${task.id
+                  ? (task.attachmentsCount
+                      ? `<p class="attach-empty">Carregando anexos...</p>`
+                      : `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`)
+                  : `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`}
               </div>
             </div>
           </div>
