@@ -924,6 +924,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .attach-item svg { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
 
 .attach-empty { font-size: 12.5px; color: var(--text-muted); font-style: italic; padding: 4px 2px; }
+.attach-size { font-size: 11px; color: var(--text-muted); font-weight: 400; }
 
 .attach-toggle {
   width: 20px; height: 20px; border-radius: 50%; border: none;
