@@ -2754,7 +2754,7 @@ function renderDetail() {
   panel.innerHTML = `
     <div class="detail-inner">
       <div class="detail-header">
-        <div class="detail-header-left">
+        <div class="detail-header-pill">
           <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
           <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
           <span class="detail-sep">|</span>
@@ -2783,12 +2783,12 @@ function renderDetail() {
           ` : ""}
           <span class="detail-taskname">${task.title}</span>
           <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
-        </div>
-        <div class="detail-header-right">
+          <span class="detail-sep">|</span>
           <div class="nav-dots-group" id="workflowSeqGroup">
             ${renderSequenciaHTML(task)}
           </div>
-
+        </div>
+        <div class="detail-header-right">
           <div class="status-wrap">
             <button type="button" class="status-badge" id="statusBadge">${task.isMotherCard ? "Card mãe" : (columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa")}</button>
             <div class="status-menu" id="statusMenu">
