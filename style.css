@@ -2069,6 +2069,15 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .pasta-drive-btn-label.saindo { transform: translateY(-16px); opacity: 0; }
 .pasta-drive-btn-label.entrando { transform: translateY(16px); opacity: 0; }
 
+.upload-check-sidebar-btn {
+  display: block; margin-top: 8px;
+  border: none; background: transparent; color: var(--text-muted);
+  font-family: inherit; font-size: 11.5px; font-weight: 600;
+  padding: 0; cursor: pointer; text-align: left;
+}
+.upload-check-sidebar-btn:hover { color: var(--accent); }
+.upload-check-sidebar-btn:disabled { opacity: 0.6; cursor: default; }
+
 /* ===== Modal de confirmação (criar pasta no Drive) ===== */
 .confirm-pasta-modal { width: 360px; }
 .confirm-pasta-texto {
