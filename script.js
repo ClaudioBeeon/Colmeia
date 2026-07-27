@@ -146,7 +146,7 @@ async function renderNotificacoesUpload(task) {
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "buscarUploadsRecentesDoCard", taskId: task.id }),
+      body: JSON.stringify({ acao: "buscarUploadsRecentesDoCard", taskId: task.id, cliente: task.client }),
     });
     resultado = await res.json();
   } catch (err) {
@@ -170,19 +170,34 @@ async function renderNotificacoesUpload(task) {
       // exclui se souber com certeza que foi outra pessoa.
       (u.quem === null || u.quem === undefined || nomesCorrespondem(u.quem, DESIGNER_LOGADO)) &&
       (agora - u.quando) < JANELA_NOTIFICACAO_UPLOAD_MS
-    )
-    .map(u => u.arquivo);
+    );
 
-  if (arquivosRelevantes.length === 0 || uploadJaVisto(resultado.pastaUrl)) {
+  if (arquivosRelevantes.length === 0) {
     container.innerHTML = "";
     return;
   }
 
-  const grupos = [{ pasta: resultado.pastaNome || "pasta do card", link: resultado.pastaUrl, arquivos: arquivosRelevantes }];
+  // IMPORTANTE: o "já visto" agora é por ESSE CONJUNTO EXATO de
+  // arquivos, não pela pasta inteira — antes, dispensar a notificação
+  // uma vez escondia a pasta pra sempre, mesmo quando um arquivo
+  // totalmente novo aparecia nela depois. Assim que qualquer arquivo
+  // novo entra na lista, a chave muda e a notificação volta a aparecer.
+  const chaveConjunto = resultado.pastaUrl + "::" + arquivosRelevantes
+    .map(u => u.arquivo + "@" + u.quando)
+    .sort()
+    .join("|");
+
+  if (uploadJaVisto(chaveConjunto)) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const nomesArquivos = arquivosRelevantes.map(u => u.arquivo);
+  const grupos = [{ pasta: resultado.pastaNome || "pasta do card", link: resultado.pastaUrl, arquivos: nomesArquivos, chave: chaveConjunto }];
 
   container.innerHTML = grupos.map(g => `
-    <div class="upload-notif" data-link="${g.link}">
-      <button type="button" class="upload-notif-dismiss" data-link="${g.link}" aria-label="Dispensar">×</button>
+    <div class="upload-notif" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}">
+      <button type="button" class="upload-notif-dismiss" data-chave="${escaparHTML(g.chave)}" aria-label="Dispensar">×</button>
       <p class="upload-notif-text">Você adicionou ${g.arquivos.length} arquivo${g.arquivos.length > 1 ? "s" : ""} na pasta <strong>${g.pasta}</strong></p>
       <div class="upload-notif-actions">
         <button type="button" class="upload-notif-copy" data-link="${g.link}">Copiar link</button>
@@ -202,8 +217,8 @@ async function renderNotificacoesUpload(task) {
   });
   container.querySelectorAll(".upload-notif-dismiss").forEach(btn => {
     btn.addEventListener("click", () => {
-      marcarUploadVisto(btn.dataset.link);
-      const el = container.querySelector(`.upload-notif[data-link="${CSS.escape(btn.dataset.link)}"]`);
+      marcarUploadVisto(btn.dataset.chave);
+      const el = container.querySelector(`.upload-notif[data-chave="${CSS.escape(btn.dataset.chave)}"]`);
       if (el) el.remove();
     });
   });
@@ -556,18 +571,25 @@ async function atualizarKanbanEmBackground() {
     });
 
     const idAberto = (tasks[detailIdx] && tasks[detailIdx].id) || null;
+    const tarefaAbertaAntes = tasks[detailIdx] || null;
     tasks = novasTarefas;
 
     if (idAberto) {
       const novoIdx = tasks.findIndex(t => t.id === idAberto);
       if (novoIdx !== -1) {
         detailIdx = novoIdx;
-      } else {
-        // A tarefa que estava aberta sumiu daqui (mudou de etapa ou de
-        // responsável) — fecha o pop-up sozinho, não faz sentido
-        // continuar mostrando o detalhe de algo que já não está mais
-        // no seu quadro.
-        closeDetail();
+      } else if (tarefaAbertaAntes) {
+        // A tarefa aberta não veio nessa busca — pode ser porque foi
+        // entregue agora há pouco, porque é um card mãe (o backend não
+        // devolve cards mãe na lista normal de propósito), uma
+        // subtarefa, ou qualquer outro caso "fora do quadro". Em NENHUM
+        // desses casos o pop-up deve fechar sozinho — só a própria
+        // pessoa fechando manualmente. Mantém a tarefa viva com os
+        // dados que já tínhamos; um status que não bate com nenhuma
+        // coluna garante que ela não volte a aparecer no quadro.
+        tarefaAbertaAntes.status = "__fora_do_quadro__";
+        tasks.push(tarefaAbertaAntes);
+        detailIdx = tasks.length - 1;
       }
     }
 
@@ -3163,12 +3185,15 @@ function wireWorkflowArrows(task) {
     } else {
       deliverBtn.addEventListener("click", async () => {
         deliverBtn.disabled = true;
-        await pararCronometroAoTransferir(task);
 
-        // Anima na hora (círculo virando verde + o pill preto inteiro
-        // "varrendo" de verde), mesmo antes do Runrun.it confirmar —
-        // se der errado, desfaz sozinho (o carregarSequencia final
-        // busca o estado real da tarefa).
+        // Tudo visual acontece NA HORA, antes de qualquer resposta do
+        // Runrun.it: já troca pro ícone de reciclagem (reabrir), pinta
+        // o botão de verde e faz o pill preto inteiro varrer de verde.
+        // Se der errado lá embaixo, tudo isso volta sozinho.
+        const iconOriginal = deliverBtn.innerHTML;
+        const tituloOriginal = deliverBtn.title;
+        deliverBtn.innerHTML = reopenIcon;
+        deliverBtn.title = "Reabrir tarefa";
         deliverBtn.classList.add("delivered");
         const pillEl = document.querySelector(".detail-header-pill");
         if (pillEl) {
@@ -3178,6 +3203,8 @@ function wireWorkflowArrows(task) {
         }
         const entregueOtimista = task.entregue;
         task.entregue = true;
+
+        await pararCronometroAoTransferir(task);
 
         // Primeiro fecha a etapa da última pessoa da sequência (sem
         // transferir pra ninguém, já que não tem próximo) — confirmado
@@ -3193,8 +3220,11 @@ function wireWorkflowArrows(task) {
           await carregarSequencia(task);
           agendarAtualizacaoKanban();
         } else {
-          // Runrun.it recusou — a conclusão volta sozinha.
+          // Runrun.it recusou — volta tudo sozinho pro estado original,
+          // ícone de concluir incluso.
           task.entregue = entregueOtimista;
+          deliverBtn.innerHTML = iconOriginal;
+          deliverBtn.title = tituloOriginal;
           deliverBtn.classList.remove("delivered");
           if (pillEl) pillEl.classList.remove("entregando");
           deliverBtn.disabled = false;
@@ -3334,6 +3364,9 @@ function renderDetail() {
                   <span class="pasta-drive-btn-label">Criar pasta do card</span>
                 </span>
               </button>
+              <button type="button" class="upload-check-sidebar-btn" id="uploadCheckSidebarBtn" title="Verificar se subiu algum arquivo novo na pasta do card">
+                ↻ Verificar upload novo
+              </button>
             </div>
           ` : ""}
           <div class="side-block">
@@ -3464,6 +3497,18 @@ function renderDetail() {
   if (criarPastaBtn) {
     criarPastaBtn.addEventListener("click", () => confirmarECriarPastaDoCard(task));
     verificarPastaJaSalva(task, criarPastaBtn);
+  }
+
+  const uploadCheckSidebarBtn = document.getElementById("uploadCheckSidebarBtn");
+  if (uploadCheckSidebarBtn) {
+    uploadCheckSidebarBtn.addEventListener("click", async () => {
+      uploadCheckSidebarBtn.disabled = true;
+      uploadCheckSidebarBtn.textContent = "Verificando...";
+      abrirChatPanel(task); // abre o painel de comentários pra já mostrar o resultado
+      await renderNotificacoesUpload(task);
+      uploadCheckSidebarBtn.disabled = false;
+      uploadCheckSidebarBtn.textContent = "↻ Verificar upload novo";
+    });
   }
 
   wireEdicaoEntregaDesejada(task);
@@ -3962,6 +4007,12 @@ function closeDetail() {
   panel.classList.remove("open");
   document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
   setTimeout(() => panel.classList.remove("visible"), 250);
+  // Sem isso, uma tarefa concluída (que o Colmeia mantém viva em
+  // `tasks` só pra não fechar o pop-up sozinho — ver
+  // atualizarKanbanEmBackground) continuaria sendo "readicionada" pra
+  // sempre a cada atualização em segundo plano, mesmo depois de a
+  // pessoa já ter fechado o pop-up manualmente.
+  detailIdx = -1;
 }
 
 document.addEventListener("keydown", e => {
