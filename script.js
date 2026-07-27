@@ -490,6 +490,72 @@ async function carregarTarefasReais() {
   }
 }
 
+/**
+ * Busca de novo as tarefas reais do Runrun.it e atualiza o quadro sem
+ * mostrar a tela de "Carregando..." e sem fechar o pop-up de detalhe
+ * que estiver aberto — usada depois de qualquer ação (comentário,
+ * concluir, avançar responsável, mudar coluna etc) pra que tarefas que
+ * mudaram de dono/etapa já sumam do quadro sozinhas, e tarefas novas já
+ * apareçam, sem precisar dar F5.
+ */
+async function atualizarKanbanEmBackground() {
+  if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL + "?tipo=tarefas");
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const novasTarefas = data.tarefas.filter(t => !t.isOutraEtapa).map(mapearTarefaDoBackend);
+
+    // Preserva o progresso visual (barra) e não deixa o cronômetro
+    // "voltar no tempo" se, por acaso, o Runrun.it ainda não processou
+    // os últimos segundos rodados localmente.
+    novasTarefas.forEach(nova => {
+      const antiga = tasks.find(t => t.id === nova.id);
+      if (antiga) {
+        nova.estimatePct = antiga.estimatePct || nova.estimatePct;
+        if (antiga.running && nova.running) {
+          nova.timerSeconds = Math.max(nova.timerSeconds, antiga.timerSeconds);
+        }
+      }
+    });
+
+    const idAberto = (tasks[detailIdx] && tasks[detailIdx].id) || null;
+    tasks = novasTarefas;
+
+    if (idAberto) {
+      const novoIdx = tasks.findIndex(t => t.id === idAberto);
+      if (novoIdx !== -1) {
+        detailIdx = novoIdx;
+      } else {
+        // A tarefa que estava aberta sumiu daqui (mudou de etapa ou de
+        // responsável) — fecha o pop-up sozinho, não faz sentido
+        // continuar mostrando o detalhe de algo que já não está mais
+        // no seu quadro.
+        closeDetail();
+      }
+    }
+
+    render();
+    updateNowPlaying();
+  } catch (err) {
+    console.error("Falha ao atualizar o kanban em background:", err);
+  }
+}
+
+// Agenda a atualização em background com um pequeno atraso (dá tempo
+// do Runrun.it processar a mudança) e "debounca" — se vários cliques
+// pedirem atualização em sequência, só dispara uma vez.
+let _timeoutAtualizacaoKanban = null;
+function agendarAtualizacaoKanban() {
+  clearTimeout(_timeoutAtualizacaoKanban);
+  _timeoutAtualizacaoKanban = setTimeout(atualizarKanbanEmBackground, 900);
+}
+
+// Além de atualizar depois de cada ação, também atualiza sozinho de
+// tempos em tempos (pega mudanças feitas por outras pessoas do time).
+setInterval(atualizarKanbanEmBackground, 60000);
+
 async function salvarPrioridadeNoBackend(taskId, prioridade) {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1 || !taskId) return;
   try {
@@ -533,6 +599,27 @@ async function pausarTarefaNoBackend(taskId) {
   } catch (err) {
     console.error("Falha ao pausar no Runrun.it:", err);
   }
+}
+
+/**
+ * Para o cronômetro (visual + Runrun.it) automaticamente sempre que a
+ * tarefa é transferida pro próximo responsável ou concluída — não faz
+ * sentido o cronômetro continuar rodando numa tarefa que já não é mais
+ * "sua" ou que já foi entregue.
+ */
+function pararCronometroAoTransferir(task) {
+  if (!task.running) return;
+  task.running = false;
+  pausarTarefaNoBackend(task.id);
+  render();
+  updateNowPlaying();
+  const detailPlayBtn = document.getElementById("detailPlay");
+  if (detailPlayBtn) {
+    detailPlayBtn.innerHTML = playIcon;
+    detailPlayBtn.setAttribute("aria-label", "Iniciar tarefa");
+  }
+  const detailTimerEl = document.getElementById("detailTimer");
+  if (detailTimerEl) detailTimerEl.textContent = formatTime(task.timerSeconds);
 }
 
 /**
@@ -1444,12 +1531,25 @@ const CORES_FORMATO_BOX = ["fb-blue", "fb-purple", "fb-orange", "fb-teal", "fb-p
  * tarefa em plataformas + formatos + um resumo do briefing, e desenha
  * o resultado no lugar do botão.
  */
+function wireBriefingCopyButtons(resultEl) {
+  resultEl.querySelectorAll(".ai-briefing-copy-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(btn.dataset.texto).then(() => {
+        const original = btn.innerHTML;
+        btn.innerHTML = "✓";
+        setTimeout(() => { btn.innerHTML = original; }, 1200);
+      });
+    });
+  });
+}
+
 async function gerarBriefingComIA(task) {
   const resultEl = document.getElementById("briefingResult");
   if (!resultEl) return;
 
   if (!COLMEIA_API_URL) {
     resultEl.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
+    task.briefingHTML = resultEl.innerHTML;
     return;
   }
 
@@ -1466,10 +1566,12 @@ async function gerarBriefingComIA(task) {
 
     if (!data.ok) {
       resultEl.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui gerar o briefing."}</p>`;
+      task.briefingHTML = resultEl.innerHTML;
       return;
     }
     if (data.semDescricao) {
       resultEl.innerHTML = `<p class="workflow-seq-empty">Essa tarefa não tem descrição pra organizar.</p>`;
+      task.briefingHTML = resultEl.innerHTML;
       return;
     }
 
@@ -1535,19 +1637,13 @@ async function gerarBriefingComIA(task) {
       })()}
     `;
 
-    resultEl.querySelectorAll(".ai-briefing-copy-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        navigator.clipboard.writeText(btn.dataset.texto).then(() => {
-          const original = btn.innerHTML;
-          btn.innerHTML = "✓";
-          setTimeout(() => { btn.innerHTML = original; }, 1200);
-        });
-      });
-    });
+    task.briefingHTML = resultEl.innerHTML; // guarda pronto — não perde mais em re-renders (ex: ao dar play)
+    wireBriefingCopyButtons(resultEl);
   } catch (err) {
     console.error("Falha ao gerar briefing com IA:", err);
     if (tasks[detailIdx] === task) {
       resultEl.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
+      task.briefingHTML = resultEl.innerHTML;
     }
   }
 }
@@ -1899,6 +1995,8 @@ function setupDragAndDrop() {
           if (!ok) {
             task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
             render();
+          } else {
+            agendarAtualizacaoKanban();
           }
         });
       }
@@ -1944,6 +2042,8 @@ function attachCardDragHandlers() {
             if (!ok) {
               task.status = statusAntigo;
               render();
+            } else {
+              agendarAtualizacaoKanban();
             }
           });
           return;
@@ -1977,11 +2077,13 @@ function attachCardDragHandlers() {
       menu.querySelector(".assignee-advance-btn").addEventListener("click", async ev => {
         ev.stopPropagation();
         menu.classList.remove("open");
+        pararCronometroAoTransferir(task);
         const novoResponsavel = await avancarWorkflowNoBackend(task.id);
         if (novoResponsavel) {
           task.assignee = novoResponsavel;
           task.assigneeAvatarUrl = null;
           render();
+          agendarAtualizacaoKanban();
         } else {
           console.warn("Não consegui avançar a sequência — talvez essa tarefa não tenha uma Sequência de responsáveis configurada.");
         }
@@ -2010,6 +2112,7 @@ function attachCardDragHandlers() {
             task.assignee = nomeEscolhido;
             task.assigneeAvatarUrl = null; // deixa a próxima carga real trazer a foto certa
             render();
+            agendarAtualizacaoKanban();
           } else {
             alert("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.");
           }
@@ -2573,9 +2676,25 @@ function trocarTextoBotaoPasta(novoTexto) {
 async function confirmarECriarPastaDoCard(task) {
   const btn = document.getElementById("criarPastaDriveBtn");
 
-  // Se a pasta já foi criada nessa sessão, o botão vira link de acesso.
-  if (btn.dataset.pastaUrl) {
-    window.open(btn.dataset.pastaUrl, "_blank");
+  // Se ainda está em andamento a checagem automática de "essa pasta já
+  // existe?" (corrida entre o clique e essa checagem), espera ela
+  // terminar antes de decidir se cria uma pasta nova ou só abre a que
+  // já existe — é exatamente essa corrida que fazia o Colmeia às vezes
+  // não reconhecer uma pasta já criada.
+  if (task._pastaCheckPromise) {
+    btn.disabled = true;
+    trocarTextoBotaoPasta("Verificando...");
+    await task._pastaCheckPromise;
+    btn.disabled = false;
+  }
+
+  // Se a pasta já foi criada antes (guardado no objeto da tarefa, então
+  // sobrevive a qualquer re-render do pop-up — não só no dataset do
+  // botão, que é recriado do zero toda vez), o botão vira link de acesso.
+  const urlJaSalva = btn.dataset.pastaUrl || task.pastaUrlSalva;
+  if (urlJaSalva) {
+    trocarTextoBotaoPasta("Acessar pasta do card");
+    window.open(urlJaSalva, "_blank");
     return;
   }
 
@@ -2603,6 +2722,7 @@ async function confirmarECriarPastaDoCard(task) {
       return;
     }
     btn.dataset.pastaUrl = data.url;
+    task.pastaUrlSalva = data.url; // guarda no objeto da tarefa — reconhece na hora se reabrir de novo
     trocarTextoBotaoPasta("Acessar pasta do card");
   } catch (err) {
     console.error("Falha ao criar pasta do card no Drive:", err);
@@ -2616,23 +2736,51 @@ async function confirmarECriarPastaDoCard(task) {
  * tocar no Drive) se a pasta do card já foi criada antes — assim o
  * botão já nasce como "Acessar pasta do card" em vez de pedir
  * confirmação de criação de novo toda vez que a tarefa é reaberta.
+ *
+ * O resultado fica guardado em task.pastaUrlSalva (não só no dataset
+ * do botão, que é recriado do zero a cada renderDetail) — assim, se o
+ * pop-up re-renderizar por qualquer motivo (dar play, mudar de coluna,
+ * etc), o botão já nasce certo na hora, sem esperar o fetch de novo e
+ * sem correr o risco de "esquecer" que a pasta já existe.
  */
 async function verificarPastaJaSalva(task, btn) {
   if (!task.id) return;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarPastaCard", taskId: task.id }),
-    });
-    const data = await res.json();
-    if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
-    if (data.ok && data.url) {
-      btn.dataset.pastaUrl = data.url;
+
+  if (task.pastaUrlSalva !== undefined) {
+    if (task.pastaUrlSalva) {
+      btn.dataset.pastaUrl = task.pastaUrlSalva;
       const label = btn.querySelector(".pasta-drive-btn-label");
       if (label) label.textContent = "Acessar pasta do card";
     }
-  } catch (err) {
-    console.error("Falha ao checar se a pasta do card já existe:", err);
+    return;
+  }
+
+  if (!task._pastaCheckPromise) {
+    task._pastaCheckPromise = (async () => {
+      try {
+        const res = await fetch(COLMEIA_API_URL, {
+          method: "POST",
+          body: JSON.stringify({ acao: "buscarPastaCard", taskId: task.id }),
+        });
+        const data = await res.json();
+        task.pastaUrlSalva = (data.ok && data.url) ? data.url : null;
+      } catch (err) {
+        console.error("Falha ao checar se a pasta do card já existe:", err);
+        // Não guarda nada em caso de erro — deixa tentar de novo da
+        // próxima vez que a tarefa for aberta, em vez de travar como
+        // "sem pasta" pra sempre por causa de uma falha de rede.
+      } finally {
+        task._pastaCheckPromise = null;
+      }
+    })();
+  }
+
+  await task._pastaCheckPromise;
+  if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
+  if (task.pastaUrlSalva) {
+    btn.dataset.pastaUrl = task.pastaUrlSalva;
+    const label = btn.querySelector(".pasta-drive-btn-label");
+    if (label) label.textContent = "Acessar pasta do card";
   }
 }
 
@@ -2649,13 +2797,23 @@ function wireEdicaoEntregaDesejada(task) {
   btn.addEventListener("click", () => {
     const row = document.getElementById("dueDateRow");
     if (!row) return;
-    row.innerHTML = `<input type="date" class="side-date-input" id="dueDateInput" value="${task.due || ""}">`;
+    // Usa a data ISO (ano-mês-dia) de verdade como valor inicial do
+    // input — usar o texto já formatado ("22 jul") aqui quebrava o
+    // calendário nativo (ele não reconhece esse formato) e depois
+    // salvava o valor cru (ex: "2026-07-27") no lugar do "22 jul"
+    // bonito, que era o bug reportado.
+    row.innerHTML = `<input type="date" class="side-date-input" id="dueDateInput" value="${task.dueISO || ""}">`;
     const input = document.getElementById("dueDateInput");
     input.focus();
+    // Abre o calendário nativo direto (em vez de deixar a pessoa
+    // digitar a data na mão) — dá a sensação de um seletor moderno.
+    if (typeof input.showPicker === "function") {
+      try { input.showPicker(); } catch (e) { /* alguns navegadores recusam fora de um clique direto — sem problema, o campo continua clicável normalmente */ }
+    }
 
     async function salvar() {
-      const novaData = input.value;
-      if (!novaData || novaData === task.due) {
+      const novaData = input.value; // sempre no formato AAAA-MM-DD
+      if (!novaData || novaData === task.dueISO) {
         renderDetail();
         return;
       }
@@ -2671,9 +2829,14 @@ function wireEdicaoEntregaDesejada(task) {
           setTimeout(() => renderDetail(), 1800);
           return;
         }
-        task.due = novaData;
+        // Mantém sempre o mesmo padrão visual de antes (ex: "27 jul"),
+        // nunca a data crua (AAAA-MM-DD) — isso é que ficava feio.
+        const [ano, mes, dia] = novaData.split("-").map(Number);
+        task.dueISO = novaData;
+        task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
         renderDetail();
         render(); // atualiza a data no card do quadro também
+        agendarAtualizacaoKanban();
       } catch (err) {
         console.error("Falha ao trocar a Entrega desejada:", err);
         row.innerHTML = `<span class="side-date-saving">Falha de conexão</span>`;
@@ -2773,6 +2936,13 @@ function openDetail(idx, entradaAnimacao) {
   carregarAnexos(tasks[detailIdx]);
   renderNotificacoesUpload(tasks[detailIdx]);
   if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
+  // Se já tinha sido gerado antes (task.briefingHTML cacheado), o
+  // template já usa o cache direto — só precisa religar os botões de
+  // copiar, já que o innerHTML foi todo recriado do zero.
+  else if (tasks[detailIdx].briefingHTML !== undefined) {
+    const resultEl = document.getElementById("briefingResult");
+    if (resultEl) wireBriefingCopyButtons(resultEl);
+  }
 }
 
 /**
@@ -2788,8 +2958,18 @@ function renderSequenciaHTML(task) {
     return `<span class="workflow-seq-empty">Carregando sequência...</span>`;
   }
   if (task.sequencia.length === 0) {
+    // Sem "Sequência de responsáveis" configurada — em vez de só um
+    // texto ("Sem sequência"), mostra a foto de quem está com a tarefa
+    // agora (o responsável atual), pra sempre dar pra ver quem deve
+    // fazer o quê.
+    const responsavelAtualHTML = `
+      <div class="wf-dot current wf-dot-sem-sequencia" title="${task.assignee}">
+        ${avatarHTML(task.assignee, "avatar-xs", task.assigneeAvatarUrl)}
+      </div>
+    `;
     if (task.entregue) {
       return `
+        <div class="workflow-seq-dots">${responsavelAtualHTML}</div>
         <button type="button" class="nav-arrow nav-deliver delivered" id="navDeliverBtn" title="Reabrir tarefa">
           ${reopenIcon}
         </button>
@@ -2800,13 +2980,13 @@ function renderSequenciaHTML(task) {
       // de concluir/entregar é obrigatório aqui, senão não tem outro
       // jeito de marcar essa subtarefa como entregue.
       return `
-        <span class="workflow-seq-empty">Sem sequência</span>
+        <div class="workflow-seq-dots">${responsavelAtualHTML}</div>
         <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Concluir e entregar essa subtarefa">
           <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       `;
     }
-    return `<span class="workflow-seq-empty">Sem sequência configurada</span>`;
+    return `<div class="workflow-seq-dots">${responsavelAtualHTML}</div>`;
   }
   const atualIdx = task.sequencia.findIndex(s => s.atual);
   const semNinguemNaFrente = atualIdx !== -1 && task.sequencia[atualIdx].ultimo;
@@ -2870,24 +3050,51 @@ function wireWorkflowArrows(task) {
   if (prevBtn) {
     prevBtn.addEventListener("click", async () => {
       prevBtn.disabled = true;
+      pararCronometroAoTransferir(task);
       const novoResponsavel = await desfazerWorkflowNoBackend(task.id);
       if (novoResponsavel) {
         task.assignee = novoResponsavel;
         task.assigneeAvatarUrl = null;
         render();
+        agendarAtualizacaoKanban();
       }
+      // Sincroniza com o Runrun.it de verdade — se a chamada acima
+      // falhou, isso já devolve a sequência real (volta sozinho).
       await carregarSequencia(task);
     });
   }
   if (nextBtn) {
     nextBtn.addEventListener("click", async () => {
       nextBtn.disabled = true;
+      pararCronometroAoTransferir(task);
+
+      // Animação otimista: já mostra a transferência acontecendo na
+      // hora (mesmo sem confirmação do Runrun.it ainda) — se a chamada
+      // de baixo falhar, o carregarSequencia final busca o estado real
+      // e desfaz a animação sozinho.
+      if (task.sequencia && task.sequencia.length) {
+        const atualIdx = task.sequencia.findIndex(s => s.atual);
+        if (atualIdx !== -1 && atualIdx < task.sequencia.length - 1) {
+          task.sequencia[atualIdx].atual = false;
+          task.sequencia[atualIdx].concluido = true;
+          task.sequencia[atualIdx + 1].atual = true;
+          const seqEl = document.getElementById("workflowSeqGroup");
+          if (seqEl) {
+            seqEl.innerHTML = renderSequenciaHTML(task);
+            wireWorkflowArrows(task);
+          }
+        }
+      }
+
       const novoResponsavel = await avancarWorkflowNoBackend(task.id);
       if (novoResponsavel) {
         task.assignee = novoResponsavel;
         task.assigneeAvatarUrl = null;
         render();
+        agendarAtualizacaoKanban();
       }
+      // Sincroniza com o Runrun.it de verdade (confirma ou desfaz a
+      // animação otimista de cima, se o Runrun.it recusou).
       await carregarSequencia(task);
     });
   }
@@ -2912,6 +3119,15 @@ function wireWorkflowArrows(task) {
     } else {
       deliverBtn.addEventListener("click", async () => {
         deliverBtn.disabled = true;
+        pararCronometroAoTransferir(task);
+
+        // Anima na hora (círculo virando verde), mesmo antes do
+        // Runrun.it confirmar — se der errado, desfaz sozinho (o
+        // carregarSequencia final busca o estado real da tarefa).
+        deliverBtn.classList.add("delivered");
+        const entregueOtimista = task.entregue;
+        task.entregue = true;
+
         // Primeiro fecha a etapa da última pessoa da sequência (sem
         // transferir pra ninguém, já que não tem próximo) — confirmado
         // que o Runrun.it só deixa entregar depois disso. Se a tarefa
@@ -2922,14 +3138,15 @@ function wireWorkflowArrows(task) {
         const ok = await entregarTarefaNoBackend(task.id);
         if (ok) {
           task.entregue = true;
-          // Anima o círculo virando verde antes de trocar pro ícone de
-          // reabrir (senão a troca de ícone acontece de repente, sem o
-          // usuário ver a confirmação visual).
-          deliverBtn.classList.add("delivered");
           await esperar(450);
           await carregarSequencia(task);
+          agendarAtualizacaoKanban();
         } else {
+          // Runrun.it recusou — a conclusão volta sozinha.
+          task.entregue = entregueOtimista;
+          deliverBtn.classList.remove("delivered");
           deliverBtn.disabled = false;
+          await carregarSequencia(task);
         }
       });
     }
@@ -3018,7 +3235,7 @@ function renderDetail() {
             <div class="desc-content" id="descContent">
               ${task.id ? `
                 <div class="ai-briefing-result" id="briefingResult">
-                  <p class="workflow-seq-empty">Carregando briefing...</p>
+                  ${task.briefingHTML !== undefined ? task.briefingHTML : `<p class="workflow-seq-empty">Carregando briefing...</p>`}
                 </div>
                 <div class="desc-actions-row">
                   <button type="button" class="ai-briefing-toggle" id="verOriginalBtn">Ver briefing original</button>
@@ -3241,6 +3458,8 @@ function renderDetail() {
         task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
         renderDetail();
         render();
+      } else {
+        agendarAtualizacaoKanban();
       }
     });
   });
@@ -3383,14 +3602,39 @@ function renderDetail() {
     commentInput.disabled = true;
     limparAnexoSelecionado();
 
+    // Mostra a bolha na hora (opaca/pendente), antes mesmo do Runrun.it
+    // confirmar — assim que confirma, ela "acende" (muda de cor).
+    const thread = document.getElementById("commentsThread");
+    const idTemporario = "pendente-" + Date.now();
+    if (thread && texto) {
+      const vazio = thread.querySelector(".comments-empty");
+      if (vazio) vazio.remove();
+      thread.insertAdjacentHTML("beforeend", `
+        <div class="comment-bubble mine pending" data-comment-id="${idTemporario}">
+          <div class="comment-body">
+            <div class="comment-meta"><span class="comment-author">Você</span><span class="comment-time">Enviando...</span></div>
+            <div class="comment-text">${linkifyTexto(escaparHTML(texto))}</div>
+          </div>
+        </div>
+      `);
+      thread.scrollTop = thread.scrollHeight;
+    }
+
     const ok = arquivoAtual
       ? await enviarComentarioComAnexoNoBackend(alvoId, texto, arquivoAtual)
       : await enviarComentarioNoBackend(alvoId, texto);
 
     commentInput.disabled = false;
+    const bolhaTemporaria = document.querySelector(`.comment-bubble[data-comment-id="${idTemporario}"]`);
     if (ok) {
+      // Confirma visualmente (some o opaco/pendente) até a lista real
+      // (com a bolha de verdade vinda do Runrun.it) substituir tudo.
+      if (bolhaTemporaria) bolhaTemporaria.classList.remove("pending");
       recarregarThreadAtiva();
+      agendarAtualizacaoKanban();
       if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, texto);
+    } else {
+      if (bolhaTemporaria) bolhaTemporaria.remove(); // não foi enviado — some a bolha
     }
   }
 
@@ -3663,7 +3907,10 @@ function updateNowPlaying() {
   const el = document.getElementById("nowPlaying");
   const idle = document.getElementById("nowPlayingIdle");
   if (!el) return;
-  const running = tasks.find(t => t.running);
+  // Só considera tarefas rodando do PRÓPRIO designer logado — o array
+  // `tasks` pode ter tarefas de outras pessoas (visão do coordenador),
+  // e a barra "tocando agora" é sempre sobre o que EU estou fazendo.
+  const running = tasks.find(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
   if (running) {
     el.hidden = false;
     if (idle) idle.hidden = true;
