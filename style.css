@@ -177,8 +177,19 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  position: relative;
   transition: background 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
 }
+
+.nav-badge {
+  position: absolute; top: -3px; right: -3px;
+  min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--danger); color: #fff;
+  font-size: 10px; font-weight: 700; font-family: var(--font-body);
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--sidebar-bg);
+}
+.nav-badge[hidden] { display: none; }
 
 .nav-icon-circle svg { width: 19px; height: 19px; flex-shrink: 0; }
 
@@ -650,7 +661,7 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .detail-header-pill {
   display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;
   background: #14151A; border-radius: 999px; padding: 8px 8px 8px 8px;
-  position: relative; overflow: hidden;
+  position: relative;
 }
 /* Todo filho direto vira "elemento posicionado" pra garantir que fica
    por cima da varredura verde (ver .detail-header-pill::before), não
@@ -2290,3 +2301,122 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .task-card:hover { transform: translateY(-2px); }
 .task-card:active { transform: translateY(0) scale(0.985); }
+
+/* ===== Fila de Repasse ===== */
+.repasse-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 4px 2px 18px; flex-shrink: 0; flex-wrap: wrap;
+}
+.repasse-tabs { display: flex; gap: 8px; }
+.repasse-tab {
+  border: none; background: var(--page-bg); color: var(--text-secondary);
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  padding: 9px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.repasse-tab:hover { background: var(--border); }
+.repasse-tab.active { background: var(--kanban-yellow); color: #16181D; }
+
+.repasse-board { align-items: flex-start; }
+
+.repasse-column {
+  min-width: 270px; max-width: 270px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.repasse-column-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 2px;
+}
+.repasse-column-nome { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.repasse-column-count {
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+  background: var(--page-bg); color: var(--text-secondary);
+  font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.repasse-column-body { display: flex; flex-direction: column; gap: 10px; }
+
+.repasse-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px; cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple);
+}
+.repasse-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+.repasse-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.repasse-card-due { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+.repasse-card-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); line-height: 1.35; margin-bottom: 6px; }
+.repasse-card-tempo { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
+.repasse-card-actions { display: flex; gap: 8px; position: relative; }
+
+.repasse-btn {
+  flex: 1; border: none; border-radius: 10px; padding: 8px 0; cursor: pointer;
+  font-family: var(--font-body); font-size: 12px; font-weight: 700;
+  transition: transform var(--dur-fast) var(--ease-apple), opacity var(--dur-fast) var(--ease-apple);
+}
+.repasse-btn:active { transform: scale(0.95); }
+.repasse-btn:disabled { opacity: 0.6; cursor: default; }
+.repasse-btn-repassar { background: var(--accent); color: #fff; }
+.repasse-btn-ficar { background: var(--page-bg); color: var(--text-primary); }
+
+.repasse-picker {
+  position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 20;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 6px; box-shadow: var(--shadow-hover); max-height: 220px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  animation: colmeia-modal-pop var(--dur-fast) var(--ease-apple-spring);
+}
+.repasse-picker button {
+  display: flex; align-items: center; gap: 8px; border: none; background: transparent;
+  text-align: left; font-family: var(--font-body); font-size: 13px; font-weight: 500;
+  color: var(--text-primary); padding: 8px; border-radius: 8px; cursor: pointer; width: 100%;
+}
+.repasse-picker button:hover { background: var(--page-bg); }
+
+/* ===== Painel de Avisos ===== */
+.avisos-novo {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.avisos-novo textarea {
+  width: 100%; resize: vertical; min-height: 60px;
+  font-family: var(--font-body); font-size: 13px; color: var(--text-primary);
+  background: var(--page-bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+}
+.avisos-novo button {
+  align-self: flex-end; border: none; background: var(--accent); color: #fff;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
+  padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-apple), opacity var(--dur-fast) var(--ease-apple);
+}
+.avisos-novo button:active { transform: scale(0.95); }
+.avisos-novo button:disabled { opacity: 0.6; cursor: default; }
+
+.aviso-item {
+  position: relative; padding: 12px; border-radius: 12px; cursor: default;
+}
+.aviso-item:hover { background: var(--border); }
+.aviso-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.aviso-item-autor { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+.aviso-item-tempo { font-size: 11px; color: var(--text-muted); }
+.aviso-item-texto { font-size: 13px; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap; padding-right: 18px; }
+.aviso-item-excluir {
+  position: absolute; top: 10px; right: 10px; border: none; background: transparent;
+  color: var(--text-muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px;
+}
+.aviso-item-excluir:hover { color: var(--danger); }
+
+/* ===== Pill "Coordenação" (ao lado de "Quadro de Tarefas") ===== */
+.coordenacao-pill-wrap:empty { display: none; }
+.coordenacao-pill {
+  display: flex; align-items: center; gap: 8px;
+  border: none; background: #14151A; color: #fff; border-radius: 999px;
+  padding: 6px 14px 6px 6px; cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  transition: transform var(--dur-fast) var(--ease-apple);
+}
+.coordenacao-pill:active { transform: scale(0.96); }
+.coordenacao-pill-play {
+  width: 24px; height: 24px; border-radius: 50%; background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.coordenacao-pill-play svg { width: 11px; height: 11px; }
+.coordenacao-pill-timer { color: #B8BAC4; font-variant-numeric: tabular-nums; }
