@@ -63,6 +63,13 @@ let painelBeeonData = null;
  * Busca as atividades recentes do Drive (uploads de arquivo) que já
  * existem no painel-designers-beeon — mesmo cache que alimenta o card
  * "Atividade recente" de lá.
+ *
+ * NÃO é mais usada pela notificação de upload dentro do pop-up de
+ * tarefa (ver renderNotificacoesUpload) — aquela agora checa a pasta
+ * do próprio card direto pelo Code.gs do Colmeia (instantâneo, sem
+ * depender do cache de 10 minutos do painel). Deixada aqui por se um
+ * dia precisar de uma visão geral de atividades fora do contexto de
+ * uma tarefa específica.
  */
 async function buscarAtividadesPainelBeeon() {
   if (!PAINEL_BEEON_API_URL) return [];
@@ -96,33 +103,47 @@ function marcarUploadVisto(link) {
  * — junto com "Copiar link" e "Ver", pra não precisar catar a pasta
  * certa no Drive na mão. Pode aparecer mais de um (ex: PSD numa pasta,
  * PNG em outra).
+ *
+ * Checa direto a pasta do card (Code.gs > buscarUploadsRecentesDoCard),
+ * em vez do cache de 10 minutos do painel-designers-beeon — como o
+ * Colmeia já sabe exatamente qual é a pasta dessa tarefa, a checagem é
+ * instantânea (olha só 1 pasta, não o Drive inteiro).
  */
 async function renderNotificacoesUpload(task) {
   const container = document.getElementById("uploadNotifs");
-  if (!container) return;
+  if (!container || !task.id) return;
 
-  const atividades = await buscarAtividadesPainelBeeon();
+  let resultado;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarUploadsRecentesDoCard", taskId: task.id }),
+    });
+    resultado = await res.json();
+  } catch (err) {
+    console.error("Falha ao checar uploads recentes da pasta do card:", err);
+    return;
+  }
   if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
-
-  const agora = Date.now();
-  const relevantes = atividades.filter(a =>
-    normalizarParaComparar(a.cliente) === normalizarParaComparar(task.client) &&
-    nomesCorrespondem(a.quem, DESIGNER_LOGADO) &&
-    (agora - a.quando) < JANELA_NOTIFICACAO_UPLOAD_MS &&
-    !uploadJaVisto(a.link)
-  );
-
-  const porPasta = {};
-  relevantes.forEach(a => {
-    if (!porPasta[a.link]) porPasta[a.link] = { pasta: a.pasta, link: a.link, arquivos: [] };
-    porPasta[a.link].arquivos.push(a.arquivo);
-  });
-  const grupos = Object.values(porPasta);
-
-  if (grupos.length === 0) {
+  if (!resultado.ok || !resultado.uploads || !resultado.pastaUrl) {
     container.innerHTML = "";
     return;
   }
+
+  const agora = Date.now();
+  const arquivosRelevantes = resultado.uploads
+    .filter(u =>
+      nomesCorrespondem(u.quem, DESIGNER_LOGADO) &&
+      (agora - u.quando) < JANELA_NOTIFICACAO_UPLOAD_MS
+    )
+    .map(u => u.arquivo);
+
+  if (arquivosRelevantes.length === 0 || uploadJaVisto(resultado.pastaUrl)) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const grupos = [{ pasta: resultado.pastaNome || "pasta do card", link: resultado.pastaUrl, arquivos: arquivosRelevantes }];
 
   container.innerHTML = grupos.map(g => `
     <div class="upload-notif" data-link="${g.link}">
@@ -2296,6 +2317,24 @@ function formatarHoraComentario(dataISO) {
     d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+/**
+ * Transforma links soltos (http://..., https://..., www...) dentro do
+ * texto de um comentário em links de verdade, clicáveis. Se o texto já
+ * vier com um <a> pronto (o Runrun.it às vezes já manda formatado),
+ * não mexe em nada pra não linkificar duas vezes.
+ */
+function linkifyTexto(texto) {
+  if (!texto) return "";
+  if (/<a\s/i.test(texto)) return texto;
+  const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/gi;
+  return texto.replace(urlRegex, url => {
+    const limpo = url.replace(/[.,;:)\]]+$/, ""); // não pega pontuação colada no final
+    const sobra = url.slice(limpo.length);
+    const href = limpo.startsWith("http") ? limpo : "https://" + limpo;
+    return `<a href="${href}" target="_blank" rel="noopener">${limpo}</a>${sobra}`;
+  });
+}
+
 function renderComentariosHTML(task) {
   if (!task.id) {
     return `<p class="comments-empty">Essa tarefa ainda não está conectada ao Runrun.it.</p>`;
@@ -2313,7 +2352,7 @@ function renderComentariosHTML(task) {
       ${minha ? "" : avatarHTML(c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-meta"><span class="comment-author">${minha ? "Você" : c.autor}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span></div>
-        <div class="comment-text">${c.texto}</div>
+        <div class="comment-text">${linkifyTexto(c.texto)}</div>
         ${(c.reactions || []).length ? `
           <div class="comment-reactions">
             ${c.reactions.map(r => `<span class="comment-reaction-chip" title="${(r.users || []).map(u => u.name).join(", ")}">${r.emoji} ${r.count}</span>`).join("")}
@@ -2554,7 +2593,7 @@ async function confirmarECriarPastaDoCard(task) {
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "criarPastaDoCard", cliente: task.client, tituloCard: task.title }),
+      body: JSON.stringify({ acao: "criarPastaDoCard", cliente: task.client, tituloCard: task.title, taskId: task.id }),
     });
     const data = await res.json();
     btn.disabled = false;
@@ -2572,6 +2611,83 @@ async function confirmarECriarPastaDoCard(task) {
   }
 }
 
+/**
+ * Ao abrir o pop-up da tarefa, checa (leitura rápida na planilha, sem
+ * tocar no Drive) se a pasta do card já foi criada antes — assim o
+ * botão já nasce como "Acessar pasta do card" em vez de pedir
+ * confirmação de criação de novo toda vez que a tarefa é reaberta.
+ */
+async function verificarPastaJaSalva(task, btn) {
+  if (!task.id) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarPastaCard", taskId: task.id }),
+    });
+    const data = await res.json();
+    if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
+    if (data.ok && data.url) {
+      btn.dataset.pastaUrl = data.url;
+      const label = btn.querySelector(".pasta-drive-btn-label");
+      if (label) label.textContent = "Acessar pasta do card";
+    }
+  } catch (err) {
+    console.error("Falha ao checar se a pasta do card já existe:", err);
+  }
+}
+
+/**
+ * Deixa a "Entrega desejada" editável: clicar no lápis troca o texto
+ * por um <input type="date"> nativo; ao escolher uma data nova, salva
+ * de verdade no Runrun.it e atualiza a tela (card + pop-up) sem
+ * precisar recarregar tudo.
+ */
+function wireEdicaoEntregaDesejada(task) {
+  const btn = document.getElementById("dueDateEditBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", () => {
+    const row = document.getElementById("dueDateRow");
+    if (!row) return;
+    row.innerHTML = `<input type="date" class="side-date-input" id="dueDateInput" value="${task.due || ""}">`;
+    const input = document.getElementById("dueDateInput");
+    input.focus();
+
+    async function salvar() {
+      const novaData = input.value;
+      if (!novaData || novaData === task.due) {
+        renderDetail();
+        return;
+      }
+      row.innerHTML = `<span class="side-date-saving">Salvando...</span>`;
+      try {
+        const res = await fetch(COLMEIA_API_URL, {
+          method: "POST",
+          body: JSON.stringify({ acao: "alterarEntrega", taskId: task.id, novaData }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          row.innerHTML = `<span class="side-date-saving">${data.error ? data.error.slice(0, 40) : "Não consegui salvar"}</span>`;
+          setTimeout(() => renderDetail(), 1800);
+          return;
+        }
+        task.due = novaData;
+        renderDetail();
+        render(); // atualiza a data no card do quadro também
+      } catch (err) {
+        console.error("Falha ao trocar a Entrega desejada:", err);
+        row.innerHTML = `<span class="side-date-saving">Falha de conexão</span>`;
+        setTimeout(() => renderDetail(), 1800);
+      }
+    }
+
+    input.addEventListener("change", salvar);
+    input.addEventListener("blur", () => {
+      // Se saiu do campo sem trocar nada, só volta pro texto normal.
+      if (document.getElementById("dueDateInput")) renderDetail();
+    });
+  });
+}
 
 function wireExcluirComentario() {
   document.querySelectorAll(".comment-delete-btn").forEach(btn => {
@@ -2930,7 +3046,14 @@ function renderDetail() {
         <div class="detail-side">
           <div class="side-block">
             <span class="side-label">Entrega desejada</span>
-            <div class="side-date">${task.due}</div>
+            <div class="side-date-row" id="dueDateRow">
+              <span class="side-date" id="dueDateText">${task.due || "Sem data"}</span>
+              ${task.id ? `
+                <button type="button" class="side-date-edit-btn" id="dueDateEditBtn" title="Alterar data" aria-label="Alterar data">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              ` : ""}
+            </div>
           </div>
           ${task.id ? `
             <div class="side-block">
@@ -3070,7 +3193,10 @@ function renderDetail() {
   const criarPastaBtn = document.getElementById("criarPastaDriveBtn");
   if (criarPastaBtn) {
     criarPastaBtn.addEventListener("click", () => confirmarECriarPastaDoCard(task));
+    verificarPastaJaSalva(task, criarPastaBtn);
   }
+
+  wireEdicaoEntregaDesejada(task);
 
   const motherBtn = document.getElementById("motherCardBtn");
   if (motherBtn) motherBtn.addEventListener("click", () => abrirCardMae(task));
