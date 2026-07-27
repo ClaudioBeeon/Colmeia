@@ -615,6 +615,8 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   transform: translateX(24px) scale(0.99);
   transition: opacity var(--dur-slow) var(--ease-apple-spring), transform var(--dur-slow) var(--ease-apple-spring);
   z-index: 100;
+  font-family: var(--font-body);
+  color: var(--text-primary);
 }
 
 .task-detail.visible { display: flex; }
