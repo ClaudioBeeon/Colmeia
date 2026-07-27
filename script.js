@@ -2880,6 +2880,7 @@ async function confirmarECriarPastaDoCard(task) {
     btn.dataset.pastaUrl = data.url;
     task.pastaUrlSalva = data.url; // guarda no objeto da tarefa — reconhece na hora se reabrir de novo
     trocarTextoBotaoPasta("Acessar pasta do card");
+    mostrarPillCopiarLinkDaPasta(data.url);
   } catch (err) {
     console.error("Falha ao criar pasta do card no Drive:", err);
     btn.disabled = false;
@@ -2899,6 +2900,13 @@ async function confirmarECriarPastaDoCard(task) {
  * etc), o botão já nasce certo na hora, sem esperar o fetch de novo e
  * sem correr o risco de "esquecer" que a pasta já existe.
  */
+function mostrarPillCopiarLinkDaPasta(url) {
+  const pill = document.getElementById("pastaCopyLinkBtn");
+  if (!pill) return;
+  pill.dataset.url = url;
+  pill.hidden = false;
+}
+
 async function verificarPastaJaSalva(task, btn) {
   if (!task.id) return;
 
@@ -2907,6 +2915,7 @@ async function verificarPastaJaSalva(task, btn) {
       btn.dataset.pastaUrl = task.pastaUrlSalva;
       const label = btn.querySelector(".pasta-drive-btn-label");
       if (label) label.textContent = "Acessar pasta do card";
+      mostrarPillCopiarLinkDaPasta(task.pastaUrlSalva);
     }
     return;
   }
@@ -2937,6 +2946,7 @@ async function verificarPastaJaSalva(task, btn) {
     btn.dataset.pastaUrl = task.pastaUrlSalva;
     const label = btn.querySelector(".pasta-drive-btn-label");
     if (label) label.textContent = "Acessar pasta do card";
+    mostrarPillCopiarLinkDaPasta(task.pastaUrlSalva);
   }
 }
 
@@ -3465,8 +3475,9 @@ function renderDetail() {
                   <span class="pasta-drive-btn-label">Criar pasta do card</span>
                 </span>
               </button>
-              <button type="button" class="upload-check-sidebar-btn" id="uploadCheckSidebarBtn" title="Verificar se subiu algum arquivo novo na pasta do card">
-                ↻ Verificar upload novo
+              <button type="button" class="pasta-copy-link-pill" id="pastaCopyLinkBtn" hidden>
+                <svg viewBox="0 0 24 24" fill="none"><path d="M9 12a4 4 0 004 4h1a4 4 0 000-8h-1M15 12a4 4 0 00-4-4H10a4 4 0 000 8h1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>Copiar link da pasta</span>
               </button>
             </div>
           ` : ""}
@@ -3597,20 +3608,20 @@ function renderDetail() {
 
   // ===== Menu de mais opções (⋮) =====
   const criarPastaBtn = document.getElementById("criarPastaDriveBtn");
+  const copyLinkPill = document.getElementById("pastaCopyLinkBtn");
   if (criarPastaBtn) {
     criarPastaBtn.addEventListener("click", () => confirmarECriarPastaDoCard(task));
     verificarPastaJaSalva(task, criarPastaBtn);
   }
-
-  const uploadCheckSidebarBtn = document.getElementById("uploadCheckSidebarBtn");
-  if (uploadCheckSidebarBtn) {
-    uploadCheckSidebarBtn.addEventListener("click", async () => {
-      uploadCheckSidebarBtn.disabled = true;
-      uploadCheckSidebarBtn.textContent = "Verificando...";
-      abrirChatPanel(task); // abre o painel de comentários pra já mostrar o resultado
-      await renderNotificacoesUpload(task);
-      uploadCheckSidebarBtn.disabled = false;
-      uploadCheckSidebarBtn.textContent = "↻ Verificar upload novo";
+  if (copyLinkPill) {
+    copyLinkPill.addEventListener("click", () => {
+      const url = copyLinkPill.dataset.url;
+      if (!url) return;
+      navigator.clipboard.writeText(url).then(() => {
+        const original = copyLinkPill.querySelector("span").textContent;
+        copyLinkPill.querySelector("span").textContent = "Link copiado!";
+        setTimeout(() => { copyLinkPill.querySelector("span").textContent = original; }, 1200);
+      });
     });
   }
 
@@ -4691,19 +4702,44 @@ function buildTiposPage() {
 }
 
 // ================= FILA DE REPASSE =================
-// Tarefas que estão, agora, com o atendimento do cliente — ou seja,
-// ainda não foram passadas pro designer. Duas situações diferentes,
-// por isso os 3 modos de visualização da aba:
+// Tarefas que estão, agora, com você (Cláudio) — ou seja, ainda não
+// foram passadas pro designer. Duas situações diferentes, por isso os
+// 3 modos de visualização da aba:
 // - "Com sequência pronta": já tem uma Sequência de responsáveis
 //   configurada, só falta avançar de verdade.
 // - "Sem sequência": ninguém configurou nada, e a tarefa ficou "presa"
-//   com quem cuida do cliente — precisa de alguém decidindo na hora
-//   pra quem vai (repassar pro designer, ou o atendimento assume).
+//   com você — precisa de alguém decidindo na hora pra quem vai
+//   (repassar pro designer, ou você mesmo assume).
+//
+// IMPORTANTE: o responsável (você) pode estar em QUALQUER coluna — a
+// maioria chega em "Pendentes", mas o atendimento às vezes erra e
+// acaba te deixando em "Prioridades" ou até "Revisão". Por isso a
+// checagem NÃO olha a coluna, só o responsável atual. (Uma versão
+// anterior exigia que a tarefa estivesse fora das 5 colunas normais do
+// quadro — isso ficou errado assim que vi que a maioria cai dentro de
+// "Pendentes" mesmo, então foi removido.)
+const REPASSE_IGNORADOS_KEY = "colmeia_repasse_ignorados_ids";
+function idsRepasseIgnorados() {
+  try { return new Set(JSON.parse(localStorage.getItem(REPASSE_IGNORADOS_KEY) || "[]")); }
+  catch (e) { return new Set(); }
+}
+// Usado quando você clica "Ficar comigo" — a tarefa continua com você
+// (assignee não muda), então sem isso ela voltaria a aparecer na fila
+// pra sempre mesmo depois de você decidir assumir ela de propósito.
+function ignorarNaRepasse(taskId) {
+  try {
+    const ignorados = idsRepasseIgnorados();
+    ignorados.add(taskId);
+    localStorage.setItem(REPASSE_IGNORADOS_KEY, JSON.stringify(Array.from(ignorados)));
+  } catch (e) { /* sem problema */ }
+}
+
 function tarefaEstaComAtendimento(t) {
-  if (!t.id || !t.client || !t.assignee) return false;
-  const atend = getAtendimentoDoCliente(t.client);
-  if (!atend) return false;
-  return nomesCorrespondem(t.assignee, atend);
+  if (!t.id || !t.assignee) return false;
+  if (t.type === "estatico") return false; // Estático não passa por você
+  if (ehTarefaDeCoordenacao(t)) return false; // a sua tarefa fixa de coordenação não é "repasse"
+  if (idsRepasseIgnorados().has(t.id)) return false; // você já decidiu ficar com essa
+  return nomesCorrespondem(t.assignee, DESIGNER_LOGADO);
 }
 
 function tarefasParaRepasse() {
@@ -4754,7 +4790,7 @@ function marcarRepasseComoVisto(lista) {
 }
 function atualizarBadgeRepasse() {
   const badge = document.getElementById("repasseBadge");
-  if (!badge) return;
+  if (!badge || !souClaudio()) return;
   const lista = tarefasParaRepasse();
   const vistos = idsRepasseVistos();
   const novos = lista.filter(t => !vistos.has(t.id)).length;
@@ -4771,6 +4807,7 @@ let repasseSearch = "";
 let repasseMontada = false;
 
 function buildRepassePage() {
+  if (!souClaudio()) { mostrarPagina("kanban"); return; } // essa página é só do Cláudio
   if (!repasseMontada) {
     document.querySelectorAll(".repasse-tab").forEach(tab => {
       tab.addEventListener("click", () => {
@@ -4910,6 +4947,7 @@ function wireRepasseCards(lista) {
       }
       const ok = await reatribuirTarefaNoBackend(t.id, eu.id);
       if (ok) {
+        ignorarNaRepasse(t.id);
         removerCardDeRepasseDaTela(btn);
         agendarAtualizacaoKanban();
       } else {
@@ -5193,7 +5231,7 @@ function renderAvisos() {
         <span class="aviso-item-tempo">${tempoRelativoAviso(a.criadoEm)}</span>
       </div>
       <p class="aviso-item-texto">${escaparHTML(a.texto)}</p>
-      ${PAPEL_LOGADO === "coordenador" ? `<button type="button" class="aviso-item-excluir" data-id="${a.id}" aria-label="Excluir aviso">×</button>` : ""}
+      ${souClaudio() ? `<button type="button" class="aviso-item-excluir" data-id="${a.id}" aria-label="Excluir aviso">×</button>` : ""}
     </div>
   `).join("");
 
@@ -5221,7 +5259,7 @@ document.getElementById("avisosBtn").addEventListener("click", async () => {
   if (!avisosPanel.classList.contains("open")) return;
 
   const novoWrap = document.getElementById("avisosNovoWrap");
-  if (novoWrap) novoWrap.hidden = PAPEL_LOGADO !== "coordenador"; // só o coordenador lança aviso novo
+  if (novoWrap) novoWrap.hidden = !souClaudio(); // só o Cláudio lança aviso novo — os outros só veem
 
   document.getElementById("avisosBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
   avisosCache = await buscarAvisosDoBackend();
@@ -5324,6 +5362,11 @@ function iniciarAppPosLogin() {
   document.getElementById("sidebarAvatarIniciais").textContent = initials(DESIGNER_LOGADO);
   document.getElementById("sidebarProfileLink").title = PAPEL_LOGADO === "coordenador" ? "Configurações" : DESIGNER_LOGADO;
 
+  // Fila de repasse é só do Cláudio (ele que atende os clientes e
+  // decide o que repassar) — os outros nem veem o ícone.
+  const repasseNav = document.querySelector('.nav-ic[data-page="repasse"]');
+  if (repasseNav) repasseNav.hidden = !souClaudio();
+
   buildBoard();
   render();
   mostrarPagina("kanban");
@@ -5333,6 +5376,13 @@ function iniciarAppPosLogin() {
   carregarLinksClientes();
   carregarProgressoClientes();
   carregarClientesOcultos();
+}
+
+// Algumas coisas (Fila de Repasse, lançar Avisos) são só do Cláudio,
+// não de qualquer coordenador — centraliza essa checagem aqui pra
+// trocar fácil se um dia isso mudar.
+function souClaudio() {
+  return nomesCorrespondem(DESIGNER_LOGADO, "Claudio");
 }
 
 // ===== Login e sessão =====
