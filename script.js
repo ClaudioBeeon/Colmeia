@@ -200,19 +200,37 @@ async function renderNotificacoesUpload(task) {
       <button type="button" class="upload-notif-dismiss" data-chave="${escaparHTML(g.chave)}" aria-label="Dispensar">×</button>
       <p class="upload-notif-text">Você adicionou ${g.arquivos.length} arquivo${g.arquivos.length > 1 ? "s" : ""} na pasta <strong>${g.pasta}</strong></p>
       <div class="upload-notif-actions">
-        <button type="button" class="upload-notif-copy" data-link="${g.link}">Copiar link</button>
+        <button type="button" class="upload-notif-copy" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}" data-qtd="${g.arquivos.length}">Adicionar ao comentário</button>
         <a href="${g.link}" target="_blank" rel="noopener" class="upload-notif-ver">Ver</a>
       </div>
     </div>
   `).join("");
 
   container.querySelectorAll(".upload-notif-copy").forEach(btn => {
-    btn.addEventListener("click", () => {
-      navigator.clipboard.writeText(btn.dataset.link).then(() => {
-        const original = btn.textContent;
-        btn.textContent = "Copiado!";
-        setTimeout(() => { btn.textContent = original; }, 1200);
-      });
+    btn.addEventListener("click", async () => {
+      // Em vez de só copiar o link pra você colar manualmente, já posta
+      // o comentário sozinho no Runrun.it com o link da pasta — um
+      // clique a menos.
+      if (!task.id) return;
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "Adicionando...";
+      const qtd = Number(btn.dataset.qtd) || 1;
+      const texto = `${qtd > 1 ? "Arquivos adicionados" : "Arquivo adicionado"} na pasta: ${btn.dataset.link}`;
+      const ok = await enviarComentarioNoBackend(task.id, texto);
+      if (ok) {
+        btn.textContent = "Adicionado ✓";
+        marcarUploadVisto(btn.dataset.chave);
+        if (chatThreadAtivo === "aqui" && chatAlvoTaskId === task.id) recarregarThreadAtiva();
+        setTimeout(() => {
+          const el = container.querySelector(`.upload-notif[data-chave="${CSS.escape(btn.dataset.chave)}"]`);
+          if (el) el.remove();
+        }, 900);
+      } else {
+        btn.disabled = false;
+        btn.textContent = original;
+        alert("Não consegui adicionar o comentário agora. Tenta de novo em alguns segundos.");
+      }
     });
   });
   container.querySelectorAll(".upload-notif-dismiss").forEach(btn => {
@@ -494,6 +512,7 @@ function mapearTarefaDoBackend(t) {
     parentTaskId: t.parentTaskId || null,
     link: t.link,
     attachmentsCount: t.attachmentsCount || 0,
+    lastActivityAt: t.lastActivityAt || null,
     assignee: t.assignee,
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
     timerSeconds: t.workedSeconds || 0,
@@ -524,13 +543,15 @@ async function carregarTarefasReais() {
       render();
       return;
     }
-    const doKanban = data.tarefas.filter(t => !t.isOutraEtapa).map(mapearTarefaDoBackend);
-    tasks = doKanban;
+    const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
+    tasksTodas = todasMapeadas;
+    tasks = todasMapeadas.filter(t => !t.isOutraEtapa);
     tasks.forEach(t => { t.estimatePct = t.estimatePct || 0; });
     carregandoTarefas = false;
     buildBoard();
     render();
     verificarNotificacoes();
+    atualizarBadgeRepasse();
   } catch (err) {
     console.error("Falha ao conectar com o backend do Colmeia:", err);
     tasks = tasksFake;
@@ -555,7 +576,9 @@ async function atualizarKanbanEmBackground() {
     const data = await res.json();
     if (!data.ok) return;
 
-    const novasTarefas = data.tarefas.filter(t => !t.isOutraEtapa).map(mapearTarefaDoBackend);
+    const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
+    tasksTodas = todasMapeadas;
+    const novasTarefas = todasMapeadas.filter(t => !t.isOutraEtapa);
 
     // Preserva o progresso visual (barra) e não deixa o cronômetro
     // "voltar no tempo" se, por acaso, o Runrun.it ainda não processou
@@ -595,6 +618,8 @@ async function atualizarKanbanEmBackground() {
 
     render();
     updateNowPlaying();
+    atualizarBadgeRepasse();
+    if (!document.getElementById("page-repasse").hidden) renderRepasse();
   } catch (err) {
     console.error("Falha ao atualizar o kanban em background:", err);
   }
@@ -642,6 +667,21 @@ async function tocarTarefaNoBackend(taskId) {
   } catch (err) {
     console.error("Falha ao dar play no Runrun.it:", err);
   }
+}
+
+/**
+ * Só pode ter UMA tarefa rodando por vez — antes disso, dar play numa
+ * tarefa nova não parava a que já estava rodando, então o cronômetro
+ * da antiga continuava contando escondido (e os dois batiam ponto ao
+ * mesmo tempo no Runrun.it). Chama isso sempre antes de iniciar um play.
+ */
+function pararOutrasTarefasRodando(exceto) {
+  tasks.forEach(t => {
+    if (t.running && t !== exceto) {
+      t.running = false;
+      pausarTarefaNoBackend(t.id);
+    }
+  });
 }
 
 async function pausarTarefaNoBackend(taskId) {
@@ -1878,6 +1918,12 @@ tasksFake.forEach((t, i) => { t.timerSeconds = 0; t.running = false; t.estimateP
 // Começa vazio de propósito — mostra tela de carregando até o backend
 // responder (ou, em último caso, cair pros dados fake).
 let tasks = [];
+// Igual a `tasks`, mas SEM o filtro de "só as 5 etapas do quadro" —
+// inclui tarefas que estão em qualquer outra etapa do Runrun.it (ex:
+// uma etapa de atendimento/briefing antes de chegar no designer).
+// Usada pela Fila de Repasse, que precisa enxergar essas tarefas mesmo
+// sem elas aparecerem no Kanban normal.
+let tasksTodas = [];
 let carregandoTarefas = true;
 
 const typeLabels = {
@@ -2008,10 +2054,53 @@ function buildBoard() {
 
 let searchQuery = "";
 
+/**
+ * Tarefa fixa de "coordenação" (a sua, de acompanhar o time) não fica
+ * misturada dentro de "Fazendo" — vira um pill redondo ao lado do
+ * título "Quadro de tarefas", com o próprio play/pause.
+ *
+ * IMPORTANTE — identificação por título: por enquanto essa função
+ * reconhece a tarefa pelo TÍTULO conter "coordenação" (sem acento
+ * também funciona). Se a sua tarefa de coordenação tem um nome
+ * diferente, ou se preferir identificar de outro jeito (por tipo, por
+ * tag, por ID fixo), é só me avisar que troco essa regra aqui — é uma
+ * única função, fácil de ajustar.
+ */
+function ehTarefaDeCoordenacao(t) {
+  return !!(t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO) && normalizarParaComparar(t.title).includes("coordenacao"));
+}
+
+function encontrarTarefaDeCoordenacao() {
+  return tasks.find(ehTarefaDeCoordenacao);
+}
+
+function renderCoordenacaoPill() {
+  const wrap = document.getElementById("coordenacaoPillWrap");
+  if (!wrap) return;
+  const t = encontrarTarefaDeCoordenacao();
+  if (!t) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `
+    <button type="button" class="coordenacao-pill" id="coordenacaoPillBtn" data-id="${t.id}" title="${t.title}">
+      <span class="coordenacao-pill-play">${t.running ? pauseIcon : playIcon}</span>
+      <span class="coordenacao-pill-label">Coordenação</span>
+      <span class="coordenacao-pill-timer">${formatTime(t.timerSeconds)}</span>
+    </button>
+  `;
+  document.getElementById("coordenacaoPillBtn").addEventListener("click", () => {
+    const vaiComecar = !t.running;
+    if (vaiComecar) pararOutrasTarefasRodando(t);
+    t.running = vaiComecar;
+    if (t.running) tocarTarefaNoBackend(t.id);
+    else pausarTarefaNoBackend(t.id);
+    render();
+    updateNowPlaying();
+  });
+}
+
 function render() {
   if (carregandoTarefas) return;
   columnsDef.forEach(({ key }) => {
-    let list = tasks.filter(t => t.status === key);
+    let list = tasks.filter(t => t.status === key && !ehTarefaDeCoordenacao(t));
     if (PAPEL_LOGADO === "designer") {
       list = list.filter(t => nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
     } else if (PAPEL_LOGADO === "coordenador" && filtroDesignerCoordenador !== "todos") {
@@ -2036,6 +2125,7 @@ function render() {
     document.querySelector(`.column[data-status="${key}"] .column-count`).textContent = list.length;
   });
   attachCardDragHandlers();
+  renderCoordenacaoPill();
 }
 
 function setupDragAndDrop() {
@@ -2192,11 +2282,12 @@ function attachCardDragHandlers() {
       e.stopPropagation();
       const idx = btn.dataset.idx;
       const task = tasks[idx];
-      task.running = !task.running;
-      btn.innerHTML = task.running ? pauseIcon : playIcon;
-      btn.setAttribute("aria-label", (task.running ? "Pausar" : "Iniciar") + " tarefa");
+      const vaiComecar = !task.running;
+      if (vaiComecar) pararOutrasTarefasRodando(task);
+      task.running = vaiComecar;
       if (task.running) tocarTarefaNoBackend(task.id);
       else pausarTarefaNoBackend(task.id);
+      render(); // atualiza o ícone dessa tarefa E o da outra que parou junto
       updateNowPlaying();
     });
   });
@@ -3493,7 +3584,9 @@ function renderDetail() {
   wireWorkflowArrows(task);
 
   document.getElementById("detailPlay").addEventListener("click", () => {
-    task.running = !task.running;
+    const vaiComecar = !task.running;
+    if (vaiComecar) pararOutrasTarefasRodando(task);
+    task.running = vaiComecar;
     if (task.running) tocarTarefaNoBackend(task.id);
     else pausarTarefaNoBackend(task.id);
     renderDetail();
@@ -4064,6 +4157,10 @@ setInterval(() => {
         const fill = document.querySelector(`.progress-fill[data-idx="${idx}"]`);
         if (fill) fill.style.width = task.estimatePct + "%";
       }
+      if (ehTarefaDeCoordenacao(task)) {
+        const pillTimerEl = document.querySelector(".coordenacao-pill-timer");
+        if (pillTimerEl) pillTimerEl.textContent = formatTime(task.timerSeconds);
+      }
     }
   });
   updateNowPlaying();
@@ -4089,6 +4186,7 @@ const pageTitles = {
   tipos: ["Tipos de tarefas", "Visão por categoria"],
   runrun: ["Runrun completo", "Todas as abas e tarefas do time"],
   hoje: ["Minhas tarefas de hoje", "O que você deu play hoje"],
+  repasse: ["Fila de repasse", "Tarefas esperando com o atendimento"],
 };
 
 // Nome do designer logado no Colmeia hoje (mesmo usado na barra lateral).
@@ -4592,6 +4690,311 @@ function buildTiposPage() {
   });
 }
 
+// ================= FILA DE REPASSE =================
+// Tarefas que estão, agora, com o atendimento do cliente — ou seja,
+// ainda não foram passadas pro designer. Duas situações diferentes,
+// por isso os 3 modos de visualização da aba:
+// - "Com sequência pronta": já tem uma Sequência de responsáveis
+//   configurada, só falta avançar de verdade.
+// - "Sem sequência": ninguém configurou nada, e a tarefa ficou "presa"
+//   com quem cuida do cliente — precisa de alguém decidindo na hora
+//   pra quem vai (repassar pro designer, ou o atendimento assume).
+function tarefaEstaComAtendimento(t) {
+  if (!t.id || !t.client || !t.assignee) return false;
+  const atend = getAtendimentoDoCliente(t.client);
+  if (!atend) return false;
+  return nomesCorrespondem(t.assignee, atend);
+}
+
+function tarefasParaRepasse() {
+  return tasksTodas.filter(t => !t.isMotherCard && tarefaEstaComAtendimento(t));
+}
+
+// "Há quanto tempo está parada" — usa a última atividade da tarefa no
+// Runrun.it como aproximação (não existe um campo de "desde quando é
+// dessa pessoa" de verdade disponível na API).
+function formatarTempoParado(isoString) {
+  if (!isoString) return null;
+  const ms = Date.now() - new Date(isoString).getTime();
+  if (!(ms >= 0)) return null;
+  const horas = Math.floor(ms / 3600000);
+  if (horas < 1) return "atualizada há poucos minutos";
+  if (horas < 24) return `atualizada há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  return `atualizada há ${dias} dia${dias > 1 ? "s" : ""}`;
+}
+
+// Classificação "com/sem sequência" — buscada sob demanda (custa uma
+// chamada ao Runrun.it por tarefa) e cacheada direto no objeto da
+// tarefa, pra não perguntar de novo toda vez que a aba reabrir.
+async function garantirClassificacaoSequencia(t) {
+  if (t._temSequencia !== undefined) return t._temSequencia;
+  if (!t.id) { t._temSequencia = false; return false; }
+  const resultado = await buscarSequenciaDoBackend(t.id);
+  t._sequenciaCache = resultado.sequencia;
+  t._workflowIdCache = resultado.workflowId;
+  t._temSequencia = !!(resultado.sequencia && resultado.sequencia.length > 0);
+  return t._temSequencia;
+}
+
+// Contador do ícone da barra lateral: só mostra o que é NOVO desde a
+// última vez que a pessoa abriu a aba (evita virar um número gigante e
+// inútil toda vez que reabre o Colmeia).
+const REPASSE_VISTOS_KEY = "colmeia_repasse_vistos_ids";
+function idsRepasseVistos() {
+  try { return new Set(JSON.parse(localStorage.getItem(REPASSE_VISTOS_KEY) || "[]")); }
+  catch (e) { return new Set(); }
+}
+function marcarRepasseComoVisto(lista) {
+  try {
+    const vistos = idsRepasseVistos();
+    lista.forEach(t => vistos.add(t.id));
+    localStorage.setItem(REPASSE_VISTOS_KEY, JSON.stringify(Array.from(vistos)));
+  } catch (e) { /* sem problema */ }
+}
+function atualizarBadgeRepasse() {
+  const badge = document.getElementById("repasseBadge");
+  if (!badge) return;
+  const lista = tarefasParaRepasse();
+  const vistos = idsRepasseVistos();
+  const novos = lista.filter(t => !vistos.has(t.id)).length;
+  if (novos > 0) {
+    badge.textContent = novos > 99 ? "99+" : String(novos);
+    badge.hidden = false;
+  } else {
+    badge.hidden = true;
+  }
+}
+
+let repasseViewMode = "cliente"; // "cliente" | "com_sequencia" | "sem_sequencia"
+let repasseSearch = "";
+let repasseMontada = false;
+
+function buildRepassePage() {
+  if (!repasseMontada) {
+    document.querySelectorAll(".repasse-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".repasse-tab").forEach(b => b.classList.remove("active"));
+        tab.classList.add("active");
+        repasseViewMode = tab.dataset.mode;
+        renderRepasse();
+      });
+    });
+    const searchInput = document.getElementById("repasseSearchInput");
+    if (searchInput) {
+      searchInput.addEventListener("input", e => {
+        repasseSearch = e.target.value;
+        renderRepasse();
+      });
+    }
+    repasseMontada = true;
+  }
+  renderRepasse();
+  // Assim que a pessoa abre a aba, o que já estava ali vira "visto" —
+  // o contador só volta a subir quando chegar tarefa nova de verdade.
+  marcarRepasseComoVisto(tarefasParaRepasse());
+  atualizarBadgeRepasse();
+}
+
+function repasseCardHTML(t) {
+  const type = typeLabels[t.type] || { label: t.type, class: "" };
+  const tempoParado = formatarTempoParado(t.lastActivityAt);
+  return `
+    <div class="repasse-card" data-id="${t.id}">
+      <div class="repasse-card-top">
+        <span class="badge ${type.class}">${type.label}</span>
+        ${t.dueISO ? `<span class="repasse-card-due">${t.due}</span>` : ""}
+      </div>
+      <div class="repasse-card-title">${t.title}</div>
+      ${tempoParado ? `<div class="repasse-card-tempo">${tempoParado}</div>` : ""}
+      <div class="repasse-card-actions">
+        <button type="button" class="repasse-btn repasse-btn-repassar" data-id="${t.id}">Repassar</button>
+        <button type="button" class="repasse-btn repasse-btn-ficar" data-id="${t.id}">Ficar comigo</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderRepasse() {
+  const board = document.getElementById("repasseBoard");
+  if (!board) return;
+
+  let lista = tarefasParaRepasse();
+
+  if (repasseSearch.trim()) {
+    const alvo = normalizarParaComparar(repasseSearch);
+    lista = lista.filter(t => normalizarParaComparar(t.client).includes(alvo) || normalizarParaComparar(t.title).includes(alvo));
+  }
+
+  if (repasseViewMode === "cliente") {
+    renderRepasseColunas(board, lista);
+  } else {
+    // Pros modos "com sequência" / "sem sequência", precisa classificar
+    // cada tarefa primeiro (busca sob demanda, cacheada em cada tarefa).
+    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Conferindo quais têm sequência configurada...</p>`;
+    Promise.all(lista.map(t => garantirClassificacaoSequencia(t))).then(() => {
+      if (repasseViewMode !== "com_sequencia" && repasseViewMode !== "sem_sequencia") return; // trocou de aba enquanto carregava
+      const filtrada = lista.filter(t => repasseViewMode === "com_sequencia" ? t._temSequencia : !t._temSequencia);
+      renderRepasseColunas(board, filtrada);
+    });
+  }
+}
+
+function renderRepasseColunas(board, lista) {
+  lista = lista.slice().sort((a, b) => {
+    if (!a.dueISO) return 1;
+    if (!b.dueISO) return -1;
+    return a.dueISO.localeCompare(b.dueISO);
+  });
+
+  const porCliente = {};
+  lista.forEach(t => {
+    if (!porCliente[t.client]) porCliente[t.client] = [];
+    porCliente[t.client].push(t);
+  });
+  const clientes = Object.keys(porCliente).sort();
+
+  if (clientes.length === 0) {
+    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Nenhuma tarefa esperando repasse por aqui 🎉</p>`;
+    return;
+  }
+
+  board.innerHTML = clientes.map(cliente => `
+    <div class="repasse-column">
+      <div class="repasse-column-header">
+        <span class="repasse-column-nome">${cliente}</span>
+        <span class="repasse-column-count">${porCliente[cliente].length}</span>
+      </div>
+      <div class="repasse-column-body">
+        ${porCliente[cliente].map(t => repasseCardHTML(t)).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  wireRepasseCards(lista);
+}
+
+function removerCardDeRepasseDaTela(btn) {
+  const card = btn.closest(".repasse-card");
+  if (!card) return;
+  card.style.transition = "opacity 0.2s var(--ease-apple), transform 0.2s var(--ease-apple)";
+  card.style.opacity = "0";
+  card.style.transform = "translateX(12px)";
+  setTimeout(() => card.remove(), 200);
+}
+
+function wireRepasseCards(lista) {
+  document.querySelectorAll(".repasse-card").forEach(card => {
+    const t = lista.find(x => String(x.id) === card.dataset.id);
+    if (!t) return;
+    card.addEventListener("click", () => {
+      mostrarPagina("kanban"); // o pop-up de detalhe vive dentro da página do Kanban
+      abrirTarefaPorId(t.id);
+    });
+  });
+
+  document.querySelectorAll(".repasse-btn-ficar").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const t = lista.find(x => String(x.id) === btn.dataset.id);
+      if (!t) return;
+      btn.disabled = true;
+      btn.textContent = "Assumindo...";
+      const usuarios = await buscarUsuariosRunrun();
+      const eu = usuarios.find(u => nomesCorrespondem(u.nome, DESIGNER_LOGADO));
+      if (!eu) {
+        btn.disabled = false;
+        btn.textContent = "Ficar comigo";
+        alert("Não consegui te encontrar na lista de usuários do Runrun.it.");
+        return;
+      }
+      const ok = await reatribuirTarefaNoBackend(t.id, eu.id);
+      if (ok) {
+        removerCardDeRepasseDaTela(btn);
+        agendarAtualizacaoKanban();
+      } else {
+        btn.disabled = false;
+        btn.textContent = "Ficar comigo";
+        alert("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.");
+      }
+    });
+  });
+
+  document.querySelectorAll(".repasse-btn-repassar").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const t = lista.find(x => String(x.id) === btn.dataset.id);
+      if (!t) return;
+      btn.disabled = true;
+      btn.textContent = "Repassando...";
+      await garantirClassificacaoSequencia(t);
+      if (t._temSequencia) {
+        const novoResponsavel = await avancarWorkflowNoBackend(t.id);
+        if (novoResponsavel) {
+          removerCardDeRepasseDaTela(btn);
+          agendarAtualizacaoKanban();
+        } else {
+          btn.disabled = false;
+          btn.textContent = "Repassar";
+          alert("Não consegui avançar a sequência dessa tarefa agora.");
+        }
+      } else {
+        btn.disabled = false;
+        btn.textContent = "Repassar";
+        abrirSeletorRepasseManual(t, btn);
+      }
+    });
+  });
+}
+
+// Quando a tarefa não tem sequência configurada, "Repassar" precisa
+// perguntar pra quem — reaproveita a mesma lista de usuários usada no
+// resto do Colmeia (buscarUsuariosRunrun).
+async function abrirSeletorRepasseManual(t, btn) {
+  const usuarios = await buscarUsuariosRunrun();
+  if (usuarios.length === 0) {
+    alert("Não consegui buscar a lista de designers agora.");
+    return;
+  }
+  let menu = btn.parentElement.querySelector(".repasse-picker");
+  if (menu) { menu.remove(); return; } // clicou de novo — fecha
+  menu = document.createElement("div");
+  menu.className = "repasse-picker";
+  menu.innerHTML = usuarios.map(u => `
+    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
+      ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
+    </button>
+  `).join("");
+  btn.parentElement.appendChild(menu);
+
+  menu.querySelectorAll("button").forEach(opt => {
+    opt.addEventListener("click", async e => {
+      e.stopPropagation();
+      menu.remove();
+      btn.disabled = true;
+      btn.textContent = "Repassando...";
+      const ok = await reatribuirTarefaNoBackend(t.id, opt.dataset.userId);
+      if (ok) {
+        removerCardDeRepasseDaTela(btn);
+        agendarAtualizacaoKanban();
+      } else {
+        btn.disabled = false;
+        btn.textContent = "Repassar";
+        alert("Não consegui reatribuir essa tarefa agora.");
+      }
+    });
+  });
+
+  setTimeout(() => {
+    document.addEventListener("click", function fechar(ev) {
+      if (!menu.contains(ev.target) && ev.target !== btn) {
+        menu.remove();
+        document.removeEventListener("click", fechar);
+      }
+    });
+  }, 0);
+}
+
 function mostrarPagina(page) {
   document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.toggle("active", l.dataset.page === page));
   document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
@@ -4621,6 +5024,7 @@ function mostrarPagina(page) {
   if (page === "clientes") buildClientsPage();
   if (page === "atendimento") buildAtendimentoPage();
   if (page === "tipos") buildTiposPage();
+  if (page === "repasse") buildRepassePage();
 }
 
 document.getElementById("designerFilterSelect").addEventListener("change", e => {
@@ -4737,6 +5141,136 @@ document.getElementById("notificationsBtn").addEventListener("click", async () =
 document.getElementById("notificationsClose").addEventListener("click", () => {
   document.getElementById("notificationsPanel").classList.remove("open");
 });
+
+// ===== Painel de Avisos (coordenador lança, todo mundo vê) =====
+const AVISOS_VISTOS_KEY = "colmeia_avisos_vistos_ids";
+function idsAvisosVistos() {
+  try { return new Set(JSON.parse(localStorage.getItem(AVISOS_VISTOS_KEY) || "[]")); }
+  catch (e) { return new Set(); }
+}
+function marcarAvisosVistos(lista) {
+  try {
+    const vistos = idsAvisosVistos();
+    lista.forEach(a => vistos.add(a.id));
+    localStorage.setItem(AVISOS_VISTOS_KEY, JSON.stringify(Array.from(vistos)));
+  } catch (e) { /* sem problema */ }
+}
+
+let avisosCache = [];
+
+async function buscarAvisosDoBackend() {
+  if (!COLMEIA_API_URL) return [];
+  try {
+    const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify({ acao: "listarAvisos" }) });
+    const data = await res.json();
+    return data.ok ? data.avisos : [];
+  } catch (err) {
+    console.error("Falha ao buscar avisos:", err);
+    return [];
+  }
+}
+
+function tempoRelativoAviso(criadoEm) {
+  const ms = Date.now() - Number(criadoEm);
+  const horas = Math.floor(ms / 3600000);
+  if (horas < 1) return "agora há pouco";
+  if (horas < 24) return `há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  return `há ${dias} dia${dias > 1 ? "s" : ""}`;
+}
+
+function renderAvisos() {
+  const body = document.getElementById("avisosBody");
+  if (!body) return;
+  if (avisosCache.length === 0) {
+    body.innerHTML = `<p class="quick-access-empty">Nenhum aviso por enquanto.</p>`;
+    return;
+  }
+  body.innerHTML = avisosCache.map(a => `
+    <div class="aviso-item" data-id="${a.id}">
+      <div class="aviso-item-top">
+        <span class="aviso-item-autor">${a.autor}</span>
+        <span class="aviso-item-tempo">${tempoRelativoAviso(a.criadoEm)}</span>
+      </div>
+      <p class="aviso-item-texto">${escaparHTML(a.texto)}</p>
+      ${PAPEL_LOGADO === "coordenador" ? `<button type="button" class="aviso-item-excluir" data-id="${a.id}" aria-label="Excluir aviso">×</button>` : ""}
+    </div>
+  `).join("");
+
+  body.querySelectorAll(".aviso-item-excluir").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      btn.disabled = true;
+      const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify({ acao: "excluirAviso", id }) });
+      const data = await res.json();
+      if (data.ok) {
+        avisosCache = avisosCache.filter(a => a.id !== id);
+        renderAvisos();
+      } else {
+        btn.disabled = false;
+        alert(data.error || "Não consegui excluir esse aviso agora.");
+      }
+    });
+  });
+}
+
+const avisosPanel = document.getElementById("avisosPanel");
+document.getElementById("avisosBtn").addEventListener("click", async () => {
+  avisosPanel.classList.toggle("open");
+  if (!avisosPanel.classList.contains("open")) return;
+
+  const novoWrap = document.getElementById("avisosNovoWrap");
+  if (novoWrap) novoWrap.hidden = PAPEL_LOGADO !== "coordenador"; // só o coordenador lança aviso novo
+
+  document.getElementById("avisosBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
+  avisosCache = await buscarAvisosDoBackend();
+  renderAvisos();
+  // Abrir o painel já marca tudo como visto — o contador zera na hora.
+  marcarAvisosVistos(avisosCache);
+  const badge = document.getElementById("avisosBadge");
+  if (badge) badge.hidden = true;
+});
+document.getElementById("avisosClose").addEventListener("click", () => {
+  avisosPanel.classList.remove("open");
+});
+document.getElementById("avisosNovoBtn").addEventListener("click", async () => {
+  const textarea = document.getElementById("avisosNovoTexto");
+  const texto = textarea.value.trim();
+  if (!texto) return;
+  const btn = document.getElementById("avisosNovoBtn");
+  btn.disabled = true;
+  btn.textContent = "Lançando...";
+  const res = await fetch(COLMEIA_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ acao: "criarAviso", autor: DESIGNER_LOGADO, texto }),
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.textContent = "Lançar aviso";
+  if (data.ok) {
+    textarea.value = "";
+    avisosCache = await buscarAvisosDoBackend();
+    renderAvisos();
+    marcarAvisosVistos(avisosCache);
+  } else {
+    alert(data.error || "Não consegui lançar o aviso agora.");
+  }
+});
+
+// Checa avisos novos sozinho de vez em quando (mesmo sem o painel
+// aberto), pra acender o sino quando chegar aviso novo.
+async function atualizarBadgeAvisos() {
+  const badge = document.getElementById("avisosBadge");
+  if (!badge || !COLMEIA_API_URL) return;
+  avisosCache = await buscarAvisosDoBackend();
+  const vistos = idsAvisosVistos();
+  const novos = avisosCache.filter(a => !vistos.has(a.id)).length;
+  if (novos > 0) { badge.textContent = novos > 99 ? "99+" : String(novos); badge.hidden = false; }
+  else badge.hidden = true;
+}
+atualizarBadgeAvisos();
+setInterval(atualizarBadgeAvisos, 5 * 60 * 1000); // a cada 5 minutos
 
 // Acesso rápido — painel lateral recolhível
 const quickAccessPanel = document.getElementById("quickAccessPanel");
