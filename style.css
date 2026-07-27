@@ -1,4 +1,16 @@
 :root {
+  /* Sistema de animação "estilo Apple" — rápido, leve, sempre a mesma
+     curva (o "ease-out" que acelera rápido e desacelera suave no
+     final, usado em quase toda micro-interação do iOS/tvOS/macOS) e
+     durações curtas (150–320ms). Todo o site usa essas mesmas
+     variáveis pra ter uma sensação consistente em vez de cada elemento
+     animar do seu jeito. */
+  --ease-apple: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-apple-spring: cubic-bezier(0.16, 1, 0.3, 1); /* entradas com uma leve "molinha" no final, tipo folha/sheet do iOS */
+  --dur-fast: 150ms;   /* hover, toggle, troca de cor/ícone */
+  --dur-base: 220ms;   /* abrir menu, trocar de estado */
+  --dur-slow: 320ms;   /* pop-ups, painéis, modais maiores */
+
   --page-bg: #F3F4F6;
   --sidebar-bg: #FFFFFF;
   --card-bg: #FFFFFF;
@@ -69,7 +81,7 @@
 
 html, body { height: 100%; }
 
-body { background: var(--page-bg); transition: background 0.2s ease; overflow: hidden; }
+body { background: var(--page-bg); transition: background 0.2s var(--ease-apple); overflow: hidden; }
 
 .page {
   display: flex;
@@ -152,7 +164,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   color: var(--text-secondary);
   text-decoration: none;
   white-space: nowrap;
-  transition: color 0.15s ease;
+  transition: color 0.15s var(--ease-apple);
 }
 
 .nav-icon-circle {
@@ -165,7 +177,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
 }
 
 .nav-icon-circle svg { width: 19px; height: 19px; flex-shrink: 0; }
@@ -193,7 +205,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   font-size: 13.5px;
   font-weight: 500;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s var(--ease-apple);
 }
 
 .sidebar:hover .nav-label { opacity: 1; transition-delay: 0.08s; }
@@ -267,7 +279,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   padding: 10px 20px; margin: 0; cursor: pointer;
   font-family: var(--font-body);
   flex: 1; min-width: 0; justify-content: center;
-  transition: background 0.15s ease;
+  transition: background 0.15s var(--ease-apple);
 }
 .now-playing[hidden] { display: none; }
 .now-playing:hover { background: #E0A800; }
@@ -486,7 +498,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   box-shadow: var(--shadow-card);
   border: 1px solid transparent;
   cursor: grab;
-  transition: box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  transition: box-shadow 0.15s var(--ease-apple), transform 0.15s var(--ease-apple), opacity 0.15s var(--ease-apple);
 }
 
 [data-theme="dark"] .task-card { border-color: var(--border); }
@@ -525,7 +537,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 
 [data-theme="dark"] .progress-track { background: rgba(255,255,255,0.08); }
 
-.progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFDF00, #FFA200); transition: width 0.4s ease; }
+.progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFDF00, #FFA200); transition: width 0.4s var(--ease-apple); }
 
 .play-btn {
   width: 26px; height: 26px; border-radius: 50%;
@@ -551,11 +563,17 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
   background: var(--card-bg); border: 1px solid var(--border);
   border-radius: 10px; padding: 4px; box-shadow: var(--shadow-hover);
-  display: none; flex-direction: column; gap: 2px; min-width: 88px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 88px;
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.92) translateY(-4px); transform-origin: top right;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear var(--dur-fast);
 }
 
-.priority-menu.open { display: flex; }
+.priority-menu.open {
+  opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear;
+}
 
 .priority-menu button {
   border: none; background: transparent; text-align: left;
@@ -582,8 +600,8 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   top: 22px; right: 22px; bottom: 22px; left: 106px;
   gap: 16px;
   opacity: 0;
-  transform: translateX(40px);
-  transition: opacity 0.28s ease, transform 0.28s ease;
+  transform: translateX(24px) scale(0.99);
+  transition: opacity var(--dur-slow) var(--ease-apple-spring), transform var(--dur-slow) var(--ease-apple-spring);
   z-index: 100;
 }
 
@@ -603,11 +621,11 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 [data-theme="dark"] .detail-side {
   background: #0C0B12;
 }
-.task-detail.open { opacity: 1; transform: translateX(0); }
+.task-detail.open { opacity: 1; transform: translateX(0) scale(1); }
 
 .detail-inner {
   display: flex; flex-direction: column; width: 100%; min-height: 0;
-  transition: transform 0.26s ease, opacity 0.26s ease;
+  transition: transform 0.26s var(--ease-apple), opacity 0.26s var(--ease-apple);
   position: relative;
   background: var(--card-bg);
   border: 1px solid var(--border);
@@ -679,10 +697,16 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
   background: var(--card-bg); border: 1px solid var(--border);
   border-radius: 12px; padding: 6px; box-shadow: var(--shadow-hover);
-  display: none; flex-direction: column; gap: 2px; min-width: 150px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 150px;
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.92) translateY(-4px); transform-origin: top right;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear var(--dur-fast);
 }
-.status-menu.open { display: flex; }
+.status-menu.open {
+  opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear;
+}
 
 .status-menu button {
   border: none; background: transparent; text-align: left;
@@ -708,10 +732,16 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
   background: var(--card-bg); border: 1px solid var(--border);
   border-radius: 12px; padding: 6px; box-shadow: var(--shadow-hover);
-  display: none; flex-direction: column; gap: 2px; min-width: 160px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 160px;
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.92) translateY(-4px); transform-origin: top right;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear var(--dur-fast);
 }
-.detail-more-menu.open { display: flex; }
+.detail-more-menu.open {
+  opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear;
+}
 
 .detail-more-menu button, .detail-more-menu a {
   border: none; background: transparent; text-align: left;
@@ -760,13 +790,13 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 
 .desc-stack { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
-.desc-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; transition: flex-basis 0.32s ease; }
+.desc-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; transition: flex-basis 0.32s var(--ease-apple); }
 
 .change-panel {
   flex: 0 0 0%; overflow: hidden; opacity: 0;
   border-top: 1px solid var(--border);
   background: var(--page-bg);
-  transition: flex-basis 0.32s ease, opacity 0.25s ease;
+  transition: flex-basis 0.32s var(--ease-apple), opacity 0.25s var(--ease-apple);
 }
 
 [data-theme="dark"] .change-panel { background: rgba(255,255,255,0.03); }
@@ -857,7 +887,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   width: 18px; height: 18px; border-radius: 50%;
   border: none; background: var(--card-bg); color: var(--text-muted);
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.12s ease; cursor: pointer;
+  opacity: 0; transition: opacity 0.12s var(--ease-apple); cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
 .comment-bubble:hover .comment-delete-btn { opacity: 1; }
@@ -876,12 +906,12 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 
 /* Bolha otimista: aparece na hora que clica enviar, opaca/pendente, e
    "acende" (cor normal) assim que o Runrun.it confirma o envio. */
-.comment-bubble { animation: commentPop 0.18s ease; }
+.comment-bubble { animation: commentPop 0.18s var(--ease-apple); }
 @keyframes commentPop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-.comment-bubble.pending { opacity: 0.5; transition: opacity 0.25s ease; }
+.comment-bubble.pending { opacity: 0.5; transition: opacity 0.25s var(--ease-apple); }
 .comment-bubble.pending .comment-body { background: var(--page-bg); }
 .comment-bubble.pending .comment-time { font-style: italic; }
-.comment-bubble:not(.pending) { transition: opacity 0.25s ease; }
+.comment-bubble:not(.pending) { transition: opacity 0.25s var(--ease-apple); }
 
 .comment-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
 .comment-bubble.mine .comment-meta { flex-direction: row-reverse; }
@@ -956,7 +986,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   background: var(--kanban-yellow); color: #16181D; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 6px 18px rgba(255,199,0,0.4);
-  transition: transform .12s ease;
+  transition: transform .12s var(--ease-apple);
 }
 .chat-fab:hover { transform: scale(1.06); }
 .chat-fab svg { width: 22px; height: 22px; }
@@ -1121,7 +1151,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   width: 100%; background: var(--page-bg); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-weight: 500;
   font-family: var(--font-body); text-align: left; cursor: pointer;
-  color: var(--text-primary); transition: border-color .12s ease;
+  color: var(--text-primary); transition: border-color .12s var(--ease-apple);
 }
 .attach-item:hover { border-color: var(--text-muted); }
 .attach-item:disabled { opacity: 0.6; cursor: default; }
@@ -1230,11 +1260,17 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 20;
   background: var(--card-bg); border: 1px solid var(--border);
   border-radius: 10px; padding: 4px; box-shadow: var(--shadow-hover);
-  display: none; flex-direction: column; gap: 2px; min-width: 160px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 160px;
   max-height: 220px; overflow-y: auto;
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.92) translateY(4px); transform-origin: bottom left;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear var(--dur-fast);
 }
-.assignee-menu.open { display: flex; }
+.assignee-menu.open {
+  opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear;
+}
 .assignee-menu button {
   display: flex; align-items: center; gap: 8px;
   border: none; background: transparent; text-align: left;
@@ -1302,7 +1338,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 }
 
 .board-loading-text.fade-in {
-  animation: colmeia-text-fade 0.4s ease;
+  animation: colmeia-text-fade 0.4s var(--ease-apple);
 }
 
 @keyframes colmeia-glass-move {
@@ -1362,7 +1398,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .notif-item {
   display: flex; flex-direction: column; gap: 4px;
   padding: 12px; border-radius: 12px; background: var(--page-bg);
-  margin-bottom: 8px; cursor: pointer; transition: background .12s ease;
+  margin-bottom: 8px; cursor: pointer; transition: background .12s var(--ease-apple);
 }
 .notif-item:hover { background: var(--border); }
 .notif-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1383,7 +1419,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   z-index: 90;
   display: flex; flex-direction: column;
   transform: translateX(calc(100% + 22px));
-  transition: transform 0.28s ease;
+  transition: transform 0.28s var(--ease-apple);
 }
 .quick-access-panel.open { transform: translateX(0); }
 .quick-access-header {
@@ -1458,7 +1494,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .nav-arrow.nav-deliver.delivered {
   background: #2F9E44;
   color: #fff;
-  animation: navDeliverPop 0.45s ease;
+  animation: navDeliverPop 0.45s var(--ease-apple);
 }
 .nav-arrow.nav-deliver.delivered:hover { background: #248037; }
 
@@ -1475,6 +1511,17 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   display: flex; align-items: center; justify-content: center;
 }
 .rule-modal-overlay[hidden] { display: none; }
+/* Entrada estilo "sheet" da Apple: some rápido, aparece com uma leve
+   "molinha" no final — dispara sozinha toda vez que o overlay sai de
+   [hidden] (o navegador reinicia animações quando um elemento volta a
+   ser renderizado), sem precisar mexer no JS que já controla o hidden. */
+.rule-modal-overlay:not([hidden]) { animation: colmeia-overlay-fade var(--dur-base) var(--ease-apple); }
+.rule-modal-overlay:not([hidden]) .rule-modal { animation: colmeia-modal-pop var(--dur-base) var(--ease-apple-spring); }
+@keyframes colmeia-overlay-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes colmeia-modal-pop {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
 .rule-modal {
   width: 420px; max-height: 80vh;
   background: var(--card-bg);
@@ -1545,7 +1592,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   height: 100%;
   width: 100%;
   opacity: 0;
-  animation: colmeia-blank-fade 0.3s ease forwards;
+  animation: colmeia-blank-fade 0.3s var(--ease-apple) forwards;
 }
 .detail-loading-bee {
   width: 34px;
@@ -1639,7 +1686,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .rule-row-remove:hover { background: #FFE3E3; color: #E03131; }
 
 .rule-row {
-  transition: opacity 0.18s ease, transform 0.18s ease, max-height 0.2s ease;
+  transition: opacity 0.18s var(--ease-apple), transform 0.18s var(--ease-apple), max-height 0.2s var(--ease-apple);
   max-height: 60px; overflow: hidden;
 }
 .rule-row.saindo { opacity: 0; transform: translateX(6px); max-height: 0; padding-top: 0; padding-bottom: 0; }
@@ -1659,7 +1706,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   border-radius: 50%;
   z-index: 999;
   pointer-events: none;
-  transition: left 0.55s cubic-bezier(.2,.8,.3,1), top 0.55s cubic-bezier(.2,.8,.3,1), opacity 0.55s ease, transform 0.55s ease;
+  transition: left 0.55s cubic-bezier(.2,.8,.3,1), top 0.55s cubic-bezier(.2,.8,.3,1), opacity 0.55s var(--ease-apple), transform 0.55s var(--ease-apple);
 }
 
 /* ===== Briefing com IA (gerado automático, via Groq) ===== */
@@ -1782,7 +1829,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   height: 24px;
   min-width: 24px;
   object-fit: contain;
-  transition: opacity 0.16s ease;
+  transition: opacity 0.16s var(--ease-apple);
   background: var(--card-bg);
   border-radius: 14px;
   padding: 8px;
@@ -1797,7 +1844,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   max-width: 200px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.16s ease;
+  transition: opacity 0.16s var(--ease-apple);
 }
 .sidebar:hover .sidebar-logo-icon { opacity: 0; }
 .sidebar:hover .sidebar-logo-full { opacity: 1; transition-delay: 0.08s; }
@@ -1879,7 +1926,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .sidebar-logout {
   font-size: 11px; color: var(--text-muted); background: transparent;
   border: none; cursor: pointer; text-align: left; padding: 4px 0 0;
-  opacity: 0; transition: opacity 0.16s ease;
+  opacity: 0; transition: opacity 0.16s var(--ease-apple);
 }
 .sidebar:hover .sidebar-logout { opacity: 1; }
 
@@ -1953,7 +2000,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   width: 18px; height: 18px; border-radius: 50%;
   border: none; background: var(--card-bg); font-size: 11px;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.12s ease; cursor: pointer;
+  opacity: 0; transition: opacity 0.12s var(--ease-apple); cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
 .comment-bubble:hover .comment-react-btn { opacity: 1; }
@@ -1980,7 +2027,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .pasta-drive-btn-label-wrap { position: relative; overflow: hidden; height: 15px; flex: 1; }
 .pasta-drive-btn-label {
   display: block; white-space: nowrap;
-  transition: transform 0.26s ease, opacity 0.26s ease;
+  transition: transform 0.26s var(--ease-apple), opacity 0.26s var(--ease-apple);
 }
 .pasta-drive-btn-label.saindo { transform: translateY(-16px); opacity: 0; }
 .pasta-drive-btn-label.entrando { transform: translateY(16px); opacity: 0; }
@@ -2013,7 +2060,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .mc-card {
   background: var(--card-bg); border-radius: 24px; padding: 26px;
   box-shadow: var(--shadow-card); cursor: pointer;
-  transition: box-shadow .15s ease, transform .15s ease;
+  transition: box-shadow .15s var(--ease-apple), transform .15s var(--ease-apple);
   display: flex; flex-direction: column; height: 360px; overflow: hidden;
   position: relative;
 }
@@ -2054,7 +2101,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .mc-progress-head .mc-pct { font-weight: 500; }
 
 .mc-progress-track { height: 18px; border-radius: 999px; background: var(--page-bg); overflow: hidden; margin-bottom: 22px; flex-shrink: 0; }
-.mc-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFDF00, #FFA200); transition: width .4s ease; }
+.mc-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFDF00, #FFA200); transition: width .4s var(--ease-apple); }
 
 .mc-bottom { display: flex; align-items: center; gap: 12px; margin-top: auto; flex-shrink: 0; }
 .mc-avatar { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; background: #D9D9D9; flex-shrink: 0; }
@@ -2080,7 +2127,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .ch-tarefa-item {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 9px 14px; background: var(--page-bg); border-radius: 14px;
-  cursor: pointer; transition: background .12s ease;
+  cursor: pointer; transition: background .12s var(--ease-apple);
 }
 .ch-tarefa-item:hover { background: var(--border); }
 .ch-tarefa-titulo { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2098,7 +2145,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 [data-theme="dark"] .ch-modal-body .hub-pill { color: #16181D; }
 
 .pd-designers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: start; }
-.pd-designer-card { background: var(--card-bg); border-radius: 20px; padding: 18px 16px; transition: box-shadow .15s ease; position: relative; box-shadow: var(--shadow-card); }
+.pd-designer-card { background: var(--card-bg); border-radius: 20px; padding: 18px 16px; transition: box-shadow .15s var(--ease-apple); position: relative; box-shadow: var(--shadow-card); }
 .pd-designer-card:hover { box-shadow: var(--shadow-hover); }
 .pd-dcard-top { text-align: center; cursor: pointer; min-height: 128px; display: flex; flex-direction: column; }
 .pd-dcard-top-spacer { flex: 1; min-height: 4px; }
@@ -2110,13 +2157,13 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .pd-dstat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .pd-dstat-num { font-size: 14px; font-weight: 600; font-family: var(--font-body); color: var(--text-primary); }
 .pd-dstat-label { font-size: 9px; color: var(--text-muted); font-family: var(--font-body); }
-.pd-clients-inner { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+.pd-clients-inner { max-height: 0; overflow: hidden; transition: max-height .3s var(--ease-apple); }
 .pd-designer-card.expanded .pd-clients-inner { max-height: calc(100vh - 320px); overflow-y: auto; margin-top: 14px; padding-top: 12px; padding-right: 4px; border-top: 1px dashed var(--border); }
 .pd-clients-inner::-webkit-scrollbar { width: 6px; }
 .pd-clients-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 .pd-clients-inner::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-.pd-client-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 13px; margin-bottom: 8px; box-shadow: 0 1px 4px rgba(10,10,20,0.05); transition: box-shadow .15s ease; font-family: var(--font-body); }
+.pd-client-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 13px; margin-bottom: 8px; box-shadow: 0 1px 4px rgba(10,10,20,0.05); transition: box-shadow .15s var(--ease-apple); font-family: var(--font-body); }
 .pd-client-card:hover { box-shadow: var(--shadow-card); }
 .pd-client-top-row { display: flex; align-items: center; gap: 8px; }
 .pd-client-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
@@ -2137,3 +2184,63 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .comment-react-picker[hidden] {
   display: none !important;
 }
+
+/* ===== Feedback de toque "estilo Apple" (aplicado por último de
+   propósito, pra garantir que essa transição de transform vença
+   qualquer regra anterior da mesma classe) =====
+   Botões de ação encolhem bem sutilmente ao clicar e voltam rápido —
+   é o mesmo tipo de resposta tátil do iOS/tvOS/macOS, em vez de um
+   clique "seco" sem feedback nenhum. */
+.icon-btn-circle,
+.play-btn,
+.nav-arrow,
+.comment-send-btn,
+.ver-todas-btn,
+.sidebar-logout,
+.detail-more,
+.status-badge,
+.card-priority-tag,
+.comment-react-btn,
+.comment-delete-btn,
+.comment-tool-btn,
+.pasta-drive-btn,
+.confirm-pasta-confirmar,
+.confirm-pasta-cancelar,
+.assignee-advance-btn,
+.upload-notif-copy,
+.now-playing {
+  transition: transform var(--dur-fast) var(--ease-apple),
+              background var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple),
+              box-shadow var(--dur-fast) var(--ease-apple),
+              opacity var(--dur-fast) var(--ease-apple);
+}
+.icon-btn-circle:active,
+.play-btn:active,
+.nav-arrow:active,
+.comment-send-btn:active,
+.ver-todas-btn:active,
+.sidebar-logout:active,
+.detail-more:active,
+.status-badge:active,
+.card-priority-tag:active,
+.comment-react-btn:active,
+.comment-delete-btn:active,
+.comment-tool-btn:active,
+.pasta-drive-btn:active,
+.confirm-pasta-confirmar:active,
+.confirm-pasta-cancelar:active,
+.assignee-advance-btn:active,
+.upload-notif-copy:active,
+.now-playing:active {
+  transform: scale(0.93);
+}
+
+/* Cards do kanban: leve "levantada" no hover (translate + sombra), no
+   mesmo timing/curva do resto do site, pra parecer parte do mesmo
+   sistema em vez de um efeito à parte. */
+.task-card {
+  transition: transform var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple);
+}
+.task-card:hover { transform: translateY(-2px); }
+.task-card:active { transform: translateY(0) scale(0.985); }
