@@ -3184,25 +3184,35 @@ function wireWorkflowArrows(task) {
       });
     } else {
       deliverBtn.addEventListener("click", async () => {
-        deliverBtn.disabled = true;
+        // Tudo isso acontece NA HORA, antes de qualquer resposta do
+        // Runrun.it: já marca como entregue, já re-renderiza o botão
+        // inteiro (não só o ícone!) mostrando reciclagem, e já faz o
+        // pill preto varrer de verde. Re-renderizar o GRUPO inteiro
+        // (não só trocar o innerHTML do ícone) é importante — é o que
+        // garante que o clique do botão já fica ligado no "reabrir"
+        // de verdade, em vez de continuar ligado no "concluir" antigo
+        // (esse era o bug: o ícone mudava mas o clique continuava
+        // sendo o de concluir, então "reabrir" nunca funcionava).
+        const entregueOtimista = task.entregue;
+        const sequenciaOtimista = task.sequencia;
+        task.entregue = true;
 
-        // Tudo visual acontece NA HORA, antes de qualquer resposta do
-        // Runrun.it: já troca pro ícone de reciclagem (reabrir), pinta
-        // o botão de verde e faz o pill preto inteiro varrer de verde.
-        // Se der errado lá embaixo, tudo isso volta sozinho.
-        const iconOriginal = deliverBtn.innerHTML;
-        const tituloOriginal = deliverBtn.title;
-        deliverBtn.innerHTML = reopenIcon;
-        deliverBtn.title = "Reabrir tarefa";
-        deliverBtn.classList.add("delivered");
         const pillEl = document.querySelector(".detail-header-pill");
         if (pillEl) {
           pillEl.classList.remove("entregando"); // reinicia se já tinha rodado antes
           void pillEl.offsetWidth; // força o navegador a "esquecer" a animação anterior
           pillEl.classList.add("entregando");
         }
-        const entregueOtimista = task.entregue;
-        task.entregue = true;
+
+        const seqEl = document.getElementById("workflowSeqGroup");
+        if (seqEl) {
+          seqEl.innerHTML = renderSequenciaHTML(task);
+          wireWorkflowArrows(task);
+        }
+        // Pega o botão novo (o de cima foi substituído no re-render
+        // acima) pra poder desabilitar enquanto fala com o Runrun.it.
+        const novoDeliverBtn = document.getElementById("navDeliverBtn");
+        if (novoDeliverBtn) novoDeliverBtn.disabled = true;
 
         await pararCronometroAoTransferir(task);
 
@@ -3210,7 +3220,7 @@ function wireWorkflowArrows(task) {
         // transferir pra ninguém, já que não tem próximo) — confirmado
         // que o Runrun.it só deixa entregar depois disso. Se a tarefa
         // não tiver sequência (comum em subtarefas), pula essa parte.
-        if (task.sequencia && task.sequencia.length > 0) {
+        if (sequenciaOtimista && sequenciaOtimista.length > 0) {
           await avancarWorkflowNoBackend(task.id);
         }
         const ok = await entregarTarefaNoBackend(task.id);
@@ -3220,15 +3230,15 @@ function wireWorkflowArrows(task) {
           await carregarSequencia(task);
           agendarAtualizacaoKanban();
         } else {
-          // Runrun.it recusou — volta tudo sozinho pro estado original,
-          // ícone de concluir incluso.
+          // Runrun.it recusou — volta tudo sozinho pro estado original
+          // (ícone de concluir e o clique certo de novo inclusos).
           task.entregue = entregueOtimista;
-          deliverBtn.innerHTML = iconOriginal;
-          deliverBtn.title = tituloOriginal;
-          deliverBtn.classList.remove("delivered");
+          task.sequencia = sequenciaOtimista;
           if (pillEl) pillEl.classList.remove("entregando");
-          deliverBtn.disabled = false;
-          await carregarSequencia(task);
+          if (seqEl) {
+            seqEl.innerHTML = renderSequenciaHTML(task);
+            wireWorkflowArrows(task);
+          }
         }
       });
     }
