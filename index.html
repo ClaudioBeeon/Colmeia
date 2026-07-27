@@ -60,6 +60,13 @@
         <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="nav-label">Minhas tarefas de hoje</span>
       </a>
+      <a href="#" class="nav-ic" title="Fila de repasse" data-page="repasse">
+        <span class="nav-icon-circle">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h11M4 12h16M4 17h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17 4l3 3-3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="nav-badge" id="repasseBadge" hidden>0</span>
+        </span>
+        <span class="nav-label">Fila de repasse</span>
+      </a>
     </nav>
 
     <a href="#" class="nav-ic sidebar-profile-link" id="sidebarProfileLink" title="Configurações">
@@ -104,6 +111,11 @@
           <span class="icon-btn-badge" id="notificationsBadge" hidden>0</span>
         </button>
 
+        <button type="button" class="icon-btn-circle" id="avisosBtn" title="Avisos">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 11l18-7-7 18-2.5-7.5L3 11z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="icon-btn-badge" id="avisosBadge" hidden>0</span>
+        </button>
+
         <button type="button" class="icon-btn-circle accent" id="quickAccessBtn" title="Acesso rápido">
           <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/></svg>
         </button>
@@ -112,6 +124,7 @@
 
     <div class="page-heading-row" id="pageHeadingRow">
       <h2 id="pageHeadingTitle">Quadro de Tarefas</h2>
+      <div class="coordenacao-pill-wrap" id="coordenacaoPillWrap"></div>
       <div class="page-heading-right">
         <select class="designer-filter-select" id="designerFilterSelect" hidden></select>
         <div class="search-box">
@@ -130,6 +143,22 @@
         </button>
       </div>
       <div class="quick-access-body" id="notificationsBody">
+        <p class="quick-access-empty">Carregando...</p>
+      </div>
+    </aside>
+
+    <aside class="quick-access-panel" id="avisosPanel">
+      <div class="quick-access-header">
+        <h3>Avisos</h3>
+        <button type="button" id="avisosClose" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="avisos-novo" id="avisosNovoWrap" hidden>
+        <textarea id="avisosNovoTexto" placeholder="Lançar um aviso novo pra todo mundo... (ex: Manu está de férias, os clientes dela ficam com a Julia até dia 30)" rows="3"></textarea>
+        <button type="button" id="avisosNovoBtn">Lançar aviso</button>
+      </div>
+      <div class="quick-access-body" id="avisosBody">
         <p class="quick-access-empty">Carregando...</p>
       </div>
     </aside>
@@ -250,6 +279,21 @@
         <span>⏱️</span>
         <p>Em breve: tarefas que você deu play hoje</p>
       </div>
+    </section>
+
+    <section class="app-page" id="page-repasse" hidden>
+      <div class="repasse-toolbar">
+        <div class="repasse-tabs">
+          <button type="button" class="repasse-tab active" data-mode="cliente">Por cliente</button>
+          <button type="button" class="repasse-tab" data-mode="com_sequencia">Com sequência pronta</button>
+          <button type="button" class="repasse-tab" data-mode="sem_sequencia">Sem sequência</button>
+        </div>
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="text" id="repasseSearchInput" placeholder="Buscar cliente ou tarefa...">
+        </div>
+      </div>
+      <section class="board repasse-board" id="repasseBoard"></section>
     </section>
 
   </div>
