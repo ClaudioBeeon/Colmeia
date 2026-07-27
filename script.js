@@ -2774,7 +2774,27 @@ async function carregarAnexos(task) {
     btn.addEventListener("click", () => baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn));
   });
 }
-
+/**
+ * Busca o tempo trabalhado de verdade no Runrun.it toda vez que o card
+ * é aberto, em vez de confiar só no cronômetro local ou na atualização
+ * automática de 60s (que só cobre tarefas EM ABERTO — uma tarefa já
+ * entregue/fechada para de ser sincronizada e o número local podia
+ * ficar congelado errado pra sempre). Nunca deixa o tempo voltar pra
+ * trás, mesmo raciocínio do merge da atualização em segundo plano.
+ */
+async function carregarCronometroReal(task) {
+  if (!task.id) return;
+  const resultado = await buscarTarefaCompletaDoBackend(task.id);
+  if (!resultado.ok) return;
+  const fresco = mapearTarefaDoBackend(resultado.tarefa);
+  task.timerSeconds = Math.max(task.timerSeconds, fresco.timerSeconds);
+  task.tempoMedioMinutos = fresco.tempoMedioMinutos;
+  task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
+  if (tasks[detailIdx] && tasks[detailIdx].id === task.id) {
+    const timerEl = document.getElementById("detailTimer");
+    if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
+  }
+}
 /**
  * Baixa o anexo de verdade: pede o arquivo em base64 pro backend (que
  * busca autenticado no Runrun.it) e monta o download no navegador.
@@ -3139,6 +3159,7 @@ function openDetail(idx, entradaAnimacao) {
   carregarDescricao(tasks[detailIdx]);
   carregarSequencia(tasks[detailIdx]);
   carregarAnexos(tasks[detailIdx]);
+  carregarCronometroReal(tasks[detailIdx]);
   renderNotificacoesUpload(tasks[detailIdx]);
   iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);
   if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
