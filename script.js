@@ -109,6 +109,35 @@ function marcarUploadVisto(link) {
  * Colmeia já sabe exatamente qual é a pasta dessa tarefa, a checagem é
  * instantânea (olha só 1 pasta, não o Drive inteiro).
  */
+/**
+ * Antes, a checagem de "você subiu um arquivo na pasta do card" só
+ * rodava uma vez, no momento de abrir a tarefa — se o upload no Drive
+ * acontecesse só depois (ex: em outra aba), a notificação nunca mais
+ * aparecia até fechar e reabrir a tarefa. Agora, enquanto o pop-up da
+ * tarefa fica aberto, o Colmeia rechecha sozinho a cada poucos
+ * segundos (e também na hora, assim que a aba volta a ficar em foco —
+ * o momento mais comum de ter acabado de subir algo no Drive em outra
+ * aba/janela e voltado pro Colmeia pra copiar o link).
+ */
+let _intervalChecagemUpload = null;
+function iniciarChecagemUploadEmSegundoPlano(task) {
+  pararChecagemUploadEmSegundoPlano();
+  if (!task.id) return;
+  _intervalChecagemUpload = setInterval(() => {
+    if (tasks[detailIdx] !== task) { pararChecagemUploadEmSegundoPlano(); return; }
+    renderNotificacoesUpload(task);
+  }, 8000);
+}
+function pararChecagemUploadEmSegundoPlano() {
+  clearInterval(_intervalChecagemUpload);
+  _intervalChecagemUpload = null;
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && tasks[detailIdx] && tasks[detailIdx].id) {
+    renderNotificacoesUpload(tasks[detailIdx]);
+  }
+});
+
 async function renderNotificacoesUpload(task) {
   const container = document.getElementById("uploadNotifs");
   if (!container || !task.id) return;
@@ -2935,6 +2964,7 @@ function openDetail(idx, entradaAnimacao) {
   carregarSequencia(tasks[detailIdx]);
   carregarAnexos(tasks[detailIdx]);
   renderNotificacoesUpload(tasks[detailIdx]);
+  iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);
   if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
   // Se já tinha sido gerado antes (task.briefingHTML cacheado), o
   // template já usa o cache direto — só precisa religar os botões de
@@ -3893,6 +3923,7 @@ function stepDetail(dir) {
 }
 
 function closeDetail() {
+  pararChecagemUploadEmSegundoPlano();
   const panel = document.getElementById("taskDetail");
   panel.classList.remove("open");
   document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
