@@ -2372,6 +2372,19 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .repasse-picker button:hover { background: var(--page-bg); }
 
+.repasse-confirm { padding: 12px; gap: 10px; }
+.repasse-confirm-text {
+  font-family: var(--font-body); font-size: 13px; color: var(--text-primary);
+  padding: 0 2px;
+}
+.repasse-confirm-actions { display: flex; gap: 8px; }
+.repasse-confirm-actions button {
+  flex: 1; border: none; border-radius: 8px; padding: 8px; font-family: var(--font-body);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.repasse-confirm-cancel { background: var(--page-bg); color: var(--text-primary); }
+.repasse-confirm-ok { background: var(--accent); color: #fff; }
+
 /* ===== Painel de Avisos ===== */
 .avisos-novo {
   display: flex; flex-direction: column; gap: 8px;
