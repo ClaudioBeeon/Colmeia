@@ -2783,19 +2783,19 @@ function renderDetail() {
           ` : ""}
           <span class="detail-taskname">${task.title}</span>
           <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
-          <span class="detail-sep">|</span>
-          <div class="nav-dots-group" id="workflowSeqGroup">
-            ${renderSequenciaHTML(task)}
+          <div class="detail-header-pill-right">
+            <div class="nav-dots-group" id="workflowSeqGroup">
+              ${renderSequenciaHTML(task)}
+            </div>
+            <div class="status-wrap">
+              <button type="button" class="status-badge" id="statusBadge">${task.isMotherCard ? "Card mãe" : (columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa")}</button>
+              <div class="status-menu" id="statusMenu">
+                ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("")}
+              </div>
+            </div>
           </div>
         </div>
         <div class="detail-header-right">
-          <div class="status-wrap">
-            <button type="button" class="status-badge" id="statusBadge">${task.isMotherCard ? "Card mãe" : (columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa")}</button>
-            <div class="status-menu" id="statusMenu">
-              ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("")}
-            </div>
-          </div>
-
           <div class="detail-more-wrap">
             <button type="button" class="detail-more" id="detailMore" aria-label="Mais opções">
               <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
@@ -3430,6 +3430,10 @@ setInterval(() => {
       task.timerSeconds++;
       const timerEl = document.querySelector(`.timer-text[data-idx="${idx}"]`);
       if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
+      if (tasks[detailIdx] === task) {
+        const detailTimerEl = document.getElementById("detailTimer");
+        if (detailTimerEl) detailTimerEl.textContent = formatTime(task.timerSeconds);
+      }
       if (task.estimatePct < 100) {
         task.estimatePct++;
         const fill = document.querySelector(`.progress-fill[data-idx="${idx}"]`);
