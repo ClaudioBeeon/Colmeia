@@ -601,7 +601,8 @@ async function atualizarKanbanEmBackground() {
     // os últimos segundos rodados localmente.
     novasTarefas.forEach(nova => {
       const antiga = tasks.find(t => t.id === nova.id);
-      // Nunca deixa o tempo "voltar" pra trás, mesmo que o Runrun.it
+      if (antiga) {
+        // Nunca deixa o tempo "voltar" pra trás, mesmo que o Runrun.it
         // ainda não tenha confirmado que a tarefa está rodando (a API
         // dele às vezes demora a refletir isso, e aí devolvia um valor
         // mais baixo — às vezes 0 — que sobrescrevia o tempo certo).
