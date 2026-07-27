@@ -518,9 +518,25 @@ function mapearTarefaDoBackend(t) {
     timerSeconds: t.workedSeconds || 0,
     running: !!t.isRunning,
     estimateMinutes: t.estimateMinutes || 30,
-    estimatePct: Math.min(95, Math.round((t.estimateMinutes || 30) / 2)),
+    // Meta da barra de progresso: tempo médio de criação desse cliente
+    // (cadastrado no painel-designers-beeon, ex: 20min pro Alden 348).
+    // 0% quando o cronômetro está em 00:00, 100% ao bater esse tempo.
+    // Sem tempo médio cadastrado pro cliente, a barra fica em 0% (não
+    // dá pra calcular meta nenhuma).
+    tempoMedioMinutos: t.tempoMedioMinutos || 0,
+    estimatePct: calcularEstimatePct(t.workedSeconds || 0, t.tempoMedioMinutos || 0),
     hasChange: false,
   };
+}
+
+// Percentual da barra de progresso do card: proporção do tempo já
+// trabalhado (segundos reais, vindos do Runrun.it) sobre o tempo médio
+// de criação daquele cliente (minutos, cadastrado no painel-designers-
+// beeon). Sem tempo médio cadastrado, não dá pra saber a meta — fica 0%.
+function calcularEstimatePct(timerSeconds, tempoMedioMinutos) {
+  if (!tempoMedioMinutos) return 0;
+  const metaSegundos = tempoMedioMinutos * 60;
+  return Math.max(0, Math.min(100, Math.round((timerSeconds / metaSegundos) * 100)));
 }
 
 async function carregarTarefasReais() {
@@ -586,10 +602,14 @@ async function atualizarKanbanEmBackground() {
     novasTarefas.forEach(nova => {
       const antiga = tasks.find(t => t.id === nova.id);
       if (antiga) {
-        nova.estimatePct = antiga.estimatePct || nova.estimatePct;
         if (antiga.running && nova.running) {
           nova.timerSeconds = Math.max(nova.timerSeconds, antiga.timerSeconds);
         }
+        // A barra de progresso é sempre recalculada a partir do tempo real
+        // (já protegido contra "voltar no tempo" acima) e do tempo médio do
+        // cliente — nunca travada no valor antigo, senão ela para de andar
+        // depois da primeira atualização em segundo plano.
+        nova.estimatePct = calcularEstimatePct(nova.timerSeconds, nova.tempoMedioMinutos);
       }
     });
 
@@ -2032,10 +2052,19 @@ function buildBoard() {
     boardEl.appendChild(col);
   });
 
+  // O painel de detalhe é fixed (posicionado pela tela toda, não pelo
+  // board), então mora solto no <body> em vez de dentro do board do
+  // Kanban. Antes, por estar dentro de #page-kanban, ele sumia junto
+  // quando essa página ficava "hidden" (ex: ao clicar num card na Fila
+  // de repasse) — daí o pop-up só aparecia depois de navegar de volta
+  // pro Kanban. Remove qualquer painel antigo (de um buildBoard()
+  // anterior) antes de criar o novo, pra não duplicar o id.
+  const panelAntigo = document.getElementById("taskDetail");
+  if (panelAntigo) panelAntigo.remove();
   const panel = document.createElement("div");
   panel.className = "task-detail";
   panel.id = "taskDetail";
-  boardEl.appendChild(panel);
+  document.body.appendChild(panel);
 
   boardEl.querySelectorAll(".column-sort-ic").forEach(group => {
     const key = group.dataset.col;
@@ -2666,8 +2695,14 @@ function formatarDescricaoRunrun(html) {
  */
 async function carregarDescricao(task) {
   if (!task.id) return;
-  const texto = await buscarDescricaoDoBackend(task.id);
-  if (tasks[detailIdx] === task) {
+  const taskId = task.id;
+  const texto = await buscarDescricaoDoBackend(taskId);
+  // Compara pelo ID, não pela referência do objeto: o array `tasks` pode
+  // ter sido substituído por atualizarKanbanEmBackground() enquanto essa
+  // busca estava em andamento (troca os objetos por outros novos, mesmo
+  // sendo a mesma tarefa), o que fazia esse "if" falhar sempre na
+  // primeira abertura e a descrição só aparecer ao reabrir o card.
+  if (tasks[detailIdx] && tasks[detailIdx].id === taskId) {
     const el = document.getElementById("descTextReal");
     if (el) el.innerHTML = texto ? formatarDescricaoRunrun(texto) : "Sem descrição cadastrada nessa tarefa.";
   }
@@ -2675,9 +2710,11 @@ async function carregarDescricao(task) {
 
 async function carregarComentarios(task) {
   if (!task.id) return;
-  task.comments = await buscarComentariosDoBackend(task.id);
-  // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa.
-  if (tasks[detailIdx] === task) {
+  const taskId = task.id;
+  task.comments = await buscarComentariosDoBackend(taskId);
+  // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa
+  // (compara por ID, não por referência — ver comentário em carregarDescricao).
+  if (tasks[detailIdx] && tasks[detailIdx].id === taskId) {
     atualizarBadgeChat(task);
     const chatPanel = document.getElementById("chatPanel");
     const chatAberto = chatPanel && !chatPanel.hidden;
@@ -2718,7 +2755,7 @@ async function carregarAnexos(task) {
   } catch (err) {
     console.error("Falha ao buscar anexos:", err);
   }
-  if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
+  if (!tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de tarefa enquanto carregava
   const listaEl = document.getElementById("attachList");
   if (!listaEl) return;
   if (anexos.length === 0) {
@@ -3721,7 +3758,6 @@ function renderDetail() {
       const ok = await ajustarEstimativaNoBackend(task.id, horas * 60);
       if (ok) {
         task.estimateMinutes = Math.round(horas * 60);
-        task.estimatePct = Math.min(95, Math.round(task.estimateMinutes / 2));
         render();
       } else {
         alert("Não consegui ajustar a estimativa agora. Tenta de novo em alguns segundos.");
@@ -4163,8 +4199,8 @@ setInterval(() => {
         const detailTimerEl = document.getElementById("detailTimer");
         if (detailTimerEl) detailTimerEl.textContent = formatTime(task.timerSeconds);
       }
-      if (task.estimatePct < 100) {
-        task.estimatePct++;
+      if (task.tempoMedioMinutos) {
+        task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
         const fill = document.querySelector(`.progress-fill[data-idx="${idx}"]`);
         if (fill) fill.style.width = task.estimatePct + "%";
       }
@@ -4736,7 +4772,6 @@ function ignorarNaRepasse(taskId) {
 
 function tarefaEstaComAtendimento(t) {
   if (!t.id || !t.assignee) return false;
-  if (t.type === "estatico") return false; // Estático não passa por você
   if (ehTarefaDeCoordenacao(t)) return false; // a sua tarefa fixa de coordenação não é "repasse"
   if (idsRepasseIgnorados().has(t.id)) return false; // você já decidiu ficar com essa
   return nomesCorrespondem(t.assignee, DESIGNER_LOGADO);
@@ -4925,8 +4960,7 @@ function wireRepasseCards(lista) {
     const t = lista.find(x => String(x.id) === card.dataset.id);
     if (!t) return;
     card.addEventListener("click", () => {
-      mostrarPagina("kanban"); // o pop-up de detalhe vive dentro da página do Kanban
-      abrirTarefaPorId(t.id);
+      abrirTarefaPorId(t.id); // painel de detalhe fica solto no body, então abre por cima da própria aba de repasse
     });
   });
 
@@ -4964,65 +4998,69 @@ function wireRepasseCards(lista) {
       const t = lista.find(x => String(x.id) === btn.dataset.id);
       if (!t) return;
       btn.disabled = true;
-      btn.textContent = "Repassando...";
+      btn.textContent = "Verificando...";
       await garantirClassificacaoSequencia(t);
+      btn.disabled = false;
+      btn.textContent = "Repassar";
+
       if (t._temSequencia) {
-        const novoResponsavel = await avancarWorkflowNoBackend(t.id);
-        if (novoResponsavel) {
-          removerCardDeRepasseDaTela(btn);
-          agendarAtualizacaoKanban();
+        const proximo = proximoDaSequencia(t._sequenciaCache);
+        if (proximo) {
+          // Já tem alguém definido como próximo na sequência — confirma
+          // com o nome antes de avançar de verdade.
+          abrirConfirmacaoRepasse(t, proximo, btn);
         } else {
-          btn.disabled = false;
-          btn.textContent = "Repassar";
-          alert("Não consegui avançar a sequência dessa tarefa agora.");
+          // Tem sequência configurada, mas ninguém definido como próximo
+          // (ex: sequência com todo mundo já concluído) — deixa o
+          // Runrun.it decidir e mostra quem entrou depois.
+          confirmarEAvancarSequencia(t, btn, null);
         }
       } else {
-        btn.disabled = false;
-        btn.textContent = "Repassar";
-        abrirSeletorRepasseManual(t, btn);
+        // Sem sequência nenhuma configurada ainda: abre o mesmo modal
+        // "Ver regra" usado dentro dos cards, pra criar a regra de
+        // verdade (não só reatribuir uma vez só) — reaproveita a
+        // sequência/workflowId já buscados por garantirClassificacaoSequencia.
+        t.sequencia = t._sequenciaCache || [];
+        t.workflowId = t._workflowIdCache || null;
+        abrirModalRegra(t);
       }
     });
   });
 }
 
-// Quando a tarefa não tem sequência configurada, "Repassar" precisa
-// perguntar pra quem — reaproveita a mesma lista de usuários usada no
-// resto do Colmeia (buscarUsuariosRunrun).
-async function abrirSeletorRepasseManual(t, btn) {
-  const usuarios = await buscarUsuariosRunrun();
-  if (usuarios.length === 0) {
-    alert("Não consegui buscar a lista de designers agora.");
-    return;
+// Acha, na sequência já carregada, quem vem logo depois do responsável
+// atual e ainda não concluiu a etapa dele — é pra essa pessoa que o
+// "Repassar" vai perguntar antes de avançar de verdade.
+function proximoDaSequencia(seq) {
+  if (!Array.isArray(seq) || seq.length === 0) return null;
+  const idxAtual = seq.findIndex(s => s.atual);
+  for (let i = idxAtual + 1; i < seq.length; i++) {
+    if (!seq[i].concluido) return seq[i];
   }
+  return null;
+}
+
+// Pop-up de confirmação "Repassar para <nome>?" antes de mexer em
+// qualquer coisa de verdade no Runrun.it.
+function abrirConfirmacaoRepasse(t, proximo, btn) {
   let menu = btn.parentElement.querySelector(".repasse-picker");
   if (menu) { menu.remove(); return; } // clicou de novo — fecha
   menu = document.createElement("div");
-  menu.className = "repasse-picker";
-  menu.innerHTML = usuarios.map(u => `
-    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
-      ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
-    </button>
-  `).join("");
+  menu.className = "repasse-picker repasse-confirm";
+  menu.innerHTML = `
+    <div class="repasse-confirm-text">Repassar para <strong>${proximo.nome}</strong>?</div>
+    <div class="repasse-confirm-actions">
+      <button type="button" class="repasse-confirm-cancel">Cancelar</button>
+      <button type="button" class="repasse-confirm-ok">Confirmar</button>
+    </div>
+  `;
   btn.parentElement.appendChild(menu);
-
-  menu.querySelectorAll("button").forEach(opt => {
-    opt.addEventListener("click", async e => {
-      e.stopPropagation();
-      menu.remove();
-      btn.disabled = true;
-      btn.textContent = "Repassando...";
-      const ok = await reatribuirTarefaNoBackend(t.id, opt.dataset.userId);
-      if (ok) {
-        removerCardDeRepasseDaTela(btn);
-        agendarAtualizacaoKanban();
-      } else {
-        btn.disabled = false;
-        btn.textContent = "Repassar";
-        alert("Não consegui reatribuir essa tarefa agora.");
-      }
-    });
+  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); menu.remove(); });
+  menu.querySelector(".repasse-confirm-ok").addEventListener("click", ev => {
+    ev.stopPropagation();
+    menu.remove();
+    confirmarEAvancarSequencia(t, btn, proximo);
   });
-
   setTimeout(() => {
     document.addEventListener("click", function fechar(ev) {
       if (!menu.contains(ev.target) && ev.target !== btn) {
@@ -5031,6 +5069,22 @@ async function abrirSeletorRepasseManual(t, btn) {
       }
     });
   }, 0);
+}
+
+// Avança a sequência de verdade no Runrun.it (só chamado depois de
+// confirmado, ou quando não havia ninguém específico pra confirmar).
+async function confirmarEAvancarSequencia(t, btn, proximo) {
+  btn.disabled = true;
+  btn.textContent = "Repassando...";
+  const novoResponsavel = await avancarWorkflowNoBackend(t.id);
+  if (novoResponsavel) {
+    removerCardDeRepasseDaTela(btn);
+    agendarAtualizacaoKanban();
+  } else {
+    btn.disabled = false;
+    btn.textContent = "Repassar";
+    alert("Não consegui avançar a sequência dessa tarefa agora.");
+  }
 }
 
 function mostrarPagina(page) {
