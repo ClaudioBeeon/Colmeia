@@ -2774,6 +2774,7 @@ async function carregarAnexos(task) {
     btn.addEventListener("click", () => baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn));
   });
 }
+
 /**
  * Busca o tempo trabalhado de verdade no Runrun.it toda vez que o card
  * é aberto, em vez de confiar só no cronômetro local ou na atualização
@@ -2795,6 +2796,7 @@ async function carregarCronometroReal(task) {
     if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
   }
 }
+
 /**
  * Baixa o anexo de verdade: pede o arquivo em base64 pro backend (que
  * busca autenticado no Runrun.it) e monta o download no navegador.
@@ -3448,7 +3450,7 @@ function renderDetail() {
               ${renderSequenciaHTML(task)}
             </div>
             <div class="status-wrap">
-              <button type="button" class="status-badge" id="statusBadge">${task.isMotherCard ? "Card mãe" : (columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa")}</button>
+              <button type="button" class="status-badge" id="statusBadge">${columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa"}</button>
               <div class="status-menu" id="statusMenu">
                 ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("")}
               </div>
@@ -3708,15 +3710,14 @@ function renderDetail() {
 
   const statusBadge = document.getElementById("statusBadge");
   const statusMenu = document.getElementById("statusMenu");
-  if (task.isMotherCard) {
-    statusBadge.disabled = true;
-    statusBadge.title = "Card mãe não tem coluna no Colmeia";
-  } else {
-    statusBadge.addEventListener("click", e => {
-      e.stopPropagation();
-      statusMenu.classList.toggle("open");
-    });
-  }
+  // O card mãe também pode ser movido de etapa — a trava que bloqueava
+  // isso não fazia sentido, já que o Runrun.it trata ele como uma
+  // tarefa normal (só fica numa etapa própria, "Cards Mães", até
+  // alguém mudar).
+  statusBadge.addEventListener("click", e => {
+    e.stopPropagation();
+    statusMenu.classList.toggle("open");
+  });
   statusMenu.querySelectorAll("button").forEach(opt => {
     opt.addEventListener("click", async e => {
       e.stopPropagation();
