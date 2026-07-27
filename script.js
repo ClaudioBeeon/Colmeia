@@ -2869,7 +2869,7 @@ function renderDetail() {
           </div>
           <div class="side-block">
             <span class="side-label">Cliente</span>
-            <span class="badge badge-estatico">${task.client}</span>
+            <span class="badge badge-cliente">${task.client}</span>
           </div>
           <div class="side-block">
             <span class="side-label">Hub do cliente</span>
