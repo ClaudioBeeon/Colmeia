@@ -2057,6 +2057,40 @@ async function salvarLinksClienteNoBackend(cliente, dados) {
 }
 
 let progressoClientes = []; // [{designer, cliente, entregues, total}]
+let clientesOcultos = []; // [{designer, cliente}] — só filtro do Colmeia
+
+async function carregarClientesOcultos() {
+  if (!COLMEIA_API_URL) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "listarClientesOcultos" }),
+    });
+    const data = await res.json();
+    if (data.ok) clientesOcultos = data.ocultos || [];
+  } catch (err) {
+    console.error("Falha ao carregar clientes ocultos:", err);
+  }
+}
+
+function clienteEstaOculto(designer, cliente) {
+  return clientesOcultos.some(o => nomesCorrespondem(o.designer, designer) && normalizarParaComparar(o.cliente) === normalizarParaComparar(cliente));
+}
+
+async function ocultarClienteNoBackend(designer, cliente) {
+  if (!COLMEIA_API_URL) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "ocultarCliente", designer, cliente }),
+    });
+    const data = await res.json();
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao ocultar cliente:", err);
+    return false;
+  }
+}
 
 async function carregarProgressoClientes() {
   if (!COLMEIA_API_URL) return;
@@ -3767,7 +3801,7 @@ function formatarNomeExibicao(nome) {
  * entregas do mês (degradê amarelo → laranja) e o atendimento
  * responsável embaixo. Clicável: abre o hub do cliente.
  */
-function mcClientCardHTML(cliente, designer, servicos) {
+function mcClientCardHTML(cliente, designer, servicos, souCoordenador) {
   const servico = (servicos && servicos[0]) || "Cliente";
   const corBadge = mcCorServico(servico);
   const dadosLinks = getLinksDoCliente(cliente);
@@ -3780,6 +3814,11 @@ function mcClientCardHTML(cliente, designer, servicos) {
 
   return `
     <div class="mc-card" data-cliente="${cliente}" data-designer="${designer}">
+      ${souCoordenador ? `
+        <button type="button" class="mc-ocultar-btn" title="Ocultar esse cliente da lista de ${designer} (só no Colmeia)" aria-label="Ocultar cliente">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      ` : ""}
       <span class="mc-badge" style="background:${corBadge};">${servico}</span>
       <div class="mc-title">${formatarNomeExibicao(cliente)}</div>
       <div class="mc-desc">${descricao}</div>
@@ -3810,20 +3849,49 @@ function buildClientsPage() {
     return;
   }
 
-  const chaveDesigner = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, DESIGNER_LOGADO));
-  const meusItens = chaveDesigner ? (painelBeeonData.state[chaveDesigner] || []).map(c => ({ c, designer: chaveDesigner })) : [];
+  // Coordenador pode usar o mesmo seletor "ver o Kanban de quem" pra
+  // olhar os clientes de outro designer também.
+  const designerAlvo = (PAPEL_LOGADO === "coordenador" && filtroDesignerCoordenador !== "todos")
+    ? (filtroDesignerCoordenador === "eu" ? DESIGNER_LOGADO : filtroDesignerCoordenador)
+    : DESIGNER_LOGADO;
+
+  const chaveDesigner = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, designerAlvo));
+  const todosOsItens = chaveDesigner ? (painelBeeonData.state[chaveDesigner] || []).map(c => ({ c, designer: chaveDesigner })) : [];
+  const meusItens = todosOsItens.filter(({ c }) => !clienteEstaOculto(chaveDesigner, c.cliente));
 
   if (meusItens.length === 0) {
-    grid.innerHTML = `<div class="mc-empty placeholder-box"><span>🗂️</span><p>Nenhum cliente encontrado pra ${DESIGNER_LOGADO} no painel-designers-beeon.</p></div>`;
+    grid.innerHTML = `<div class="mc-empty placeholder-box"><span>🗂️</span><p>Nenhum cliente encontrado pra ${designerAlvo} no painel-designers-beeon.</p></div>`;
     return;
   }
 
   const grupos = pdMesclarPorCliente(meusItens);
-  grid.innerHTML = grupos.map(g => mcClientCardHTML(g.clienteName, chaveDesigner, g.entries[0].c.servicos)).join("");
+  const souCoordenador = PAPEL_LOGADO === "coordenador";
+  grid.innerHTML = grupos.map(g => mcClientCardHTML(g.clienteName, chaveDesigner, g.entries[0].c.servicos, souCoordenador)).join("");
 
   grid.querySelectorAll(".mc-card").forEach(card => {
     card.addEventListener("click", () => abrirHubDoCliente(card.dataset.cliente, card.dataset.designer));
   });
+
+  if (souCoordenador) {
+    grid.querySelectorAll(".mc-ocultar-btn").forEach(btn => {
+      btn.addEventListener("click", async e => {
+        e.stopPropagation(); // não abre o hub do cliente ao clicar em ocultar
+        const card = btn.closest(".mc-card");
+        const cliente = card.dataset.cliente;
+        const designer = card.dataset.designer;
+        if (!confirm(`Ocultar "${cliente}" da lista de clientes de ${designer}? Isso não mexe nos dados do painel-designers-beeon, só esconde aqui no Colmeia.`)) return;
+        btn.disabled = true;
+        const ok = await ocultarClienteNoBackend(designer, cliente);
+        if (ok) {
+          clientesOcultos.push({ designer, cliente });
+          buildClientsPage();
+        } else {
+          btn.disabled = false;
+          alert("Não consegui ocultar esse cliente agora. Tenta de novo em alguns segundos.");
+        }
+      });
+    });
+  }
 }
 
 const clientHubModalOverlay = document.getElementById("clientHubModalOverlay");
@@ -4035,7 +4103,7 @@ function mostrarPagina(page) {
 
   const seletor = document.getElementById("designerFilterSelect");
   if (seletor) {
-    if (page === "kanban" && PAPEL_LOGADO === "coordenador") {
+    if ((page === "kanban" || page === "clientes") && PAPEL_LOGADO === "coordenador") {
       if (!seletor.dataset.montado) {
         seletor.innerHTML = `
           <option value="todos">Todos juntos</option>
@@ -4059,6 +4127,7 @@ function mostrarPagina(page) {
 document.getElementById("designerFilterSelect").addEventListener("change", e => {
   filtroDesignerCoordenador = e.target.value;
   render();
+  if (!document.getElementById("page-clientes").hidden) buildClientsPage();
 });
 
 document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
@@ -4230,6 +4299,7 @@ function iniciarAppPosLogin() {
   carregarPessoasSalvas();
   carregarLinksClientes();
   carregarProgressoClientes();
+  carregarClientesOcultos();
 }
 
 // ===== Login e sessão =====
