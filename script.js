@@ -34,6 +34,13 @@ const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xm
 const PAINEL_BEEON_API_URL = "https://script.google.com/macros/s/AKfycbzzWtG4jkVpLvPwOAHaj-h9KK9k_8N6YWGUXfFtUDSXRiCj7ILDPvuSy9VJXhglTrzEQQ/exec";
 
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const MESES_COMPLETOS = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+(function atualizarPillDeData() {
+  const el = document.getElementById("topbarDateText");
+  if (!el) return;
+  const agora = new Date();
+  el.textContent = `${agora.getDate()} ${MESES_COMPLETOS[agora.getMonth()]}`;
+})();
 
 // Guarda os dados lidos do painel-designers-beeon (designers, clientes,
 // atendimento, fotos) depois que carregarDadosPainelBeeon() rodar.
@@ -3402,14 +3409,17 @@ document.addEventListener("keydown", e => {
 
 function updateNowPlaying() {
   const el = document.getElementById("nowPlaying");
+  const idle = document.getElementById("nowPlayingIdle");
   if (!el) return;
   const running = tasks.find(t => t.running);
   if (running) {
     el.hidden = false;
+    if (idle) idle.hidden = true;
     document.getElementById("nowPlayingTitle").textContent = running.title;
     document.getElementById("nowPlayingTime").textContent = formatTime(running.timerSeconds);
   } else {
     el.hidden = true;
+    if (idle) idle.hidden = false;
   }
 }
 
@@ -3776,14 +3786,7 @@ function abrirHubDoCliente(cliente, designer) {
  */
 function abrirTarefaDoHub(idx) {
   clientHubModalOverlay.hidden = true;
-  const linkKanban = document.querySelector('.nav-ic[data-page="kanban"]');
-  document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.remove("active"));
-  if (linkKanban) linkKanban.classList.add("active");
-  document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
-  document.getElementById("page-kanban").hidden = false;
-  const [title, subtitle] = pageTitles.kanban;
-  document.querySelector(".page-title").textContent = title;
-  document.querySelector(".page-subtitle").textContent = subtitle;
+  mostrarPagina("kanban");
   openDetail(idx);
 }
 
@@ -3921,26 +3924,36 @@ function buildTiposPage() {
   });
 }
 
+function mostrarPagina(page) {
+  document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.toggle("active", l.dataset.page === page));
+  document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
+  document.getElementById("page-" + page).hidden = false;
+  const [title, subtitle] = pageTitles[page];
+  document.querySelector(".page-title").textContent = title;
+  document.querySelector(".page-subtitle").textContent = subtitle;
+  const kanbanRow = document.getElementById("kanbanHeadingRow");
+  if (kanbanRow) kanbanRow.hidden = page !== "kanban";
+  if (page === "clientes") buildClientsPage();
+  if (page === "atendimento") buildAtendimentoPage();
+  if (page === "tipos") buildTiposPage();
+}
+
 document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
   link.addEventListener("click", e => {
     e.preventDefault();
-    const page = link.dataset.page;
-    document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.remove("active"));
-    link.classList.add("active");
-    document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
-    document.getElementById("page-" + page).hidden = false;
-    const [title, subtitle] = pageTitles[page];
-    document.querySelector(".page-title").textContent = title;
-    document.querySelector(".page-subtitle").textContent = subtitle;
-    if (page === "clientes") buildClientsPage();
-    if (page === "atendimento") buildAtendimentoPage();
-    if (page === "tipos") buildTiposPage();
+    mostrarPagina(link.dataset.page);
   });
 });
 
 // Busca por tarefa ou cliente
 document.getElementById("searchInput").addEventListener("input", e => {
   searchQuery = e.target.value;
+  render();
+});
+
+document.getElementById("verTodasBtn").addEventListener("click", () => {
+  searchQuery = "";
+  document.getElementById("searchInput").value = "";
   render();
 });
 
@@ -4005,7 +4018,10 @@ function renderNotificacoes() {
       const n = notificacoes[Number(el.dataset.i)];
       document.getElementById("notificationsPanel").classList.remove("open");
       const idxExistente = tasks.indexOf(n.task);
-      if (idxExistente !== -1) openDetail(idxExistente);
+      if (idxExistente !== -1) {
+        mostrarPagina("kanban");
+        openDetail(idxExistente);
+      }
       await esperar(150);
       abrirChatPanel(tasks[detailIdx]);
     });
@@ -4080,6 +4096,7 @@ function iniciarAppPosLogin() {
 
   buildBoard();
   render();
+  mostrarPagina("kanban");
   carregarTarefasReais();
   carregarDadosPainelBeeon();
   carregarPessoasSalvas();
