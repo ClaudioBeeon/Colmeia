@@ -3928,11 +3928,9 @@ function mostrarPagina(page) {
   document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.toggle("active", l.dataset.page === page));
   document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
   document.getElementById("page-" + page).hidden = false;
-  const [title, subtitle] = pageTitles[page];
-  document.querySelector(".page-title").textContent = title;
-  document.querySelector(".page-subtitle").textContent = subtitle;
-  const kanbanRow = document.getElementById("kanbanHeadingRow");
-  if (kanbanRow) kanbanRow.hidden = page !== "kanban";
+  const [title] = pageTitles[page];
+  const heading = document.getElementById("pageHeadingTitle");
+  if (heading) heading.textContent = title;
   if (page === "clientes") buildClientsPage();
   if (page === "atendimento") buildAtendimentoPage();
   if (page === "tipos") buildTiposPage();
