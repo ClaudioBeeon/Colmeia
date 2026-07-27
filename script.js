@@ -2619,6 +2619,24 @@ function renderSequenciaHTML(task) {
     return `<span class="workflow-seq-empty">Carregando sequência...</span>`;
   }
   if (task.sequencia.length === 0) {
+    if (task.entregue) {
+      return `
+        <button type="button" class="nav-arrow nav-deliver delivered" id="navDeliverBtn" title="Reabrir tarefa">
+          ${reopenIcon}
+        </button>
+      `;
+    }
+    if (task.parentTaskId) {
+      // Subtarefa sem "Sequência de responsáveis" configurada — o botão
+      // de concluir/entregar é obrigatório aqui, senão não tem outro
+      // jeito de marcar essa subtarefa como entregue.
+      return `
+        <span class="workflow-seq-empty">Sem sequência</span>
+        <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Concluir e entregar essa subtarefa">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      `;
+    }
     return `<span class="workflow-seq-empty">Sem sequência configurada</span>`;
   }
   const atualIdx = task.sequencia.findIndex(s => s.atual);
@@ -2727,8 +2745,11 @@ function wireWorkflowArrows(task) {
         deliverBtn.disabled = true;
         // Primeiro fecha a etapa da última pessoa da sequência (sem
         // transferir pra ninguém, já que não tem próximo) — confirmado
-        // que o Runrun.it só deixa entregar depois disso.
-        await avancarWorkflowNoBackend(task.id);
+        // que o Runrun.it só deixa entregar depois disso. Se a tarefa
+        // não tiver sequência (comum em subtarefas), pula essa parte.
+        if (task.sequencia && task.sequencia.length > 0) {
+          await avancarWorkflowNoBackend(task.id);
+        }
         const ok = await entregarTarefaNoBackend(task.id);
         if (ok) {
           task.entregue = true;
