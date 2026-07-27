@@ -1550,6 +1550,22 @@ async function buscarDescricaoDoBackend(taskId) {
   }
 }
 
+async function salvarDescricaoNoBackend(taskId, texto) {
+  if (!COLMEIA_API_URL || !taskId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "salvarDescricao", taskId, texto }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou salvar a descrição:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao salvar a descrição no Runrun.it:", err);
+    return false;
+  }
+}
+
 async function buscarComentariosDoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return [];
   try {
@@ -1816,6 +1832,9 @@ function render() {
     let list = tasks.filter(t => t.status === key);
     if (PAPEL_LOGADO === "designer") {
       list = list.filter(t => nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+    } else if (PAPEL_LOGADO === "coordenador" && filtroDesignerCoordenador !== "todos") {
+      const alvoNome = filtroDesignerCoordenador === "eu" ? DESIGNER_LOGADO : filtroDesignerCoordenador;
+      list = list.filter(t => nomesCorrespondem(t.assignee, alvoNome));
     }
     if (searchQuery) {
       const alvo = normalizarParaComparar(searchQuery);
@@ -2851,9 +2870,16 @@ function renderDetail() {
                 <div class="ai-briefing-result" id="briefingResult">
                   <p class="workflow-seq-empty">Carregando briefing...</p>
                 </div>
-                <button type="button" class="ai-briefing-toggle" id="verOriginalBtn">Ver briefing original</button>
+                <div class="desc-actions-row">
+                  <button type="button" class="ai-briefing-toggle" id="verOriginalBtn">Ver briefing original</button>
+                  ${task.id ? `<button type="button" class="ai-briefing-toggle" id="editarDescricaoBtn">Editar descrição</button>` : ""}
+                </div>
               ` : ""}
               <div class="desc-text-real" id="descTextReal" ${task.id ? "hidden" : ""}>${task.id ? "Carregando..." : ""}</div>
+              <div class="desc-edit-actions" id="descEditActions" hidden>
+                <button type="button" class="desc-edit-salvar" id="descEditSalvar">Salvar</button>
+                <button type="button" class="desc-edit-cancelar" id="descEditCancelar">Cancelar</button>
+              </div>
             </div>
             ${task.hasChange ? `
               <div class="change-panel" id="changePanel">
@@ -3119,6 +3145,51 @@ function renderDetail() {
       const escondido = original.hidden;
       original.hidden = !escondido;
       verOriginalBtn.textContent = escondido ? "Ocultar briefing original" : "Ver briefing original";
+    });
+  }
+
+  const editarDescricaoBtn = document.getElementById("editarDescricaoBtn");
+  if (editarDescricaoBtn) {
+    let htmlAntesDeEditar = "";
+    editarDescricaoBtn.addEventListener("click", () => {
+      const original = document.getElementById("descTextReal");
+      const acoes = document.getElementById("descEditActions");
+      original.hidden = false;
+      if (verOriginalBtn) verOriginalBtn.textContent = "Ocultar briefing original";
+      htmlAntesDeEditar = original.innerHTML;
+      original.contentEditable = "true";
+      original.classList.add("editando");
+      original.focus();
+      acoes.hidden = false;
+      editarDescricaoBtn.hidden = true;
+    });
+
+    document.getElementById("descEditCancelar").addEventListener("click", () => {
+      const original = document.getElementById("descTextReal");
+      original.innerHTML = htmlAntesDeEditar;
+      original.contentEditable = "false";
+      original.classList.remove("editando");
+      document.getElementById("descEditActions").hidden = true;
+      editarDescricaoBtn.hidden = false;
+    });
+
+    document.getElementById("descEditSalvar").addEventListener("click", async () => {
+      const original = document.getElementById("descTextReal");
+      const salvarBtn = document.getElementById("descEditSalvar");
+      const novoHtml = original.innerHTML;
+      salvarBtn.disabled = true;
+      salvarBtn.textContent = "Salvando...";
+      const ok = await salvarDescricaoNoBackend(task.id, novoHtml);
+      salvarBtn.disabled = false;
+      salvarBtn.textContent = "Salvar";
+      if (ok) {
+        original.contentEditable = "false";
+        original.classList.remove("editando");
+        document.getElementById("descEditActions").hidden = true;
+        editarDescricaoBtn.hidden = false;
+      } else {
+        alert("Não consegui salvar a descrição agora. Tenta de novo em alguns segundos.");
+      }
     });
   }
 
@@ -3493,6 +3564,11 @@ const pageTitles = {
 // Antes disso fica null — nenhuma tela usa isso até o login acontecer.
 let DESIGNER_LOGADO = null;
 let PAPEL_LOGADO = null; // 'coordenador' ou 'designer'
+
+// Mesma equipe configurada no backend (RUNRUN_USUARIOS) — usado só pra
+// montar as opções do seletor "ver o Kanban de quem" do coordenador.
+const DESIGNERS_EQUIPE = ["Cláudio", "Gustavo", "Erick"];
+let filtroDesignerCoordenador = "todos"; // "todos" | "eu" | nome de alguém da equipe
 
 // Mesma lógica de normalização usada no painel-designers-beeon: tira
 // acento, deixa minúsculo, tira espaço extra. Assim "Claudio" (Colmeia)
@@ -3956,10 +4032,34 @@ function mostrarPagina(page) {
   const [title] = pageTitles[page];
   const heading = document.getElementById("pageHeadingTitle");
   if (heading) heading.textContent = title;
+
+  const seletor = document.getElementById("designerFilterSelect");
+  if (seletor) {
+    if (page === "kanban" && PAPEL_LOGADO === "coordenador") {
+      if (!seletor.dataset.montado) {
+        seletor.innerHTML = `
+          <option value="todos">Todos juntos</option>
+          <option value="eu">Só o meu (${DESIGNER_LOGADO})</option>
+          ${DESIGNERS_EQUIPE.filter(n => !nomesCorrespondem(n, DESIGNER_LOGADO)).map(n => `<option value="${n}">${n}</option>`).join("")}
+        `;
+        seletor.value = filtroDesignerCoordenador;
+        seletor.dataset.montado = "1";
+      }
+      seletor.hidden = false;
+    } else {
+      seletor.hidden = true;
+    }
+  }
+
   if (page === "clientes") buildClientsPage();
   if (page === "atendimento") buildAtendimentoPage();
   if (page === "tipos") buildTiposPage();
 }
+
+document.getElementById("designerFilterSelect").addEventListener("change", e => {
+  filtroDesignerCoordenador = e.target.value;
+  render();
+});
 
 document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
   link.addEventListener("click", e => {
@@ -4059,6 +4159,11 @@ document.getElementById("notificationsBtn").addEventListener("click", async () =
     document.getElementById("notificationsBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
     await verificarNotificacoes();
     renderNotificacoes();
+    // Abrir o sino já marca tudo como visto — o contador zera na hora
+    // (a lista continua na tela pra você poder clicar nela normalmente).
+    notificacoes.forEach(n => marcarChatVisto(n.task));
+    const badge = document.getElementById("notificationsBadge");
+    if (badge) badge.hidden = true;
   }
 });
 document.getElementById("notificationsClose").addEventListener("click", () => {
