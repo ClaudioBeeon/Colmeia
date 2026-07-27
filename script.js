@@ -612,6 +612,11 @@ async function atualizarKanbanEmBackground() {
         // cliente — nunca travada no valor antigo, senão ela para de andar
         // depois da primeira atualização em segundo plano.
         nova.estimatePct = calcularEstimatePct(nova.timerSeconds, nova.tempoMedioMinutos);
+        // Preserva os comentários já carregados — sem isso, toda
+        // atualização automática do quadro trocava a tarefa por um
+        // objeto novo sem comentários, e quem estivesse com o card
+        // aberto via eles "sumirem" até recarregar de novo.
+        if (antiga.comments !== undefined) nova.comments = antiga.comments;
       }
     });
 
@@ -2551,7 +2556,7 @@ async function abrirThreadDoCardMae(task) {
   if (!cache) {
     const resultado = await buscarCardMaeDoBackend(task.id);
     if (!resultado.ok || !resultado.temPai) {
-      if (chatThreadAtivo === "mae" && tasks[detailIdx] === task && thread) {
+      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id && thread) {
         thread.innerHTML = `<p class="comments-empty">Essa tarefa não tem card mãe.</p>`;
       }
       return;
@@ -2560,7 +2565,7 @@ async function abrirThreadDoCardMae(task) {
     cache = { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios };
     chatMaeCache.set(task.id, cache);
   }
-  if (chatThreadAtivo !== "mae" || tasks[detailIdx] !== task) return; // trocou de aba/tarefa enquanto carregava
+  if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de aba/tarefa enquanto carregava
   chatAlvoTaskId = cache.id;
   const titulo = document.getElementById("chatPanelTitle");
   if (titulo) titulo.textContent = cache.title;
@@ -2586,7 +2591,7 @@ async function recarregarThreadAtiva() {
   if (!cache) return;
   cache.comments = await buscarComentariosDoBackend(cache.id);
   chatMaeCache.set(task.id, cache);
-  if (chatThreadAtivo !== "mae" || tasks[detailIdx] !== task) return;
+  if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return;
   const thread = document.getElementById("commentsThread");
   if (thread) {
     thread.innerHTML = renderComentariosHTML({ id: cache.id, comments: cache.comments });
@@ -3204,13 +3209,13 @@ function renderSequenciaHTML(task) {
         </button>
       `;
     }
-    if (task.parentTaskId) {
-      // Subtarefa sem "Sequência de responsáveis" configurada — o botão
-      // de concluir/entregar é obrigatório aqui, senão não tem outro
-      // jeito de marcar essa subtarefa como entregue.
+    if (task.parentTaskId || task.isMotherCard) {
+      // Subtarefa OU card mãe sem "Sequência de responsáveis"
+      // configurada — o botão de concluir/entregar é obrigatório aqui,
+      // senão não tem outro jeito de marcar como entregue.
       return `
         <div class="workflow-seq-dots">${responsavelAtualHTML}</div>
-        <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Concluir e entregar essa subtarefa">
+        <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Concluir e entregar essa tarefa">
           <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       `;
@@ -3389,6 +3394,11 @@ function wireWorkflowArrows(task) {
         const ok = await entregarTarefaNoBackend(task.id);
         if (ok) {
           task.entregue = true;
+          // Segurança extra: garante que o Runrun.it recebeu o pause,
+          // mesmo que avançar a sequência logo acima tenha, por algum
+          // motivo do lado de lá, deixado a tarefa marcada como
+          // rodando de novo.
+          pausarTarefaNoBackend(task.id);
           await esperar(450);
           await carregarSequencia(task);
           agendarAtualizacaoKanban();
@@ -3949,7 +3959,13 @@ function renderDetail() {
   // ===== Emoji =====
   const emojiBtn = document.getElementById("emojiBtn");
   const emojiPicker = document.getElementById("emojiPicker");
-  const EMOJIS_COMUNS = ["😀","😂","😍","👍","🙏","🎉","🔥","👀","✅","❌","😅","😢","🚀","💡","⚠️","❤️"];
+  const EMOJIS_COMUNS = [
+    "😀","😁","😂","🤣","😅","😊","🙂","😉","😍","😘","😜","🤔","😐","😴","😭","😢",
+    "😡","🥳","🤯","😱","🙄","😇","🤗","😅","🤝","👏","🙏","💪","👍","👎","👌","✌️",
+    "🤞","👀","🙌","💯","🔥","🚀","💡","⚠️","✅","❌","⭐","✨","🎉","🎯","📌","📎",
+    "📅","⏰","💬","📸","🎨","🖥️","📱","🔗","❤️","🧡","💛","💚","💙","💜","🖤","🤍",
+    "💔","🐝","☀️","🌙","☕","🍕","🎂","👋","🙋","🤦","🤷","😬","🥲","😎","🤩","🫡"
+  ];
   if (emojiBtn && emojiPicker) {
     emojiPicker.innerHTML = EMOJIS_COMUNS.map(e => `<button type="button" class="emoji-opt">${e}</button>`).join("");
     emojiBtn.addEventListener("click", e => {
