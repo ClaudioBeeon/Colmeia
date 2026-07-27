@@ -162,7 +162,13 @@ async function renderNotificacoesUpload(task) {
   const agora = Date.now();
   const arquivosRelevantes = resultado.uploads
     .filter(u =>
-      nomesCorrespondem(u.quem, DESIGNER_LOGADO) &&
+      // Antes exigia bater o nome de quem subiu com o designer logado —
+      // mas em Drives Compartilhados o Google não expõe o dono do
+      // arquivo (vem null), então essa checagem falhava sempre e a
+      // notificação nunca aparecia. Como essa pasta já é específica
+      // dessa tarefa, qualquer upload recente aqui é relevante — só
+      // exclui se souber com certeza que foi outra pessoa.
+      (u.quem === null || u.quem === undefined || nomesCorrespondem(u.quem, DESIGNER_LOGADO)) &&
       (agora - u.quando) < JANELA_NOTIFICACAO_UPLOAD_MS
     )
     .map(u => u.arquivo);
@@ -617,7 +623,7 @@ async function tocarTarefaNoBackend(taskId) {
 }
 
 async function pausarTarefaNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return;
+  if (!COLMEIA_API_URL || !taskId) return false;
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
@@ -625,8 +631,10 @@ async function pausarTarefaNoBackend(taskId) {
     });
     const data = await res.json();
     if (!data.ok) console.error("Runrun.it recusou o pause:", data.error);
+    return !!data.ok;
   } catch (err) {
     console.error("Falha ao pausar no Runrun.it:", err);
+    return false;
   }
 }
 
@@ -635,11 +643,16 @@ async function pausarTarefaNoBackend(taskId) {
  * tarefa é transferida pro próximo responsável ou concluída — não faz
  * sentido o cronômetro continuar rodando numa tarefa que já não é mais
  * "sua" ou que já foi entregue.
+ *
+ * IMPORTANTE: agora é assíncrona e espera o Runrun.it confirmar o
+ * pause de verdade antes de devolver — se o Colmeia tentasse entregar
+ * ou avançar a tarefa enquanto o pause ainda estava "no ar", o
+ * Runrun.it podia recusar (tarefa ainda "rodando" do lado de lá) e o
+ * ícone/cronômetro pareciam não ter feito nada.
  */
-function pararCronometroAoTransferir(task) {
-  if (!task.running) return;
+async function pararCronometroAoTransferir(task) {
+  if (!task.running) return true;
   task.running = false;
-  pausarTarefaNoBackend(task.id);
   render();
   updateNowPlaying();
   const detailPlayBtn = document.getElementById("detailPlay");
@@ -649,6 +662,7 @@ function pararCronometroAoTransferir(task) {
   }
   const detailTimerEl = document.getElementById("detailTimer");
   if (detailTimerEl) detailTimerEl.textContent = formatTime(task.timerSeconds);
+  return await pausarTarefaNoBackend(task.id);
 }
 
 /**
@@ -2106,7 +2120,7 @@ function attachCardDragHandlers() {
       menu.querySelector(".assignee-advance-btn").addEventListener("click", async ev => {
         ev.stopPropagation();
         menu.classList.remove("open");
-        pararCronometroAoTransferir(task);
+        await pararCronometroAoTransferir(task);
         const novoResponsavel = await avancarWorkflowNoBackend(task.id);
         if (novoResponsavel) {
           task.assignee = novoResponsavel;
@@ -3080,7 +3094,7 @@ function wireWorkflowArrows(task) {
   if (prevBtn) {
     prevBtn.addEventListener("click", async () => {
       prevBtn.disabled = true;
-      pararCronometroAoTransferir(task);
+      await pararCronometroAoTransferir(task);
       const novoResponsavel = await desfazerWorkflowNoBackend(task.id);
       if (novoResponsavel) {
         task.assignee = novoResponsavel;
@@ -3096,7 +3110,7 @@ function wireWorkflowArrows(task) {
   if (nextBtn) {
     nextBtn.addEventListener("click", async () => {
       nextBtn.disabled = true;
-      pararCronometroAoTransferir(task);
+      await pararCronometroAoTransferir(task);
 
       // Animação otimista: já mostra a transferência acontecendo na
       // hora (mesmo sem confirmação do Runrun.it ainda) — se a chamada
@@ -3149,12 +3163,19 @@ function wireWorkflowArrows(task) {
     } else {
       deliverBtn.addEventListener("click", async () => {
         deliverBtn.disabled = true;
-        pararCronometroAoTransferir(task);
+        await pararCronometroAoTransferir(task);
 
-        // Anima na hora (círculo virando verde), mesmo antes do
-        // Runrun.it confirmar — se der errado, desfaz sozinho (o
-        // carregarSequencia final busca o estado real da tarefa).
+        // Anima na hora (círculo virando verde + o pill preto inteiro
+        // "varrendo" de verde), mesmo antes do Runrun.it confirmar —
+        // se der errado, desfaz sozinho (o carregarSequencia final
+        // busca o estado real da tarefa).
         deliverBtn.classList.add("delivered");
+        const pillEl = document.querySelector(".detail-header-pill");
+        if (pillEl) {
+          pillEl.classList.remove("entregando"); // reinicia se já tinha rodado antes
+          void pillEl.offsetWidth; // força o navegador a "esquecer" a animação anterior
+          pillEl.classList.add("entregando");
+        }
         const entregueOtimista = task.entregue;
         task.entregue = true;
 
@@ -3175,6 +3196,7 @@ function wireWorkflowArrows(task) {
           // Runrun.it recusou — a conclusão volta sozinha.
           task.entregue = entregueOtimista;
           deliverBtn.classList.remove("delivered");
+          if (pillEl) pillEl.classList.remove("entregando");
           deliverBtn.disabled = false;
           await carregarSequencia(task);
         }
@@ -3400,6 +3422,7 @@ function renderDetail() {
       <div class="chat-panel-tabs">
         <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
         <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
+        ${task.id ? `<button type="button" class="upload-check-btn" id="uploadCheckBtn" title="Verificar se subiu algum arquivo novo na pasta do card">↻ Verificar upload</button>` : ""}
       </div>
       <div class="upload-notifs" id="uploadNotifs"></div>
       <div class="comments-thread" id="commentsThread">
@@ -3774,6 +3797,17 @@ function renderDetail() {
 
   const chatTabMae = document.getElementById("chatTabMae");
   if (chatTabMae) chatTabMae.addEventListener("click", () => abrirThreadDoCardMae(task));
+
+  const uploadCheckBtn = document.getElementById("uploadCheckBtn");
+  if (uploadCheckBtn) {
+    uploadCheckBtn.addEventListener("click", async () => {
+      uploadCheckBtn.disabled = true;
+      uploadCheckBtn.textContent = "Verificando...";
+      await renderNotificacoesUpload(task);
+      uploadCheckBtn.disabled = false;
+      uploadCheckBtn.textContent = "↻ Verificar upload";
+    });
+  }
 
   atualizarBadgeChat(task);
 
