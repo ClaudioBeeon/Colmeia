@@ -82,8 +82,8 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 /* ===== SIDEBAR ===== */
 .sidebar {
   width: 64px;
-  background: var(--sidebar-bg);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: none;
   border-radius: 20px;
   display: flex;
   flex-direction: column;
@@ -91,13 +91,18 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   gap: 14px;
   padding: 18px 10px;
   height: 100%;
-  box-shadow: var(--shadow-sidebar);
+  box-shadow: none;
   flex-shrink: 0;
   overflow: hidden;
   transition: width 0.22s cubic-bezier(.4,0,.2,1);
 }
 
-.sidebar:hover { width: 248px; }
+.sidebar:hover {
+  width: 248px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sidebar);
+}
 
 .sidebar-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; }
 
@@ -168,7 +173,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .nav-ic { outline: none; }
 .nav-ic:focus-visible .nav-icon-circle { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--accent); }
 
-.nav-ic.active .nav-icon-circle { background: var(--accent); color: #fff; }
+.nav-ic.active .nav-icon-circle { background: var(--kanban-yellow); color: #16181D; }
 
 .nav-icon-circle.avatar {
   width: 40px;
@@ -262,6 +267,7 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   flex: 1; min-width: 0; justify-content: center;
   transition: background 0.15s ease;
 }
+.now-playing[hidden] { display: none; }
 .now-playing:hover { background: #E0A800; }
 
 .now-playing-idle {
@@ -1676,11 +1682,15 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
   flex-shrink: 0;
 }
 .sidebar-logo-icon {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
   object-fit: contain;
   transition: opacity 0.16s ease;
+  background: var(--card-bg);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 .sidebar-logo-full {
   position: absolute;
