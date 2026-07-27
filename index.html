@@ -73,7 +73,7 @@
 
     <header class="topbar">
       <div class="topbar-dark">
-        <h1 class="page-title">Quadro de tarefas</h1>
+        <h1 class="page-title">Colmeia</h1>
         <p class="page-subtitle" hidden>Time de design · Beeon</p>
 
         <div class="date-pill">
@@ -110,14 +110,15 @@
       </div>
     </header>
 
-    <div class="kanban-heading-row" id="kanbanHeadingRow" hidden>
-      <span class="kanban-heading-dot"></span>
-      <h2>Quadro de Tarefas</h2>
-      <div class="search-box">
-        <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        <input type="text" id="searchInput" placeholder="Buscar tarefa, cliente...">
+    <div class="page-heading-row" id="pageHeadingRow">
+      <h2 id="pageHeadingTitle">Quadro de Tarefas</h2>
+      <div class="page-heading-right">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="text" id="searchInput" placeholder="Buscar tarefa, cliente...">
+        </div>
+        <button type="button" class="ver-todas-btn" id="verTodasBtn">VER TODAS</button>
       </div>
-      <button type="button" class="ver-todas-btn" id="verTodasBtn">VER TODAS</button>
     </div>
 
     <aside class="quick-access-panel" id="notificationsPanel">
