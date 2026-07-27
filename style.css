@@ -2065,37 +2065,37 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 .ch-modal-body .hub-teal { background: #DCF3EA; }
 [data-theme="dark"] .ch-modal-body .hub-pill { color: #16181D; }
 
-.pd-designers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; align-items: start; }
-.pd-designer-card { background: #fff; border-radius: 16px; padding: 16px 15px; transition: box-shadow .15s; position: relative; box-shadow: 0 1px 3px rgba(20,20,18,0.06); }
-.pd-designer-card:hover { box-shadow: 0 3px 12px rgba(20,20,18,0.1); }
+.pd-designers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: start; }
+.pd-designer-card { background: var(--card-bg); border-radius: 20px; padding: 18px 16px; transition: box-shadow .15s ease; position: relative; box-shadow: var(--shadow-card); }
+.pd-designer-card:hover { box-shadow: var(--shadow-hover); }
 .pd-dcard-top { text-align: center; cursor: pointer; min-height: 128px; display: flex; flex-direction: column; }
 .pd-dcard-top-spacer { flex: 1; min-height: 4px; }
-.pd-avatar-wrap { position: relative; width: 50px; margin: 0 auto 8px; }
-.pd-avatar { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; overflow: hidden; font-family: 'Inter', -apple-system, sans-serif; }
+.pd-avatar-wrap { position: relative; width: 52px; margin: 0 auto 10px; }
+.pd-avatar { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; overflow: hidden; font-family: var(--font-body); }
 .pd-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-.pd-dcard-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; font-family: 'Inter', -apple-system, sans-serif; color: #1a1a18; }
-.pd-designer-stats-row { display: flex; justify-content: space-around; border-top: 1px solid #eeece4; padding-top: 10px; }
+.pd-dcard-name { font-size: 14.5px; font-weight: 600; margin-bottom: 2px; font-family: var(--font-display); color: var(--text-primary); }
+.pd-designer-stats-row { display: flex; justify-content: space-around; border-top: 1px solid var(--border); padding-top: 10px; }
 .pd-dstat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.pd-dstat-num { font-size: 14px; font-weight: 600; font-family: 'Inter', -apple-system, sans-serif; color: #1a1a18; }
-.pd-dstat-label { font-size: 9px; color: #a3a091; font-family: 'Inter', -apple-system, sans-serif; }
+.pd-dstat-num { font-size: 14px; font-weight: 600; font-family: var(--font-body); color: var(--text-primary); }
+.pd-dstat-label { font-size: 9px; color: var(--text-muted); font-family: var(--font-body); }
 .pd-clients-inner { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
-.pd-designer-card.expanded .pd-clients-inner { max-height: calc(100vh - 320px); overflow-y: auto; margin-top: 14px; padding-top: 12px; padding-right: 4px; border-top: 1px dashed #e0ddd3; }
+.pd-designer-card.expanded .pd-clients-inner { max-height: calc(100vh - 320px); overflow-y: auto; margin-top: 14px; padding-top: 12px; padding-right: 4px; border-top: 1px dashed var(--border); }
 .pd-clients-inner::-webkit-scrollbar { width: 6px; }
-.pd-clients-inner::-webkit-scrollbar-thumb { background: #dcd9cd; border-radius: 4px; }
-.pd-clients-inner::-webkit-scrollbar-thumb:hover { background: #b8b4a6; }
+.pd-clients-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.pd-clients-inner::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-.pd-client-card { background: #fff; border-radius: 14px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(20,20,18,0.13); transition: box-shadow .1s; font-family: 'Inter', -apple-system, sans-serif; }
-.pd-client-card:hover { box-shadow: 0 4px 14px rgba(20,20,18,0.18); }
+.pd-client-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 13px; margin-bottom: 8px; box-shadow: 0 1px 4px rgba(10,10,20,0.05); transition: box-shadow .15s ease; font-family: var(--font-body); }
+.pd-client-card:hover { box-shadow: var(--shadow-card); }
 .pd-client-top-row { display: flex; align-items: center; gap: 8px; }
-.pd-client-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
-.pd-client-name-wrap { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: #1a1a18; }
-.pd-client-atend { font-size: 9.5px; color: #78766e; background: #F3F3F1; border-radius: 8px; padding: 2px 8px; display: inline-block; margin-top: 8px; margin-left: 38px; }
-.pd-client-designer-row { margin-top: 8px; margin-left: 38px; padding: 8px; background: #FAF9F7; border-radius: 10px; }
+.pd-client-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.pd-client-name-wrap { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); font-family: var(--font-display); }
+.pd-client-atend { font-size: 10px; color: var(--text-muted); background: var(--page-bg); border-radius: 999px; padding: 3px 9px; display: inline-block; margin-top: 8px; margin-left: 40px; }
+.pd-client-designer-row { margin-top: 8px; margin-left: 40px; padding: 9px; background: var(--page-bg); border-radius: 12px; }
 .pd-client-designer-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.pd-client-designer-badge { font-size: 9.5px; font-weight: 700; padding: 2px 8px; border-radius: 8px; display: inline-flex; align-items: center; gap: 4px; }
+.pd-client-designer-badge { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; }
 .pd-client-designer-photo { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
-.pd-client-tags-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
-.pd-tag { font-size: 8.5px; font-weight: 600; padding: 2px 8px; border-radius: 10px; display: inline-flex; align-items: center; gap: 2px; }
+.pd-client-tags-row { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.pd-tag { font-size: 9px; font-weight: 600; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 2px; }
 
 /* Correção: o [hidden] do navegador estava sendo sobrescrito pelo
    display:grid/flex dessas classes, fazendo os pickers ficarem
