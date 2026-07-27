@@ -3985,7 +3985,7 @@ function buildAtendimentoPage() {
     return;
   }
 
-  const flat = pdTodosClientesPlano().filter(({ c }) => !!c.atend);
+  const flat = pdTodosClientesPlano().filter(({ c }) => !!c.atend && normalizarParaComparar(c.atend) !== "sem atendimento");
   const porAtendimento = {};
   flat.forEach(item => {
     const a = item.c.atend;
