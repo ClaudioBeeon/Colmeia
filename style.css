@@ -312,15 +312,15 @@ body { background: var(--page-bg); transition: background 0.2s ease; overflow: h
 [data-theme="dark"] .icon-btn-circle { background: #24252C; color: #fff; }
 [data-theme="dark"] .icon-btn-circle.accent { background: var(--kanban-yellow); color: #16181D; }
 
-.kanban-heading-row {
-  display: flex; align-items: center; gap: 16px;
+.page-heading-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
   margin-bottom: 22px; flex-shrink: 0;
 }
-.kanban-heading-row[hidden] { display: none; }
-.kanban-heading-dot { width: 40px; height: 40px; border-radius: 50%; background: var(--kanban-yellow); flex-shrink: 0; }
-.kanban-heading-row h2 { font-family: var(--font-display); font-size: 32px; font-weight: 400; flex-shrink: 0; }
+.page-heading-row[hidden] { display: none; }
+.page-heading-row h2 { font-family: var(--font-display); font-size: 32px; font-weight: 400; flex-shrink: 0; }
 
-.kanban-heading-row .search-box { flex: 1; max-width: 640px; height: 46px; border-radius: 999px; }
+.page-heading-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+.page-heading-right .search-box { width: 380px; height: 46px; border-radius: 999px; }
 
 .ver-todas-btn {
   background: var(--kanban-yellow); color: #16181D; border: none;
