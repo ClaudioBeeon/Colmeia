@@ -650,6 +650,34 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .detail-header-pill {
   display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;
   background: #14151A; border-radius: 999px; padding: 8px 8px 8px 8px;
+  position: relative; overflow: hidden;
+}
+/* Todo filho direto vira "elemento posicionado" pra garantir que fica
+   por cima da varredura verde (ver .detail-header-pill::before), não
+   importa a ordem de pintura do flexbox. */
+.detail-header-pill > * { position: relative; z-index: 2; }
+
+/* Animação de "concluir tarefa": o pill preto inteiro varre de verde,
+   saindo de onde fica o botão de concluir (canto direito), cobre tudo,
+   segura um instante, e volta pro preto sozinho — puramente visual,
+   não depende de re-render nem de resposta do Runrun.it. */
+.detail-header-pill::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: #2F9E44;
+  border-radius: inherit;
+  clip-path: circle(0% at 95% 50%);
+  z-index: 1;
+  pointer-events: none;
+}
+.detail-header-pill.entregando::before {
+  animation: colmeia-pill-deliver 900ms var(--ease-apple-spring);
+}
+@keyframes colmeia-pill-deliver {
+  0%   { clip-path: circle(0% at 95% 50%); }
+  40%  { clip-path: circle(150% at 95% 50%); }
+  75%  { clip-path: circle(150% at 95% 50%); }
+  100% { clip-path: circle(0% at 95% 50%); }
 }
 
 .detail-header-pill-right { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
@@ -1033,6 +1061,15 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   padding: 8px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap;
 }
 .chat-panel-tab.active { background: var(--kanban-yellow); color: #16181D; }
+
+.upload-check-btn {
+  border: none; background: transparent; color: var(--text-muted);
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  padding: 8px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  margin-left: auto;
+}
+.upload-check-btn:hover { background: var(--page-bg); color: var(--text-primary); }
+.upload-check-btn:disabled { opacity: 0.6; cursor: default; }
 
 @media (max-width: 900px) {
   .task-detail.chat-open .detail-inner { display: none; }
