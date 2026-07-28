@@ -438,6 +438,23 @@ function linkificarTexto(texto) {
   return escapado.replace(/(https?:\/\/[^\s<]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
 }
 
+/**
+ * O Runrun.it manda menções de comentário cruas, tipo
+ * "<mention>@fulano</mention> confere isso aí". Antes de escapar/exibir
+ * o texto em qualquer lugar (chat, notificações do sino), passa por
+ * aqui pra virar destaque de verdade em vez de aparecer a tag crua ou
+ * sumir sem querer.
+ */
+function formatarMencoes(texto) {
+  if (!texto) return "";
+  return texto.replace(/<mention>(.*?)<\/mention>/gi, (match, nome) => `__MENTION_START__${nome}__MENTION_END__`);
+}
+function aplicarMarcadoresDeMencao(textoEscapado) {
+  return textoEscapado
+    .replace(/__MENTION_START__/g, '<strong class="mention-tag">')
+    .replace(/__MENTION_END__/g, "</strong>");
+}
+
 // Cores pra alternar entre os formatos gerados pela IA (mesmo estilo
 // visual dos boxes que já existiam, só que agora com dados reais).
 const CORES_FORMATO_BOX = ["fb-blue", "fb-purple", "fb-orange", "fb-teal", "fb-pink"];

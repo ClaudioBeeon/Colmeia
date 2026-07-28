@@ -207,6 +207,11 @@ function buildRunrunCompletoPage() {
     const entregues = extrasRunrunCompleto.entregues.filter(pertenceAoDesigner);
     if (cardMae.length) colunasExtras.push({ nome: "Card mãe", tarefas: cardMae });
     if (entregues.length) colunasExtras.push({ nome: "Entregues", tarefas: entregues });
+  } else if (carregandoExtrasRunrunCompleto) {
+    // Ainda buscando Card mãe/Entregues no backend — mostra uma coluna
+    // avisando que está carregando, em vez de deixar a pessoa achando
+    // que essas abas simplesmente não existem.
+    colunasExtras.push({ nome: "Card mãe / Entregues", tarefas: [], carregando: true });
   }
 
   let colunas = etapas.map(etapa => ({ nome: etapa, tarefas: porEtapa[etapa] })).concat(colunasExtras);
@@ -214,12 +219,14 @@ function buildRunrunCompletoPage() {
 
   board.innerHTML = colunas.map(col => `
     <div class="column">
-      <div class="column-header" draggable="true" data-col-nome="${escaparHTML(col.nome)}">
+      <div class="column-header" draggable="${col.carregando ? "false" : "true"}" data-col-nome="${escaparHTML(col.nome)}">
         <span class="column-hex" style="color:var(--accent);">${hexIcon}</span>
         <h2>${col.nome}</h2>
-        <span class="column-count">${col.tarefas.length}</span>
+        ${col.carregando ? `<span class="rule-row-spinner"></span>` : `<span class="column-count">${col.tarefas.length}</span>`}
       </div>
-      <div class="column-cards">${ordenarPorCriacaoAscendente(col.tarefas).map(t => runrunCompletoCardHTML(t)).join("")}</div>
+      <div class="column-cards">${col.carregando
+        ? `<p class="workflow-seq-empty" style="padding:24px;">Carregando...</p>`
+        : ordenarPorCriacaoAscendente(col.tarefas).map(t => runrunCompletoCardHTML(t)).join("")}</div>
     </div>
   `).join("");
 

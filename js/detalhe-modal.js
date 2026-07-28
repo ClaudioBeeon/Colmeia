@@ -312,6 +312,9 @@ function renderDetail() {
             </button>
           ` : ""}
           <span class="detail-taskname">${task.title}</span>
+          <button type="button" class="detail-taskname-copy" id="detailTaskNameCopy" title="Copiar nome da tarefa" aria-label="Copiar nome da tarefa">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
           <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
           <div class="detail-header-pill-right">
             <div class="nav-dots-group" id="workflowSeqGroup">
@@ -523,6 +526,19 @@ function renderDetail() {
 
   document.getElementById("detailClose").addEventListener("click", closeDetail);
   wireWorkflowArrows(task);
+
+  const copyNameBtn = document.getElementById("detailTaskNameCopy");
+  if (copyNameBtn) {
+    copyNameBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(task.title);
+        copyNameBtn.classList.add("copied");
+        setTimeout(() => copyNameBtn.classList.remove("copied"), 1200);
+      } catch (err) {
+        console.error("Falha ao copiar nome da tarefa:", err);
+      }
+    });
+  }
 
   document.getElementById("detailPlay").addEventListener("click", () => {
     const vaiComecar = !task.running;

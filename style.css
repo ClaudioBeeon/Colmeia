@@ -736,6 +736,15 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 
 .detail-taskname { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 40px; }
 
+.detail-taskname-copy {
+  flex-shrink: 0; width: 18px; height: 18px; padding: 0; border: none; background: none;
+  color: #6b6d76; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; transition: color 0.15s var(--ease-apple), background 0.15s var(--ease-apple);
+}
+.detail-taskname-copy svg { width: 13px; height: 13px; }
+.detail-taskname-copy:hover { color: #9a9ca5; background: rgba(255,255,255,0.06); }
+.detail-taskname-copy.copied { color: #2F9E44; }
+
 .detail-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
 .nav-dot { width: 26px; height: 26px; border-radius: 50%; border: none; background: var(--page-bg); cursor: pointer; overflow: hidden; padding: 0; display: flex; align-items: center; justify-content: center; }
@@ -985,6 +994,7 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .comment-text { font-size: 13px; color: var(--text-primary); line-height: 1.5; text-align: left; }
 .comment-text a { color: var(--accent); text-decoration: underline; word-break: break-word; }
 .comment-text a:hover { text-decoration: none; }
+.mention-tag { color: var(--accent); font-weight: 700; }
 
 .comment-input {
   position: relative;

@@ -218,6 +218,85 @@ function removerCardDeRepasseDaTela(btn) {
   setTimeout(() => card.remove(), 200);
 }
 
+// Reconstrói só o conteúdo de um pill de data (label + valor), sem tocar
+// no resto do card nem na ordem da lista — usado depois de salvar uma
+// nova data, e também na primeira montagem de cada item.
+function restaurarPillItem(item, t, campo) {
+  const label = campo === "publicacao" ? "Publicação" : "Entrega";
+  const valorISO = campo === "publicacao" ? t.dataPublicacao : t.dueISO;
+  const atrasada = campo === "entrega" && t.dueISO && t.dueISO < hojeISO();
+  item.classList.toggle("overdue", atrasada);
+  item.innerHTML = `
+    <span class="repasse-data-label">${label}</span>
+    <button type="button" class="repasse-data-valor">${formatarDataCurtaSemAno(valorISO) || "—"}</button>
+  `;
+}
+
+// Liga o clique de abrir o calendário num pill de data específico —
+// chamado na montagem inicial de cada card e de novo depois de salvar
+// uma data (já que o innerHTML do item é reconstruído nessa hora).
+function wireDataItem(item, lista) {
+  item.onclick = e => e.stopPropagation(); // não abre o card de detalhe
+
+  const valorBtn = item.querySelector(".repasse-data-valor");
+  valorBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    const t = lista.find(x => String(x.id) === item.dataset.id);
+    if (!t) return;
+    const campo = item.dataset.campo; // "publicacao" ou "entrega"
+    const valorAtualISO = (campo === "publicacao" ? t.dataPublicacao : t.dueISO) || "";
+    const labelHTML = item.querySelector(".repasse-data-label").outerHTML;
+
+    item.innerHTML = `${labelHTML}<input type="date" class="repasse-data-input" value="${valorAtualISO}">`;
+    const input = item.querySelector(".repasse-data-input");
+    input.addEventListener("click", ev => ev.stopPropagation());
+    input.focus();
+    // Abre o calendário nativo direto ao clicar, em vez de deixar a
+    // pessoa digitar a data na mão.
+    if (typeof input.showPicker === "function") {
+      try { input.showPicker(); } catch (err) { /* alguns navegadores recusam fora de um clique direto — segue clicável normalmente */ }
+    }
+
+    let jaSalvou = false;
+    async function salvar() {
+      if (jaSalvou) return;
+      jaSalvou = true;
+      const novaData = input.value; // sempre AAAA-MM-DD
+      if (!novaData || novaData === valorAtualISO) {
+        restaurarPillItem(item, t, campo);
+        wireDataItem(item, lista);
+        return;
+      }
+
+      input.disabled = true;
+      const ok = campo === "publicacao"
+        ? await alterarPublicacaoNoBackend(t.id, novaData)
+        : await alterarEntregaNoBackend(t.id, novaData);
+
+      if (!ok) {
+        alert(`Não consegui alterar a ${campo === "publicacao" ? "Publicação" : "Entrega Desejada"} agora. Tenta de novo em alguns segundos.`);
+        restaurarPillItem(item, t, campo);
+        wireDataItem(item, lista);
+        return;
+      }
+
+      if (campo === "publicacao") {
+        t.dataPublicacao = novaData;
+      } else {
+        const [ano, mes, dia] = novaData.split("-").map(Number);
+        t.dueISO = novaData;
+        t.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+      }
+      agendarAtualizacaoKanban();
+      restaurarPillItem(item, t, campo);
+      wireDataItem(item, lista);
+    }
+
+    input.addEventListener("change", salvar);
+    input.addEventListener("blur", () => { if (!jaSalvou) { restaurarPillItem(item, t, campo); wireDataItem(item, lista); } });
+  });
+}
+
 function wireRepasseCards(lista) {
   document.querySelectorAll(".repasse-card").forEach(card => {
     const t = lista.find(x => String(x.id) === card.dataset.id);
@@ -228,60 +307,13 @@ function wireRepasseCards(lista) {
   });
 
   // ===== Pill de datas: clicar em Publicação ou Entrega abre o calendário =====
+  // Importante: depois de salvar, NÃO chamamos renderRepasse() (isso
+  // reordenaria a lista inteira por data e o card "pularia" de posição
+  // enquanto a pessoa ainda está mexendo nele). Em vez disso, só o pill
+  // daquele campo é reconstruído no lugar — a reordenação de verdade só
+  // acontece quando a aba é reaberta/atualizada de novo.
   document.querySelectorAll(".repasse-data-item").forEach(item => {
-    item.addEventListener("click", e => e.stopPropagation()); // não abre o card de detalhe
-
-    const valorBtn = item.querySelector(".repasse-data-valor");
-    valorBtn.addEventListener("click", e => {
-      e.stopPropagation();
-      const t = lista.find(x => String(x.id) === item.dataset.id);
-      if (!t) return;
-      const campo = item.dataset.campo; // "publicacao" ou "entrega"
-      const valorAtualISO = (campo === "publicacao" ? t.dataPublicacao : t.dueISO) || "";
-      const labelHTML = item.querySelector(".repasse-data-label").outerHTML;
-
-      item.innerHTML = `${labelHTML}<input type="date" class="repasse-data-input" value="${valorAtualISO}">`;
-      const input = item.querySelector(".repasse-data-input");
-      input.addEventListener("click", ev => ev.stopPropagation());
-      input.focus();
-      // Abre o calendário nativo direto ao clicar, em vez de deixar a
-      // pessoa digitar a data na mão.
-      if (typeof input.showPicker === "function") {
-        try { input.showPicker(); } catch (err) { /* alguns navegadores recusam fora de um clique direto — segue clicável normalmente */ }
-      }
-
-      let jaSalvou = false;
-      async function salvar() {
-        if (jaSalvou) return;
-        jaSalvou = true;
-        const novaData = input.value; // sempre AAAA-MM-DD
-        if (!novaData || novaData === valorAtualISO) { renderRepasse(); return; }
-
-        input.disabled = true;
-        const ok = campo === "publicacao"
-          ? await alterarPublicacaoNoBackend(t.id, novaData)
-          : await alterarEntregaNoBackend(t.id, novaData);
-
-        if (!ok) {
-          alert(`Não consegui alterar a ${campo === "publicacao" ? "Publicação" : "Entrega Desejada"} agora. Tenta de novo em alguns segundos.`);
-          renderRepasse();
-          return;
-        }
-
-        if (campo === "publicacao") {
-          t.dataPublicacao = novaData;
-        } else {
-          const [ano, mes, dia] = novaData.split("-").map(Number);
-          t.dueISO = novaData;
-          t.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
-        }
-        agendarAtualizacaoKanban();
-        renderRepasse();
-      }
-
-      input.addEventListener("change", salvar);
-      input.addEventListener("blur", () => { if (!jaSalvou) renderRepasse(); });
-    });
+    wireDataItem(item, lista);
   });
 
   document.querySelectorAll(".repasse-btn-ficar").forEach(btn => {

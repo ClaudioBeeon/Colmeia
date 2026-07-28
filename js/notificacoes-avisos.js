@@ -24,6 +24,21 @@ function salvarNotificacoesLog(lista) {
  * por "lido"), então o item continua na lista mesmo depois de visto,
  * até completar os 2 dias de retenção.
  */
+// Comentários buscados há pouco tempo (pelo sino ou pelo chat) ficam
+// guardados aqui por um tempinho curto — evita refazer uma busca de
+// rede por tarefa toda vez que o sino é aberto de novo em seguida
+// (ex: abrir/fechar sem querer, ou dar uma segunda olhada logo depois).
+const CACHE_COMENTARIOS_TTL_MS = 30 * 1000;
+const cacheComentariosPorTarefa = new Map(); // taskId -> { comentarios, quando }
+
+async function buscarComentariosComCache(taskId) {
+  const cache = cacheComentariosPorTarefa.get(taskId);
+  if (cache && (Date.now() - cache.quando) < CACHE_COMENTARIOS_TTL_MS) return cache.comentarios;
+  const comentarios = await buscarComentariosDoBackend(taskId);
+  cacheComentariosPorTarefa.set(taskId, { comentarios, quando: Date.now() });
+  return comentarios;
+}
+
 async function verificarNotificacoes() {
   if (!DESIGNER_LOGADO) return;
   const minhasTarefas = tasks.filter(t => t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
@@ -31,7 +46,7 @@ async function verificarNotificacoes() {
   const chavesExistentes = new Set(log.map(n => n.taskId + "::" + n.comentarioId));
 
   await Promise.all(minhasTarefas.map(async t => {
-    const comentarios = await buscarComentariosDoBackend(t.id);
+    const comentarios = await buscarComentariosComCache(t.id);
     t.comments = comentarios; // aproveita e já deixa cacheado pro chat também
     comentarios
       .filter(c => !nomesCorrespondem(c.autor, DESIGNER_LOGADO))
@@ -42,6 +57,7 @@ async function verificarNotificacoes() {
         log.push({
           taskId: t.id,
           taskTitle: t.title,
+          taskClient: t.client,
           autor: c.autor,
           texto: c.texto,
           comentarioId: c.id || 0,
@@ -95,8 +111,8 @@ function renderNotificacoes() {
           <span class="notif-card-autor">${escaparHTML(n.autor)}</span>
           <span class="notif-card-tempo">${tempoRelativoNotificacao(n.criadoEm)}</span>
         </div>
-        <p class="notif-card-texto">${linkifyTexto(escaparHTML(n.texto))}</p>
-        <span class="notif-card-tarefa">${escaparHTML(n.taskTitle)}</span>
+        <p class="notif-card-texto">${aplicarMarcadoresDeMencao(linkifyTexto(escaparHTML(formatarMencoes(n.texto))))}</p>
+        <span class="notif-card-tarefa">${escaparHTML(n.taskTitle)}${n.taskClient ? ` · ${escaparHTML(n.taskClient)}` : ""}</span>
       </div>
       ${n.vista ? "" : `<span class="notif-card-dot" title="Novo"></span>`}
     </div>

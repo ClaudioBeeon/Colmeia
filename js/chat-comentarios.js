@@ -179,7 +179,7 @@ function renderComentariosHTML(task) {
       ${minha ? "" : avatarHTML(c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-meta"><span class="comment-author">${minha ? "Você" : c.autor}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span></div>
-        <div class="comment-text">${linkifyTexto(c.texto)}</div>
+        <div class="comment-text">${aplicarMarcadoresDeMencao(linkifyTexto(escaparHTML(formatarMencoes(c.texto))))}</div>
         ${(c.reactions || []).length ? `
           <div class="comment-reactions">
             ${c.reactions.map(r => `<span class="comment-reaction-chip" title="${(r.users || []).map(u => u.name).join(", ")}">${r.emoji} ${r.count}</span>`).join("")}
