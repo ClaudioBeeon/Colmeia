@@ -1,0 +1,8 @@
+{
+  "name": "colmeia-apps-script-deploy",
+  "private": true,
+  "description": "Só existe pra dar ao GitHub Actions uma cópia do clasp (a ferramenta que publica o Code.gs no Google Apps Script) — não tem relação com o frontend (index.html/script.js/style.css).",
+  "devDependencies": {
+    "@google/clasp": "2.4.2"
+  }
+}

@@ -1,0 +1,62 @@
+name: Deploy Code.gs to Google Apps Script
+
+# Publica o Code.gs no Google Apps Script automaticamente, sem revisão
+# manual, sempre que ele muda na branch principal. Ver CLAUDE.md /
+# aviso no chat sobre os riscos disso antes de mexer aqui.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Code.gs"
+  workflow_dispatch: {} # permite rodar manualmente pela aba "Actions" do GitHub, se precisar
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      STAGING_DEPLOYMENT_ID: ${{ secrets.STAGING_DEPLOYMENT_ID }}
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar o clasp
+        run: npm install
+
+      - name: Restaurar o login do clasp (a partir do secret CLASP_CREDENTIALS)
+        run: echo '${{ secrets.CLASP_CREDENTIALS }}' > "$HOME/.clasprc.json"
+
+      - name: Gerar o .clasp.json (a partir do secret SCRIPT_ID)
+        run: |
+          cat > .clasp.json << EOF
+          { "scriptId": "${{ secrets.SCRIPT_ID }}", "rootDir": "." }
+          EOF
+
+      - name: Enviar o código pro Apps Script (clasp push)
+        run: npx clasp push --force
+
+      - name: Publicar como a versão de produção (clasp deploy, atualizando a implantação existente)
+        run: >
+          npx clasp deploy
+          --deploymentId "${{ secrets.CLASP_DEPLOYMENT_ID }}"
+          --description "Deploy automático via GitHub Actions - commit ${{ github.sha }}"
+
+      # Só roda se você tiver cadastrado o secret STAGING_DEPLOYMENT_ID
+      # (implantação de teste separada) — serve de rede de segurança.
+      - name: Publicar também na implantação de teste (opcional)
+        if: env.STAGING_DEPLOYMENT_ID != ''
+        run: >
+          npx clasp deploy
+          --deploymentId "$STAGING_DEPLOYMENT_ID"
+          --description "Deploy automático (teste) - commit ${{ github.sha }}"
+
+      - name: Limpar o login do clasp da máquina do GitHub
+        if: always()
+        run: rm -f "$HOME/.clasprc.json"
