@@ -349,42 +349,92 @@ function abrirConfirmacaoEntregarCard(t, btn, temSequencia) {
   }, 0);
 }
 
+// Marca visualmente a fileira de fotinhos como "confirmando..." — o
+// pedido já foi otimista (a tela já mudou), isso só deixa claro que a
+// confirmação de verdade com o Runrun.it ainda está rodando em segundo
+// plano, com um anel amarelo pulsando na foto que está assumindo.
+function marcarSeqRowConfirmando(taskId, ligar) {
+  const row = document.querySelector(`.repasse-seq-row[data-id="${CSS.escape(String(taskId))}"]`);
+  if (!row) return;
+  row.classList.toggle("repasse-seq-confirmando", ligar);
+  if (ligar) {
+    const dotAtual = row.querySelector(".wf-dot.current");
+    if (dotAtual) dotAtual.classList.add("confirmando");
+  }
+}
+
 // Avança a sequência de verdade no Runrun.it (repassar pro próximo OU
 // entregar, se você já era o último — mesmo endpoint faz as duas
 // coisas, ver comentário em avancarWorkflowNoBackend). Não tira o card
 // da tela sozinho: só marca ele como "recém avançado" pra continuar
 // aparecendo até você sair da aba ou recarregar — pedido explícito,
 // pra não perder o card de vista no meio da fila.
+//
+// Otimista: a fileira de fotinhos já mostra a transferência acontecendo
+// NA HORA (antes de qualquer resposta do Runrun.it), com o anel
+// amarelo indicando que ainda está confirmando em segundo plano — se o
+// Runrun.it recusar, desfaz sozinho e avisa com um toast, em vez de
+// deixar o botão "travado" esperando a chamada de rede inteira terminar.
 async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
-  btn.disabled = true;
-  const resultado = await avancarWorkflowNoBackend(t.id);
-  if (resultado.ok) {
-    repasseRecemAvancados.add(t.id);
-    if (resultado.novoResponsavel) {
-      t.assignee = resultado.novoResponsavel;
-      t.assigneeAvatarUrl = null;
+  await pararCronometroAoTransferir(t); // se por acaso estava rodando, para antes de repassar
+
+  const sequenciaAntes = t.sequencia ? t.sequencia.map(s => ({ ...s })) : t.sequencia;
+  const entregueAntes = t._repasseEntregue;
+  if (t.sequencia && t.sequencia.length) {
+    const atualIdx = t.sequencia.findIndex(s => s.atual);
+    if (atualIdx !== -1) {
+      t.sequencia[atualIdx].atual = false;
+      t.sequencia[atualIdx].concluido = true;
+      if (atualIdx + 1 < t.sequencia.length) t.sequencia[atualIdx + 1].atual = true;
     }
-    if (!proximo) t._repasseEntregue = true; // era o último da fila — isso entregou a tarefa de verdade
-    await recarregarSequenciaCard(t);
-    agendarAtualizacaoKanban();
-  } else {
-    btn.disabled = false;
-    mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
+  }
+  if (!proximo) t._repasseEntregue = true; // era o último da fila — isso entrega a tarefa de verdade
+  montarSequenciaCard(t);
+  marcarSeqRowConfirmando(t.id, true);
+
+  try {
+    const resultado = await avancarWorkflowNoBackend(t.id);
+    if (resultado.ok) {
+      repasseRecemAvancados.add(t.id);
+      if (resultado.novoResponsavel) {
+        t.assignee = resultado.novoResponsavel;
+        t.assigneeAvatarUrl = null;
+      }
+      await recarregarSequenciaCard(t); // sincroniza com o estado real
+      agendarAtualizacaoKanban();
+    } else {
+      t.sequencia = sequenciaAntes;
+      t._repasseEntregue = entregueAntes;
+      montarSequenciaCard(t);
+      mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
+    }
+  } finally {
+    marcarSeqRowConfirmando(t.id, false);
   }
 }
 
-// Entrega direto (tarefa sem nenhuma sequência configurada ainda).
+// Entrega direto (tarefa sem nenhuma sequência configurada ainda) —
+// mesmo tratamento otimista do avanço acima.
 async function confirmarEntregaDiretaCard(t, btn) {
-  btn.disabled = true;
-  const ok = await entregarTarefaNoBackend(t.id);
-  if (ok) {
-    repasseRecemAvancados.add(t.id);
-    t._repasseEntregue = true;
-    montarSequenciaCard(t);
-    agendarAtualizacaoKanban();
-  } else {
-    btn.disabled = false;
-    mostrarToast("Não consegui entregar essa tarefa agora.", "erro");
+  await pararCronometroAoTransferir(t); // se por acaso estava rodando, para antes de entregar
+
+  const entregueAntes = t._repasseEntregue;
+  t._repasseEntregue = true;
+  montarSequenciaCard(t);
+  marcarSeqRowConfirmando(t.id, true);
+
+  try {
+    const ok = await entregarTarefaNoBackend(t.id);
+    if (ok) {
+      repasseRecemAvancados.add(t.id);
+      agendarAtualizacaoKanban();
+    } else {
+      t._repasseEntregue = entregueAntes;
+      montarSequenciaCard(t);
+      mostrarToast("Não consegui entregar essa tarefa agora.", "erro");
+    }
+  } finally {
+    marcarSeqRowConfirmando(t.id, false);
   }
 }
 

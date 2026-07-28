@@ -307,6 +307,29 @@ async function atualizarKanbanEmBackground() {
     if (!data.ok) return;
 
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
+
+    // Preserva o cache da "Sequência de responsáveis" (usado na aba de
+    // Repasse) de uma atualização pra outra. Sem isso, toda vez que o
+    // quadro atualizava sozinho em segundo plano (a cada 60s, ou 900ms
+    // depois de qualquer ação em qualquer lugar do app) os objetos de
+    // tarefa eram recriados do zero e a aba de Repasse tinha que buscar
+    // a sequência de novo no Runrun.it pra cada card — fazendo a
+    // fileira de fotinhos sumir e voltar ("Carregando sequência...")
+    // por 1-2s toda hora, mesmo sem nada ter mudado de verdade (e às
+    // vezes fechando um pop-up de confirmação que a pessoa tinha acabado
+    // de abrir, bem na hora de clicar).
+    const antigasPorId = {};
+    tasksTodas.forEach(t => { antigasPorId[t.id] = t; });
+    todasMapeadas.forEach(nova => {
+      const antiga = antigasPorId[nova.id];
+      if (antiga && antiga.sequencia !== undefined) {
+        nova.sequencia = antiga.sequencia;
+        nova.workflowId = antiga.workflowId;
+        nova._temSequencia = antiga._temSequencia;
+        if (antiga._repasseEntregue) nova._repasseEntregue = antiga._repasseEntregue;
+      }
+    });
+
     tasksTodas = todasMapeadas;
     const novasTarefas = todasMapeadas.filter(t => !t.isOutraEtapa);
 

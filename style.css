@@ -2513,6 +2513,20 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .repasse-seq-btn.deliver { color: #2F9E44; border-color: #2F9E44; }
 .repasse-seq-btn.deliver:hover:not(:disabled) { background: #2F9E44; color: #fff; }
 
+/* Estado "confirmando em segundo plano" — a tela já mudou na hora
+   (otimista), isso só avisa visualmente que ainda tá confirmando de
+   verdade com o Runrun.it: um anel amarelo pulsando na foto que está
+   assumindo, e a fileira levemente esmaecida/travada pra evitar clique
+   duplo enquanto isso não termina. */
+.repasse-seq-row.repasse-seq-confirmando { opacity: 0.75; pointer-events: none; }
+.wf-dot.current.confirmando {
+  animation: repasseConfirmandoPulso 0.9s ease-in-out infinite;
+}
+@keyframes repasseConfirmandoPulso {
+  0%, 100% { box-shadow: 0 0 0 2px var(--kanban-yellow); }
+  50% { box-shadow: 0 0 0 5px var(--kanban-yellow); }
+}
+
 .repasse-picker {
   position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 20;
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;

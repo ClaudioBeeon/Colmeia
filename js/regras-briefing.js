@@ -63,6 +63,7 @@ async function atualizarSequenciaEModal(task) {
   await carregarSequencia(task);
   const overlay = document.getElementById("ruleModalOverlay");
   if (overlay && !overlay.hidden) renderModalRegra(task);
+  renderRepasseCardSeAberta(task);
 }
 
 function removerPessoaOtimista(task, elementId) {
@@ -142,6 +143,7 @@ async function adicionarPessoaOtimista(task, usuario) {
   task.sequencia = seq;
   renderModalRegra(task);
   renderSequenciaNoHeaderSeAberta(task);
+  renderRepasseCardSeAberta(task);
 
   // Tarefa que ainda não tem NENHUMA sequência configurada no Runrun.it
   // não tem workflowId — antes disso, o Colmeia tentava adicionar a
@@ -172,6 +174,20 @@ function renderSequenciaNoHeaderSeAberta(task) {
   if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return;
   const el = document.getElementById("workflowSeqGroup");
   if (el) el.innerHTML = renderSequenciaHTML(task);
+}
+
+/**
+ * Mesma ideia de renderSequenciaNoHeaderSeAberta, só que pro card da
+ * aba de Repasse: se o modal "Ver regra" foi aberto a partir de lá
+ * (repasseModalTaskAtual, definida em js/pagina-repasse.js), redesenha
+ * a fileira de fotinhos do card NA HORA a cada mudança otimista — sem
+ * isso, a foto nova só aparecia depois de fechar o modal E esperar uma
+ * busca nova no Runrun.it, o que demorava mais do que precisava.
+ */
+function renderRepasseCardSeAberta(task) {
+  if (typeof repasseModalTaskAtual === "undefined" || !repasseModalTaskAtual) return;
+  if (String(repasseModalTaskAtual.id) !== String(task.id)) return;
+  if (typeof montarSequenciaCard === "function") montarSequenciaCard(task);
 }
 
 /**
