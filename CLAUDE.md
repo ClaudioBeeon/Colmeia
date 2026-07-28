@@ -14,7 +14,8 @@ Se uma sessão futura receber acesso a essa pasta vazia, pedir acesso à pasta c
 
 ## Arquitetura
 
-- `index.html`, `script.js` (~5.600 linhas), `style.css` = frontend. Publicado automaticamente
+- `index.html`, `js/*.js` (frontend, separado por assunto em vários arquivos — ver seção
+  "Estrutura do frontend (js/)" abaixo), `style.css` = frontend. Publicado automaticamente
   no GitHub Pages a cada push.
 - `Código.gs` = backend, roda no Google Apps Script. O nome do arquivo tem que ser exatamente esse
   (com acento) — é o nome real do arquivo dentro do projeto do Apps Script (confirmado via
@@ -23,8 +24,8 @@ Se uma sessão futura receber acesso a essa pasta vazia, pedir acesso à pasta c
   "Deploy automático" abaixo) — não é mais preciso colar manualmente no editor do Apps Script.
 - Backend integra com API do Runrun.it, Google Drive e Google Sheets (a planilha é o "banco de dados").
 - Projeto irmão "painel-designers-beeon" (outro Apps Script) fornece tempo médio de criação por
-  cliente e vínculos de nomes de cliente. URL dele está em `script.js` como `PAINEL_BEEON_API_URL`.
-- URL do backend Colmeia está em `script.js` como `COLMEIA_API_URL`.
+  cliente e vínculos de nomes de cliente. URL dele está em `js/config.js` como `PAINEL_BEEON_API_URL`.
+- URL do backend Colmeia está em `js/config.js` como `COLMEIA_API_URL`.
 
 ## Estrutura do frontend (index.html)
 
@@ -32,14 +33,43 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 - `page-kanban` — quadro principal (`#board`)
 - `page-clientes`, `page-atendimento`, `page-tipos`, `page-runrun`, `page-hoje`, `page-repasse`
 
-## script.js — pontos de entrada úteis (é grande, usar grep em vez de ler tudo)
+## Estrutura do frontend (js/)
 
-- `carregarTarefasReais()`, `atualizarKanbanEmBackground()`, `agendarAtualizacaoKanban()` — carregamento/poll do quadro
-- `buildBoard()`, `render()`, `cardHTML()` — renderização do quadro e cards
-- `openDetail(idx)`, `renderDetail()`, `closeDetail()`, `stepDetail(dir)` — modal de detalhe da tarefa
-- `carregarComentarios`, `enviarComentarioNoBackend`, chat flutuante (`abrirChatPanel`, `abrirThreadAqui`, etc.)
-- `gerarBriefingComIA(task)` — geração de briefing por IA
-- `mapearTarefaDoBackend(t)` — normaliza dados vindos do backend para o formato usado no front
+Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
+menores dentro da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não
+tem bundler, TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os
+15 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
+`<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
+espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
+
+**Regra de ouro ao editar isso:** a ORDEM das tags `<script>` no `index.html` importa. Um arquivo
+que aparece depois pode usar variáveis/funções de um arquivo anterior, mas não o contrário. Se
+precisar mover uma função de um arquivo pra outro, verificar se ela usa algo que só existe em
+arquivos que vêm depois dela na lista — se sim, ou move os dois juntos, ou ajusta a ordem das tags.
+
+Arquivos, na ordem em que são carregados (`js/`):
+1. `config.js` — ícones SVG, `columnsDef`, URLs da API, nomes de meses.
+2. `notificacoes-uploads.js` — checagem de upload em segundo plano, prompt de "repetir comentário".
+3. `pessoas-fotos.js` — fotos de designers/atendimento, `avatarHTML`, `mapearTarefaDoBackend(t)`
+   (normaliza dados vindos do backend), `calcularEstimatePct`.
+4. `kanban-polling.js` — `agendarAtualizacaoKanban()`, `atualizarKanbanEmBackground()` (poll do quadro).
+5. `painel-pessoas-clientes.js` — painel de Configurações, abas Pessoas e Clientes.
+6. `regras-briefing.js` — regras de tarefa, geração de briefing por IA (`gerarBriefingComIA`).
+7. `kanban-board.js` — `buildBoard()`, `render()`, `cardHTML()`, drag and drop do quadro.
+8. `clientes-hub.js` — links/hub por cliente (Drive, banco de imagens, etc.).
+9. `chat-comentarios.js` — chat flutuante (`abrirChatPanel`, `abrirThreadAqui`), comentários,
+   edição de entrega desejada.
+10. `detalhe-modal.js` — `openDetail(idx)`, `renderDetail()`, `closeDetail()`, `stepDetail(dir)`
+    (modal de detalhe da tarefa).
+11. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
+    e "Clientes por atendimento".
+12. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
+13. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
+14. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
+15. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+
+É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
+só precisar achar uma função.
 
 ## Bug recorrente conhecido
 
@@ -68,12 +98,12 @@ prestar atenção a esse padrão.
   `buscarUploadsRecentesDoCard` (15s, pra não re-varrer a pasta do Drive a cada poll de 8s do
   front-end enquanto um card fica aberto).
 - Campo `createdAt` (data de criação da tarefa no Runrun.it) foi adicionado em `transformarTarefaParaColmeia`
-  (Código.gs) e `mapearTarefaDoBackend` (script.js) — usar esse campo pra qualquer ordenação
+  (Código.gs) e `mapearTarefaDoBackend` (js/pessoas-fotos.js) — usar esse campo pra qualquer ordenação
   "mais antigo pro mais novo".
 - Vínculo de apelidos (painel de Pessoas): `pessoasSalvas[i].aliases` agora resulta em remover a
   linha do apelido da planilha (`excluirPessoasPorNomesNoBackend`, chama a ação já existente
   `excluirPessoasPorNomes` do backend) e esconder ele da lista do painel (`chavesDeApelidosAbsorvidos`
-  em script.js), mostrando uma barrinha expansível "N vinculados" na pessoa principal. Isso é só
+  em js/painel-pessoas-clientes.js), mostrando uma barrinha expansível "N vinculados" na pessoa principal. Isso é só
   visual no painel de Pessoas — nomes em cards/comentários/painel de clientes continuam mostrando o
   nome bruto (não foi pedido resolver em todo o app, só no painel).
 - Cards do quadro/Runrun completo/Runrun completo usam `data-idx` (índice no array `tasks`/`tasksTodas`)
@@ -97,7 +127,7 @@ o aviso de "cole no Apps Script e crie uma Nova versão" (usado antes disso exis
 em vez disso, avisar que o push já publica sozinho.
 
 `.claspignore` restringe o clasp a só enviar `Código.gs` (+ `appsscript.json` se existir) — sem isso ele
-tentaria empurrar `index.html`/`script.js` (do frontend) pro Apps Script também.
+tentaria empurrar `index.html`/`js/*.js` (do frontend) pro Apps Script também.
 
 **Coisas que travaram na primeira configuração (2026-07-28), pra não repetir o diagnóstico:**
 1. `package.json` tinha que fixar a MESMA versão major do clasp que rodou o `clasp login` local

@@ -1,0 +1,471 @@
+const tasksFake = [
+  { title: "Post carrossel — Lançamento coleção inverno", client: "Ateliê Nova", type: "estatico", priority: "media", day: 26, due: "26 Jul", status: "pendentes", assignee: "Claudio" },
+  { title: "Vídeo reels — Bastidores da produção", client: "Grão Café", type: "video", priority: "baixa", day: 28, due: "28 Jul", status: "pendentes", assignee: "Bruna" },
+  { title: "E-mail marketing — Promoção de aniversário", client: "Vitrine Modas", type: "email", priority: "baixa", day: 30, due: "30 Jul", status: "pendentes", assignee: "Erick" },
+  { title: "Stories animados — Enquete de produto", client: "Ateliê Nova", type: "video", priority: "media", day: 29, due: "29 Jul", status: "pendentes", assignee: "Gustavo" },
+
+  { title: "Arte anúncio — Campanha Dia dos Pais", client: "Vitrine Modas", type: "estatico", priority: "alta", day: 24, due: "24 Jul", status: "prioridades", assignee: "Gustavo" },
+  { title: "Vídeo institucional — Reels 30s", client: "Loja Ferra", type: "video", priority: "alta", day: 24, due: "24 Jul", status: "prioridades", assignee: "Claudio" },
+  { title: "Newsletter semanal", client: "Vitrine Modas", type: "email", priority: "alta", day: 24, due: "24 Jul", status: "prioridades", assignee: "Erick" },
+
+  { title: "Post estático — Dica de uso do produto", client: "Grão Café", type: "estatico", priority: "media", day: 25, due: "25 Jul", status: "fazendo", assignee: "Gustavo" },
+  { title: "Sequência de e-mails — Boas-vindas", client: "Loja Ferra", type: "email", priority: "baixa", day: 27, due: "27 Jul", status: "fazendo", assignee: "Claudio" },
+  { title: "Stories animados — Enquete", client: "Ateliê Nova", type: "video", priority: "media", day: 24, due: "24 Jul", status: "fazendo", assignee: "Bruna" },
+  { title: "Animação logo — Abertura de vídeo", client: "Ateliê Nova", type: "video", priority: "baixa", day: 26, due: "26 Jul", status: "fazendo", assignee: "Bruna" },
+
+  { title: "Banner site — Nova coleção", client: "Loja Ferra", type: "estatico", priority: "baixa", day: 29, due: "29 Jul", status: "revisao", assignee: "Gustavo" },
+  { title: "E-mail — Confirmação de pedido (template)", client: "Loja Ferra", type: "email", priority: "baixa", day: 25, due: "25 Jul", status: "revisao", assignee: "Claudio" },
+  { title: "Vídeo — Tutorial de produto", client: "Grão Café", type: "video", priority: "media", day: 24, due: "24 Jul", status: "revisao", assignee: "Erick" },
+
+  { title: "Reels — Making of coleção", client: "Loja Ferra", type: "video", priority: "media", day: 24, due: "24 Jul", status: "ajustes", assignee: "Claudio" },
+  { title: "E-mail — Pesquisa de satisfação", client: "Vitrine Modas", type: "email", priority: "baixa", day: 22, due: "22 Jul", status: "ajustes", assignee: "Gustavo" },
+  { title: "Arte stories — Novidade da semana", client: "Grão Café", type: "estatico", priority: "baixa", day: 22, due: "22 Jul", status: "ajustes", assignee: "Erick" },
+];
+
+tasksFake.forEach(t => {
+  const now = new Date();
+  t.dueISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(t.day).padStart(2, "0")}`;
+});
+tasksFake.forEach((t, i) => { t.timerSeconds = 0; t.running = false; t.estimatePct = [12, 35, 48, 60, 20, 75, 30, 55, 18, 42, 65, 25, 50][i % 13]; t.hasChange = i % 4 === 1; });
+
+// Começa vazio de propósito — mostra tela de carregando até o backend
+// responder (ou, em último caso, cair pros dados fake).
+let tasks = [];
+// Igual a `tasks`, mas SEM o filtro de "só as 5 etapas do quadro" —
+// inclui tarefas que estão em qualquer outra etapa do Runrun.it (ex:
+// uma etapa de atendimento/briefing antes de chegar no designer).
+// Usada pela Fila de Repasse, que precisa enxergar essas tarefas mesmo
+// sem elas aparecerem no Kanban normal.
+let tasksTodas = [];
+let carregandoTarefas = true;
+
+const typeLabels = {
+  estatico: { label: "Estático", class: "badge-estatico" },
+  video: { label: "Vídeo", class: "badge-video" },
+  email: { label: "E-mail", class: "badge-email" },
+};
+
+const priorityLabels = { alta: "Alta", media: "Média", baixa: "Baixa" };
+
+// modo de visualização por coluna: "entrega" (padrão) ou "hoje"
+const columnMode = {};
+columnsDef.forEach(c => columnMode[c.key] = "entrega");
+
+const boardEl = document.getElementById("board");
+
+function initials(name) {
+  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
+function formatTime(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60).toString().padStart(2, "0");
+  const s = (sec % 60).toString().padStart(2, "0");
+  if (h > 0) return `${h}:${m}:${s}`;
+  return `${m}:${s}`;
+}
+
+function cardHTML(task, idx) {
+  const type = typeLabels[task.type];
+  const atrasada = task.dueISO && task.dueISO < hojeISO();
+  return `
+    <div class="task-card priority-${task.priority} ${atrasada ? "task-overdue" : ""}" draggable="true" data-idx="${idx}">
+      <div class="card-top">
+        <span class="badge ${type.class}">${type.label}</span>
+        <div class="priority-wrap" data-idx="${idx}">
+          <button type="button" class="card-priority-tag priority-btn">${priorityLabels[task.priority]}</button>
+          <div class="priority-menu">
+            <button type="button" data-p="alta" class="pm-alta">Alta</button>
+            <button type="button" data-p="media" class="pm-media">Média</button>
+            <button type="button" data-p="baixa" class="pm-baixa">Baixa</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-title">${task.title}</div>
+      <div class="card-client">${task.client}</div>
+      <div class="card-progress">
+        <div class="progress-head">
+          <button type="button" class="play-btn" data-idx="${idx}" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
+          <span class="timer-text" data-idx="${idx}">${formatTime(task.timerSeconds)}</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" data-idx="${idx}" style="width:${task.estimatePct}%"></div></div>
+      </div>
+      <div class="card-bottom">
+        <div class="assignee-wrap" data-idx="${idx}">
+          ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
+          <div class="assignee-menu"></div>
+        </div>
+        <div class="card-due-wrap" data-idx="${idx}">
+          <button type="button" class="card-due-simple ${atrasada ? "overdue" : ""}">${dueIcon}${task.due}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+const iconEntrega = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const iconHoje = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const hexIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.3l8.5 4.9v9.6L12 21.7l-8.5-4.9V7.2L12 2.3z"/></svg>`;
+
+function buildBoard() {
+  boardEl.innerHTML = "";
+
+  if (!carregandoTarefas) {
+    clearInterval(intervalMsgCarregando);
+  }
+
+  if (carregandoTarefas) {
+    boardEl.innerHTML = `
+      <div class="board-loading">
+        <div class="board-loading-glass"></div>
+        <div class="board-loading-content">
+          <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="board-loading-bee" alt="Colmeia">
+          <p class="board-loading-text" id="loadingMsg">${mensagensCarregando[0]}</p>
+        </div>
+      </div>
+    `;
+    iniciarMensagensCarregando();
+    return;
+  }
+
+  columnsDef.forEach(({ key, label, hex }) => {
+    const col = document.createElement("div");
+    col.className = "column";
+    col.dataset.status = key;
+    col.innerHTML = `
+      <div class="column-header">
+        <span class="column-hex" style="color:${hex};">${hexIcon}</span>
+        <h2>${label}</h2>
+        <div class="column-sort-ic" data-col="${key}">
+          <button class="on" data-mode="entrega" title="Ordem de entrega desejada">${iconEntrega}</button>
+          <button data-mode="hoje" title="Tarefas de hoje">${iconHoje}</button>
+        </div>
+        <span class="column-count"></span>
+      </div>
+      <div class="column-cards" id="col-${key}"></div>
+    `;
+    boardEl.appendChild(col);
+  });
+
+  // O painel de detalhe é fixed (posicionado pela tela toda, não pelo
+  // board), então mora solto no <body> em vez de dentro do board do
+  // Kanban. Antes, por estar dentro de #page-kanban, ele sumia junto
+  // quando essa página ficava "hidden" (ex: ao clicar num card na Fila
+  // de repasse) — daí o pop-up só aparecia depois de navegar de volta
+  // pro Kanban. Remove qualquer painel antigo (de um buildBoard()
+  // anterior) antes de criar o novo, pra não duplicar o id.
+  const panelAntigo = document.getElementById("taskDetail");
+  if (panelAntigo) panelAntigo.remove();
+  const panel = document.createElement("div");
+  panel.className = "task-detail";
+  panel.id = "taskDetail";
+  document.body.appendChild(panel);
+
+  boardEl.querySelectorAll(".column-sort-ic").forEach(group => {
+    const key = group.dataset.col;
+    group.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        group.querySelectorAll("button").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        columnMode[key] = btn.dataset.mode;
+        render();
+      });
+    });
+  });
+
+  setupDragAndDrop();
+}
+
+let searchQuery = "";
+
+/**
+ * Tarefa fixa de "coordenação" (a sua, de acompanhar o time) não fica
+ * misturada dentro de "Fazendo" — vira um pill redondo ao lado do
+ * título "Quadro de tarefas", com o próprio play/pause.
+ *
+ * IMPORTANTE — identificação por título: por enquanto essa função
+ * reconhece a tarefa pelo TÍTULO conter "coordenação" (sem acento
+ * também funciona). Se a sua tarefa de coordenação tem um nome
+ * diferente, ou se preferir identificar de outro jeito (por tipo, por
+ * tag, por ID fixo), é só me avisar que troco essa regra aqui — é uma
+ * única função, fácil de ajustar.
+ */
+function ehTarefaDeCoordenacao(t) {
+  return !!(t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO) && normalizarParaComparar(t.title).includes("coordenacao"));
+}
+
+function encontrarTarefaDeCoordenacao() {
+  return tasks.find(ehTarefaDeCoordenacao);
+}
+
+function renderCoordenacaoPill() {
+  const wrap = document.getElementById("coordenacaoPillWrap");
+  if (!wrap) return;
+  const t = encontrarTarefaDeCoordenacao();
+  if (!t) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `
+    <button type="button" class="coordenacao-pill" id="coordenacaoPillBtn" data-id="${t.id}" title="${t.title}">
+      <span class="coordenacao-pill-play">${t.running ? pauseIcon : playIcon}</span>
+      <span class="coordenacao-pill-label">Coordenação</span>
+      <span class="coordenacao-pill-timer">${formatTime(t.timerSeconds)}</span>
+    </button>
+  `;
+  document.getElementById("coordenacaoPillBtn").addEventListener("click", () => {
+    const vaiComecar = !t.running;
+    if (vaiComecar) pararOutrasTarefasRodando(t);
+    t.running = vaiComecar;
+    if (t.running) tocarTarefaNoBackend(t.id);
+    else pausarTarefaNoBackend(t.id);
+    render();
+    updateNowPlaying();
+  });
+}
+
+function render() {
+  if (carregandoTarefas) return;
+  columnsDef.forEach(({ key }) => {
+    let list = tasks.filter(t => t.status === key && !ehTarefaDeCoordenacao(t));
+    if (PAPEL_LOGADO === "designer") {
+      list = list.filter(t => nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+    } else if (PAPEL_LOGADO === "coordenador" && filtroDesignerCoordenador !== "todos") {
+      const alvoNome = filtroDesignerCoordenador === "eu" ? DESIGNER_LOGADO : filtroDesignerCoordenador;
+      list = list.filter(t => nomesCorrespondem(t.assignee, alvoNome));
+    }
+    if (searchQuery) {
+      const alvo = normalizarParaComparar(searchQuery);
+      list = list.filter(t =>
+        normalizarParaComparar(t.title).includes(alvo) ||
+        normalizarParaComparar(t.client).includes(alvo)
+      );
+    }
+    if (columnMode[key] === "hoje") {
+      list = list.filter(t => t.dueISO === hojeISO());
+    }
+    // Sempre da mais atrasada pra mais na frente, nos dois modos —
+    // usa a data completa (ano-mês-dia), não só o número do dia.
+    list = list.slice().sort((a, b) => (a.dueISO || "9999-99-99").localeCompare(b.dueISO || "9999-99-99"));
+    const holder = document.getElementById("col-" + key);
+    holder.innerHTML = list.map(t => cardHTML(t, tasks.indexOf(t))).join("");
+    document.querySelector(`.column[data-status="${key}"] .column-count`).textContent = list.length;
+  });
+  attachCardDragHandlers();
+  renderCoordenacaoPill();
+}
+
+function setupDragAndDrop() {
+  document.querySelectorAll(".column-cards").forEach(holder => {
+    holder.addEventListener("dragover", e => {
+      e.preventDefault();
+      holder.classList.add("drag-over");
+    });
+    holder.addEventListener("dragleave", () => holder.classList.remove("drag-over"));
+    holder.addEventListener("drop", e => {
+      e.preventDefault();
+      holder.classList.remove("drag-over");
+      const idx = e.dataTransfer.getData("text/plain");
+      const newStatus = holder.closest(".column").dataset.status;
+      if (idx !== "" && tasks[idx]) {
+        const task = tasks[idx];
+        const statusAntigo = task.status;
+        if (statusAntigo === newStatus) return;
+        task.status = newStatus;
+        render();
+        moverEtapaNoBackend(task.id, newStatus).then(ok => {
+          if (!ok) {
+            task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
+            render();
+          } else {
+            agendarAtualizacaoKanban();
+          }
+        });
+      }
+    });
+  });
+}
+
+function attachCardDragHandlers() {
+  document.querySelectorAll(".task-card").forEach(card => {
+    card.addEventListener("dragstart", e => {
+      e.dataTransfer.setData("text/plain", card.dataset.idx);
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    card.addEventListener("click", () => openDetail(card.dataset.idx));
+  });
+
+  // ===== Menu de prioridade =====
+  document.querySelectorAll(".priority-wrap").forEach(wrap => {
+    const btn = wrap.querySelector(".priority-btn");
+    const menu = wrap.querySelector(".priority-menu");
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const willOpen = !menu.classList.contains("open");
+      document.querySelectorAll(".priority-menu").forEach(m => m.classList.remove("open"));
+      if (willOpen) menu.classList.add("open");
+    });
+    menu.querySelectorAll("button").forEach(opt => {
+      opt.addEventListener("click", e => {
+        e.stopPropagation();
+        const idx = wrap.dataset.idx;
+        const task = tasks[idx];
+        task.priority = opt.dataset.p;
+        salvarPrioridadeNoBackend(task.id, opt.dataset.p);
+
+        // "Alta" também move a tarefa de verdade pra coluna Prioridades
+        // no Runrun.it (não só no Colmeia).
+        if (opt.dataset.p === "alta" && task.status !== "prioridades") {
+          const statusAntigo = task.status;
+          task.status = "prioridades";
+          render();
+          moverEtapaNoBackend(task.id, "prioridades").then(ok => {
+            if (!ok) {
+              task.status = statusAntigo;
+              render();
+            } else {
+              agendarAtualizacaoKanban();
+            }
+          });
+          return;
+        }
+        render();
+      });
+    });
+  });
+
+  // ===== Data de entrega desejada: clicar abre o calendário nativo =====
+  document.querySelectorAll(".card-due-wrap").forEach(wrap => {
+    const btn = wrap.querySelector(".card-due-simple");
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const task = tasks[wrap.dataset.idx];
+      if (!task) return;
+
+      wrap.innerHTML = `<input type="date" class="card-due-input" value="${task.dueISO || ""}">`;
+      const input = wrap.querySelector(".card-due-input");
+      input.addEventListener("click", ev => ev.stopPropagation());
+      input.focus();
+      // Abre o calendário nativo direto ao clicar, igual já faz no
+      // pop-up de detalhe — dá a sensação de um seletor moderno sem
+      // precisar construir um calendário do zero.
+      if (typeof input.showPicker === "function") {
+        try { input.showPicker(); } catch (err) { /* alguns navegadores recusam fora de um clique direto — segue clicável normalmente */ }
+      }
+
+      let jaSalvou = false;
+      async function salvar() {
+        if (jaSalvou) return;
+        jaSalvou = true;
+        const novaData = input.value; // sempre AAAA-MM-DD
+        if (!novaData || novaData === task.dueISO) { render(); return; }
+        wrap.innerHTML = `<span class="card-due-saving">Salvando...</span>`;
+        const ok = await alterarEntregaNoBackend(task.id, novaData);
+        if (!ok) { render(); return; }
+        const [ano, mes, dia] = novaData.split("-").map(Number);
+        task.dueISO = novaData;
+        task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+        render();
+        agendarAtualizacaoKanban();
+      }
+
+      input.addEventListener("change", salvar);
+      input.addEventListener("blur", () => { if (!jaSalvou) render(); });
+    });
+  });
+
+  // ===== Foto do responsável: avançar sequência ou reatribuir manual =====
+  document.querySelectorAll(".assignee-wrap").forEach(wrap => {
+    const menu = wrap.querySelector(".assignee-menu");
+    wrap.addEventListener("click", async e => {
+      e.stopPropagation();
+      const willOpen = !menu.classList.contains("open");
+      document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
+      if (!willOpen) return;
+      menu.classList.add("open");
+
+      const idx = wrap.dataset.idx;
+      const task = tasks[idx];
+
+      menu.innerHTML = `
+        <button type="button" class="assignee-advance-btn" data-idx="${idx}">
+          ➡️ <span>Avançar sequência (próximo responsável)</span>
+        </button>
+        <div class="assignee-menu-sep"></div>
+        <div class="assignee-menu-loading">Carregando outras pessoas...</div>
+      `;
+
+      menu.querySelector(".assignee-advance-btn").addEventListener("click", async ev => {
+        ev.stopPropagation();
+        menu.classList.remove("open");
+        await pararCronometroAoTransferir(task);
+        const novoResponsavel = await avancarWorkflowNoBackend(task.id);
+        if (novoResponsavel) {
+          task.assignee = novoResponsavel;
+          task.assigneeAvatarUrl = null;
+          render();
+          agendarAtualizacaoKanban();
+        } else {
+          console.warn("Não consegui avançar a sequência — talvez essa tarefa não tenha uma Sequência de responsáveis configurada.");
+        }
+      });
+
+      const usuarios = await buscarUsuariosRunrun();
+      if (!menu.classList.contains("open")) return; // fechou enquanto carregava
+      const listaContainer = menu.querySelector(".assignee-menu-loading");
+      if (!listaContainer) return;
+      if (usuarios.length === 0) {
+        listaContainer.textContent = "Não consegui buscar a lista.";
+        return;
+      }
+      listaContainer.outerHTML = usuarios.map(u => `
+        <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
+          ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
+        </button>
+      `).join("");
+      menu.querySelectorAll("button:not(.assignee-advance-btn)").forEach(opt => {
+        opt.addEventListener("click", async ev => {
+          ev.stopPropagation();
+          const nomeEscolhido = opt.dataset.userNome;
+          menu.classList.remove("open");
+          const ok = await reatribuirTarefaNoBackend(task.id, opt.dataset.userId);
+          if (ok) {
+            task.assignee = nomeEscolhido;
+            task.assigneeAvatarUrl = null; // deixa a próxima carga real trazer a foto certa
+            render();
+            agendarAtualizacaoKanban();
+          } else {
+            alert("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.");
+          }
+        });
+      });
+    });
+  });
+
+  // ===== Play / progresso =====
+  document.querySelectorAll(".play-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const idx = btn.dataset.idx;
+      const task = tasks[idx];
+      const vaiComecar = !task.running;
+      if (vaiComecar) pararOutrasTarefasRodando(task);
+      task.running = vaiComecar;
+      if (task.running) tocarTarefaNoBackend(task.id);
+      else pausarTarefaNoBackend(task.id);
+      render(); // atualiza o ícone dessa tarefa E o da outra que parou junto
+      updateNowPlaying();
+    });
+  });
+}
+
+document.addEventListener("click", () => {
+  document.querySelectorAll(".priority-menu").forEach(m => m.classList.remove("open"));
+  document.querySelectorAll(".detail-more-menu").forEach(m => m.classList.remove("open"));
+  document.querySelectorAll(".status-menu").forEach(m => m.classList.remove("open"));
+  document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
+  const emojiPicker = document.getElementById("emojiPicker");
+  if (emojiPicker) emojiPicker.hidden = true;
+});
+
+// Links de clientes cadastrados pelo coordenador (Drive, Banco de
+// imagens, Biblioteca Adobe, Pasta de publicações + extras avulsos),
+// carregados do backend do Colmeia.
