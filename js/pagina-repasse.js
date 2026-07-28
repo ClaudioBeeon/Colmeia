@@ -470,6 +470,7 @@ function mostrarPagina(page) {
   if (page === "tipos") buildTiposPage();
   if (page === "repasse") buildRepassePage();
   if (page === "runrun") buildRunrunCompletoPage();
+  if (page === "hoje") buildHistoricoPage();
 }
 
 document.getElementById("designerFilterSelect").addEventListener("change", e => {

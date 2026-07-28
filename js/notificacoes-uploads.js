@@ -212,6 +212,7 @@ async function carregarDadosPainelBeeon() {
     buildClientsPage();
     buildAtendimentoPage();
     buildTiposPage();
+    if (!document.getElementById("page-hoje").hidden) carregarAtividadesDrive();
   } catch (err) {
     console.error("Falha ao conectar com o painel-designers-beeon:", err);
   }

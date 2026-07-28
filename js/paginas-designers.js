@@ -4,7 +4,7 @@ const pageTitles = {
   atendimento: ["Clientes por atendimento", "Agrupados por atendimento responsável"],
   tipos: ["Tipos de tarefas", "Visão por categoria"],
   runrun: ["Runrun completo", "Todas as abas e tarefas do time"],
-  hoje: ["Minhas tarefas de hoje", "O que você deu play hoje"],
+  hoje: ["Histórico", "O que você fez hoje"],
   repasse: ["Fila de repasse", "Tarefas esperando com o atendimento"],
 };
 
@@ -439,6 +439,145 @@ function buildAtendimentoPage() {
       buildAtendimentoPage();
     });
   });
+}
+
+/**
+ * Página "Histórico": duas seções —
+ * 1) as tarefas em que você deu play hoje (log próprio, "Log de Plays"
+ *    na planilha, lido via ação buscarTarefasHoje);
+ * 2) atividades recentes nas pastas do Drive dos seus clientes
+ *    (uploads/arquivos novos em "Publicações > ano > mês").
+ * As duas buscas rodam em paralelo e cada uma mostra seu próprio
+ * "carregando" — uma pode demorar mais que a outra sem travar a outra.
+ */
+function buildHistoricoPage() {
+  carregarHistoricoPlays();
+  carregarAtividadesDrive();
+}
+
+async function carregarHistoricoPlays() {
+  const lista = document.getElementById("hojeList");
+  if (!lista) return;
+  lista.innerHTML = `<div class="historico-loading"><span class="rule-row-spinner"></span><p>Carregando...</p></div>`;
+  if (!COLMEIA_API_URL || !DESIGNER_LOGADO) {
+    lista.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
+    return;
+  }
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarTarefasHoje", designer: DESIGNER_LOGADO }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      lista.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui buscar seu histórico de hoje."}</p>`;
+      return;
+    }
+    if (data.tarefas.length === 0) {
+      lista.innerHTML = `<p class="workflow-seq-empty">Você ainda não deu play em nenhuma tarefa hoje.</p>`;
+      return;
+    }
+
+    // Usa os dados já carregados em tasksTodas quando a tarefa ainda
+    // está aberta (mais rápido, sem ida ao Runrun.it) — só busca avulso
+    // (buscarTarefaCompletaDoBackend) as que já foram entregues/fechadas
+    // e por isso não estão mais nessa lista.
+    const detalhes = await Promise.all(data.tarefas.map(async p => {
+      const jaCarregada = tasksTodas.find(t => String(t.id) === String(p.taskId));
+      if (jaCarregada) return Object.assign({}, jaCarregada, { ultimoPlay: p.ultimoPlay });
+      const resultado = await buscarTarefaCompletaDoBackend(p.taskId);
+      if (!resultado.ok) return { id: p.taskId, title: p.titulo, client: "", type: "", ultimoPlay: p.ultimoPlay };
+      return Object.assign({}, mapearTarefaDoBackend(resultado.tarefa), { ultimoPlay: p.ultimoPlay });
+    }));
+
+    lista.innerHTML = detalhes.map(t => historicoCardHTML(t)).join("");
+    lista.querySelectorAll(".historico-card").forEach(card => {
+      card.addEventListener("click", () => abrirTarefaPorId(card.dataset.id));
+    });
+  } catch (err) {
+    console.error("Falha ao buscar histórico de plays de hoje:", err);
+    lista.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
+  }
+}
+
+function historicoCardHTML(t) {
+  const type = typeLabels[t.type] || { label: t.type || "Tarefa", class: "" };
+  const hora = new Date(Number(t.ultimoPlay)).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `
+    <div class="task-card historico-card" data-id="${t.id}">
+      <div class="card-top">
+        <span class="badge ${type.class}">${type.label}</span>
+        <span class="historico-card-hora">${hora}</span>
+      </div>
+      <div class="card-title">${t.title}</div>
+      ${t.client ? `<div class="card-client">${t.client}</div>` : ""}
+      ${t.assignee ? `<div class="card-bottom">${avatarHTML(t.assignee, "avatar-sm", t.assigneeAvatarUrl)}</div>` : ""}
+    </div>
+  `;
+}
+
+// Nomes dos clientes do designer logado, vindos do painel-designers-beeon
+// (mesma fonte da página "Meus clientes") — usado pra saber em quais
+// pastas do Drive procurar atividade recente.
+function meusClientesNomes() {
+  if (!painelBeeonData) return [];
+  const chaveDesigner = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, DESIGNER_LOGADO));
+  if (!chaveDesigner) return [];
+  const itens = (painelBeeonData.state[chaveDesigner] || []).filter(c => !clienteEstaOculto(chaveDesigner, c.cliente));
+  return Array.from(new Set(itens.map(c => c.cliente)));
+}
+
+async function carregarAtividadesDrive() {
+  const lista = document.getElementById("atividadesList");
+  if (!lista) return;
+  lista.innerHTML = `<div class="historico-loading"><span class="rule-row-spinner"></span><p>Carregando...</p></div>`;
+  if (!COLMEIA_API_URL || !DESIGNER_LOGADO) {
+    lista.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
+    return;
+  }
+  if (!painelBeeonData) {
+    lista.innerHTML = `<p class="workflow-seq-empty">Carregando clientes do painel-designers-beeon...</p>`;
+    return; // carregarPainelBeeon() chama isso de novo assim que os dados chegarem
+  }
+
+  const clientes = meusClientesNomes();
+  if (clientes.length === 0) {
+    lista.innerHTML = `<p class="workflow-seq-empty">Nenhum cliente encontrado pra buscar atividades.</p>`;
+    return;
+  }
+
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarAtividadesDrive", clientes }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      lista.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui buscar as atividades do Drive."}</p>`;
+      return;
+    }
+    if (data.atividades.length === 0) {
+      lista.innerHTML = `<p class="workflow-seq-empty">Nenhuma atividade recente nas pastas dos seus clientes.</p>`;
+      return;
+    }
+    lista.innerHTML = data.atividades.map(a => atividadeCardHTML(a)).join("");
+  } catch (err) {
+    console.error("Falha ao buscar atividades do Drive:", err);
+    lista.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
+  }
+}
+
+function atividadeCardHTML(a) {
+  return `
+    <a class="task-card atividade-card" href="${a.pastaUrl || "#"}" target="_blank" rel="noopener">
+      <div class="card-top">
+        <span class="badge badge-cliente">${a.cliente}</span>
+        <span class="historico-card-hora">${tempoRelativoNotificacao(a.quando)}</span>
+      </div>
+      <div class="card-title">${a.arquivo}</div>
+      <div class="card-client">${a.quem ? "Enviado por " + a.quem : "Arquivo novo"}</div>
+    </a>
+  `;
 }
 
 // Guarda quais grupos de serviço estão expandidos.

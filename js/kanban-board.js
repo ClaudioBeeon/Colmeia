@@ -214,7 +214,7 @@ function renderCoordenacaoPill() {
     const vaiComecar = !t.running;
     if (vaiComecar) pararOutrasTarefasRodando(t);
     t.running = vaiComecar;
-    if (t.running) tocarTarefaNoBackend(t.id);
+    if (t.running) tocarTarefaNoBackend(t.id, t.title);
     else pausarTarefaNoBackend(t.id);
     render();
     updateNowPlaying();
@@ -449,7 +449,7 @@ function attachCardDragHandlers() {
       const vaiComecar = !task.running;
       if (vaiComecar) pararOutrasTarefasRodando(task);
       task.running = vaiComecar;
-      if (task.running) tocarTarefaNoBackend(task.id);
+      if (task.running) tocarTarefaNoBackend(task.id, task.title);
       else pausarTarefaNoBackend(task.id);
       render(); // atualiza o ícone dessa tarefa E o da outra que parou junto
       updateNowPlaying();

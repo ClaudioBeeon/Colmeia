@@ -145,6 +145,8 @@ function handleRequest(e, method) {
         output = entregarTarefa(body.taskId);
       } else if (body.acao === 'reabrirTarefa') {
         output = reabrirTarefa(body.taskId);
+      } else if (body.acao === 'criarRegra') {
+        output = criarWorkflowDaTarefa(body.taskId);
       } else if (body.acao === 'adicionarNaRegra') {
         output = adicionarPessoaNaRegra(body.workflowId, body.userId);
       } else if (body.acao === 'removerDaRegra') {
@@ -183,6 +185,8 @@ function handleRequest(e, method) {
         output = buscarPastaSalvaDoCard(body.taskId);
       } else if (body.acao === 'buscarUploadsRecentesDoCard') {
         output = buscarUploadsRecentesDoCard(body.taskId, body.cliente);
+      } else if (body.acao === 'buscarAtividadesDrive') {
+        output = buscarAtividadesDrive(body.clientes);
       } else if (body.acao === 'buscarProgressoClientes') {
         output = buscarProgressoMensalClientes();
       } else if (body.acao === 'listarClientesOcultos') {
@@ -1023,6 +1027,86 @@ function listarUploadsRecentesDaPasta(pasta) {
     uploads.push({ arquivo: arq.getName(), quando: criadoEm, quem: nomeDeQuemSubiuArquivo(arq) });
   }
   return uploads;
+}
+
+// ============ ATIVIDADES DO DRIVE (aba "Histórico" > Atividades recentes) ============
+var JANELA_ATIVIDADES_DRIVE_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
+
+/**
+ * Pra cada cliente informado, varre a pasta "Publicações > ano atual >
+ * mês atual" (e as subpastas de card dentro dela) procurando arquivos
+ * criados nos últimos 7 dias — mesma lógica de
+ * buscarUploadsRecentesDoCard, só que pra vários clientes de uma vez e
+ * com uma janela maior (é um feed de atividade, não um "acabou de
+ * subir agora"). Cacheado por 3 minutos (varrer várias pastas do Drive
+ * é lento) pra não repetir o trabalho toda vez que a aba é reaberta.
+ */
+function buscarAtividadesDrive(clientes) {
+  if (!clientes || !clientes.length) return { ok: true, atividades: [] };
+
+  var chaveCache = 'atividadesDrive_' + clientes.slice().sort().join('|');
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get(chaveCache);
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* recalcula abaixo */ }
+  }
+
+  try {
+    var beeonFolder = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
+    var clientesFolder = (beeonFolder.getName() === 'Clientes') ? beeonFolder : getSubfolderPorNome(beeonFolder, 'Clientes');
+    if (!clientesFolder) return { ok: false, error: 'Pasta "Clientes" não encontrada dentro da pasta Beeon.' };
+
+    var agora = new Date();
+    var ano = String(agora.getFullYear());
+    var atividades = [];
+
+    clientes.forEach(function (nomeCliente) {
+      try {
+        var pastaCliente = acharPastaDoCliente(clientesFolder, nomeCliente);
+        var pastaPublicacoes = pastaCliente && getSubfolderPorNome(pastaCliente, 'Publicações');
+        var pastaAno = pastaPublicacoes && getSubfolderPorNome(pastaPublicacoes, ano);
+        var pastaMes = pastaAno && getPastaMesSemCriar(pastaAno, agora.getMonth());
+        if (!pastaMes) return;
+
+        var pastaMesUrl = pastaMes.getUrl();
+        listarAtividadesRecentesDaPasta(pastaMes, pastaMesUrl).forEach(function (a) {
+          a.cliente = nomeCliente;
+          atividades.push(a);
+        });
+        var subpastas = pastaMes.getFolders();
+        while (subpastas.hasNext()) {
+          var sub = subpastas.next();
+          listarAtividadesRecentesDaPasta(sub, sub.getUrl()).forEach(function (a) {
+            a.cliente = nomeCliente;
+            atividades.push(a);
+          });
+        }
+      } catch (e) {
+        // Um cliente com pasta bagunçada/sem permissão não deve travar
+        // os outros — só pula ele.
+      }
+    });
+
+    atividades.sort(function (a, b) { return b.quando - a.quando; });
+    var resultado = { ok: true, atividades: atividades.slice(0, 40) };
+    try { cache.put(chaveCache, JSON.stringify(resultado), 180); } catch (e) { /* cache indisponível, segue sem ele */ }
+    return resultado;
+  } catch (err) {
+    return { ok: false, error: 'Erro ao ler o Drive: ' + err.message };
+  }
+}
+
+function listarAtividadesRecentesDaPasta(pasta, pastaUrl) {
+  var agora = new Date().getTime();
+  var atividades = [];
+  var arquivos = pasta.getFiles();
+  while (arquivos.hasNext()) {
+    var arq = arquivos.next();
+    var criadoEm = arq.getDateCreated().getTime();
+    if ((agora - criadoEm) > JANELA_ATIVIDADES_DRIVE_MS) continue;
+    atividades.push({ arquivo: arq.getName(), quando: criadoEm, quem: nomeDeQuemSubiuArquivo(arq), pastaUrl: pastaUrl });
+  }
+  return atividades;
 }
 
 // Igual getOuCriarPastaMes, mas NUNCA cria pasta — só serve pra
@@ -1962,17 +2046,18 @@ function reabrirTarefa(taskId) {
 }
 
 /**
- * ⚠️ AINDA NÃO CONFIRMADA — inferida pelo mesmo padrão que o resto da
- * API do Runrun.it já usa (ex: POST /tasks/:id/checklist pra criar um
- * checklist na tarefa). Cria a "Sequência de responsáveis" do zero
- * numa tarefa que ainda não tem nenhuma — segundo o Cláudio, ao fazer
- * isso pela tela do Runrun.it, ele mesmo (quem está logado) já entra
+ * ⚠️ 2026-07-28: JÁ LIGADA no dispatcher (ação 'criarRegra', chamada por
+ * adicionarPessoaOtimista em js/regras-briefing.js quando a tarefa ainda
+ * não tem workflowId) — mas o endpoint em si (POST /tasks/:id/workflow)
+ * nunca foi confirmado batendo de verdade no Runrun.it. ANTES de colar
+ * essa versão do Código.gs em produção (ou dar deploy), rode
+ * diagnosticoCriarWorkflowTeste() aqui no editor do Apps Script (Executar
+ * > escolher a função > Executar), veja o "Registro de execução" e
+ * confira no próprio Runrun.it se a sequência foi criada certinho na
+ * tarefa de teste. Cria a "Sequência de responsáveis" do zero numa
+ * tarefa que ainda não tem nenhuma — segundo o Cláudio, ao fazer isso
+ * pela tela do Runrun.it, ele mesmo (quem está logado) já entra
  * automaticamente como primeira pessoa da sequência.
- *
- * NÃO está ligada em nenhum fluxo de verdade ainda. Rode
- * diagnosticoCriarWorkflowTeste() numa tarefa de TESTE (trocando o
- * número), confira no "Registro de execução" e no próprio Runrun.it
- * se criou a sequência certinho, antes de eu ligar isso no Repassar.
  */
 function criarWorkflowDaTarefa(taskId) {
   if (!taskId) return { ok: false, error: 'taskId ausente.' };
@@ -1985,7 +2070,7 @@ function criarWorkflowDaTarefa(taskId) {
 }
 
 function diagnosticoCriarWorkflowTeste() {
-  var taskId = 109278; // troque pelo ID de uma tarefa de TESTE, sem sequência configurada ainda
+  var taskId = 111787; // tarefa de teste indicada pelo Cláudio (2026-07-28)
   var resultado = criarWorkflowDaTarefa(taskId);
   Logger.log('Resultado: ' + JSON.stringify(resultado, null, 2));
   if (resultado.ok) {

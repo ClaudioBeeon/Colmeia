@@ -56,9 +56,9 @@
         <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M9 9v12" stroke="currentColor" stroke-width="1.8"/></svg></span>
         <span class="nav-label">Runrun completo</span>
       </a>
-      <a href="#" class="nav-ic" title="Minhas tarefas de hoje" data-page="hoje">
+      <a href="#" class="nav-ic" title="Histórico" data-page="hoje">
         <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="nav-label">Minhas tarefas de hoje</span>
+        <span class="nav-label">Histórico</span>
       </a>
       <a href="#" class="nav-ic" title="Fila de repasse" data-page="repasse">
         <span class="nav-icon-circle">
@@ -272,7 +272,14 @@
     </section>
 
     <section class="app-page" id="page-hoje" hidden>
-      <div class="column-cards hoje-list" id="hojeList"></div>
+      <div class="historico-secao">
+        <h3 class="historico-secao-titulo">O que você deu play hoje</h3>
+        <div class="hoje-list" id="hojeList"></div>
+      </div>
+      <div class="historico-secao">
+        <h3 class="historico-secao-titulo">Atividades recentes</h3>
+        <div class="atividades-list" id="atividadesList"></div>
+      </div>
     </section>
 
     <section class="app-page" id="page-repasse" hidden>

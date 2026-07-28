@@ -127,7 +127,7 @@ function renderizarListaAdicionarRegra(task, usuarios, filtro) {
  * de verdade em segundo plano e substitui pela sequência real quando
  * a resposta chegar.
  */
-function adicionarPessoaOtimista(task, usuario) {
+async function adicionarPessoaOtimista(task, usuario) {
   const seq = task.sequencia || [];
   seq.forEach(s => { s.ultimo = false; });
   seq.push({
@@ -142,6 +142,23 @@ function adicionarPessoaOtimista(task, usuario) {
   task.sequencia = seq;
   renderModalRegra(task);
   renderSequenciaNoHeaderSeAberta(task);
+
+  // Tarefa que ainda não tem NENHUMA sequência configurada no Runrun.it
+  // não tem workflowId — antes disso, o Colmeia tentava adicionar a
+  // pessoa direto e a chamada era abortada em silêncio (nunca ia pro ar
+  // request nenhum), então a "pessoa otimista" simplesmente sumia da
+  // tela sem explicação nenhuma. Agora, nesse caso, primeiro cria a
+  // sequência do zero no Runrun.it (ele mesmo já entra com quem estiver
+  // logado como 1ª pessoa) e só then adiciona de verdade.
+  if (!task.workflowId) {
+    const criado = await criarRegraNoBackend(task.id);
+    if (!criado.ok) {
+      console.error("Não consegui criar a sequência do zero:", criado.error);
+      await atualizarSequenciaEModal(task); // desfaz a linha otimista
+      return;
+    }
+    task.workflowId = criado.workflowId;
+  }
 
   adicionarNaRegraNoBackend(task.workflowId, usuario.id).then(() => atualizarSequenciaEModal(task));
 }

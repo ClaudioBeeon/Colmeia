@@ -25,12 +25,12 @@ async function salvarPrioridadeNoBackend(taskId, prioridade) {
  * ainda não confirmado), avisa no console mas não trava a tela — o
  * cronômetro local continua rodando mesmo assim.
  */
-async function tocarTarefaNoBackend(taskId) {
+async function tocarTarefaNoBackend(taskId, taskTitle) {
   if (!COLMEIA_API_URL || !taskId) return;
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "tocarTarefa", taskId }),
+      body: JSON.stringify({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO }),
     });
     const data = await res.json();
     if (!data.ok) console.error("Runrun.it recusou o play:", data.error);
@@ -167,8 +167,30 @@ async function buscarSequenciaDoBackend(taskId) {
   }
 }
 
+// Cria a "Sequência de responsáveis" do zero numa tarefa que ainda não
+// tem nenhuma (sem isso, workflowId fica null e não tem como adicionar
+// a 1ª pessoa) — ver comentário em adicionarPessoaOtimista, js/regras-briefing.js.
+async function criarRegraNoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "criarRegra", taskId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou criar a sequência do zero:", data.error);
+    return data;
+  } catch (err) {
+    console.error("Falha ao criar a sequência do zero no Runrun.it:", err);
+    return { ok: false, error: "Falha de conexão." };
+  }
+}
+
 async function adicionarNaRegraNoBackend(workflowId, userId) {
-  if (!COLMEIA_API_URL || !workflowId || !userId) return false;
+  if (!COLMEIA_API_URL || !workflowId || !userId) {
+    console.error("adicionarNaRegraNoBackend: chamada abortada — workflowId ou userId ausente.", { workflowId, userId });
+    return false;
+  }
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",

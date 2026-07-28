@@ -544,7 +544,7 @@ function renderDetail() {
     const vaiComecar = !task.running;
     if (vaiComecar) pararOutrasTarefasRodando(task);
     task.running = vaiComecar;
-    if (task.running) tocarTarefaNoBackend(task.id);
+    if (task.running) tocarTarefaNoBackend(task.id, task.title);
     else pausarTarefaNoBackend(task.id);
     renderDetail();
     render();
