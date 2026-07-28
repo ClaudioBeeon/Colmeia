@@ -385,6 +385,25 @@ async function salvarPessoaNoBackend(nome, foto, aliases, discord) {
   }
 }
 
+/**
+ * Remove da planilha os registros de pessoa que acabaram de virar
+ * apelido de outra (depois de um "Linkar selecionados").
+ */
+async function excluirPessoasPorNomesNoBackend(nomes) {
+  if (!COLMEIA_API_URL || !nomes || !nomes.length) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "excluirPessoasPorNomes", nomes }),
+    });
+    const data = await res.json();
+    return !!data.ok;
+  } catch (err) {
+    console.error("Falha ao excluir pessoas mescladas:", err);
+    return false;
+  }
+}
+
 function fotoDoAtendimento(nomeAtendimento) {
   const chave = Object.keys(ATENDIMENTO_PHOTOS_BEEON).find(d => nomesCorrespondem(d, nomeAtendimento));
   return chave ? ATENDIMENTO_PHOTOS_BEEON[chave] : null;
@@ -421,15 +440,33 @@ function getDiscordDoCliente(nomeCliente) {
 }
 
 /**
+ * Se esse nome de cliente foi "linkado" a outro (ex: veio do Runrun.it
+ * ou do Drive escrito diferente do painel), devolve o nome canônico
+ * cadastrado em Links de clientes. Comparação exata (sem prefixo tipo
+ * nomesCorrespondem) — pra clientes, um match "parecido" é arriscado
+ * (ex: "Loja A" e "Loja A2" são clientes diferentes de verdade). Se não
+ * achar nenhum vínculo, devolve o próprio nome sem mudar nada.
+ */
+function resolverClienteCanonico(nomeCliente) {
+  if (!nomeCliente) return nomeCliente;
+  const alvo = normalizarParaComparar(nomeCliente);
+  const achado = linksClientes.find(l =>
+    normalizarParaComparar(l.cliente) === alvo ||
+    (l.aliases || []).some(a => normalizarParaComparar(a) === alvo)
+  );
+  return achado ? achado.cliente : nomeCliente;
+}
+
+/**
  * Acha quem é o atendimento responsável (c.atend) de um cliente,
  * procurando nos clientes de todos os designers no painel-beeon.
  * Devolve null se o cliente não for encontrado lá (ex: dados fake).
  */
 function getAtendimentoDoCliente(nomeCliente) {
   if (!painelBeeonData || !painelBeeonData.state) return null;
-  const alvo = normalizarParaComparar(nomeCliente);
+  const alvo = normalizarParaComparar(resolverClienteCanonico(nomeCliente));
   for (const designer of Object.keys(painelBeeonData.state)) {
-    const cliente = (painelBeeonData.state[designer] || []).find(c => normalizarParaComparar(c.cliente) === alvo);
+    const cliente = (painelBeeonData.state[designer] || []).find(c => normalizarParaComparar(resolverClienteCanonico(c.cliente)) === alvo);
     if (cliente && cliente.atend) return cliente.atend;
   }
   return null;
@@ -506,6 +543,7 @@ function mapearTarefaDoBackend(t) {
     day,
     due,
     dueISO: t.due || null, // data completa (ano-mês-dia), usada pra ordenar e saber se está atrasada
+    dataPublicacao: t.dataPublicacao || null,
     status: t.status,
     runrunStage: t.runrunStage,
     isOutraEtapa: t.isOutraEtapa,
@@ -682,17 +720,36 @@ async function salvarPrioridadeNoBackend(taskId, prioridade) {
  * ainda não confirmado), avisa no console mas não trava a tela — o
  * cronômetro local continua rodando mesmo assim.
  */
-async function tocarTarefaNoBackend(taskId) {
+async function tocarTarefaNoBackend(taskId, taskTitle) {
   if (!COLMEIA_API_URL || !taskId) return;
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "tocarTarefa", taskId }),
+      body: JSON.stringify({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO }),
     });
     const data = await res.json();
     if (!data.ok) console.error("Runrun.it recusou o play:", data.error);
   } catch (err) {
     console.error("Falha ao dar play no Runrun.it:", err);
+  }
+}
+
+/**
+ * Busca no backend a lista de tarefas que o designer logado deu play
+ * hoje, já agrupada por tarefa (com o horário do 1º e do último play).
+ */
+async function buscarPlaysDeHojeDoBackend() {
+  if (!COLMEIA_API_URL || !DESIGNER_LOGADO) return [];
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarTarefasHoje", designer: DESIGNER_LOGADO }),
+    });
+    const data = await res.json();
+    return data.ok ? (data.tarefas || []) : [];
+  } catch (err) {
+    console.error("Falha ao buscar tarefas de hoje:", err);
+    return [];
   }
 }
 
@@ -853,6 +910,22 @@ function abrirPainelPessoas() {
   overlay.hidden = false;
   configTabAtiva = "pessoas";
   atualizarAbasConfig();
+  // Além dos nomes já vistos na tela nessa sessão, traz também todo
+  // mundo do Runrun.it e do painel-designers-beeon — assim a lista pra
+  // linkar já nasce completa, sem depender de ter passado o mouse em
+  // cada card antes.
+  registrarNomesConhecidosGlobais().then(() => {
+    if (configTabAtiva === "pessoas") renderPainelPessoas();
+  });
+}
+
+async function registrarNomesConhecidosGlobais() {
+  const usuarios = await buscarUsuariosRunrun();
+  usuarios.forEach(u => registrarNomeVisto(u.nome, u.foto));
+  if (painelBeeonData && painelBeeonData.designers) {
+    painelBeeonData.designers.forEach(d => registrarNomeVisto(d, fotoDoDesigner(d)));
+  }
+  Object.keys(ATENDIMENTO_PHOTOS_BEEON).forEach(nome => registrarNomeVisto(nome, ATENDIMENTO_PHOTOS_BEEON[nome]));
 }
 
 function atualizarAbasConfig() {
@@ -880,7 +953,11 @@ function renderPainelPessoas() {
     return;
   }
 
-  body.innerHTML = nomes.map(([chave, info]) => {
+  body.innerHTML = `
+    <div class="link-merge-toolbar" style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <button type="button" class="people-row-save" id="linkarPessoasBtn">🔗 Linkar selecionados</button>
+    </div>
+  ` + nomes.map(([chave, info]) => {
     const salvo = pessoasSalvas.find(p => normalizarParaComparar(p.nome) === chave);
     const fotoAtual = resolverFotoManual(info.nomeOriginal) || info.fotoAtual || "";
     const aliasesTexto = salvo ? salvo.aliases.join(", ") : "";
@@ -888,6 +965,7 @@ function renderPainelPessoas() {
     return `
       <div class="people-row" data-chave="${chave}" data-nome-original="${info.nomeOriginal}">
         <div class="people-row-top">
+          <input type="checkbox" class="people-row-check" data-chave-check="${chave}" style="margin-right:8px;width:16px;height:16px;">
           <div class="people-row-avatar">${avatarPreviewHTML(info.nomeOriginal, fotoAtual)}</div>
           <span class="people-row-name">${info.nomeOriginal}</span>
         </div>
@@ -900,7 +978,9 @@ function renderPainelPessoas() {
     `;
   }).join("");
 
-  body.querySelectorAll(".people-row-save").forEach(btn => {
+  document.getElementById("linkarPessoasBtn").addEventListener("click", () => linkarPessoasSelecionadas(body));
+
+  body.querySelectorAll(".people-row-save[data-chave]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const row = btn.closest(".people-row");
       const nomeOriginal = row.dataset.nomeOriginal;
@@ -938,6 +1018,72 @@ function renderPainelPessoas() {
   });
 }
 
+/**
+ * Junta 2+ nomes marcados numa pessoa só: escolhe o nome mais comprido
+ * como principal (prioriza um que já tenha registro salvo), guarda os
+ * outros como apelidos, herda foto/Discord de quem já tinha cadastrado,
+ * e apaga os registros antigos dos nomes que viraram apelido.
+ */
+async function linkarPessoasSelecionadas(body) {
+  const marcados = Array.from(body.querySelectorAll(".people-row-check:checked")).map(cb => cb.dataset.chaveCheck);
+  if (marcados.length < 2) {
+    alert("Marque pelo menos 2 nomes pra linkar (são a mesma pessoa).");
+    return;
+  }
+  const selecionados = marcados.map(chave => nomesVistos.get(chave)).filter(Boolean);
+  const jaSalvos = selecionados.filter(s => pessoasSalvas.some(p => normalizarParaComparar(p.nome) === normalizarParaComparar(s.nomeOriginal)));
+  const baseEscolha = jaSalvos.length ? jaSalvos : selecionados;
+  const principal = baseEscolha.slice().sort((a, b) => b.nomeOriginal.length - a.nomeOriginal.length)[0];
+  const outros = selecionados.filter(s => s !== principal);
+
+  const buscarSalvo = nome => pessoasSalvas.find(p => normalizarParaComparar(p.nome) === normalizarParaComparar(nome));
+
+  const aliasesSet = new Set();
+  outros.forEach(o => {
+    aliasesSet.add(o.nomeOriginal);
+    const salvoO = buscarSalvo(o.nomeOriginal);
+    if (salvoO) salvoO.aliases.forEach(a => aliasesSet.add(a));
+  });
+  const salvoPrincipal = buscarSalvo(principal.nomeOriginal);
+  if (salvoPrincipal) salvoPrincipal.aliases.forEach(a => aliasesSet.add(a));
+  const aliases = Array.from(aliasesSet).filter(a => normalizarParaComparar(a) !== normalizarParaComparar(principal.nomeOriginal));
+
+  const foto = (salvoPrincipal && salvoPrincipal.foto) || principal.fotoAtual ||
+    outros.map(o => { const s = buscarSalvo(o.nomeOriginal); return s && s.foto; }).find(Boolean) || "";
+  const discord = (salvoPrincipal && salvoPrincipal.discord) ||
+    outros.map(o => { const s = buscarSalvo(o.nomeOriginal); return s && s.discord; }).find(Boolean) || "";
+
+  const btn = document.getElementById("linkarPessoasBtn");
+  btn.disabled = true;
+  btn.textContent = "Linkando...";
+
+  const ok = await salvarPessoaNoBackend(principal.nomeOriginal, foto, aliases, discord);
+  if (!ok) {
+    btn.disabled = false;
+    btn.textContent = "🔗 Linkar selecionados";
+    alert("Não consegui linkar agora. Tenta de novo em alguns segundos.");
+    return;
+  }
+
+  const nomesParaRemover = outros.map(o => o.nomeOriginal).filter(n => buscarSalvo(n));
+  if (nomesParaRemover.length) await excluirPessoasPorNomesNoBackend(nomesParaRemover);
+
+  outros.forEach(o => {
+    const idx = pessoasSalvas.findIndex(p => normalizarParaComparar(p.nome) === normalizarParaComparar(o.nomeOriginal));
+    if (idx !== -1) pessoasSalvas.splice(idx, 1);
+  });
+  const idxPrincipal = pessoasSalvas.findIndex(p => normalizarParaComparar(p.nome) === normalizarParaComparar(principal.nomeOriginal));
+  const registro = { nome: principal.nomeOriginal, foto, aliases, discord };
+  if (idxPrincipal !== -1) pessoasSalvas[idxPrincipal] = registro;
+  else pessoasSalvas.push(registro);
+
+  render();
+  buildClientsPage();
+  buildAtendimentoPage();
+  buildTiposPage();
+  renderPainelPessoas();
+}
+
 // Grupos de clientes expandidos no painel de configuração (igual ao
 // padrão das outras listas expansíveis do Colmeia).
 const clientesConfigExpandido = new Set();
@@ -959,6 +1105,28 @@ function listarTodosClientesConhecidos() {
       nomes.push(c.cliente);
     });
   });
+  return nomes.sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Igual à de cima, mas junta nomes de cliente vindos das 3 fontes
+ * (painel-designers-beeon, Runrun.it e pastas do Drive) — usada só na
+ * lista de "linkar clientes", onde o objetivo é justamente mostrar as
+ * variações de escrita de cada fonte pra poder marcar e mesclar.
+ */
+function listarTodosNomesClienteConhecidos() {
+  const vistos = new Set();
+  const nomes = [];
+  function add(nome) {
+    if (!nome) return;
+    const chave = normalizarParaComparar(nome);
+    if (!chave || vistos.has(chave)) return;
+    vistos.add(chave);
+    nomes.push(nome);
+  }
+  listarTodosClientesConhecidos().forEach(add);
+  tasksTodas.forEach(t => add(t.client));
+  (pastasDriveCache || []).forEach(p => add(p.nome));
   return nomes.sort((a, b) => a.localeCompare(b));
 }
 
@@ -990,7 +1158,7 @@ async function preencherDriveAutomatico() {
     let atualizados = 0;
 
     for (const cliente of todosClientes) {
-      const dadosAtuais = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [], pastaDriveVinculada: "" };
+      const dadosAtuais = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [], pastaDriveVinculada: "", aliases: [] };
 
       // Se já tem um vínculo manual escolhido, usa ele — não tenta
       // adivinhar pelo nome nesse caso.
@@ -1013,6 +1181,7 @@ async function preencherDriveAutomatico() {
         pastaPublicacoes: dadosAtuais.pastaPublicacoes || pasta.pastaPublicacoesUrl || "",
         pastaDriveVinculada: dadosAtuais.pastaDriveVinculada || "",
         extras: dadosAtuais.extras || [],
+        aliases: dadosAtuais.aliases || [],
       };
       const ok = await salvarLinksClienteNoBackend(cliente, novosDados);
       if (ok) {
@@ -1061,25 +1230,36 @@ function renderPainelClientes() {
     return;
   }
 
-  const todosClientes = listarTodosClientesConhecidos();
+  // Nomes de cliente das 3 fontes (painel, Runrun.it, Drive), menos os
+  // que já viraram apelido de outro cliente (esses não aparecem mais
+  // como linha própria — só o nome principal deles aparece).
+  const todosClientes = listarTodosNomesClienteConhecidos()
+    .filter(n => normalizarParaComparar(resolverClienteCanonico(n)) === normalizarParaComparar(n));
   const alvo = normalizarParaComparar(clientesConfigFiltro);
   const clientesFiltrados = alvo ? todosClientes.filter(c => normalizarParaComparar(c).includes(alvo)) : todosClientes;
 
   body.innerHTML = `
-    <div class="drive-autofill-bar">
+    <div class="drive-autofill-bar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       <button type="button" id="driveAutofillBtn">🔄 Preencher Drive automaticamente</button>
+      <button type="button" id="linkarClientesBtn">🔗 Linkar selecionados</button>
       <span class="people-row-saved" id="driveAutofillStatus"></span>
     </div>
     <input type="text" class="rule-add-search" id="clientesConfigSearch" placeholder="Buscar cliente..." value="${clientesConfigFiltro}">
     <div class="config-clientes-list">
       ${clientesFiltrados.map(cliente => {
-        const dados = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [], pastaDriveVinculada: "", descricao: "" };
+        const dados = getLinksDoCliente(cliente) || { drive: "", bancoImagens: "", bibliotecaAdobe: "", pastaPublicacoes: "", extras: [], pastaDriveVinculada: "", descricao: "", aliases: [] };
         const aberto = clientesConfigExpandido.has(cliente);
+        const aliasHint = (dados.aliases && dados.aliases.length)
+          ? ` <span style="font-weight:400;opacity:.6;font-size:12px;">(também: ${dados.aliases.join(", ")})</span>`
+          : "";
         return `
           <div class="atendimento-group ${aberto ? "expanded" : ""}">
-            <button type="button" class="atendimento-group-header" data-cliente="${cliente}">
-              <span class="atendimento-group-name">${cliente}</span>
-            </button>
+            <div style="display:flex;align-items:center;">
+              <input type="checkbox" class="cliente-row-check" data-cliente-check="${cliente}" style="margin-right:8px;width:16px;height:16px;flex-shrink:0;">
+              <button type="button" class="atendimento-group-header" data-cliente="${cliente}" style="flex:1;">
+                <span class="atendimento-group-name">${cliente}${aliasHint}</span>
+              </button>
+            </div>
             ${aberto ? `
               <div class="cliente-links-form" data-cliente-form="${cliente}">
                 <label class="cliente-link-field">
@@ -1139,6 +1319,7 @@ function renderPainelClientes() {
   });
 
   document.getElementById("driveAutofillBtn").addEventListener("click", preencherDriveAutomatico);
+  document.getElementById("linkarClientesBtn").addEventListener("click", () => linkarClientesSelecionados(body));
 
   body.querySelectorAll(".atendimento-group-header").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -1186,6 +1367,7 @@ function renderPainelClientes() {
     btn.addEventListener("click", async () => {
       const cliente = btn.dataset.clienteSalvar;
       const form = body.querySelector(`[data-cliente-form="${CSS.escape(cliente)}"]`);
+      const existente = getLinksDoCliente(cliente);
       const dados = {
         descricao: form.querySelector('[data-campo="descricao"]').value.trim(),
         drive: form.querySelector('[data-campo="drive"]').value.trim(),
@@ -1197,6 +1379,7 @@ function renderPainelClientes() {
           nome: div.querySelector('[data-extra-campo="nome"]').value.trim(),
           url: div.querySelector('[data-extra-campo="url"]').value.trim(),
         })).filter(e => e.nome && e.url),
+        aliases: (existente && existente.aliases) || [], // preserva apelidos já linkados (não editáveis nesse formulário)
       };
 
       btn.disabled = true;
@@ -1218,6 +1401,76 @@ function renderPainelClientes() {
       }
     });
   });
+}
+
+/**
+ * Junta 2+ nomes de cliente marcados (vindos do painel, Runrun.it ou
+ * Drive) num só: escolhe como principal um que já tenha registro
+ * salvo (ou o nome mais comprido, se nenhum tiver), guarda os outros
+ * como apelidos, herda os links já cadastrados de qualquer um deles, e
+ * apaga os registros antigos dos nomes que viraram apelido.
+ */
+async function linkarClientesSelecionados(body) {
+  const marcados = Array.from(body.querySelectorAll(".cliente-row-check:checked")).map(cb => cb.dataset.clienteCheck);
+  if (marcados.length < 2) {
+    alert("Marque pelo menos 2 nomes pra linkar (é o mesmo cliente).");
+    return;
+  }
+
+  const buscarSalvo = nome => linksClientes.find(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(nome));
+  const jaSalvos = marcados.filter(nome => buscarSalvo(nome));
+  const baseEscolha = jaSalvos.length ? jaSalvos : marcados;
+  const principal = baseEscolha.slice().sort((a, b) => b.length - a.length)[0];
+  const outros = marcados.filter(n => n !== principal);
+
+  const aliasesSet = new Set();
+  outros.forEach(nome => {
+    aliasesSet.add(nome);
+    const salvo = buscarSalvo(nome);
+    if (salvo) (salvo.aliases || []).forEach(a => aliasesSet.add(a));
+  });
+  const salvoPrincipal = buscarSalvo(principal);
+  if (salvoPrincipal) (salvoPrincipal.aliases || []).forEach(a => aliasesSet.add(a));
+  const aliases = Array.from(aliasesSet).filter(a => normalizarParaComparar(a) !== normalizarParaComparar(principal));
+
+  // Junta os campos preenchidos: prioriza o que o principal já tem,
+  // senão pega o primeiro valor não-vazio entre os outros selecionados.
+  const CAMPOS_MESCLAVEIS = ["drive", "bancoImagens", "bibliotecaAdobe", "pastaPublicacoes", "pastaDriveVinculada", "descricao"];
+  const todosRegistros = [salvoPrincipal, ...outros.map(buscarSalvo)].filter(Boolean);
+  const dados = { aliases };
+  CAMPOS_MESCLAVEIS.forEach(campo => {
+    dados[campo] = (salvoPrincipal && salvoPrincipal[campo]) || todosRegistros.map(r => r[campo]).find(Boolean) || "";
+  });
+  dados.extras = (salvoPrincipal && salvoPrincipal.extras && salvoPrincipal.extras.length)
+    ? salvoPrincipal.extras
+    : (todosRegistros.map(r => r.extras).find(e => e && e.length) || []);
+
+  const btn = document.getElementById("linkarClientesBtn");
+  btn.disabled = true;
+  btn.textContent = "Linkando...";
+
+  const ok = await salvarLinksClienteNoBackend(principal, dados);
+  if (!ok) {
+    btn.disabled = false;
+    btn.textContent = "🔗 Linkar selecionados";
+    alert("Não consegui linkar agora. Tenta de novo em alguns segundos.");
+    return;
+  }
+
+  const nomesParaRemover = outros.filter(n => buscarSalvo(n));
+  if (nomesParaRemover.length) await excluirClientesPorNomesNoBackend(nomesParaRemover);
+
+  outros.forEach(nome => {
+    const idx = linksClientes.findIndex(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(nome));
+    if (idx !== -1) linksClientes.splice(idx, 1);
+  });
+  const idxPrincipal = linksClientes.findIndex(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(principal));
+  const registro = { cliente: principal, ...dados };
+  if (idxPrincipal !== -1) linksClientes[idxPrincipal] = registro;
+  else linksClientes.push(registro);
+
+  buildClientsPage();
+  renderPainelClientes();
 }
 
 // Avatar simples só pra pré-visualização dentro do painel de pessoas
@@ -1470,6 +1723,22 @@ async function reabrirTarefaNoBackend(taskId) {
  * tanto pelo drag-and-drop do Kanban quanto pelo menu de status do
  * pop-up de detalhe.
  */
+async function alterarEntregaNoBackend(taskId, novaData) {
+  if (!COLMEIA_API_URL || !taskId || !novaData) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "alterarEntrega", taskId, novaData }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou alterar a Entrega Desejada:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao alterar a Entrega Desejada no Runrun.it:", err);
+    return false;
+  }
+}
+
 async function moverEtapaNoBackend(taskId, chaveColuna) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
@@ -2015,6 +2284,85 @@ function cardHTML(task, idx) {
   `;
 }
 
+/**
+ * Card usado na aba "Minhas tarefas de hoje" — igual ao card normal,
+ * mas com uma linha extra mostrando o horário do 1º e do último play
+ * de hoje nessa tarefa. Não é arrastável (não faz sentido nessa lista).
+ */
+function hojeCardHTML(task, idx, primeiroPlay, ultimoPlay) {
+  const type = typeLabels[task.type];
+  const atrasada = task.dueISO && task.dueISO < hojeISO();
+  return `
+    <div class="task-card priority-${task.priority} ${atrasada ? "task-overdue" : ""}" data-idx="${idx}">
+      <div class="card-top">
+        <span class="badge ${type.class}">${type.label}</span>
+        <span class="card-priority-tag" style="pointer-events:none;">${priorityLabels[task.priority]}</span>
+      </div>
+      <div class="card-title">${task.title}</div>
+      <div class="card-client">${task.client}</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin:8px 0 4px;">
+        <span>1º play: ${formatarHoraSimples(primeiroPlay)}</span>
+        <span>Último: ${formatarHoraSimples(ultimoPlay)}</span>
+      </div>
+      <div class="card-bottom">
+        ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
+        <span class="card-due-simple ${atrasada ? "overdue" : ""}">${dueIcon}${task.due}</span>
+      </div>
+    </div>
+  `;
+}
+
+function formatarHoraSimples(timestampMs) {
+  if (!timestampMs) return "--:--";
+  const d = new Date(Number(timestampMs));
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * Monta a página "Minhas tarefas de hoje": busca no backend o log de
+ * plays de hoje do designer logado (agrupado por tarefa) e desenha um
+ * card por tarefa, ordenado do play mais recente pro mais antigo.
+ * Tarefas que ainda não estão carregadas em `tasks` são buscadas
+ * avulsas no Runrun.it (mesmo padrão de abrirTarefaPorId).
+ */
+async function buildHojePage() {
+  const container = document.getElementById("hojeList");
+  if (!container || !DESIGNER_LOGADO) return;
+  container.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Carregando...</p>`;
+
+  const plays = await buscarPlaysDeHojeDoBackend();
+  if (plays.length === 0) {
+    container.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Você ainda não deu play em nenhuma tarefa hoje.</p>`;
+    return;
+  }
+
+  const encontradas = [];
+  for (const p of plays) {
+    let idx = tasks.findIndex(t => String(t.id) === String(p.taskId));
+    if (idx === -1) {
+      const resultado = await buscarTarefaCompletaDoBackend(p.taskId);
+      if (!resultado.ok) continue;
+      const nova = mapearTarefaDoBackend(resultado.tarefa);
+      tasks.push(nova);
+      idx = tasks.length - 1;
+    }
+    encontradas.push({ idx, primeiroPlay: p.primeiroPlay, ultimoPlay: p.ultimoPlay });
+  }
+
+  if (encontradas.length === 0) {
+    container.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Não consegui carregar as tarefas de hoje.</p>`;
+    return;
+  }
+
+  container.innerHTML = encontradas
+    .map(({ idx, primeiroPlay, ultimoPlay }) => hojeCardHTML(tasks[idx], idx, primeiroPlay, ultimoPlay))
+    .join("");
+
+  container.querySelectorAll(".task-card").forEach(card => {
+    card.addEventListener("click", () => openDetail(card.dataset.idx));
+  });
+}
+
 const iconEntrega = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const iconHoje = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const hexIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.3l8.5 4.9v9.6L12 21.7l-8.5-4.9V7.2L12 2.3z"/></svg>`;
@@ -2126,7 +2474,7 @@ function renderCoordenacaoPill() {
     const vaiComecar = !t.running;
     if (vaiComecar) pararOutrasTarefasRodando(t);
     t.running = vaiComecar;
-    if (t.running) tocarTarefaNoBackend(t.id);
+    if (t.running) tocarTarefaNoBackend(t.id, t.title);
     else pausarTarefaNoBackend(t.id);
     render();
     updateNowPlaying();
@@ -2321,7 +2669,7 @@ function attachCardDragHandlers() {
       const vaiComecar = !task.running;
       if (vaiComecar) pararOutrasTarefasRodando(task);
       task.running = vaiComecar;
-      if (task.running) tocarTarefaNoBackend(task.id);
+      if (task.running) tocarTarefaNoBackend(task.id, task.title);
       else pausarTarefaNoBackend(task.id);
       render(); // atualiza o ícone dessa tarefa E o da outra que parou junto
       updateNowPlaying();
@@ -2372,6 +2720,25 @@ async function salvarLinksClienteNoBackend(cliente, dados) {
   }
 }
 
+/**
+ * Remove da planilha os registros de cliente que acabaram de virar
+ * apelido de outro (depois de um "Linkar selecionados").
+ */
+async function excluirClientesPorNomesNoBackend(nomes) {
+  if (!COLMEIA_API_URL || !nomes || !nomes.length) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "excluirClientesPorNomes", nomes }),
+    });
+    const data = await res.json();
+    return !!data.ok;
+  } catch (err) {
+    console.error("Falha ao excluir clientes mesclados:", err);
+    return false;
+  }
+}
+
 let progressoClientes = []; // [{designer, cliente, entregues, total}]
 let clientesOcultos = []; // [{designer, cliente}] — só filtro do Colmeia
 
@@ -2390,7 +2757,8 @@ async function carregarClientesOcultos() {
 }
 
 function clienteEstaOculto(designer, cliente) {
-  return clientesOcultos.some(o => nomesCorrespondem(o.designer, designer) && normalizarParaComparar(o.cliente) === normalizarParaComparar(cliente));
+  const alvo = normalizarParaComparar(resolverClienteCanonico(cliente));
+  return clientesOcultos.some(o => nomesCorrespondem(o.designer, designer) && normalizarParaComparar(resolverClienteCanonico(o.cliente)) === alvo);
 }
 
 async function ocultarClienteNoBackend(designer, cliente) {
@@ -2426,12 +2794,14 @@ async function carregarProgressoClientes() {
 }
 
 function getProgressoCliente(designer, cliente) {
-  const reg = progressoClientes.find(p => nomesCorrespondem(p.designer, designer) && normalizarParaComparar(p.cliente) === normalizarParaComparar(cliente));
+  const alvo = normalizarParaComparar(resolverClienteCanonico(cliente));
+  const reg = progressoClientes.find(p => nomesCorrespondem(p.designer, designer) && normalizarParaComparar(resolverClienteCanonico(p.cliente)) === alvo);
   return reg ? { entregues: reg.entregues, total: reg.total } : { entregues: 0, total: 0 };
 }
 
 function getLinksDoCliente(nomeCliente) {
-  return linksClientes.find(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(nomeCliente)) || null;
+  const canonico = resolverClienteCanonico(nomeCliente);
+  return linksClientes.find(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(canonico)) || null;
 }
 
 const HUB_FIXOS = [
@@ -3262,10 +3632,11 @@ function renderSequenciaHTML(task) {
  */
 async function carregarSequencia(task) {
   if (!task.id) return;
-  const resultado = await buscarSequenciaDoBackend(task.id);
+  const taskId = task.id;
+  const resultado = await buscarSequenciaDoBackend(taskId);
   task.sequencia = resultado.sequencia;
   task.workflowId = resultado.workflowId;
-  if (tasks[detailIdx] !== task) return; // usuário já trocou de tarefa
+  if (!tasks[detailIdx] || tasks[detailIdx].id !== taskId) return; // usuário já trocou de tarefa
   const el = document.getElementById("workflowSeqGroup");
   if (el) {
     el.innerHTML = renderSequenciaHTML(task);
@@ -3670,7 +4041,7 @@ function renderDetail() {
     const vaiComecar = !task.running;
     if (vaiComecar) pararOutrasTarefasRodando(task);
     task.running = vaiComecar;
-    if (task.running) tocarTarefaNoBackend(task.id);
+    if (task.running) tocarTarefaNoBackend(task.id, task.title);
     else pausarTarefaNoBackend(task.id);
     renderDetail();
     render();
@@ -4028,10 +4399,10 @@ function renderDetail() {
   if (chatPanelClose) chatPanelClose.addEventListener("click", fecharChatPanel);
 
   const chatTabAqui = document.getElementById("chatTabAqui");
-  if (chatTabAqui) chatTabAqui.addEventListener("click", () => abrirThreadAqui(task));
+  if (chatTabAqui) chatTabAqui.addEventListener("click", () => abrirThreadAqui(tasks[detailIdx] || task));
 
   const chatTabMae = document.getElementById("chatTabMae");
-  if (chatTabMae) chatTabMae.addEventListener("click", () => abrirThreadDoCardMae(task));
+  if (chatTabMae) chatTabMae.addEventListener("click", () => abrirThreadDoCardMae(tasks[detailIdx] || task));
 
   const uploadCheckBtn = document.getElementById("uploadCheckBtn");
   if (uploadCheckBtn) {
@@ -4607,7 +4978,7 @@ function abrirHubDoCliente(cliente, designer) {
 
   const tarefasDoCliente = tasks
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => normalizarParaComparar(t.client) === normalizarParaComparar(cliente) && nomesCorrespondem(t.assignee, designer))
+    .filter(({ t }) => normalizarParaComparar(resolverClienteCanonico(t.client)) === normalizarParaComparar(cliente) && nomesCorrespondem(t.assignee, designer))
     .sort((a, b) => (a.t.dueISO || "9999-99-99").localeCompare(b.t.dueISO || "9999-99-99"));
 
   const listaEl = document.getElementById("chModalTarefas");
@@ -4777,6 +5148,79 @@ function buildTiposPage() {
   });
 }
 
+/**
+ * "Runrun completo": mostra TODAS as etapas de verdade do Runrun.it
+ * (não só as 5 do Kanban principal — Cards Mães fica de fora, igual o
+ * resto do Colmeia já faz), com todas as tarefas em aberto de quem for
+ * escolhido no seletor (ou do time inteiro, no "Todos juntos"). Usa
+ * tasksTodas (a lista crua, sem o filtro de coluna do Kanban
+ * principal) em vez de tasks.
+ */
+function buildRunrunCompletoPage() {
+  const board = document.getElementById("runrunBoard");
+  if (!board) return;
+
+  if (carregandoTarefas) {
+    board.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando tarefas do Runrun.it...</p></div>`;
+    return;
+  }
+
+  const designerAlvo = (PAPEL_LOGADO === "coordenador" && filtroDesignerCoordenador !== "todos")
+    ? (filtroDesignerCoordenador === "eu" ? DESIGNER_LOGADO : filtroDesignerCoordenador)
+    : (PAPEL_LOGADO === "coordenador" ? null : DESIGNER_LOGADO); // null = "Todos juntos"
+
+  const lista = tasksTodas.filter(t => t.id && (!designerAlvo || nomesCorrespondem(t.assignee, designerAlvo)));
+
+  if (lista.length === 0) {
+    board.innerHTML = `<div class="placeholder-box"><span>📋</span><p>Nenhuma tarefa em aberto encontrada.</p></div>`;
+    return;
+  }
+
+  const porEtapa = {};
+  lista.forEach(t => {
+    const etapa = t.runrunStage || "Sem etapa";
+    if (!porEtapa[etapa]) porEtapa[etapa] = [];
+    porEtapa[etapa].push(t);
+  });
+  const etapas = Object.keys(porEtapa).sort((a, b) => porEtapa[b].length - porEtapa[a].length);
+
+  board.innerHTML = etapas.map(etapa => `
+    <div class="column">
+      <div class="column-header">
+        <span class="column-hex" style="color:var(--accent);">${hexIcon}</span>
+        <h2>${etapa}</h2>
+        <span class="column-count">${porEtapa[etapa].length}</span>
+      </div>
+      <div class="column-cards">${porEtapa[etapa].map(t => runrunCompletoCardHTML(t)).join("")}</div>
+    </div>
+  `).join("");
+
+  board.querySelectorAll(".rc-card").forEach(el => {
+    el.addEventListener("click", () => {
+      const t = lista.find(x => String(x.id) === el.dataset.id);
+      if (t) abrirTarefaPorId(t.id);
+    });
+  });
+}
+
+function runrunCompletoCardHTML(t) {
+  const type = typeLabels[t.type] || { label: t.type, class: "" };
+  const atrasada = t.dueISO && t.dueISO < hojeISO();
+  return `
+    <div class="task-card rc-card" data-id="${t.id}">
+      <div class="card-top">
+        <span class="badge ${type.class}">${type.label}</span>
+      </div>
+      <div class="card-title">${t.title}</div>
+      <div class="card-client">${t.client}</div>
+      <div class="card-bottom">
+        ${avatarHTML(t.assignee, "avatar-sm", t.assigneeAvatarUrl)}
+        ${t.due ? `<span class="card-due-simple ${atrasada ? "overdue" : ""}">${dueIcon}${t.due}</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
 // ================= FILA DE REPASSE =================
 // Tarefas que estão, agora, com você (Cláudio) — ou seja, ainda não
 // foram passadas pro designer. Duas situações diferentes, por isso os
@@ -4918,7 +5362,12 @@ function repasseCardHTML(t) {
         ${t.dueISO ? `<span class="repasse-card-due">${t.due}</span>` : ""}
       </div>
       <div class="repasse-card-title">${t.title}</div>
+      ${t.dataPublicacao ? `<div class="repasse-card-pub">Publicação: ${t.dataPublicacao.split("-").reverse().join("/")}</div>` : ""}
       ${tempoParado ? `<div class="repasse-card-tempo">${tempoParado}</div>` : ""}
+      <div class="repasse-card-entrega" data-id="${t.id}">
+        <label>Entrega desejada</label>
+        <input type="date" class="repasse-due-input" data-id="${t.id}" value="${t.dueISO || ""}">
+      </div>
       <div class="repasse-card-actions">
         <button type="button" class="repasse-btn repasse-btn-repassar" data-id="${t.id}">Repassar</button>
         <button type="button" class="repasse-btn repasse-btn-ficar" data-id="${t.id}">Ficar comigo</button>
@@ -5001,6 +5450,25 @@ function wireRepasseCards(lista) {
     if (!t) return;
     card.addEventListener("click", () => {
       abrirTarefaPorId(t.id); // painel de detalhe fica solto no body, então abre por cima da própria aba de repasse
+    });
+  });
+
+  document.querySelectorAll(".repasse-due-input").forEach(input => {
+    input.addEventListener("click", e => e.stopPropagation()); // não abre o card de detalhe ao clicar no campo
+    input.addEventListener("change", async e => {
+      e.stopPropagation();
+      const t = lista.find(x => String(x.id) === input.dataset.id);
+      if (!t || !input.value) return;
+      input.disabled = true;
+      const ok = await alterarEntregaNoBackend(t.id, input.value);
+      input.disabled = false;
+      if (ok) {
+        t.dueISO = input.value;
+        t.due = input.value.split("-").reverse().join("/");
+        agendarAtualizacaoKanban();
+      } else {
+        alert("Não consegui alterar a Entrega Desejada agora. Tenta de novo em alguns segundos.");
+      }
     });
   });
 
@@ -5137,7 +5605,7 @@ function mostrarPagina(page) {
 
   const seletor = document.getElementById("designerFilterSelect");
   if (seletor) {
-    if ((page === "kanban" || page === "clientes") && PAPEL_LOGADO === "coordenador") {
+    if ((page === "kanban" || page === "clientes" || page === "runrun") && PAPEL_LOGADO === "coordenador") {
       if (!seletor.dataset.montado) {
         seletor.innerHTML = `
           <option value="todos">Todos juntos</option>
@@ -5156,13 +5624,16 @@ function mostrarPagina(page) {
   if (page === "clientes") buildClientsPage();
   if (page === "atendimento") buildAtendimentoPage();
   if (page === "tipos") buildTiposPage();
+  if (page === "hoje") buildHojePage();
   if (page === "repasse") buildRepassePage();
+  if (page === "runrun") buildRunrunCompletoPage();
 }
 
 document.getElementById("designerFilterSelect").addEventListener("change", e => {
   filtroDesignerCoordenador = e.target.value;
   render();
   if (!document.getElementById("page-clientes").hidden) buildClientsPage();
+  if (!document.getElementById("page-runrun").hidden) buildRunrunCompletoPage();
 });
 
 document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
