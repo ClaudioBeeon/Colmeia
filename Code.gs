@@ -1,5 +1,6 @@
 /**
  * Backend do Colmeia — Quadro de tarefas Beeon
+ * (deploy automático via GitHub Actions + clasp, configurado em 2026-07-28)
  * ---------------------------------------------
  * Este script tem duas fontes de dados:
  *
