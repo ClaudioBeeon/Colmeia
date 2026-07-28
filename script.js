@@ -385,6 +385,24 @@ async function salvarPessoaNoBackend(nome, foto, aliases, discord) {
   }
 }
 
+// Remove da planilha de Pessoas as linhas de nomes que acabaram de virar
+// apelido de outra pessoa (chamado depois de vincular, pra não deixar
+// linha duplicada/solta pra esse nome).
+async function excluirPessoasPorNomesNoBackend(nomes) {
+  if (!COLMEIA_API_URL || !nomes || !nomes.length) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "excluirPessoasPorNomes", nomes }),
+    });
+    const data = await res.json();
+    return !!data.ok;
+  } catch (err) {
+    console.error("Falha ao excluir pessoas vinculadas no backend:", err);
+    return false;
+  }
+}
+
 function fotoDoAtendimento(nomeAtendimento) {
   const chave = Object.keys(ATENDIMENTO_PHOTOS_BEEON).find(d => nomesCorrespondem(d, nomeAtendimento));
   return chave ? ATENDIMENTO_PHOTOS_BEEON[chave] : null;
@@ -514,6 +532,7 @@ function mapearTarefaDoBackend(t) {
     link: t.link,
     attachmentsCount: t.attachmentsCount || 0,
     lastActivityAt: t.lastActivityAt || null,
+    createdAt: t.createdAt || null,
     assignee: t.assignee,
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
     timerSeconds: t.workedSeconds || 0,
@@ -872,9 +891,32 @@ function atualizarAbasConfig() {
   }
 }
 
+// Chaves (nome normalizado) de quem tem a "barrinha" de vínculos aberta
+// no painel de Pessoas.
+const pessoasVinculadasExpandido = new Set();
+
+// Nomes (normalizados) que já são apelido vinculado de outra pessoa
+// salva — esses não devem aparecer como linha própria no painel, só
+// dentro da pessoa principal deles (é isso que faz o "linkar" parecer
+// que funcionou de verdade).
+function chavesDeApelidosAbsorvidos() {
+  const absorvidos = new Set();
+  pessoasSalvas.forEach(p => {
+    const chavePrincipal = normalizarParaComparar(p.nome);
+    p.aliases.forEach(a => {
+      const chaveAlias = normalizarParaComparar(a);
+      if (chaveAlias && chaveAlias !== chavePrincipal) absorvidos.add(chaveAlias);
+    });
+  });
+  return absorvidos;
+}
+
 function renderPainelPessoas() {
   const body = document.getElementById("peopleModalBody");
-  const nomes = Array.from(nomesVistos.entries()).sort((a, b) => a[1].nomeOriginal.localeCompare(b[1].nomeOriginal));
+  const absorvidos = chavesDeApelidosAbsorvidos();
+  const nomes = Array.from(nomesVistos.entries())
+    .filter(([chave]) => !absorvidos.has(chave))
+    .sort((a, b) => a[1].nomeOriginal.localeCompare(b[1].nomeOriginal));
 
   if (nomes.length === 0) {
     body.innerHTML = `<p class="workflow-seq-empty">Nenhum nome visto ainda nessa sessão — navegue pelo Colmeia (abra tarefas, veja clientes) e volte aqui.</p>`;
@@ -886,12 +928,24 @@ function renderPainelPessoas() {
     const fotoAtual = resolverFotoManual(info.nomeOriginal) || info.fotoAtual || "";
     const aliasesTexto = salvo ? salvo.aliases.join(", ") : "";
     const discordAtual = salvo ? salvo.discord || "" : "";
+    const vinculos = salvo ? salvo.aliases : [];
+    const aberto = pessoasVinculadasExpandido.has(chave);
     return `
       <div class="people-row" data-chave="${chave}" data-nome-original="${info.nomeOriginal}">
         <div class="people-row-top">
           <div class="people-row-avatar">${avatarPreviewHTML(info.nomeOriginal, fotoAtual)}</div>
           <span class="people-row-name">${info.nomeOriginal}</span>
+          ${vinculos.length ? `
+            <button type="button" class="people-row-vinculos-toggle" data-chave-toggle="${chave}">
+              ${vinculos.length} vinculado${vinculos.length > 1 ? "s" : ""} ${aberto ? "▴" : "▾"}
+            </button>
+          ` : ""}
         </div>
+        ${vinculos.length && aberto ? `
+          <div class="people-row-vinculos">
+            ${vinculos.map(a => `<span class="people-row-vinculo-chip">${escaparHTML(a)}</span>`).join("")}
+          </div>
+        ` : ""}
         <input type="text" class="people-row-input" data-campo="foto" placeholder="URL da foto" value="${fotoAtual}">
         <input type="text" class="people-row-input" data-campo="aliases" placeholder="Apelidos, separados por vírgula (ex: Manu, Manuela)" value="${aliasesTexto}">
         <input type="text" class="people-row-input" data-campo="discord" placeholder="Link do Discord (DM dessa pessoa)" value="${discordAtual}">
@@ -900,6 +954,15 @@ function renderPainelPessoas() {
       </div>
     `;
   }).join("");
+
+  body.querySelectorAll(".people-row-vinculos-toggle").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const chave = btn.dataset.chaveToggle;
+      if (pessoasVinculadasExpandido.has(chave)) pessoasVinculadasExpandido.delete(chave);
+      else pessoasVinculadasExpandido.add(chave);
+      renderPainelPessoas();
+    });
+  });
 
   body.querySelectorAll(".people-row-save").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -922,9 +985,22 @@ function renderPainelPessoas() {
         if (idxSalvo !== -1) pessoasSalvas[idxSalvo] = novoRegistro;
         else pessoasSalvas.push(novoRegistro);
 
+        // Apelido que virou vínculo mas já tinha linha própria salva
+        // antes: apaga essa linha (local e no backend), senão ele
+        // continua existindo separado e a fusão não parece ter feito nada.
+        const nomesDeSobra = aliases.filter(a => {
+          const chaveAlias = normalizarParaComparar(a);
+          return pessoasSalvas.some(p => p !== novoRegistro && normalizarParaComparar(p.nome) === chaveAlias);
+        });
+        if (nomesDeSobra.length) {
+          pessoasSalvas = pessoasSalvas.filter(p =>
+            p === novoRegistro || !nomesDeSobra.some(n => normalizarParaComparar(n) === normalizarParaComparar(p.nome))
+          );
+          excluirPessoasPorNomesNoBackend(nomesDeSobra);
+        }
+
         const avisoEl = row.querySelector(".people-row-saved");
-        avisoEl.textContent = "✓ Salvo";
-        setTimeout(() => { avisoEl.textContent = ""; }, 2000);
+        avisoEl.textContent = aliases.length ? "✓ Vinculado" : "✓ Salvo";
 
         // Atualiza as fotos em tudo que já está na tela agora.
         render();
@@ -932,6 +1008,10 @@ function renderPainelPessoas() {
         buildAtendimentoPage();
         buildTiposPage();
         if (document.getElementById("taskDetail").classList.contains("visible")) renderDetail();
+
+        // Espera um instante pra pessoa ver o "✓" antes do apelido sumir
+        // da lista e virar a barrinha de vínculo na pessoa principal.
+        setTimeout(() => renderPainelPessoas(), 900);
       } else {
         row.querySelector(".people-row-saved").textContent = "Erro ao salvar";
       }
@@ -1487,6 +1567,22 @@ async function alterarEntregaNoBackend(taskId, novaData) {
   }
 }
 
+async function alterarPublicacaoNoBackend(taskId, novaData) {
+  if (!COLMEIA_API_URL || !taskId || !novaData) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "alterarPublicacao", taskId, novaData }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou alterar a Data de Publicação:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao alterar a Data de Publicação no Runrun.it:", err);
+    return false;
+  }
+}
+
 async function moverEtapaNoBackend(taskId, chaveColuna) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
@@ -2026,7 +2122,9 @@ function cardHTML(task, idx) {
           ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
           <div class="assignee-menu"></div>
         </div>
-        <span class="card-due-simple ${atrasada ? "overdue" : ""}">${dueIcon}${task.due}</span>
+        <div class="card-due-wrap" data-idx="${idx}">
+          <button type="button" class="card-due-simple ${atrasada ? "overdue" : ""}">${dueIcon}${task.due}</button>
+        </div>
       </div>
     </div>
   `;
@@ -2258,6 +2356,46 @@ function attachCardDragHandlers() {
         }
         render();
       });
+    });
+  });
+
+  // ===== Data de entrega desejada: clicar abre o calendário nativo =====
+  document.querySelectorAll(".card-due-wrap").forEach(wrap => {
+    const btn = wrap.querySelector(".card-due-simple");
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const task = tasks[wrap.dataset.idx];
+      if (!task) return;
+
+      wrap.innerHTML = `<input type="date" class="card-due-input" value="${task.dueISO || ""}">`;
+      const input = wrap.querySelector(".card-due-input");
+      input.addEventListener("click", ev => ev.stopPropagation());
+      input.focus();
+      // Abre o calendário nativo direto ao clicar, igual já faz no
+      // pop-up de detalhe — dá a sensação de um seletor moderno sem
+      // precisar construir um calendário do zero.
+      if (typeof input.showPicker === "function") {
+        try { input.showPicker(); } catch (err) { /* alguns navegadores recusam fora de um clique direto — segue clicável normalmente */ }
+      }
+
+      let jaSalvou = false;
+      async function salvar() {
+        if (jaSalvou) return;
+        jaSalvou = true;
+        const novaData = input.value; // sempre AAAA-MM-DD
+        if (!novaData || novaData === task.dueISO) { render(); return; }
+        wrap.innerHTML = `<span class="card-due-saving">Salvando...</span>`;
+        const ok = await alterarEntregaNoBackend(task.id, novaData);
+        if (!ok) { render(); return; }
+        const [ano, mes, dia] = novaData.split("-").map(Number);
+        task.dueISO = novaData;
+        task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+        render();
+        agendarAtualizacaoKanban();
+      }
+
+      input.addEventListener("change", salvar);
+      input.addEventListener("blur", () => { if (!jaSalvou) render(); });
     });
   });
 
@@ -4803,6 +4941,101 @@ function buildTiposPage() {
  * tasksTodas (a lista crua, sem o filtro de coluna do Kanban
  * principal) em vez de tasks.
  */
+// Abas extras da página Runrun completo (Card mãe / Entregues), buscadas
+// à parte pra não pesar o polling normal do quadro (ver
+// carregarExtrasRunrunCompletoSeNecessario). null enquanto não carregou
+// ainda nessa sessão.
+let extrasRunrunCompleto = null;
+let carregandoExtrasRunrunCompleto = false;
+
+async function carregarExtrasRunrunCompletoSeNecessario() {
+  const CINCO_MIN_MS = 5 * 60 * 1000;
+  if (extrasRunrunCompleto && (Date.now() - extrasRunrunCompleto.quando) < CINCO_MIN_MS) return;
+  if (carregandoExtrasRunrunCompleto) return;
+  carregandoExtrasRunrunCompleto = true;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarExtrasRunrunCompleto" }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      extrasRunrunCompleto = {
+        cardMae: data.cardMae.map(mapearTarefaDoBackend),
+        entregues: data.entregues.map(mapearTarefaDoBackend),
+        quando: Date.now(),
+      };
+      if (!document.getElementById("page-runrun").hidden) buildRunrunCompletoPage();
+    }
+  } catch (err) {
+    console.error("Falha ao buscar card mãe/entregues do Runrun completo:", err);
+  } finally {
+    carregandoExtrasRunrunCompleto = false;
+  }
+}
+
+// Ordem das abas da página Runrun completo, arrastada pelo próprio
+// designer — fica salva no navegador dele (cada um usa seu próprio
+// computador/login, então localStorage já basta, sem precisar do backend).
+const CHAVE_ORDEM_ABAS_RUNRUN_COMPLETO = "colmeia_ordemAbasRunrunCompleto_v1";
+
+function ordenarColunasRunrunCompletoPelaPreferencia(colunas) {
+  let ordemSalva = [];
+  try { ordemSalva = JSON.parse(localStorage.getItem(CHAVE_ORDEM_ABAS_RUNRUN_COMPLETO) || "[]"); } catch (e) { /* ignora, usa ordem padrão */ }
+  if (!ordemSalva.length) return colunas;
+
+  const porNome = new Map(colunas.map(c => [c.nome, c]));
+  const ordenadas = [];
+  ordemSalva.forEach(nome => {
+    if (porNome.has(nome)) { ordenadas.push(porNome.get(nome)); porNome.delete(nome); }
+  });
+  // Abas novas que não estavam na ordem salva (ex: uma etapa nova no
+  // Runrun.it) entram no fim, na ordem padrão.
+  colunas.forEach(c => { if (porNome.has(c.nome)) ordenadas.push(c); });
+  return ordenadas;
+}
+
+// Permite arrastar o cabeçalho de uma aba pra cima do de outra pra trocá-las
+// de lugar, salvando a nova ordem no localStorage.
+function wireDragDasAbasRunrunCompleto(board, colunas) {
+  let nomeArrastando = null;
+  board.querySelectorAll(".column-header[data-col-nome]").forEach(header => {
+    header.addEventListener("dragstart", () => { nomeArrastando = header.dataset.colNome; });
+    header.addEventListener("dragover", e => {
+      e.preventDefault();
+      header.closest(".column").classList.add("column-drag-over");
+    });
+    header.addEventListener("dragleave", () => {
+      header.closest(".column").classList.remove("column-drag-over");
+    });
+    header.addEventListener("drop", e => {
+      e.preventDefault();
+      header.closest(".column").classList.remove("column-drag-over");
+      const nomeAlvo = header.dataset.colNome;
+      if (!nomeArrastando || nomeArrastando === nomeAlvo) return;
+
+      const nomes = colunas.map(c => c.nome);
+      const de = nomes.indexOf(nomeArrastando);
+      const para = nomes.indexOf(nomeAlvo);
+      if (de === -1 || para === -1) return;
+      nomes.splice(para, 0, nomes.splice(de, 1)[0]);
+
+      try { localStorage.setItem(CHAVE_ORDEM_ABAS_RUNRUN_COMPLETO, JSON.stringify(nomes)); } catch (e) { /* ignora */ }
+      buildRunrunCompletoPage();
+    });
+  });
+}
+
+// Ordena do mais antigo pro mais novo (data de criação da tarefa no
+// Runrun.it) — tarefas sem essa data ficam no fim, por não ter como saber.
+function ordenarPorCriacaoAscendente(lista) {
+  return lista.slice().sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : Infinity;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : Infinity;
+    return ta - tb;
+  });
+}
+
 function buildRunrunCompletoPage() {
   const board = document.getElementById("runrunBoard");
   if (!board) return;
@@ -4812,13 +5045,16 @@ function buildRunrunCompletoPage() {
     return;
   }
 
+  carregarExtrasRunrunCompletoSeNecessario();
+
   const designerAlvo = (PAPEL_LOGADO === "coordenador" && filtroDesignerCoordenador !== "todos")
     ? (filtroDesignerCoordenador === "eu" ? DESIGNER_LOGADO : filtroDesignerCoordenador)
     : (PAPEL_LOGADO === "coordenador" ? null : DESIGNER_LOGADO); // null = "Todos juntos"
 
-  const lista = tasksTodas.filter(t => t.id && (!designerAlvo || nomesCorrespondem(t.assignee, designerAlvo)));
+  const pertenceAoDesigner = t => t.id && (!designerAlvo || nomesCorrespondem(t.assignee, designerAlvo));
+  const lista = tasksTodas.filter(pertenceAoDesigner);
 
-  if (lista.length === 0) {
+  if (lista.length === 0 && !extrasRunrunCompleto) {
     board.innerHTML = `<div class="placeholder-box"><span>📋</span><p>Nenhuma tarefa em aberto encontrada.</p></div>`;
     return;
   }
@@ -4831,20 +5067,36 @@ function buildRunrunCompletoPage() {
   });
   const etapas = Object.keys(porEtapa).sort((a, b) => porEtapa[b].length - porEtapa[a].length);
 
-  board.innerHTML = etapas.map(etapa => `
+  // "Card mãe" e "Entregues" são abas extras (buscadas à parte) — só
+  // aparecem depois que essa busca terminar, e só se tiverem tarefa.
+  const colunasExtras = [];
+  if (extrasRunrunCompleto) {
+    const cardMae = extrasRunrunCompleto.cardMae.filter(pertenceAoDesigner);
+    const entregues = extrasRunrunCompleto.entregues.filter(pertenceAoDesigner);
+    if (cardMae.length) colunasExtras.push({ nome: "Card mãe", tarefas: cardMae });
+    if (entregues.length) colunasExtras.push({ nome: "Entregues", tarefas: entregues });
+  }
+
+  let colunas = etapas.map(etapa => ({ nome: etapa, tarefas: porEtapa[etapa] })).concat(colunasExtras);
+  colunas = ordenarColunasRunrunCompletoPelaPreferencia(colunas);
+
+  board.innerHTML = colunas.map(col => `
     <div class="column">
-      <div class="column-header">
+      <div class="column-header" draggable="true" data-col-nome="${escaparHTML(col.nome)}">
         <span class="column-hex" style="color:var(--accent);">${hexIcon}</span>
-        <h2>${etapa}</h2>
-        <span class="column-count">${porEtapa[etapa].length}</span>
+        <h2>${col.nome}</h2>
+        <span class="column-count">${col.tarefas.length}</span>
       </div>
-      <div class="column-cards">${porEtapa[etapa].map(t => runrunCompletoCardHTML(t)).join("")}</div>
+      <div class="column-cards">${ordenarPorCriacaoAscendente(col.tarefas).map(t => runrunCompletoCardHTML(t)).join("")}</div>
     </div>
   `).join("");
 
+  wireDragDasAbasRunrunCompleto(board, colunas);
+
+  const todasAsTarefas = lista.concat(colunasExtras.flatMap(c => c.tarefas));
   board.querySelectorAll(".rc-card").forEach(el => {
     el.addEventListener("click", () => {
-      const t = lista.find(x => String(x.id) === el.dataset.id);
+      const t = todasAsTarefas.find(x => String(x.id) === el.dataset.id);
       if (t) abrirTarefaPorId(t.id);
     });
   });
@@ -4999,22 +5251,36 @@ function buildRepassePage() {
   atualizarBadgeRepasse();
 }
 
+// Formato curto (dd/mm, sem ano) usado no "pill" de datas do card de
+// repasse — mais compacto que o "10 ago" usado no resto do Colmeia.
+function formatarDataCurtaSemAno(iso) {
+  if (!iso) return null;
+  const [, mes, dia] = iso.split("-");
+  return `${dia}/${mes}`;
+}
+
 function repasseCardHTML(t) {
   const type = typeLabels[t.type] || { label: t.type, class: "" };
   const tempoParado = formatarTempoParado(t.lastActivityAt);
+  const atrasada = t.dueISO && t.dueISO < hojeISO();
   return `
     <div class="repasse-card" data-id="${t.id}">
       <div class="repasse-card-top">
         <span class="badge ${type.class}">${type.label}</span>
-        ${t.dueISO ? `<span class="repasse-card-due">${t.due}</span>` : ""}
       </div>
       <div class="repasse-card-title">${t.title}</div>
-      ${t.dataPublicacao ? `<div class="repasse-card-pub">Publicação: ${t.dataPublicacao.split("-").reverse().join("/")}</div>` : ""}
-      ${tempoParado ? `<div class="repasse-card-tempo">${tempoParado}</div>` : ""}
-      <div class="repasse-card-entrega" data-id="${t.id}">
-        <label>Entrega desejada</label>
-        <input type="date" class="repasse-due-input" data-id="${t.id}" value="${t.dueISO || ""}">
+      <div class="repasse-datas-pill">
+        <div class="repasse-data-item" data-campo="publicacao" data-id="${t.id}">
+          <span class="repasse-data-label">Publicação</span>
+          <button type="button" class="repasse-data-valor">${formatarDataCurtaSemAno(t.dataPublicacao) || "—"}</button>
+        </div>
+        <span class="repasse-data-divisor"></span>
+        <div class="repasse-data-item ${atrasada ? "overdue" : ""}" data-campo="entrega" data-id="${t.id}">
+          <span class="repasse-data-label">Entrega</span>
+          <button type="button" class="repasse-data-valor">${formatarDataCurtaSemAno(t.dueISO) || "—"}</button>
+        </div>
       </div>
+      ${tempoParado ? `<div class="repasse-card-tempo">${tempoParado}</div>` : ""}
       <div class="repasse-card-actions">
         <button type="button" class="repasse-btn repasse-btn-repassar" data-id="${t.id}">Repassar</button>
         <button type="button" class="repasse-btn repasse-btn-ficar" data-id="${t.id}">Ficar comigo</button>
@@ -5100,22 +5366,60 @@ function wireRepasseCards(lista) {
     });
   });
 
-  document.querySelectorAll(".repasse-due-input").forEach(input => {
-    input.addEventListener("click", e => e.stopPropagation()); // não abre o card de detalhe ao clicar no campo
-    input.addEventListener("change", async e => {
+  // ===== Pill de datas: clicar em Publicação ou Entrega abre o calendário =====
+  document.querySelectorAll(".repasse-data-item").forEach(item => {
+    item.addEventListener("click", e => e.stopPropagation()); // não abre o card de detalhe
+
+    const valorBtn = item.querySelector(".repasse-data-valor");
+    valorBtn.addEventListener("click", e => {
       e.stopPropagation();
-      const t = lista.find(x => String(x.id) === input.dataset.id);
-      if (!t || !input.value) return;
-      input.disabled = true;
-      const ok = await alterarEntregaNoBackend(t.id, input.value);
-      input.disabled = false;
-      if (ok) {
-        t.dueISO = input.value;
-        t.due = input.value.split("-").reverse().join("/");
-        agendarAtualizacaoKanban();
-      } else {
-        alert("Não consegui alterar a Entrega Desejada agora. Tenta de novo em alguns segundos.");
+      const t = lista.find(x => String(x.id) === item.dataset.id);
+      if (!t) return;
+      const campo = item.dataset.campo; // "publicacao" ou "entrega"
+      const valorAtualISO = (campo === "publicacao" ? t.dataPublicacao : t.dueISO) || "";
+      const labelHTML = item.querySelector(".repasse-data-label").outerHTML;
+
+      item.innerHTML = `${labelHTML}<input type="date" class="repasse-data-input" value="${valorAtualISO}">`;
+      const input = item.querySelector(".repasse-data-input");
+      input.addEventListener("click", ev => ev.stopPropagation());
+      input.focus();
+      // Abre o calendário nativo direto ao clicar, em vez de deixar a
+      // pessoa digitar a data na mão.
+      if (typeof input.showPicker === "function") {
+        try { input.showPicker(); } catch (err) { /* alguns navegadores recusam fora de um clique direto — segue clicável normalmente */ }
       }
+
+      let jaSalvou = false;
+      async function salvar() {
+        if (jaSalvou) return;
+        jaSalvou = true;
+        const novaData = input.value; // sempre AAAA-MM-DD
+        if (!novaData || novaData === valorAtualISO) { renderRepasse(); return; }
+
+        input.disabled = true;
+        const ok = campo === "publicacao"
+          ? await alterarPublicacaoNoBackend(t.id, novaData)
+          : await alterarEntregaNoBackend(t.id, novaData);
+
+        if (!ok) {
+          alert(`Não consegui alterar a ${campo === "publicacao" ? "Publicação" : "Entrega Desejada"} agora. Tenta de novo em alguns segundos.`);
+          renderRepasse();
+          return;
+        }
+
+        if (campo === "publicacao") {
+          t.dataPublicacao = novaData;
+        } else {
+          const [ano, mes, dia] = novaData.split("-").map(Number);
+          t.dueISO = novaData;
+          t.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+        }
+        agendarAtualizacaoKanban();
+        renderRepasse();
+      }
+
+      input.addEventListener("change", salvar);
+      input.addEventListener("blur", () => { if (!jaSalvou) renderRepasse(); });
     });
   });
 
