@@ -397,14 +397,16 @@ function attachCardDragHandlers() {
         ev.stopPropagation();
         menu.classList.remove("open");
         await pararCronometroAoTransferir(task);
-        const novoResponsavel = await avancarWorkflowNoBackend(task.id);
-        if (novoResponsavel) {
-          task.assignee = novoResponsavel;
+        const resultadoAvanco = await avancarWorkflowNoBackend(task.id);
+        if (resultadoAvanco.novoResponsavel) {
+          task.assignee = resultadoAvanco.novoResponsavel;
           task.assigneeAvatarUrl = null;
           render();
+        }
+        if (resultadoAvanco.ok) {
           agendarAtualizacaoKanban();
         } else {
-          console.warn("Não consegui avançar a sequência — talvez essa tarefa não tenha uma Sequência de responsáveis configurada.");
+          mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
         }
       });
 

@@ -130,13 +130,12 @@ function repasseCardHTML(t) {
         <span class="badge ${type.class}">${type.label}</span>
       </div>
       <div class="repasse-card-title">${t.title}</div>
-      <div class="repasse-datas-pill">
-        <div class="repasse-data-item" data-campo="publicacao" data-id="${t.id}">
+      <div class="repasse-datas-stack">
+        <div class="repasse-data-pill" data-campo="publicacao" data-id="${t.id}">
           <span class="repasse-data-label">Publicação</span>
           <button type="button" class="repasse-data-valor">${formatarDataCurtaSemAno(t.dataPublicacao) || "—"}</button>
         </div>
-        <span class="repasse-data-divisor"></span>
-        <div class="repasse-data-item ${atrasada ? "overdue" : ""}" data-campo="entrega" data-id="${t.id}">
+        <div class="repasse-data-pill ${atrasada ? "overdue" : ""}" data-campo="entrega" data-id="${t.id}">
           <span class="repasse-data-label">Entrega</span>
           <button type="button" class="repasse-data-valor">${formatarDataCurtaSemAno(t.dueISO) || "—"}</button>
         </div>
@@ -258,7 +257,7 @@ function wireDataItem(item, lista) {
     }
 
     let jaSalvou = false;
-    async function salvar() {
+    function salvar() {
       if (jaSalvou) return;
       jaSalvou = true;
       const novaData = input.value; // sempre AAAA-MM-DD
@@ -268,18 +267,13 @@ function wireDataItem(item, lista) {
         return;
       }
 
-      input.disabled = true;
-      const ok = campo === "publicacao"
-        ? await alterarPublicacaoNoBackend(t.id, novaData)
-        : await alterarEntregaNoBackend(t.id, novaData);
-
-      if (!ok) {
-        alert(`Não consegui alterar a ${campo === "publicacao" ? "Publicação" : "Entrega Desejada"} agora. Tenta de novo em alguns segundos.`);
-        restaurarPillItem(item, t, campo);
-        wireDataItem(item, lista);
-        return;
-      }
-
+      // Otimista: já mostra a data nova na hora (sem deixar o campo
+      // desabilitado esperando o Runrun.it responder) — a chamada real
+      // roda em segundo plano; se o Runrun.it recusar, volta pro valor
+      // antigo sozinho e avisa com um toast, em vez de travar a tela
+      // toda inteira esperando.
+      const valorAntigo = campo === "publicacao" ? t.dataPublicacao : t.dueISO;
+      const dueAntigo = t.due;
       if (campo === "publicacao") {
         t.dataPublicacao = novaData;
       } else {
@@ -287,9 +281,32 @@ function wireDataItem(item, lista) {
         t.dueISO = novaData;
         t.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
       }
-      agendarAtualizacaoKanban();
       restaurarPillItem(item, t, campo);
       wireDataItem(item, lista);
+
+      const promessa = campo === "publicacao"
+        ? alterarPublicacaoNoBackend(t.id, novaData)
+        : alterarEntregaNoBackend(t.id, novaData);
+
+      promessa.then(ok => {
+        if (ok) {
+          agendarAtualizacaoKanban();
+          return;
+        }
+        // Runrun.it recusou — desfaz sozinho e avisa.
+        if (campo === "publicacao") {
+          t.dataPublicacao = valorAntigo;
+        } else {
+          t.dueISO = valorAntigo;
+          t.due = dueAntigo;
+        }
+        const itemAtual = document.querySelector(`.repasse-data-pill[data-campo="${campo}"][data-id="${CSS.escape(String(t.id))}"]`);
+        if (itemAtual) {
+          restaurarPillItem(itemAtual, t, campo);
+          wireDataItem(itemAtual, lista);
+        }
+        mostrarToast(`Não consegui alterar a ${campo === "publicacao" ? "Publicação" : "Entrega Desejada"} agora.`, "erro");
+      });
     }
 
     input.addEventListener("change", salvar);
@@ -312,7 +329,7 @@ function wireRepasseCards(lista) {
   // enquanto a pessoa ainda está mexendo nele). Em vez disso, só o pill
   // daquele campo é reconstruído no lugar — a reordenação de verdade só
   // acontece quando a aba é reaberta/atualizada de novo.
-  document.querySelectorAll(".repasse-data-item").forEach(item => {
+  document.querySelectorAll(".repasse-data-pill").forEach(item => {
     wireDataItem(item, lista);
   });
 
@@ -328,7 +345,7 @@ function wireRepasseCards(lista) {
       if (!eu) {
         btn.disabled = false;
         btn.textContent = "Ficar comigo";
-        alert("Não consegui te encontrar na lista de usuários do Runrun.it.");
+        mostrarToast("Não consegui te encontrar na lista de usuários do Runrun.it.", "erro");
         return;
       }
       const ok = await reatribuirTarefaNoBackend(t.id, eu.id);
@@ -339,7 +356,7 @@ function wireRepasseCards(lista) {
       } else {
         btn.disabled = false;
         btn.textContent = "Ficar comigo";
-        alert("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.");
+        mostrarToast("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");
       }
     });
   });
@@ -362,10 +379,14 @@ function wireRepasseCards(lista) {
           // com o nome antes de avançar de verdade.
           abrirConfirmacaoRepasse(t, proximo, btn);
         } else {
-          // Tem sequência configurada, mas ninguém definido como próximo
-          // (ex: sequência com todo mundo já concluído) — deixa o
-          // Runrun.it decidir e mostra quem entrou depois.
-          confirmarEAvancarSequencia(t, btn, null);
+          // Tem sequência configurada, mas NINGUÉM definido como
+          // próximo (você é a última pessoa dela) — nesse caso, avançar
+          // a etapa no Runrun.it não "repassa" pra ninguém, ENTREGA a
+          // tarefa de verdade (foi assim que o bug apareceu: um clique
+          // em "Repassar" entregava a tarefa sem avisar nada). Por isso
+          // usa uma confirmação diferente, deixando claro o que vai
+          // acontecer, em vez de fazer isso direto.
+          abrirConfirmacaoEntregarSemProximo(t, btn);
         }
       } else {
         // Sem sequência nenhuma configurada ainda: abre o mesmo modal
@@ -423,19 +444,56 @@ function abrirConfirmacaoRepasse(t, proximo, btn) {
   }, 0);
 }
 
+// Pop-up de confirmação pro caso em que você é a ÚLTIMA pessoa da
+// sequência — nesse caso "Repassar" na verdade entrega a tarefa de
+// verdade (não tem mais ninguém pra passar), então avisa isso bem
+// claro antes de fazer, em vez de entregar sem perguntar nada.
+function abrirConfirmacaoEntregarSemProximo(t, btn) {
+  let menu = btn.parentElement.querySelector(".repasse-picker");
+  if (menu) { menu.remove(); return; } // clicou de novo — fecha
+  menu = document.createElement("div");
+  menu.className = "repasse-picker repasse-confirm repasse-confirm-entregar";
+  menu.innerHTML = `
+    <div class="repasse-confirm-text">Você é a última pessoa da sequência — confirmar aqui vai <strong>entregar a tarefa</strong>, não repassar pra ninguém. Tem certeza?</div>
+    <div class="repasse-confirm-actions">
+      <button type="button" class="repasse-confirm-cancel">Cancelar</button>
+      <button type="button" class="repasse-confirm-ok">Entregar</button>
+    </div>
+  `;
+  btn.parentElement.appendChild(menu);
+  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); menu.remove(); });
+  menu.querySelector(".repasse-confirm-ok").addEventListener("click", ev => {
+    ev.stopPropagation();
+    menu.remove();
+    confirmarEAvancarSequencia(t, btn, null);
+  });
+  setTimeout(() => {
+    document.addEventListener("click", function fechar(ev) {
+      if (!menu.contains(ev.target) && ev.target !== btn) {
+        menu.remove();
+        document.removeEventListener("click", fechar);
+      }
+    });
+  }, 0);
+}
+
 // Avança a sequência de verdade no Runrun.it (só chamado depois de
-// confirmado, ou quando não havia ninguém específico pra confirmar).
+// confirmado).
 async function confirmarEAvancarSequencia(t, btn, proximo) {
   btn.disabled = true;
   btn.textContent = "Repassando...";
-  const novoResponsavel = await avancarWorkflowNoBackend(t.id);
-  if (novoResponsavel) {
+  // Usa resultado.ok (não novoResponsavel) pra saber se deu certo: quando
+  // não tem "próximo" (você é a última pessoa — a tarefa foi ENTREGUE em
+  // vez de repassada), o Runrun.it não devolve nome nenhum mesmo tendo
+  // dado certo, e olhar só o nome fazia o Colmeia achar que tinha falhado.
+  const resultado = await avancarWorkflowNoBackend(t.id);
+  if (resultado.ok) {
     removerCardDeRepasseDaTela(btn);
     agendarAtualizacaoKanban();
   } else {
     btn.disabled = false;
     btn.textContent = "Repassar";
-    alert("Não consegui avançar a sequência dessa tarefa agora.");
+    mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
   }
 }
 

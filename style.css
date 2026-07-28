@@ -2410,15 +2410,13 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .repasse-card-tempo { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
 .repasse-card-actions { display: flex; gap: 8px; position: relative; }
 
-/* Pill com as duas datas (Publicação / Entrega) do card de repasse. */
-.repasse-datas-pill {
-  display: flex; align-items: stretch; background: var(--page-bg);
-  border-radius: 999px; overflow: hidden; margin-bottom: 10px;
-}
-.repasse-data-item {
-  flex: 1; min-width: 0;
-  display: flex; align-items: center; justify-content: center; gap: 5px;
-  padding: 7px 8px;
+/* Datas (Publicação / Entrega) do card de repasse — duas pills separadas,
+   uma embaixo da outra (antes era um elemento só, lado a lado). */
+.repasse-datas-stack { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.repasse-data-pill {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--page-bg); border-radius: 999px; padding: 7px 12px;
+  transition: background var(--dur-fast) var(--ease-apple);
 }
 .repasse-data-label {
   font-size: 10px; font-weight: 700; color: var(--text-secondary);
@@ -2430,8 +2428,8 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   padding: 2px 5px; border-radius: 6px; font-variant-numeric: tabular-nums;
 }
 .repasse-data-valor:hover { background: var(--card-bg); }
-.repasse-data-item.overdue .repasse-data-valor { color: var(--danger); }
-.repasse-data-divisor { width: 1px; background: var(--border); margin: 7px 0; flex-shrink: 0; }
+.repasse-data-pill.overdue { background: var(--danger-soft); }
+.repasse-data-pill.overdue .repasse-data-valor { color: var(--danger); }
 .repasse-data-input {
   width: 100%; max-width: 104px;
   font-size: 12px; font-weight: 700; font-family: inherit; color: var(--text-primary);
@@ -2451,7 +2449,8 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .repasse-btn:active { transform: scale(0.95); }
 .repasse-btn:disabled { opacity: 0.6; cursor: default; }
-.repasse-btn-repassar { background: var(--accent); color: #fff; }
+.repasse-btn-repassar { background: var(--kanban-yellow); color: #16181D; }
+.repasse-btn-repassar:hover:not(:disabled) { background: #E0A800; }
 .repasse-btn-ficar { background: var(--page-bg); color: var(--text-primary); }
 
 .repasse-picker {
@@ -2479,7 +2478,8 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .repasse-confirm-cancel { background: var(--page-bg); color: var(--text-primary); }
-.repasse-confirm-ok { background: var(--accent); color: #fff; }
+.repasse-confirm-ok { background: var(--kanban-yellow); color: #16181D; }
+.repasse-confirm-entregar .repasse-confirm-ok { background: var(--danger); color: #fff; }
 
 /* ===== Painel de Avisos ===== */
 .avisos-novo {
@@ -2572,3 +2572,19 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   display: flex; align-items: center; gap: 10px;
   padding: 14px 4px; color: var(--text-secondary); font-size: 13px;
 }
+
+/* ===== Aviso rápido (toast) ===== */
+.colmeia-toasts {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+  z-index: 999; display: flex; flex-direction: column; gap: 8px; align-items: center;
+  pointer-events: none;
+}
+.colmeia-toast {
+  background: #16181D; color: #fff; font-size: 13px; font-weight: 600;
+  padding: 11px 20px; border-radius: 999px; box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+  opacity: 0; transform: translateY(10px) scale(0.97);
+  transition: opacity 0.2s var(--ease-apple), transform 0.2s var(--ease-apple);
+  pointer-events: auto; max-width: 380px; text-align: center;
+}
+.colmeia-toast.show { opacity: 1; transform: translateY(0) scale(1); }
+.colmeia-toast.erro { background: #E03131; }

@@ -108,22 +108,25 @@ async function pararCronometroAoTransferir(task) {
  * a coluna no Colmeia (isso continua só visual por enquanto, o endpoint
  * de mover coluna ainda não foi confirmado).
  */
+// Devolve { ok, novoResponsavel } — não só o nome, porque "sem próximo
+// responsável" (tarefa entregue por completar a última etapa) e "o
+// Runrun.it recusou" davam os dois null antes, sem jeito de diferenciar
+// sucesso de falha (foi isso que causava o botão "Concluir" animar,
+// enviar de verdade pro Runrun.it e depois voltar sozinho pro estado
+// antigo — o Colmeia achava que tinha falhado só porque não veio nome).
 async function avancarWorkflowNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return null;
+  if (!COLMEIA_API_URL || !taskId) return { ok: false, novoResponsavel: null };
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
       body: JSON.stringify({ acao: "avancarWorkflow", taskId }),
     });
     const data = await res.json();
-    if (!data.ok) {
-      console.error("Runrun.it recusou avançar a sequência:", data.error);
-      return null;
-    }
-    return data.novoResponsavel || null;
+    if (!data.ok) console.error("Runrun.it recusou avançar a sequência:", data.error);
+    return { ok: !!data.ok, novoResponsavel: data.novoResponsavel || null };
   } catch (err) {
     console.error("Falha ao avançar a sequência no Runrun.it:", err);
-    return null;
+    return { ok: false, novoResponsavel: null };
   }
 }
 

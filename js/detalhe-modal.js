@@ -24,6 +24,7 @@ function openDetail(idx, entradaAnimacao) {
   carregarAnexos(tasks[detailIdx]);
   carregarCronometroReal(tasks[detailIdx]);
   carregarFilhosSeForCardMae(tasks[detailIdx]);
+  if (tasks[detailIdx].parentTaskId) precarregarCardMaeEmBackground(tasks[detailIdx].id);
   renderNotificacoesUpload(tasks[detailIdx]);
   iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);
   if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
@@ -178,13 +179,14 @@ function wireWorkflowArrows(task) {
         }
       }
 
-      const novoResponsavel = await avancarWorkflowNoBackend(task.id);
-      if (novoResponsavel) {
-        task.assignee = novoResponsavel;
+      const resultadoAvanco = await avancarWorkflowNoBackend(task.id);
+      if (resultadoAvanco.novoResponsavel) {
+        task.assignee = resultadoAvanco.novoResponsavel;
         task.assigneeAvatarUrl = null;
         render();
         agendarAtualizacaoKanban();
       }
+      if (!resultadoAvanco.ok) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
       // Sincroniza com o Runrun.it de verdade (confirma ou desfaz a
       // animação otimista de cima, se o Runrun.it recusou).
       await carregarSequencia(task);
@@ -205,7 +207,7 @@ function wireWorkflowArrows(task) {
           await carregarSequencia(task);
         } else {
           deliverBtn.disabled = false;
-          alert("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.");
+          mostrarToast("Não consegui reabrir essa tarefa agora.", "erro");
         }
       });
     } else {
@@ -242,21 +244,40 @@ function wireWorkflowArrows(task) {
 
         await pararCronometroAoTransferir(task);
 
-        // Primeiro fecha a etapa da última pessoa da sequência (sem
-        // transferir pra ninguém, já que não tem próximo) — confirmado
-        // que o Runrun.it só deixa entregar depois disso. Se a tarefa
-        // não tiver sequência (comum em subtarefas), pula essa parte.
+        // Se a tarefa tem sequência, esse botão "Concluir" só aparece
+        // quando você é a ÚLTIMA pessoa dela (renderSequenciaHTML só
+        // desenha ele nesse caso) — e fechar a etapa da última pessoa
+        // (avancarWorkflowNoBackend) JÁ entrega a tarefa de verdade no
+        // Runrun.it, sozinho. Chamar "entregar" (entregarTarefaNoBackend)
+        // DEPOIS disso é redundante e falha (a tarefa já está entregue),
+        // e era exatamente isso que fazia a animação voltar pro estado
+        // de "não concluído" mesmo a tarefa já tendo sido entregue de
+        // verdade no Runrun.it (o Colmeia achava que tinha dado erro).
+        // Só chama entregarTarefaNoBackend direto quando NÃO tem
+        // sequência nenhuma (ex: subtarefa/card mãe sem regra).
+        let ok;
         if (sequenciaOtimista && sequenciaOtimista.length > 0) {
-          await avancarWorkflowNoBackend(task.id);
+          const resultadoAvanco = await avancarWorkflowNoBackend(task.id);
+          ok = resultadoAvanco.ok;
+        } else {
+          ok = await entregarTarefaNoBackend(task.id);
         }
-        const ok = await entregarTarefaNoBackend(task.id);
         if (ok) {
           task.entregue = true;
-          // Segurança extra: garante que o Runrun.it recebeu o pause,
-          // mesmo que avançar a sequência logo acima tenha, por algum
-          // motivo do lado de lá, deixado a tarefa marcada como
-          // rodando de novo.
+          // Segurança extra: garante que o Runrun.it recebeu o pause.
           pausarTarefaNoBackend(task.id);
+          // O cronômetro já foi parado no objeto capturado no início
+          // (pararCronometroAoTransferir), mas se o quadro atualizou
+          // sozinho em segundo plano nesse meio-tempo (atualizarKanbanEmBackground
+          // troca os objetos de tarefa por outros novos), o objeto de
+          // verdade em tasks[] pode ter voltado a vir com running=true
+          // do Runrun.it antes do pause acima ter sido processado lá.
+          // Por isso força de novo, comparando por id (nunca por
+          // referência — mesmo bug documentado no restante do app).
+          const tarefaViva = tasks.find(x => String(x.id) === String(task.id));
+          if (tarefaViva) tarefaViva.running = false;
+          render();
+          updateNowPlaying();
           await esperar(450);
           await carregarSequencia(task);
           agendarAtualizacaoKanban();
@@ -270,6 +291,7 @@ function wireWorkflowArrows(task) {
             seqEl.innerHTML = renderSequenciaHTML(task);
             wireWorkflowArrows(task);
           }
+          mostrarToast("Não consegui concluir essa tarefa agora.", "erro");
         }
       });
     }
@@ -615,6 +637,7 @@ function renderDetail() {
         task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
         renderDetail();
         render();
+        mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
       } else {
         agendarAtualizacaoKanban();
       }
@@ -791,6 +814,7 @@ function renderDetail() {
       if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, texto);
     } else {
       if (bolhaTemporaria) bolhaTemporaria.remove(); // não foi enviado — some a bolha
+      mostrarToast("Não consegui enviar esse comentário agora.", "erro");
     }
   }
 
@@ -1005,6 +1029,31 @@ function mostrarCardEmBranco(mensagem) {
   `;
 }
 
+// taskId da subtarefa -> resultado de buscarCardMaeDoBackend (já com
+// temPai/cardMae/subtarefas prontos). Guardado num Map à parte (não no
+// objeto da tarefa) pra sobreviver mesmo se atualizarKanbanEmBackground
+// trocar os objetos de tasks[] por outros novos enquanto isso.
+const cardMaeCache = new Map();
+
+/**
+ * Busca o card mãe (e já deixa os comentários dele cacheados também,
+ * ver chatMaeCache em js/chat-comentarios.js) assim que uma subtarefa
+ * termina de abrir — sem esperar a pessoa clicar na seta pra cima.
+ * Assim, quando ela clicar de verdade, abrirCardMae já acha tudo pronto
+ * (abre na hora, sem esperar o Runrun.it responder de novo) e a aba
+ * "Comentários card mãe" do chat também já nasce carregada.
+ */
+async function precarregarCardMaeEmBackground(taskId) {
+  if (cardMaeCache.has(taskId)) return;
+  const resultado = await buscarCardMaeDoBackend(taskId);
+  if (!resultado.ok || !resultado.temPai) return;
+  cardMaeCache.set(taskId, resultado);
+  if (!chatMaeCache.has(taskId)) {
+    const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
+    chatMaeCache.set(taskId, { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios });
+  }
+}
+
 async function abrirCardMae(task) {
   if (!task.id) {
     console.warn("Essa tarefa não está conectada ao Runrun.it, não tem card mãe pra abrir.");
@@ -1015,9 +1064,17 @@ async function abrirCardMae(task) {
   const inner = panel.querySelector(".detail-inner");
   if (inner) inner.classList.add("panel-exit-up");
   await esperar(200);
-  mostrarCardEmBranco("Buscando o card mãe...");
 
-  const resultado = await buscarCardMaeDoBackend(task.id);
+  // Se já foi pré-carregado (ver precarregarCardMaeEmBackground, chamado
+  // assim que essa subtarefa abriu), usa direto — sem tela de
+  // "Buscando..." nem espera nenhuma do Runrun.it.
+  let resultado = cardMaeCache.get(task.id);
+  if (!resultado) {
+    mostrarCardEmBranco("Buscando o card mãe...");
+    resultado = await buscarCardMaeDoBackend(task.id);
+    if (resultado.ok && resultado.temPai) cardMaeCache.set(task.id, resultado);
+  }
+
   if (!resultado.ok) {
     mostrarCardEmBranco(resultado.error || "Não consegui buscar o card mãe.");
     return;

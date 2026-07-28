@@ -87,3 +87,28 @@ async function buscarAtividadesPainelBeeon() {
 // disso não faz mais sentido como "notificação" do momento.
 const JANELA_NOTIFICACAO_UPLOAD_MS = 3 * 60 * 60 * 1000;
 
+/**
+ * Aviso rápido (toast) que aparece embaixo da tela e some sozinho —
+ * usado quando uma ação que mexe em dado de verdade (mover etapa,
+ * salvar comentário, repassar tarefa, etc) falha de verdade. Antes
+ * essas falhas só apareciam no console do navegador (ninguém via).
+ */
+function mostrarToast(mensagem, tipo) {
+  let container = document.getElementById("colmeiaToasts");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "colmeiaToasts";
+    container.className = "colmeia-toasts";
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement("div");
+  toast.className = "colmeia-toast" + (tipo === "erro" ? " erro" : "");
+  toast.textContent = mensagem;
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("show"));
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 250);
+  }, 4200);
+}
+

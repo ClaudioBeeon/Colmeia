@@ -186,7 +186,7 @@ function handleRequest(e, method) {
       } else if (body.acao === 'buscarUploadsRecentesDoCard') {
         output = buscarUploadsRecentesDoCard(body.taskId, body.cliente);
       } else if (body.acao === 'buscarAtividadesDrive') {
-        output = buscarAtividadesDrive(body.clientes);
+        output = buscarAtividadesDrive(body.designer);
       } else if (body.acao === 'buscarProgressoClientes') {
         output = buscarProgressoMensalClientes();
       } else if (body.acao === 'listarClientesOcultos') {
@@ -1031,82 +1031,100 @@ function listarUploadsRecentesDaPasta(pasta) {
 
 // ============ ATIVIDADES DO DRIVE (aba "Histórico" > Atividades recentes) ============
 var JANELA_ATIVIDADES_DRIVE_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
+var MAX_ATIVIDADES_DRIVE = 30;
 
 /**
- * Pra cada cliente informado, varre a pasta "Publicações > ano atual >
- * mês atual" (e as subpastas de card dentro dela) procurando arquivos
- * criados nos últimos 7 dias — mesma lógica de
- * buscarUploadsRecentesDoCard, só que pra vários clientes de uma vez e
- * com uma janela maior (é um feed de atividade, não um "acabou de
- * subir agora"). Cacheado por 3 minutos (varrer várias pastas do Drive
- * é lento) pra não repetir o trabalho toda vez que a aba é reaberta.
+ * Busca os arquivos mais recentes enviados pelo PRÓPRIO designer (filtra
+ * por dono do arquivo no Drive == o e-mail dele em RUNRUN_USUARIOS) — cada
+ * um só vê a própria atividade, não a dos outros. Usa DriveApp.searchFiles
+ * (busca indexada do Google, rápida) em vez de varrer pasta por pasta de
+ * cada cliente: mesma estratégia já confirmada rápida no
+ * painel-designers-beeon (calcularAtividadesDrive() de lá, que o Cláudio
+ * mandou de referência em 2026-07-28) — a versão anterior daqui varria
+ * pasta por pasta e além de lenta ainda dava erro de chave de cache grande
+ * demais quando o designer tinha muitos clientes.
+ * Cacheado por 3 minutos (ainda precisa subir a árvore de pastas pra
+ * descobrir o cliente de cada arquivo, que é a parte mais lenta).
  */
-function buscarAtividadesDrive(clientes) {
-  if (!clientes || !clientes.length) return { ok: true, atividades: [] };
+function buscarAtividadesDrive(designer) {
+  if (!designer) return { ok: true, atividades: [] };
 
-  var chaveCache = 'atividadesDrive_' + clientes.slice().sort().join('|');
+  var email = null;
+  for (var e in RUNRUN_USUARIOS) {
+    if (RUNRUN_USUARIOS[e].toLowerCase().trim() === designer.toLowerCase().trim()) { email = e; break; }
+  }
+  if (!email) return { ok: true, atividades: [] }; // designer sem e-mail conhecido — não tem como filtrar por dono
+
+  var chaveCache = 'atividadesDrive_' + email;
   var cache = CacheService.getScriptCache();
   var cacheado = cache.get(chaveCache);
   if (cacheado) {
-    try { return JSON.parse(cacheado); } catch (e) { /* recalcula abaixo */ }
+    try { return JSON.parse(cacheado); } catch (err) { /* recalcula abaixo */ }
   }
 
   try {
     var beeonFolder = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
     var clientesFolder = (beeonFolder.getName() === 'Clientes') ? beeonFolder : getSubfolderPorNome(beeonFolder, 'Clientes');
     if (!clientesFolder) return { ok: false, error: 'Pasta "Clientes" não encontrada dentro da pasta Beeon.' };
+    var clientesId = clientesFolder.getId();
 
-    var agora = new Date();
-    var ano = String(agora.getFullYear());
+    var limite = new Date().getTime() - JANELA_ATIVIDADES_DRIVE_MS;
+    var isoCutoff = Utilities.formatDate(new Date(limite), 'GMT', "yyyy-MM-dd'T'HH:mm:ss");
+    var query = "modifiedDate > '" + isoCutoff + "' and trashed = false and mimeType != '" + MimeType.FOLDER + "' and '" + email + "' in owners";
+    var resultados = DriveApp.searchFiles(query);
+
     var atividades = [];
+    var cachePastas = {};
+    var checados = 0;
+    while (resultados.hasNext() && checados < 60 && atividades.length < MAX_ATIVIDADES_DRIVE) {
+      var arquivo = resultados.next();
+      checados++;
+      var quando = arquivo.getLastUpdated().getTime();
+      if (quando < limite) continue;
 
-    clientes.forEach(function (nomeCliente) {
-      try {
-        var pastaCliente = acharPastaDoCliente(clientesFolder, nomeCliente);
-        var pastaPublicacoes = pastaCliente && getSubfolderPorNome(pastaCliente, 'Publicações');
-        var pastaAno = pastaPublicacoes && getSubfolderPorNome(pastaPublicacoes, ano);
-        var pastaMes = pastaAno && getPastaMesSemCriar(pastaAno, agora.getMonth());
-        if (!pastaMes) return;
+      var pastasPais = arquivo.getParents();
+      if (!pastasPais.hasNext()) continue;
+      var pastaPublicacao = pastasPais.next();
+      var parentId = pastaPublicacao.getId();
 
-        var pastaMesUrl = pastaMes.getUrl();
-        listarAtividadesRecentesDaPasta(pastaMes, pastaMesUrl).forEach(function (a) {
-          a.cliente = nomeCliente;
-          atividades.push(a);
-        });
-        var subpastas = pastaMes.getFolders();
-        while (subpastas.hasNext()) {
-          var sub = subpastas.next();
-          listarAtividadesRecentesDaPasta(sub, sub.getUrl()).forEach(function (a) {
-            a.cliente = nomeCliente;
-            atividades.push(a);
-          });
-        }
-      } catch (e) {
-        // Um cliente com pasta bagunçada/sem permissão não deve travar
-        // os outros — só pula ele.
+      var nomeCliente;
+      if (cachePastas.hasOwnProperty(parentId)) {
+        nomeCliente = cachePastas[parentId];
+      } else {
+        nomeCliente = acharClienteDaPastaDoDrive(pastaPublicacao, clientesId);
+        cachePastas[parentId] = nomeCliente;
       }
-    });
+      if (!nomeCliente) continue;
+
+      atividades.push({ cliente: nomeCliente, arquivo: arquivo.getName(), quando: quando, pastaUrl: pastaPublicacao.getUrl() });
+    }
 
     atividades.sort(function (a, b) { return b.quando - a.quando; });
-    var resultado = { ok: true, atividades: atividades.slice(0, 40) };
-    try { cache.put(chaveCache, JSON.stringify(resultado), 180); } catch (e) { /* cache indisponível, segue sem ele */ }
+    var resultado = { ok: true, atividades: atividades };
+    try { cache.put(chaveCache, JSON.stringify(resultado), 180); } catch (err) { /* cache indisponível, segue sem ele */ }
     return resultado;
   } catch (err) {
     return { ok: false, error: 'Erro ao ler o Drive: ' + err.message };
   }
 }
 
-function listarAtividadesRecentesDaPasta(pasta, pastaUrl) {
-  var agora = new Date().getTime();
-  var atividades = [];
-  var arquivos = pasta.getFiles();
-  while (arquivos.hasNext()) {
-    var arq = arquivos.next();
-    var criadoEm = arq.getDateCreated().getTime();
-    if ((agora - criadoEm) > JANELA_ATIVIDADES_DRIVE_MS) continue;
-    atividades.push({ arquivo: arq.getName(), quando: criadoEm, quem: nomeDeQuemSubiuArquivo(arq), pastaUrl: pastaUrl });
+// A partir de uma pasta, sobe na árvore de pastas até achar "Clientes" — a
+// pasta logo abaixo dela nesse caminho é o nome do cliente (mesma lógica
+// do painel-designers-beeon, acharClienteDaPasta).
+function acharClienteDaPastaDoDrive(pastaInicial, clientesId) {
+  var atual = pastaInicial;
+  var anterior = null;
+  var profundidade = 0;
+  while (atual && profundidade < 10) {
+    if (atual.getId() === clientesId) {
+      return anterior ? anterior.getName() : null;
+    }
+    anterior = atual;
+    var pais = atual.getParents();
+    atual = pais.hasNext() ? pais.next() : null;
+    profundidade++;
   }
-  return atividades;
+  return null;
 }
 
 // Igual getOuCriarPastaMes, mas NUNCA cria pasta — só serve pra
@@ -2046,18 +2064,13 @@ function reabrirTarefa(taskId) {
 }
 
 /**
- * ⚠️ 2026-07-28: JÁ LIGADA no dispatcher (ação 'criarRegra', chamada por
- * adicionarPessoaOtimista em js/regras-briefing.js quando a tarefa ainda
- * não tem workflowId) — mas o endpoint em si (POST /tasks/:id/workflow)
- * nunca foi confirmado batendo de verdade no Runrun.it. ANTES de colar
- * essa versão do Código.gs em produção (ou dar deploy), rode
- * diagnosticoCriarWorkflowTeste() aqui no editor do Apps Script (Executar
- * > escolher a função > Executar), veja o "Registro de execução" e
- * confira no próprio Runrun.it se a sequência foi criada certinho na
- * tarefa de teste. Cria a "Sequência de responsáveis" do zero numa
- * tarefa que ainda não tem nenhuma — segundo o Cláudio, ao fazer isso
- * pela tela do Runrun.it, ele mesmo (quem está logado) já entra
- * automaticamente como primeira pessoa da sequência.
+ * Cria a "Sequência de responsáveis" do zero numa tarefa que ainda não
+ * tem nenhuma — quem estiver logado no Runrun.it (o dono da API key
+ * configurada no backend) já entra automaticamente como primeira
+ * pessoa da sequência. Confirmado funcionando de verdade em
+ * 2026-07-28 (diagnosticoCriarWorkflowTeste na tarefa 111787). Ligada
+ * no dispatcher (ação 'criarRegra'), chamada por adicionarPessoaOtimista
+ * (js/regras-briefing.js) sempre que a tarefa ainda não tem workflowId.
  */
 function criarWorkflowDaTarefa(taskId) {
   if (!taskId) return { ok: false, error: 'taskId ausente.' };
@@ -2251,4 +2264,65 @@ function ajustarEstimativaTarefa(taskId, minutos) {
     return { ok: false, error: 'Runrun.it recusou ajustar a estimativa (status ' + resultado.status + ').' };
   }
   return { ok: true };
+}
+
+// ============ BACKUP AUTOMÁTICO DA PLANILHA ============
+// A planilha ativa deste script é o "banco de dados" do Colmeia
+// (prioridades, Log de Plays, PastasCards, etc) — além do histórico de
+// versões nativo do próprio Google Sheets (Arquivo > Histórico de
+// versões, já existe sozinho, sem precisar de nada daqui), isso faz uma
+// cópia completa e separada da planilha 1x por dia, guardada numa pasta
+// à parte no Drive, apagando sozinho as cópias mais velhas que
+// BACKUP_RETENCAO_DIAS pra não acumular pra sempre.
+var BACKUP_PASTA_NOME = 'Backups Colmeia';
+var BACKUP_RETENCAO_DIAS = 14;
+
+function getOuCriarPastaBackups() {
+  var pastas = DriveApp.getFoldersByName(BACKUP_PASTA_NOME);
+  if (pastas.hasNext()) return pastas.next();
+  return DriveApp.createFolder(BACKUP_PASTA_NOME);
+}
+
+function fazerBackupDaPlanilha() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var pastaBackups = getOuCriarPastaBackups();
+    var hoje = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
+    var nomeBackup = ss.getName() + ' — backup ' + hoje;
+
+    var arquivoOriginal = DriveApp.getFileById(ss.getId());
+    var copia = arquivoOriginal.makeCopy(nomeBackup, pastaBackups);
+
+    limparBackupsAntigos(pastaBackups);
+    Logger.log('Backup criado: ' + copia.getUrl());
+  } catch (err) {
+    Logger.log('Erro ao fazer backup da planilha: ' + err.message);
+  }
+}
+
+function limparBackupsAntigos(pastaBackups) {
+  var limite = new Date().getTime() - BACKUP_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+  var arquivos = pastaBackups.getFiles();
+  while (arquivos.hasNext()) {
+    var arq = arquivos.next();
+    if (arq.getDateCreated().getTime() < limite) arq.setTrashed(true);
+  }
+}
+
+/**
+ * RODE ESTA FUNÇÃO UMA ÚNICA VEZ, manualmente, pelo editor do Apps
+ * Script (escolha "configurarGatilhoBackup" no menu ao lado do botão
+ * "Executar", clique em "Executar" e autorize o acesso ao Drive se
+ * pedir) — isso configura o gatilho automático que faz backup 1x por
+ * dia (de madrugada) sozinho, sem precisar de nenhuma ação do Colmeia.
+ * Não precisa rodar de novo depois — o gatilho fica salvo.
+ */
+function configurarGatilhoBackup() {
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function (t) {
+    if (t.getHandlerFunction() === 'fazerBackupDaPlanilha') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('fazerBackupDaPlanilha').timeBased().everyDays(1).atHour(3).create();
+  fazerBackupDaPlanilha(); // já roda uma vez agora, pra não ficar sem nenhum backup até amanhã de madrugada
+  Logger.log('Gatilho configurado: fazerBackupDaPlanilha vai rodar sozinho todo dia por volta das 3h da manhã.');
 }

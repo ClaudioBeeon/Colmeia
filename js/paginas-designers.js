@@ -516,17 +516,6 @@ function historicoCardHTML(t) {
   `;
 }
 
-// Nomes dos clientes do designer logado, vindos do painel-designers-beeon
-// (mesma fonte da página "Meus clientes") — usado pra saber em quais
-// pastas do Drive procurar atividade recente.
-function meusClientesNomes() {
-  if (!painelBeeonData) return [];
-  const chaveDesigner = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, DESIGNER_LOGADO));
-  if (!chaveDesigner) return [];
-  const itens = (painelBeeonData.state[chaveDesigner] || []).filter(c => !clienteEstaOculto(chaveDesigner, c.cliente));
-  return Array.from(new Set(itens.map(c => c.cliente)));
-}
-
 async function carregarAtividadesDrive() {
   const lista = document.getElementById("atividadesList");
   if (!lista) return;
@@ -535,21 +524,14 @@ async function carregarAtividadesDrive() {
     lista.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
     return;
   }
-  if (!painelBeeonData) {
-    lista.innerHTML = `<p class="workflow-seq-empty">Carregando clientes do painel-designers-beeon...</p>`;
-    return; // carregarPainelBeeon() chama isso de novo assim que os dados chegarem
-  }
-
-  const clientes = meusClientesNomes();
-  if (clientes.length === 0) {
-    lista.innerHTML = `<p class="workflow-seq-empty">Nenhum cliente encontrado pra buscar atividades.</p>`;
-    return;
-  }
 
   try {
+    // Filtra por dono do arquivo no Drive (o backend acha o e-mail do
+    // designer sozinho) — só mostra a atividade da própria pessoa, não a
+    // de todo mundo do time.
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "buscarAtividadesDrive", clientes }),
+      body: JSON.stringify({ acao: "buscarAtividadesDrive", designer: DESIGNER_LOGADO }),
     });
     const data = await res.json();
     if (!data.ok) {
@@ -575,7 +557,6 @@ function atividadeCardHTML(a) {
         <span class="historico-card-hora">${tempoRelativoNotificacao(a.quando)}</span>
       </div>
       <div class="card-title">${a.arquivo}</div>
-      <div class="card-client">${a.quem ? "Enviado por " + a.quem : "Arquivo novo"}</div>
     </a>
   `;
 }
