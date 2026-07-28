@@ -1744,14 +1744,36 @@ function gerarBriefingDaTarefa(taskId) {
   }
   if (!descricaoHtml) return { ok: true, semDescricao: true };
 
-  var hash = hashTexto(descricaoHtml);
+  // A versão entra no hash de propósito: sempre que o PROMPT mudar de
+  // um jeito que muda o resultado (ex: 2026-07-28, prompt reforçado
+  // contra resumir demais), sobe esse número — isso invalida sozinho
+  // todo o cache antigo (mesmo sem a descrição da tarefa ter mudado),
+  // sem precisar apagar a aba "Briefings" na mão.
+  var BRIEFING_PROMPT_VERSAO = 'v2';
+  var hash = hashTexto(descricaoHtml + '|' + BRIEFING_PROMPT_VERSAO);
   var cacheado = buscarBriefingCacheado(taskId, hash);
   if (cacheado) return { ok: true, briefing: cacheado, doCache: true };
 
-  var prompt = 'Você organiza briefings de tarefas de design de uma agência de marketing.\n' +
+  var prompt = 'Você é um redator de briefing sênior de uma agência de marketing premiada, especialista ' +
+    'em organizar descrições de tarefas de design pra outros profissionais da equipe executarem sem ' +
+    'precisar perguntar nada de novo pra ninguém. Capricho e completude são o seu diferencial.\n' +
     'Você vai receber a descrição em HTML de uma tarefa do Runrun.it. Ela pode ter checklists no ' +
     'formato <ul data-checked="true"> (marcado) ou <ul data-checked="false"> (não marcado), com <li> dentro, ' +
     'seguidos de perguntas em texto livre.\n\n' +
+    'REGRAS IMPORTANTES — siga à risca, é o que mais importa aqui:\n' +
+    '- Em "campos", o valor de "resposta" tem que ser o texto da resposta ORIGINAL, completo, palavra ' +
+    'por palavra — nunca resuma, encurte, parafraseie ou corte nenhum detalhe (números, links, nomes, ' +
+    'observações extras, exceções). Prefira copiar demais a copiar de menos: se a resposta original é ' +
+    'longa, a resposta aqui também tem que ser longa. Isso vai direto pra tela de um designer executar ' +
+    'a peça, então informação perdida aqui é um erro grave.\n' +
+    '- Vasculhe a descrição inteira e identifique TODAS as perguntas/campos que existirem, mesmo os que ' +
+    'parecerem secundários — não pule nenhum.\n' +
+    '- "resumo" NÃO é um resumo que substitui o resto do briefing — é só uma frase curta de CONTEXTO ' +
+    '(do que se trata a peça, pra quem, com que objetivo) pra alguém entender o panorama antes de ler ' +
+    'os campos detalhados. Nunca coloque em "resumo" uma informação que só existe ali — ela também tem ' +
+    'que aparecer em "campos", completa.\n' +
+    '- "plataformas" e "formatos" são só etiquetas curtas (ex: "Instagram", "Stories", "Feed") — não ' +
+    'jogue texto longo ali.\n\n' +
     'Responda SOMENTE com um JSON válido, exatamente neste formato, sem nenhum texto antes ou depois:\n' +
     '{"plataformas": ["..."], "formatos": ["..."], "resumo": "...", ' +
     '"campos": [{"pergunta": "...", "resposta": "..." ou null}]}\n\n' +
