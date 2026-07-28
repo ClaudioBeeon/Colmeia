@@ -21,7 +21,28 @@ function renderModalRegra(task) {
         </div>
       `).join("");
 
+  // Setinhas de transferir/voltar direto aqui dentro do modal — pra não
+  // precisar fechar ele e usar as setas do cabeçalho só pra avançar ou
+  // desfazer uma etapa. Só aparecem se já tiver uma sequência de verdade
+  // (e "Voltar" só habilita se tiver alguém antes pra voltar).
+  const atualIdx = seq.findIndex(s => s.atual);
+  const temEtapaAtualDeVerdade = atualIdx !== -1 && !seq[atualIdx].pendente;
+  const podeVoltar = temEtapaAtualDeVerdade && atualIdx > 0;
+  const podeAvancar = temEtapaAtualDeVerdade;
+
   body.innerHTML = `
+    ${seq.length > 0 ? `
+      <div class="rule-modal-transfer-row">
+        <button type="button" class="rule-modal-nav-btn" id="ruleModalPrevArrow" ${podeVoltar ? "" : "disabled"} title="Voltar pro responsável anterior">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Voltar</span>
+        </button>
+        <button type="button" class="rule-modal-nav-btn" id="ruleModalNextArrow" ${podeAvancar ? "" : "disabled"} title="Transferir pro próximo responsável">
+          <span>Transferir</span>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    ` : ""}
     <div class="rule-list" id="ruleList">${listaHtml}</div>
     <div class="rule-add-section">
       <span class="side-label">Adicionar próxima pessoa</span>
@@ -38,6 +59,38 @@ function renderModalRegra(task) {
       removerPessoaOtimista(task, btn.dataset.elementId);
     });
   });
+
+  const prevArrow = document.getElementById("ruleModalPrevArrow");
+  if (prevArrow && podeVoltar) {
+    prevArrow.addEventListener("click", async () => {
+      prevArrow.disabled = true;
+      await pararCronometroAoTransferir(task);
+      const novoResponsavel = await desfazerWorkflowNoBackend(task.id);
+      if (novoResponsavel) {
+        task.assignee = novoResponsavel;
+        task.assigneeAvatarUrl = null;
+        render();
+        agendarAtualizacaoKanban();
+      }
+      await atualizarSequenciaEModal(task); // sincroniza com o real — desfaz sozinho se recusou
+    });
+  }
+  const nextArrow = document.getElementById("ruleModalNextArrow");
+  if (nextArrow && podeAvancar) {
+    nextArrow.addEventListener("click", async () => {
+      nextArrow.disabled = true;
+      await pararCronometroAoTransferir(task);
+      const resultado = await avancarWorkflowNoBackend(task.id);
+      if (resultado.novoResponsavel) {
+        task.assignee = resultado.novoResponsavel;
+        task.assigneeAvatarUrl = null;
+        render();
+        agendarAtualizacaoKanban();
+      }
+      if (!resultado.ok) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
+      await atualizarSequenciaEModal(task);
+    });
+  }
 
   document.getElementById("ruleAddSearch").addEventListener("input", e => {
     renderizarListaAdicionarRegra(task, usuariosParaAdicionarRegra, e.target.value);

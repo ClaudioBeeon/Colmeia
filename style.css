@@ -578,16 +578,6 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .card-due-simple.overdue { color: var(--danger); }
 .card-due-simple.overdue:hover { color: var(--danger); }
 
-.card-due-input {
-  font-size: 12px; font-weight: 600; font-family: inherit; color: var(--text-primary);
-  background: var(--card-bg); border: 1.5px solid var(--accent); border-radius: 8px;
-  padding: 2px 6px; accent-color: var(--accent); cursor: pointer;
-}
-.card-due-input::-webkit-calendar-picker-indicator {
-  cursor: pointer; border-radius: 6px; padding: 2px;
-  filter: var(--calendar-icon-filter, none);
-}
-[data-theme="dark"] .card-due-input::-webkit-calendar-picker-indicator { filter: invert(1); }
 .card-due-saving { font-size: 12px; color: var(--text-muted); }
 
 .priority-wrap { position: relative; }
@@ -1164,18 +1154,6 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .side-date-edit-btn:hover { background: var(--page-bg); color: var(--accent); }
 .side-date-edit-btn svg { width: 14px; height: 14px; }
-.side-date-input {
-  font-size: 15px; font-weight: 600; font-family: inherit; color: var(--text-primary);
-  background: var(--card-bg); border: 1.5px solid var(--accent); border-radius: 10px;
-  padding: 6px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-  accent-color: var(--accent); cursor: pointer;
-}
-.side-date-input::-webkit-calendar-picker-indicator {
-  cursor: pointer; border-radius: 6px; padding: 3px; margin-left: 6px;
-  filter: var(--calendar-icon-filter, none);
-}
-[data-theme="dark"] .side-date-input::-webkit-calendar-picker-indicator { filter: invert(1); }
-.side-date-input:hover::-webkit-calendar-picker-indicator { background: var(--page-bg); }
 .side-date-saving { font-size: 13px; color: var(--text-muted); }
 
 .side-block .badge { align-self: flex-start; }
@@ -1676,6 +1654,22 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .rule-add-list button:hover { background: var(--page-bg); }
 .rule-add-list .avatar { width: 24px; height: 24px; font-size: 10px; }
 
+/* Botões "Voltar"/"Transferir" dentro do próprio modal "Ver regra" —
+   aparecem sempre que ele mostra uma sequência de verdade, pra não
+   precisar fechar e usar as setas do cabeçalho só pra mexer na etapa. */
+.rule-modal-transfer-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.rule-modal-nav-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1.5px solid var(--border); border-radius: 10px; background: transparent;
+  color: var(--text-secondary); font-family: inherit; font-size: 12.5px; font-weight: 700;
+  padding: 8px 0; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple);
+}
+.rule-modal-nav-btn svg { width: 15px; height: 15px; }
+.rule-modal-nav-btn:hover:not(:disabled) { background: var(--kanban-yellow); color: #16181D; border-color: var(--kanban-yellow); }
+.rule-modal-nav-btn:disabled { opacity: 0.4; cursor: default; }
+
 /* (modal antigo do card mãe removido — agora usa o painel flutuante, seta pra baixo) */
 
 /* ===== Card em branco (transição card mãe/subtarefa) ===== */
@@ -2116,6 +2110,29 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .repetir-comentario-prompt .repetir-sim { background: var(--kanban-yellow); color: #16181D; }
 .repetir-comentario-prompt .repetir-nao { background: var(--page-bg); color: var(--text-secondary); }
 
+/* Barra que pergunta "quer transferir o card mãe?" depois de concluir
+   uma subtarefa — fica grudada no rodapé do pop-up de detalhe (não do
+   chat, esse é o painel principal), com uma leve subida animada. */
+.detail-bottom-prompt {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px; background: var(--card-bg); border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 20px rgba(10,10,20,0.10);
+  animation: detailBottomPromptSlide var(--dur-base) var(--ease-apple-spring);
+}
+.detail-bottom-prompt-text { flex: 1; font-size: 13px; color: var(--text-primary); line-height: 1.4; }
+.detail-bottom-prompt-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.detail-bottom-prompt-actions button {
+  border: none; border-radius: 999px; padding: 7px 16px;
+  font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.detail-bottom-prompt-sim { background: var(--kanban-yellow); color: #16181D; }
+.detail-bottom-prompt-nao { background: var(--page-bg); color: var(--text-secondary); }
+@keyframes detailBottomPromptSlide {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 /* ===== Reações de emoji nos comentários ===== */
 .comment-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .comment-reaction-chip {
@@ -2464,18 +2481,6 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .repasse-data-valor:hover { background: var(--card-bg); }
 .repasse-data-pill.overdue { background: var(--danger-soft); }
 .repasse-data-pill.overdue .repasse-data-valor { color: var(--danger); }
-.repasse-data-input {
-  width: 100%; max-width: 104px;
-  font-size: 12px; font-weight: 700; font-family: inherit; color: var(--text-primary);
-  background: var(--card-bg); border: 1.5px solid var(--accent); border-radius: 8px;
-  padding: 1px 4px; accent-color: var(--accent); cursor: pointer;
-}
-.repasse-data-input::-webkit-calendar-picker-indicator {
-  cursor: pointer; border-radius: 6px; padding: 2px;
-  filter: var(--calendar-icon-filter, none);
-}
-[data-theme="dark"] .repasse-data-input::-webkit-calendar-picker-indicator { filter: invert(1); }
-
 .repasse-btn {
   flex: 1; border: none; border-radius: 10px; padding: 8px 0; cursor: pointer;
   font-family: var(--font-body); font-size: 12px; font-weight: 700;
@@ -2520,12 +2525,46 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .repasse-seq-btn.deliver { color: #2F9E44; border-color: #2F9E44; }
 .repasse-seq-btn.deliver:hover:not(:disabled) { background: #2F9E44; color: #fff; }
 
-/* Estado "confirmando em segundo plano" — a tela já mudou na hora
-   (otimista, o anel amarelo já está na foto que assumiu, do mesmo jeito
-   estático que .wf-dot.current sempre usa — sem piscar), isso só
-   esmaece levemente a fileira e trava clique duplo até a confirmação
-   de verdade com o Runrun.it terminar. */
-.repasse-seq-row.repasse-seq-confirmando { opacity: 0.75; pointer-events: none; }
+/* ===== Calendário próprio do Colmeia (abrirCalendarioColmeia, js/config.js) =====
+   Substitui o <input type="date"> nativo em todo lugar do app que edita
+   data — card do quadro, pop-up de detalhe, fila de repasse. */
+.colmeia-calendario {
+  position: fixed; z-index: 500; width: 260px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 12px; box-shadow: var(--shadow-hover); font-family: var(--font-body);
+  animation: colmeia-modal-pop var(--dur-fast) var(--ease-apple-spring);
+}
+.colmeia-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.colmeia-cal-titulo { font-size: 13px; font-weight: 700; color: var(--text-primary); text-transform: capitalize; }
+.colmeia-cal-nav {
+  width: 26px; height: 26px; border-radius: 50%; border: none; background: transparent;
+  color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.colmeia-cal-nav:hover { background: var(--page-bg); color: var(--text-primary); }
+.colmeia-cal-nav svg { width: 15px; height: 15px; }
+.colmeia-cal-semana { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 4px; }
+.colmeia-cal-semana span {
+  text-align: center; font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+}
+.colmeia-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.colmeia-cal-dia {
+  aspect-ratio: 1; border: none; background: transparent; border-radius: 8px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.colmeia-cal-dia.vazio { cursor: default; }
+.colmeia-cal-dia:not(.vazio):hover { background: var(--page-bg); }
+.colmeia-cal-dia.hoje { color: var(--kanban-yellow-text); font-weight: 800; }
+.colmeia-cal-dia.selecionado { background: var(--kanban-yellow); color: #16181D; }
+.colmeia-cal-footer {
+  display: flex; justify-content: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+}
+.colmeia-cal-hoje {
+  border: none; background: transparent; color: var(--accent); font-family: inherit;
+  font-size: 12px; font-weight: 700; cursor: pointer; padding: 4px 8px; border-radius: 6px;
+}
+.colmeia-cal-hoje:hover { background: var(--page-bg); }
 
 .repasse-picker {
   position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 20;

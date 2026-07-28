@@ -35,12 +35,137 @@ const PAINEL_BEEON_API_URL = "https://script.google.com/macros/s/AKfycbzzWtG4jkV
 
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const MESES_COMPLETOS = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+const DIAS_SEMANA_ABREV = ["D", "S", "T", "Q", "Q", "S", "S"];
 (function atualizarPillDeData() {
   const el = document.getElementById("topbarDateText");
   if (!el) return;
   const agora = new Date();
   el.textContent = `${agora.getDate()} ${MESES_COMPLETOS[agora.getMonth()]}`;
 })();
+
+/**
+ * Calendário próprio do Colmeia — substitui o <input type="date"> nativo
+ * do navegador em todo lugar que edita data (card do quadro, pop-up de
+ * detalhe, fila de repasse). Abre grudado perto de `ancoraEl` (embaixo
+ * ou em cima, conforme o espaço na tela), com navegação de mês, destaque
+ * pro dia de hoje e pro dia já selecionado.
+ *
+ * @param {Object} opts
+ * @param {HTMLElement} opts.ancoraEl - elemento perto de onde abrir
+ * @param {string} opts.valorInicial - data em AAAA-MM-DD (ou "" pra hoje)
+ * @param {function} opts.onEscolher - chamado com a data escolhida (AAAA-MM-DD)
+ * @param {function} [opts.onFechar] - chamado se fechar sem escolher nada
+ */
+function abrirCalendarioColmeia({ ancoraEl, valorInicial, onEscolher, onFechar }) {
+  document.querySelectorAll(".colmeia-calendario").forEach(el => el.remove());
+
+  const hoje = new Date();
+  const partesIniciais = valorInicial ? valorInicial.split("-").map(Number) : null;
+  let anoView = partesIniciais ? partesIniciais[0] : hoje.getFullYear();
+  let mesView = partesIniciais ? partesIniciais[1] - 1 : hoje.getMonth(); // 0-indexado
+
+  const cal = document.createElement("div");
+  cal.className = "colmeia-calendario";
+  document.body.appendChild(cal);
+
+  function isoDia(ano, mesZero, dia) {
+    return `${ano}-${String(mesZero + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+  }
+
+  function renderCalendario() {
+    const primeiroDiaSemana = new Date(anoView, mesView, 1).getDay();
+    const totalDias = new Date(anoView, mesView + 1, 0).getDate();
+    const hojeISOStr = isoDia(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const nomeMes = MESES_COMPLETOS[mesView][0] + MESES_COMPLETOS[mesView].slice(1).toLowerCase();
+
+    let celulas = "";
+    for (let i = 0; i < primeiroDiaSemana; i++) celulas += `<span class="colmeia-cal-dia vazio"></span>`;
+    for (let d = 1; d <= totalDias; d++) {
+      const iso = isoDia(anoView, mesView, d);
+      const classes = ["colmeia-cal-dia"];
+      if (iso === hojeISOStr) classes.push("hoje");
+      if (iso === valorInicial) classes.push("selecionado");
+      celulas += `<button type="button" class="${classes.join(" ")}" data-iso="${iso}">${d}</button>`;
+    }
+
+    cal.innerHTML = `
+      <div class="colmeia-cal-head">
+        <button type="button" class="colmeia-cal-nav" data-dir="-1" aria-label="Mês anterior">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="colmeia-cal-titulo">${nomeMes} ${anoView}</span>
+        <button type="button" class="colmeia-cal-nav" data-dir="1" aria-label="Próximo mês">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="colmeia-cal-semana">${DIAS_SEMANA_ABREV.map(d => `<span>${d}</span>`).join("")}</div>
+      <div class="colmeia-cal-grid">${celulas}</div>
+      <div class="colmeia-cal-footer">
+        <button type="button" class="colmeia-cal-hoje">Hoje</button>
+      </div>
+    `;
+
+    cal.querySelectorAll(".colmeia-cal-nav").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        mesView += Number(btn.dataset.dir);
+        if (mesView < 0) { mesView = 11; anoView--; }
+        if (mesView > 11) { mesView = 0; anoView++; }
+        renderCalendario();
+        posicionar();
+      });
+    });
+    cal.querySelectorAll(".colmeia-cal-dia:not(.vazio)").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const iso = btn.dataset.iso;
+        fechar();
+        onEscolher(iso);
+      });
+    });
+    cal.querySelector(".colmeia-cal-hoje").addEventListener("click", e => {
+      e.stopPropagation();
+      const iso = isoDia(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+      fechar();
+      onEscolher(iso);
+    });
+  }
+
+  function posicionar() {
+    const rect = ancoraEl.getBoundingClientRect();
+    const alturaCal = cal.offsetHeight || 300;
+    const larguraCal = cal.offsetWidth || 260;
+    const espacoAbaixo = window.innerHeight - rect.bottom;
+    const abrirParaCima = espacoAbaixo < alturaCal + 12 && rect.top > alturaCal + 12;
+
+    let left = Math.min(rect.left, window.innerWidth - larguraCal - 8);
+    left = Math.max(8, left);
+    cal.style.left = left + "px";
+    cal.style.top = abrirParaCima ? (rect.top - alturaCal - 8) + "px" : (rect.bottom + 8) + "px";
+  }
+
+  function fechar() {
+    cal.remove();
+    document.removeEventListener("click", clickFora);
+    document.removeEventListener("keydown", teclaEsc);
+  }
+  function clickFora(ev) {
+    if (!cal.contains(ev.target) && ev.target !== ancoraEl && !ancoraEl.contains(ev.target)) {
+      fechar();
+      if (onFechar) onFechar();
+    }
+  }
+  function teclaEsc(ev) {
+    if (ev.key === "Escape") { fechar(); if (onFechar) onFechar(); }
+  }
+
+  renderCalendario();
+  posicionar();
+  setTimeout(() => {
+    document.addEventListener("click", clickFora);
+    document.addEventListener("keydown", teclaEsc);
+  }, 0);
+}
 
 // Guarda os dados lidos do painel-designers-beeon (designers, clientes,
 // atendimento, fotos) depois que carregarDadosPainelBeeon() rodar.

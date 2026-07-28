@@ -285,6 +285,10 @@ function wireWorkflowArrows(task) {
           await esperar(450);
           await carregarSequencia(task);
           agendarAtualizacaoKanban();
+          // Acabou de concluir uma SUBtarefa? Confere se o card mãe dela
+          // está com você — se estiver, pergunta se quer transferir ele
+          // também, direto daqui, sem precisar ir lá procurar o card mãe.
+          if (task.parentTaskId) verificarTransferirCardMae(task);
         } else {
           // Runrun.it recusou — volta tudo sozinho pro estado original
           // (ícone de concluir e o clique certo de novo inclusos).
@@ -514,6 +518,8 @@ function renderDetail() {
         ${chatIcon}
         <span class="chat-fab-badge" id="chatFabBadge" hidden>0</span>
       </button>
+
+      <div class="detail-bottom-prompt" id="detailBottomPrompt" hidden></div>
     </div>
 
     <div class="chat-panel" id="chatPanel" hidden>
@@ -1098,6 +1104,43 @@ async function abrirCardMae(task) {
   tasks[idx].subtarefasResumo = resultado.subtarefas || [];
 
   openDetail(idx, "panel-enter-below");
+}
+
+/**
+ * Chamada depois de concluir uma subtarefa: se o card mãe dela estiver
+ * com VOCÊ agora (você é o responsável atual), pergunta — numa barra no
+ * rodapé do pop-up — se quer transferir ele pro próximo já, sem
+ * precisar sair da subtarefa pra ir procurar o card mãe.
+ */
+async function verificarTransferirCardMae(task) {
+  const resultado = cardMaeCache.get(task.id) || await buscarCardMaeDoBackend(task.id);
+  if (!resultado.ok || !resultado.temPai || !resultado.cardMae) return;
+  if (!nomesCorrespondem(resultado.cardMae.assignee, DESIGNER_LOGADO)) return; // card mãe não é seu, nada a fazer
+  // Só mostra se a pessoa ainda estiver olhando essa mesma subtarefa
+  // (não trocou de tela nesse meio-tempo).
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return;
+  mostrarPromptTransferirCardMae(resultado.cardMae);
+}
+
+function mostrarPromptTransferirCardMae(cardMaeRaw) {
+  const el = document.getElementById("detailBottomPrompt");
+  if (!el) return;
+  el.hidden = false;
+  el.innerHTML = `
+    <span class="detail-bottom-prompt-text">O card mãe <strong>${cardMaeRaw.title}</strong> está com você — quer transferir ele pro próximo responsável agora?</span>
+    <div class="detail-bottom-prompt-actions">
+      <button type="button" class="detail-bottom-prompt-nao">Agora não</button>
+      <button type="button" class="detail-bottom-prompt-sim">Transferir</button>
+    </div>
+  `;
+  el.querySelector(".detail-bottom-prompt-nao").addEventListener("click", () => { el.hidden = true; });
+  el.querySelector(".detail-bottom-prompt-sim").addEventListener("click", () => {
+    el.hidden = true;
+    // Abre o modal "Ver regra" do card mãe por cima, SEM sair da
+    // subtarefa — reaproveita um objeto solto (não precisa empurrar
+    // pra tasks[]/navegar pra lá só pra revisar a regra).
+    abrirModalRegra(mapearTarefaDoBackend(cardMaeRaw));
+  });
 }
 
 async function buscarCardMaeDoBackend(taskId) {

@@ -549,69 +549,51 @@ async function verificarPastaJaSalva(task, btn) {
 }
 
 /**
- * Deixa a "Entrega desejada" editável: clicar no lápis troca o texto
- * por um <input type="date"> nativo; ao escolher uma data nova, salva
- * de verdade no Runrun.it e atualiza a tela (card + pop-up) sem
- * precisar recarregar tudo.
+ * Deixa a "Entrega desejada" editável: clicar no lápis abre o
+ * calendário próprio do Colmeia (abrirCalendarioColmeia, js/config.js)
+ * grudado no botão; ao escolher uma data nova, salva de verdade no
+ * Runrun.it e atualiza a tela (card + pop-up) sem precisar recarregar
+ * tudo.
  */
 function wireEdicaoEntregaDesejada(task) {
   const btn = document.getElementById("dueDateEditBtn");
   if (!btn) return;
 
   btn.addEventListener("click", () => {
-    const row = document.getElementById("dueDateRow");
-    if (!row) return;
-    // Usa a data ISO (ano-mês-dia) de verdade como valor inicial do
-    // input — usar o texto já formatado ("22 jul") aqui quebrava o
-    // calendário nativo (ele não reconhece esse formato) e depois
-    // salvava o valor cru (ex: "2026-07-27") no lugar do "22 jul"
-    // bonito, que era o bug reportado.
-    row.innerHTML = `<input type="date" class="side-date-input" id="dueDateInput" value="${task.dueISO || ""}">`;
-    const input = document.getElementById("dueDateInput");
-    input.focus();
-    // Abre o calendário nativo direto (em vez de deixar a pessoa
-    // digitar a data na mão) — dá a sensação de um seletor moderno.
-    if (typeof input.showPicker === "function") {
-      try { input.showPicker(); } catch (e) { /* alguns navegadores recusam fora de um clique direto — sem problema, o campo continua clicável normalmente */ }
-    }
-
-    async function salvar() {
-      const novaData = input.value; // sempre no formato AAAA-MM-DD
-      if (!novaData || novaData === task.dueISO) {
-        renderDetail();
-        return;
-      }
-      row.innerHTML = `<span class="side-date-saving">Salvando...</span>`;
-      try {
-        const res = await fetch(COLMEIA_API_URL, {
-          method: "POST",
-          body: JSON.stringify({ acao: "alterarEntrega", taskId: task.id, novaData }),
-        });
-        const data = await res.json();
-        if (!data.ok) {
-          row.innerHTML = `<span class="side-date-saving">${data.error ? data.error.slice(0, 40) : "Não consegui salvar"}</span>`;
+    abrirCalendarioColmeia({
+      ancoraEl: btn,
+      valorInicial: task.dueISO || "",
+      onEscolher: async novaData => {
+        if (!novaData || novaData === task.dueISO) return;
+        const row = document.getElementById("dueDateRow");
+        if (row) row.innerHTML = `<span class="side-date-saving">Salvando...</span>`;
+        try {
+          const res = await fetch(COLMEIA_API_URL, {
+            method: "POST",
+            body: JSON.stringify({ acao: "alterarEntrega", taskId: task.id, novaData }),
+          });
+          const data = await res.json();
+          if (!data.ok) {
+            const rowAgora = document.getElementById("dueDateRow");
+            if (rowAgora) rowAgora.innerHTML = `<span class="side-date-saving">${data.error ? data.error.slice(0, 40) : "Não consegui salvar"}</span>`;
+            setTimeout(() => renderDetail(), 1800);
+            return;
+          }
+          // Mantém sempre o mesmo padrão visual de antes (ex: "27 jul"),
+          // nunca a data crua (AAAA-MM-DD) — isso é que ficava feio.
+          const [ano, mes, dia] = novaData.split("-").map(Number);
+          task.dueISO = novaData;
+          task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+          renderDetail();
+          render(); // atualiza a data no card do quadro também
+          agendarAtualizacaoKanban();
+        } catch (err) {
+          console.error("Falha ao trocar a Entrega desejada:", err);
+          const rowAgora = document.getElementById("dueDateRow");
+          if (rowAgora) rowAgora.innerHTML = `<span class="side-date-saving">Falha de conexão</span>`;
           setTimeout(() => renderDetail(), 1800);
-          return;
         }
-        // Mantém sempre o mesmo padrão visual de antes (ex: "27 jul"),
-        // nunca a data crua (AAAA-MM-DD) — isso é que ficava feio.
-        const [ano, mes, dia] = novaData.split("-").map(Number);
-        task.dueISO = novaData;
-        task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
-        renderDetail();
-        render(); // atualiza a data no card do quadro também
-        agendarAtualizacaoKanban();
-      } catch (err) {
-        console.error("Falha ao trocar a Entrega desejada:", err);
-        row.innerHTML = `<span class="side-date-saving">Falha de conexão</span>`;
-        setTimeout(() => renderDetail(), 1800);
-      }
-    }
-
-    input.addEventListener("change", salvar);
-    input.addEventListener("blur", () => {
-      // Se saiu do campo sem trocar nada, só volta pro texto normal.
-      if (document.getElementById("dueDateInput")) renderDetail();
+      },
     });
   });
 }

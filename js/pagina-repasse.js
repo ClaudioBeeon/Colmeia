@@ -395,9 +395,9 @@ async function abrirQuickPickerRegra(t, btn) {
 // construirSequenciaOtimistaComNovaPessoa (regras-briefing.js) pra
 // garantir que sua foto nunca some quando a regra ainda nem existia.
 async function adicionarPessoaViaQuickPicker(t, usuario) {
+  if (repasseAcaoJaEmAndamento(t)) return;
   t.sequencia = construirSequenciaOtimistaComNovaPessoa(t, usuario);
   montarSequenciaCard(t);
-  marcarSeqRowConfirmando(t.id, true);
   renderSequenciaNoHeaderSeAberta(t); // se o pop-up de detalhe dessa tarefa também estiver aberto
 
   try {
@@ -415,7 +415,7 @@ async function adicionarPessoaViaQuickPicker(t, usuario) {
     await recarregarSequenciaCard(t); // sincroniza com o estado real (troca a linha "pendente" pela de verdade)
     agendarAtualizacaoKanban();
   } finally {
-    marcarSeqRowConfirmando(t.id, false);
+    repasseLiberarAcao(t);
   }
 }
 
@@ -488,14 +488,19 @@ function abrirConfirmacaoEntregarCard(t, btn, temSequencia) {
   }, 0);
 }
 
-// Marca visualmente a fileira de fotinhos como "confirmando..." — o
-// pedido já foi otimista (a tela já mudou), isso só deixa claro que a
-// confirmação de verdade com o Runrun.it ainda está rodando em segundo
-// plano, com um anel amarelo pulsando na foto que está assumindo.
-function marcarSeqRowConfirmando(taskId, ligar) {
-  const row = document.querySelector(`.repasse-seq-row[data-id="${CSS.escape(String(taskId))}"]`);
-  if (!row) return;
-  row.classList.toggle("repasse-seq-confirmando", ligar);
+// Trava silenciosa contra clique duplo — sem NENHUM efeito visual
+// (pedido explícito: não pode parecer "carregando" de jeito nenhum,
+// nem esmaecido nem travado). Só ignora um clique novo se já tiver uma
+// ação em andamento pra essa mesma tarefa — protege contra mandar dois
+// pedidos conflitantes ao mesmo tempo pro Runrun.it (ex: clicar
+// "avançar" duas vezes rápido), sem precisar mostrar nada disso na tela.
+function repasseAcaoJaEmAndamento(t) {
+  if (t._repasseAcaoEmAndamento) return true;
+  t._repasseAcaoEmAndamento = true;
+  return false;
+}
+function repasseLiberarAcao(t) {
+  t._repasseAcaoEmAndamento = false;
 }
 
 // Avança a sequência de verdade no Runrun.it (repassar pro próximo OU
@@ -506,11 +511,11 @@ function marcarSeqRowConfirmando(taskId, ligar) {
 // pra não perder o card de vista no meio da fila.
 //
 // Otimista: a fileira de fotinhos já mostra a transferência acontecendo
-// NA HORA (antes de qualquer resposta do Runrun.it), com o anel
-// amarelo indicando que ainda está confirmando em segundo plano — se o
-// Runrun.it recusar, desfaz sozinho e avisa com um toast, em vez de
-// deixar o botão "travado" esperando a chamada de rede inteira terminar.
+// NA HORA (antes de qualquer resposta do Runrun.it), sem nenhum efeito
+// de "carregando" — confirma de verdade em segundo plano; se o
+// Runrun.it recusar, desfaz sozinho e avisa com um toast.
 async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
+  if (repasseAcaoJaEmAndamento(t)) return;
   await pararCronometroAoTransferir(t); // se por acaso estava rodando, para antes de repassar
 
   const sequenciaAntes = t.sequencia ? t.sequencia.map(s => ({ ...s })) : t.sequencia;
@@ -525,7 +530,6 @@ async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
   }
   if (!proximo) t._repasseEntregue = true; // era o último da fila — isso entrega a tarefa de verdade
   montarSequenciaCard(t);
-  marcarSeqRowConfirmando(t.id, true);
 
   try {
     const resultado = await avancarWorkflowNoBackend(t.id);
@@ -544,19 +548,19 @@ async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
       mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
     }
   } finally {
-    marcarSeqRowConfirmando(t.id, false);
+    repasseLiberarAcao(t);
   }
 }
 
 // Entrega direto (tarefa sem nenhuma sequência configurada ainda) —
 // mesmo tratamento otimista do avanço acima.
 async function confirmarEntregaDiretaCard(t, btn) {
+  if (repasseAcaoJaEmAndamento(t)) return;
   await pararCronometroAoTransferir(t); // se por acaso estava rodando, para antes de entregar
 
   const entregueAntes = t._repasseEntregue;
   t._repasseEntregue = true;
   montarSequenciaCard(t);
-  marcarSeqRowConfirmando(t.id, true);
 
   try {
     const ok = await entregarTarefaNoBackend(t.id);
@@ -569,7 +573,7 @@ async function confirmarEntregaDiretaCard(t, btn) {
       mostrarToast("Não consegui entregar essa tarefa agora.", "erro");
     }
   } finally {
-    marcarSeqRowConfirmando(t.id, false);
+    repasseLiberarAcao(t);
   }
 }
 
@@ -705,73 +709,56 @@ function wireDataItem(item, lista) {
     if (!t) return;
     const campo = item.dataset.campo; // "publicacao" ou "entrega"
     const valorAtualISO = (campo === "publicacao" ? t.dataPublicacao : t.dueISO) || "";
-    const labelHTML = item.querySelector(".repasse-data-label").outerHTML;
 
-    item.innerHTML = `${labelHTML}<input type="date" class="repasse-data-input" value="${valorAtualISO}">`;
-    const input = item.querySelector(".repasse-data-input");
-    input.addEventListener("click", ev => ev.stopPropagation());
-    input.focus();
-    // Abre o calendário nativo direto ao clicar, em vez de deixar a
-    // pessoa digitar a data na mão.
-    if (typeof input.showPicker === "function") {
-      try { input.showPicker(); } catch (err) { /* alguns navegadores recusam fora de um clique direto — segue clicável normalmente */ }
+    abrirCalendarioColmeia({
+      ancoraEl: valorBtn,
+      valorInicial: valorAtualISO,
+      onEscolher: novaData => salvarDataRepasseNoPill(t, campo, novaData, valorAtualISO, item, lista),
+    });
+  });
+}
+
+// Salva a data escolhida no calendário — otimista (já mostra a data
+// nova na hora, sem deixar o campo travado esperando o Runrun.it
+// responder); se o Runrun.it recusar, volta pro valor antigo sozinho
+// e avisa com um toast, em vez de travar a tela toda esperando.
+function salvarDataRepasseNoPill(t, campo, novaData, valorAtualISO, item, lista) {
+  if (!novaData || novaData === valorAtualISO) return;
+
+  const valorAntigo = campo === "publicacao" ? t.dataPublicacao : t.dueISO;
+  const dueAntigo = t.due;
+  if (campo === "publicacao") {
+    t.dataPublicacao = novaData;
+  } else {
+    const [ano, mes, dia] = novaData.split("-").map(Number);
+    t.dueISO = novaData;
+    t.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+  }
+  restaurarPillItem(item, t, campo);
+  wireDataItem(item, lista);
+
+  const promessa = campo === "publicacao"
+    ? alterarPublicacaoNoBackend(t.id, novaData)
+    : alterarEntregaNoBackend(t.id, novaData);
+
+  promessa.then(ok => {
+    if (ok) {
+      agendarAtualizacaoKanban();
+      return;
     }
-
-    let jaSalvou = false;
-    function salvar() {
-      if (jaSalvou) return;
-      jaSalvou = true;
-      const novaData = input.value; // sempre AAAA-MM-DD
-      if (!novaData || novaData === valorAtualISO) {
-        restaurarPillItem(item, t, campo);
-        wireDataItem(item, lista);
-        return;
-      }
-
-      // Otimista: já mostra a data nova na hora (sem deixar o campo
-      // desabilitado esperando o Runrun.it responder) — a chamada real
-      // roda em segundo plano; se o Runrun.it recusar, volta pro valor
-      // antigo sozinho e avisa com um toast, em vez de travar a tela
-      // toda inteira esperando.
-      const valorAntigo = campo === "publicacao" ? t.dataPublicacao : t.dueISO;
-      const dueAntigo = t.due;
-      if (campo === "publicacao") {
-        t.dataPublicacao = novaData;
-      } else {
-        const [ano, mes, dia] = novaData.split("-").map(Number);
-        t.dueISO = novaData;
-        t.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
-      }
-      restaurarPillItem(item, t, campo);
-      wireDataItem(item, lista);
-
-      const promessa = campo === "publicacao"
-        ? alterarPublicacaoNoBackend(t.id, novaData)
-        : alterarEntregaNoBackend(t.id, novaData);
-
-      promessa.then(ok => {
-        if (ok) {
-          agendarAtualizacaoKanban();
-          return;
-        }
-        // Runrun.it recusou — desfaz sozinho e avisa.
-        if (campo === "publicacao") {
-          t.dataPublicacao = valorAntigo;
-        } else {
-          t.dueISO = valorAntigo;
-          t.due = dueAntigo;
-        }
-        const itemAtual = document.querySelector(`.repasse-data-pill[data-campo="${campo}"][data-id="${CSS.escape(String(t.id))}"]`);
-        if (itemAtual) {
-          restaurarPillItem(itemAtual, t, campo);
-          wireDataItem(itemAtual, lista);
-        }
-        mostrarToast(`Não consegui alterar a ${campo === "publicacao" ? "Publicação" : "Entrega Desejada"} agora.`, "erro");
-      });
+    // Runrun.it recusou — desfaz sozinho e avisa.
+    if (campo === "publicacao") {
+      t.dataPublicacao = valorAntigo;
+    } else {
+      t.dueISO = valorAntigo;
+      t.due = dueAntigo;
     }
-
-    input.addEventListener("change", salvar);
-    input.addEventListener("blur", () => { if (!jaSalvou) { restaurarPillItem(item, t, campo); wireDataItem(item, lista); } });
+    const itemAtual = document.querySelector(`.repasse-data-pill[data-campo="${campo}"][data-id="${CSS.escape(String(t.id))}"]`);
+    if (itemAtual) {
+      restaurarPillItem(itemAtual, t, campo);
+      wireDataItem(itemAtual, lista);
+    }
+    mostrarToast(`Não consegui alterar a ${campo === "publicacao" ? "Publicação" : "Entrega Desejada"} agora.`, "erro");
   });
 }
 

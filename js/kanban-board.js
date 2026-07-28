@@ -332,7 +332,7 @@ function attachCardDragHandlers() {
     });
   });
 
-  // ===== Data de entrega desejada: clicar abre o calendário nativo =====
+  // ===== Data de entrega desejada: clicar abre o calendário próprio do Colmeia =====
   document.querySelectorAll(".card-due-wrap").forEach(wrap => {
     const btn = wrap.querySelector(".card-due-simple");
     btn.addEventListener("click", e => {
@@ -340,35 +340,21 @@ function attachCardDragHandlers() {
       const task = tasks[wrap.dataset.idx];
       if (!task) return;
 
-      wrap.innerHTML = `<input type="date" class="card-due-input" value="${task.dueISO || ""}">`;
-      const input = wrap.querySelector(".card-due-input");
-      input.addEventListener("click", ev => ev.stopPropagation());
-      input.focus();
-      // Abre o calendário nativo direto ao clicar, igual já faz no
-      // pop-up de detalhe — dá a sensação de um seletor moderno sem
-      // precisar construir um calendário do zero.
-      if (typeof input.showPicker === "function") {
-        try { input.showPicker(); } catch (err) { /* alguns navegadores recusam fora de um clique direto — segue clicável normalmente */ }
-      }
-
-      let jaSalvou = false;
-      async function salvar() {
-        if (jaSalvou) return;
-        jaSalvou = true;
-        const novaData = input.value; // sempre AAAA-MM-DD
-        if (!novaData || novaData === task.dueISO) { render(); return; }
-        wrap.innerHTML = `<span class="card-due-saving">Salvando...</span>`;
-        const ok = await alterarEntregaNoBackend(task.id, novaData);
-        if (!ok) { render(); return; }
-        const [ano, mes, dia] = novaData.split("-").map(Number);
-        task.dueISO = novaData;
-        task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
-        render();
-        agendarAtualizacaoKanban();
-      }
-
-      input.addEventListener("change", salvar);
-      input.addEventListener("blur", () => { if (!jaSalvou) render(); });
+      abrirCalendarioColmeia({
+        ancoraEl: btn,
+        valorInicial: task.dueISO || "",
+        onEscolher: async novaData => {
+          if (!novaData || novaData === task.dueISO) return;
+          wrap.innerHTML = `<span class="card-due-saving">Salvando...</span>`;
+          const ok = await alterarEntregaNoBackend(task.id, novaData);
+          if (!ok) { render(); return; }
+          const [ano, mes, dia] = novaData.split("-").map(Number);
+          task.dueISO = novaData;
+          task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+          render();
+          agendarAtualizacaoKanban();
+        },
+      });
     });
   });
 
