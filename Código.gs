@@ -1749,23 +1749,40 @@ function gerarBriefingDaTarefa(taskId) {
   // contra resumir demais), sobe esse número — isso invalida sozinho
   // todo o cache antigo (mesmo sem a descrição da tarefa ter mudado),
   // sem precisar apagar a aba "Briefings" na mão.
-  var BRIEFING_PROMPT_VERSAO = 'v2';
+  var BRIEFING_PROMPT_VERSAO = 'v4';
   var hash = hashTexto(descricaoHtml + '|' + BRIEFING_PROMPT_VERSAO);
   var cacheado = buscarBriefingCacheado(taskId, hash);
   if (cacheado) return { ok: true, briefing: cacheado, doCache: true };
 
   var prompt = 'Você é um redator de briefing sênior de uma agência de marketing premiada, especialista ' +
     'em organizar descrições de tarefas de design pra outros profissionais da equipe executarem sem ' +
-    'precisar perguntar nada de novo pra ninguém. Capricho e completude são o seu diferencial.\n' +
+    'precisar perguntar nada de novo pra ninguém. Seu trabalho é ORGANIZAR e deixar fácil de escanear — ' +
+    'não é encurtar. Completude é mais importante que brevidade.\n' +
     'Você vai receber a descrição em HTML de uma tarefa do Runrun.it. Ela pode ter checklists no ' +
     'formato <ul data-checked="true"> (marcado) ou <ul data-checked="false"> (não marcado), com <li> dentro, ' +
     'seguidos de perguntas em texto livre.\n\n' +
     'REGRAS IMPORTANTES — siga à risca, é o que mais importa aqui:\n' +
-    '- Em "campos", o valor de "resposta" tem que ser o texto da resposta ORIGINAL, completo, palavra ' +
-    'por palavra — nunca resuma, encurte, parafraseie ou corte nenhum detalhe (números, links, nomes, ' +
-    'observações extras, exceções). Prefira copiar demais a copiar de menos: se a resposta original é ' +
-    'longa, a resposta aqui também tem que ser longa. Isso vai direto pra tela de um designer executar ' +
-    'a peça, então informação perdida aqui é um erro grave.\n' +
+    '- Cada campo tem DOIS valores: "resposta" (versão organizada) e "respostaOriginal" (cópia literal).\n' +
+    '- "respostaOriginal" é uma cópia EXATA, palavra por palavra, do texto de origem daquele campo — ' +
+    'sem editar nada, é a rede de segurança caso "resposta" tenha perdido algo.\n' +
+    '- "resposta" é a versão organizada: reescreva pra ficar mais fácil de ler e mais profissional ' +
+    '(arrume formatação bagunçada, organize em lista quando fizer sentido, deixe escaneável) — MAS sem ' +
+    'tirar nenhuma informação de fato. Todo link, número, nome e observação do original tem que estar ' +
+    'representado em "resposta" também (nunca só em "respostaOriginal").\n' +
+    '- Cuidado especial com listas de vários links: se cada item tiver alguma informação própria e ' +
+    'diferente dos outros (ex: "Depoimento do cliente: url", "Making of: url"), mantenha um item pra ' +
+    'cada um em "resposta", só formatado. MAS se for só uma numeração de itens idênticos sem nenhuma ' +
+    'informação própria além do número (ex: "Vídeo 1: url, Vídeo 2: url, Vídeo 3: url..." — nenhuma ' +
+    'descrição do que é cada vídeo), listar cada um separado não ajuda ninguém: em "resposta", junte ' +
+    'num ÚNICO link representando o conjunto (prefira um link de pasta/hub se existir um entre eles; ' +
+    'senão, use o primeiro link da lista). A lista completa, com todos os links, continua preservada ' +
+    'sem perder nada em "respostaOriginal" — é pra isso que ela existe.\n' +
+    '- Resumir tirando detalhe É ERRADO. Mas ORGANIZAR também inclui não repetir a mesma informação ' +
+    'redundante várias vezes só porque veio assim no original — o objetivo é o profissional que for ' +
+    'executar a tarefa conseguir ler rápido, sem perder nenhuma informação real que exista.\n' +
+    '- EXCEÇÃO: se o campo for sobre o TEXTO QUE VAI DENTRO DA ARTE/PEÇA (a copy final que o designer ' +
+    'vai colar direto no design), "resposta" tem que ser IDÊNTICA a "respostaOriginal" — nunca reescreva ' +
+    'texto que vai virar copy visível na peça, nem um detalhe de pontuação.\n' +
     '- Vasculhe a descrição inteira e identifique TODAS as perguntas/campos que existirem, mesmo os que ' +
     'parecerem secundários — não pule nenhum.\n' +
     '- "resumo" NÃO é um resumo que substitui o resto do briefing — é só uma frase curta de CONTEXTO ' +
@@ -1775,8 +1792,8 @@ function gerarBriefingDaTarefa(taskId) {
     '- "plataformas" e "formatos" são só etiquetas curtas (ex: "Instagram", "Stories", "Feed") — não ' +
     'jogue texto longo ali.\n\n' +
     'Responda SOMENTE com um JSON válido, exatamente neste formato, sem nenhum texto antes ou depois:\n' +
-    '{"plataformas": ["..."], "formatos": ["..."], "resumo": "...", ' +
-    '"campos": [{"pergunta": "...", "resposta": "..." ou null}]}\n\n' +
+    '{"plataformas": ["..."], "formatos": ["..."], "resumo": "...", "campos": [{"pergunta": "...", ' +
+    '"resposta": "..." ou null, "respostaOriginal": "..." ou null}]}\n\n' +
     'Descrição da tarefa (HTML):\n' + descricaoHtml;
 
   var resultado = chamarGemini(prompt);

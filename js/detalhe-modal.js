@@ -30,10 +30,14 @@ function openDetail(idx, entradaAnimacao) {
   if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
   // Se já tinha sido gerado antes (task.briefingHTML cacheado), o
   // template já usa o cache direto — só precisa religar os botões de
-  // copiar, já que o innerHTML foi todo recriado do zero.
+  // copiar e os toggles de "ver versão original", já que o innerHTML
+  // foi todo recriado do zero.
   else if (tasks[detailIdx].briefingHTML !== undefined) {
     const resultEl = document.getElementById("briefingResult");
-    if (resultEl) wireBriefingCopyButtons(resultEl);
+    if (resultEl) {
+      wireBriefingCopyButtons(resultEl);
+      wireBriefingVersaoOriginalToggles(resultEl);
+    }
   }
 }
 

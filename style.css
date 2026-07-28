@@ -1861,11 +1861,26 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .ai-briefing-cat-label {
   font-size: 11.5px; font-weight: 600; line-height: 1.3;
 }
+.ai-briefing-cat-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ai-briefing-cat-valor {
-  flex: 1;
   font-size: 13px; line-height: 1.5; white-space: pre-wrap;
 }
 .ai-briefing-cat-valor a { text-decoration: none; font-weight: 600; }
+
+/* Lista de pills quando um campo tem vários links (ex: vários vídeos) —
+   em vez de despejar tudo em texto corrido, um pill por link. */
+.ai-briefing-link-lista { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Botão "Ver versão original" dentro de cada caixinha + o painel com o
+   texto cru que ele revela — reaproveita o mesmo estilo minimalista já
+   usado pelo "Ver briefing original" (.ai-briefing-toggle). */
+.ai-briefing-ver-original-box { margin: 2px 0 0; font-size: 11px; }
+.ai-briefing-original-texto {
+  font-size: 12px; line-height: 1.5; white-space: pre-wrap;
+  color: var(--text-muted); background: rgba(0,0,0,0.05);
+  border-radius: 8px; padding: 8px 10px; margin-top: 2px;
+}
+[data-theme="dark"] .ai-briefing-original-texto { background: rgba(255,255,255,0.06); }
 
 .cat-teal { background: #E1F5EE; }
 .cat-teal .ai-briefing-cat-icon { background: #5DCAA5; color: #04342C; }

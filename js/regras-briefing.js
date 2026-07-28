@@ -423,10 +423,15 @@ function detectarServicoDoLink(url) {
 }
 
 /**
- * Desenha o valor de um campo do briefing: se o valor inteiro for só um
- * link, mostra uma etiqueta "Ver no Docs ↗" (ou o serviço que for) em
- * vez da URL crua. Senão, usa o texto normal com qualquer link dentro
- * dele virando clicável.
+ * Desenha o valor de um campo do briefing:
+ *  - se o valor inteiro for só um link, mostra uma etiqueta "Ver no
+ *    Docs ↗" (ou o serviço que for) em vez da URL crua.
+ *  - se for uma LISTA de links (ex: "Vídeo 1: url\nVídeo 2: url..." —
+ *    veio de um campo com vários vídeos/arquivos), mostra um pill pra
+ *    cada linha, usando o texto antes do link como rótulo — em vez de
+ *    despejar tudo cru numa linha só atrás da outra.
+ *  - senão, usa o texto normal com qualquer link dentro dele virando
+ *    clicável.
  */
 function renderValorCampo(valor) {
   const soLink = /^https?:\/\/\S+$/.test(valor.trim());
@@ -435,7 +440,56 @@ function renderValorCampo(valor) {
     const servico = detectarServicoDoLink(url) || "link";
     return `<a href="${url}" target="_blank" rel="noopener" class="ai-briefing-link-pill">Ver no ${servico} ↗</a>`;
   }
+
+  const linhas = valor.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const ehListaDeLinks = linhas.length > 1 && linhas.every(l => /^https?:\/\/\S+/.test(l) || /https?:\/\/\S+$/.test(l));
+  if (ehListaDeLinks) {
+    const pills = linhas.map(linha => {
+      const match = linha.match(/https?:\/\/\S+/);
+      if (!match) return "";
+      const url = match[0];
+      const rotulo = linha.replace(url, "").replace(/[:\-–—]\s*$/, "").trim();
+      const servico = detectarServicoDoLink(url) || "link";
+      return `<a href="${url}" target="_blank" rel="noopener" class="ai-briefing-link-pill">${escaparHTML(rotulo) || `Ver no ${servico}`} ↗</a>`;
+    }).join("");
+    return `<div class="ai-briefing-link-lista">${pills}</div>`;
+  }
+
   return linkificarTexto(valor);
+}
+
+/**
+ * Monta o botão "Ver versão original" + o painel escondido embaixo
+ * dele, pra quem quiser conferir o texto exatamente como veio na
+ * descrição da tarefa (antes da IA organizar). Só aparece se a versão
+ * organizada realmente for diferente do original — não faz sentido
+ * mostrar o botão se não mudou nada.
+ */
+function blocoVersaoOriginalHTML(resposta, respostaOriginal) {
+  if (!respostaOriginal) return "";
+  if (respostaOriginal.trim() === (resposta || "").trim()) return "";
+  return `
+    <button type="button" class="ai-briefing-toggle ai-briefing-ver-original-box">Ver versão original</button>
+    <div class="ai-briefing-original-texto" hidden>${linkificarTexto(respostaOriginal)}</div>
+  `;
+}
+
+/**
+ * Liga o clique de cada botão "Ver versão original" dentro das
+ * caixinhas do briefing — precisa ser chamado de novo toda vez que o
+ * innerHTML do briefing é redesenhado (os botões são recriados do
+ * zero), igual já acontece com wireBriefingCopyButtons.
+ */
+function wireBriefingVersaoOriginalToggles(resultEl) {
+  resultEl.querySelectorAll(".ai-briefing-ver-original-box").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const painel = btn.nextElementSibling;
+      if (!painel) return;
+      const abrindo = painel.hidden;
+      painel.hidden = !abrindo;
+      btn.textContent = abrindo ? "Ocultar versão original" : "Ver versão original";
+    });
+  });
 }
 
 /**
@@ -562,9 +616,10 @@ async function gerarBriefingComIA(task) {
       ${resumo ? `<p class="ai-briefing-resumo">${resumo}</p>` : ""}
       ${campoDestaque ? `
         <div class="ai-briefing-destaque">
-          <div>
+          <div class="ai-briefing-destaque-corpo">
             <p class="ai-briefing-destaque-label">${campoDestaque.pergunta}</p>
             <p class="ai-briefing-destaque-valor">${escaparHTML(campoDestaque.resposta)}</p>
+            ${blocoVersaoOriginalHTML(campoDestaque.resposta, campoDestaque.respostaOriginal)}
           </div>
           <button type="button" class="ai-briefing-copy-btn" data-texto="${escaparHTML(campoDestaque.resposta).replace(/"/g, "&quot;")}" title="Copiar texto">
             <svg viewBox="0 0 24 24" fill="none" width="15" height="15"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>
@@ -583,7 +638,10 @@ async function gerarBriefingComIA(task) {
                     <span class="ai-briefing-cat-icon">${c.pergunta.trim().charAt(0).toUpperCase()}</span>
                     <span class="ai-briefing-cat-label">${c.pergunta}</span>
                   </div>
-                  <div class="ai-briefing-cat-valor">${renderValorCampo(c.resposta)}</div>
+                  <div class="ai-briefing-cat-corpo">
+                    <div class="ai-briefing-cat-valor">${renderValorCampo(c.resposta)}</div>
+                    ${blocoVersaoOriginalHTML(c.resposta, c.respostaOriginal)}
+                  </div>
                 </div>
               `).join("")}
             </div>
@@ -600,6 +658,7 @@ async function gerarBriefingComIA(task) {
 
     task.briefingHTML = resultEl.innerHTML; // guarda pronto — não perde mais em re-renders (ex: ao dar play)
     wireBriefingCopyButtons(resultEl);
+    wireBriefingVersaoOriginalToggles(resultEl);
   } catch (err) {
     console.error("Falha ao gerar briefing com IA:", err);
     const resultElErro = document.getElementById("briefingResult");
