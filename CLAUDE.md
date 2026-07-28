@@ -81,6 +81,24 @@ prestar atenção a esse padrão.
   momento do clique, nunca guardando a referência do objeto de antes — segue o padrão já usado em
   `priority-wrap`/`assignee-wrap`. Isso evita o bug de referência obsoleta mencionado acima.
 
+## Deploy automático do Code.gs (2026-07-28)
+
+O `Code.gs` agora tem deploy 100% automático via GitHub Actions (`.github/workflows/deploy-apps-script.yml`):
+a cada push na branch `main` que muda `Code.gs`, o workflow instala o `clasp` (`package.json`, só serve
+pra isso — não tem relação com o frontend), restaura o login do clasp a partir do secret
+`CLASP_CREDENTIALS`, gera um `.clasp.json` a partir do secret `SCRIPT_ID`, roda `clasp push --force` e
+depois `clasp deploy --deploymentId <secret CLASP_DEPLOYMENT_ID>` — **atualiza a implantação de produção
+existente, nunca cria uma nova**. Se existir o secret opcional `STAGING_DEPLOYMENT_ID`, também redeploya
+lá como rede de segurança.
+
+**IMPORTANTE — isso significa que não há mais revisão manual**: qualquer push que muda `Code.gs` na
+`main` vai direto pro Apps Script de produção. Ao propor mudanças em `Code.gs`, ter isso em mente —
+o aviso de "cole no Apps Script e crie uma Nova versão" (usado antes disso existir) não se aplica mais;
+em vez disso, avisar que o push já publica sozinho.
+
+`.claspignore` restringe o clasp a só enviar `Code.gs` (+ `appsscript.json` se existir) — sem isso ele
+tentaria empurrar `index.html`/`script.js` (do frontend) pro Apps Script também.
+
 ## Fluxo de trabalho
 
 - Validar sintaxe de JS depois de qualquer edição.
