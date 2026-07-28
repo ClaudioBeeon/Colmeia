@@ -22,7 +22,7 @@ function tarefaEstaComAtendimento(t) {
 }
 
 function tarefasParaRepasse() {
-  return tasksTodas.filter(t => !t.isMotherCard && tarefaEstaComAtendimento(t));
+  return tasksTodas.filter(t => !t.isMotherCard && (tarefaEstaComAtendimento(t) || repasseRecemAvancados.has(t.id)));
 }
 
 // "Há quanto tempo está parada" — usa a última atividade da tarefa no
@@ -41,15 +41,29 @@ function formatarTempoParado(isoString) {
 
 // Classificação "com/sem sequência" — buscada sob demanda (custa uma
 // chamada ao Runrun.it por tarefa) e cacheada direto no objeto da
-// tarefa, pra não perguntar de novo toda vez que a aba reabrir.
+// tarefa (em t.sequencia/t.workflowId, os mesmos campos usados no
+// pop-up de detalhe), pra não perguntar de novo toda vez que a aba
+// reabrir nem duplicar a busca que o card de repasse também precisa
+// pra desenhar a fileira de fotinhos.
 async function garantirClassificacaoSequencia(t) {
   if (t._temSequencia !== undefined) return t._temSequencia;
-  if (!t.id) { t._temSequencia = false; return false; }
+  if (!t.id) { t._temSequencia = false; t.sequencia = []; t.workflowId = null; return false; }
   const resultado = await buscarSequenciaDoBackend(t.id);
-  t._sequenciaCache = resultado.sequencia;
-  t._workflowIdCache = resultado.workflowId;
+  t.sequencia = resultado.sequencia;
+  t.workflowId = resultado.workflowId;
   t._temSequencia = !!(resultado.sequencia && resultado.sequencia.length > 0);
   return t._temSequencia;
+}
+
+// Busca de novo (sem usar o cache) — chamada depois de repassar/entregar/
+// adicionar alguém na regra, pra pegar o estado real e redesenhar só
+// aquele card.
+async function recarregarSequenciaCard(t) {
+  const resultado = await buscarSequenciaDoBackend(t.id);
+  t.sequencia = resultado.sequencia;
+  t.workflowId = resultado.workflowId;
+  t._temSequencia = !!(resultado.sequencia && resultado.sequencia.length > 0);
+  montarSequenciaCard(t);
 }
 
 // Contador do ícone da barra lateral: só mostra o que é NOVO desde a
@@ -85,8 +99,18 @@ let repasseViewMode = "cliente"; // "cliente" | "com_sequencia" | "sem_sequencia
 let repasseSearch = "";
 let repasseMontada = false;
 
+// Tarefas que você acabou de repassar (avançar a sequência) nessa
+// visita à aba — ficam aparecendo mesmo depois de deixarem de ser
+// "suas" de verdade, pra você não perder de vista o card no meio da
+// lista só porque a atualização em segundo plano rodou. Só é limpo de
+// novo quando a aba é reaberta (reentrar na página) ou a página é
+// recarregada — "Ficar comigo" continua sumindo na hora, esse é o
+// único jeito de tirar um card na hora.
+let repasseRecemAvancados = new Set();
+
 function buildRepassePage() {
   if (!souClaudio()) { mostrarPagina("kanban"); return; } // essa página é só do Cláudio
+  repasseRecemAvancados = new Set();
   if (!repasseMontada) {
     document.querySelectorAll(".repasse-tab").forEach(tab => {
       tab.addEventListener("click", () => {
@@ -120,7 +144,10 @@ function formatarDataCurtaSemAno(iso) {
   return `${dia}/${mes}`;
 }
 
-function repasseCardHTML(t) {
+// mostrarClientePill: liga a tagzinha com o nome do cliente no topo do
+// card — só faz sentido na aba "Prioridades" (lista corrida, não tem
+// coluna por cliente igual as outras abas pra já deixar isso óbvio).
+function repasseCardHTML(t, mostrarClientePill) {
   const type = typeLabels[t.type] || { label: t.type, class: "" };
   const tempoParado = formatarTempoParado(t.lastActivityAt);
   const atrasada = t.dueISO && t.dueISO < hojeISO();
@@ -128,6 +155,7 @@ function repasseCardHTML(t) {
     <div class="repasse-card" data-id="${t.id}">
       <div class="repasse-card-top">
         <span class="badge ${type.class}">${type.label}</span>
+        ${mostrarClientePill ? `<span class="repasse-client-pill">${t.client}</span>` : ""}
       </div>
       <div class="repasse-card-title">${t.title}</div>
       <div class="repasse-datas-stack">
@@ -140,14 +168,230 @@ function repasseCardHTML(t) {
           <button type="button" class="repasse-data-valor">${formatarDataCurtaSemAno(t.dueISO) || "—"}</button>
         </div>
       </div>
+      <div class="repasse-seq-row" data-id="${t.id}">
+        <span class="repasse-seq-loading">Carregando sequência...</span>
+      </div>
       ${tempoParado ? `<div class="repasse-card-tempo">${tempoParado}</div>` : ""}
       <div class="repasse-card-actions">
-        <button type="button" class="repasse-btn repasse-btn-repassar" data-id="${t.id}">Repassar</button>
         <button type="button" class="repasse-btn repasse-btn-ficar" data-id="${t.id}">Ficar comigo</button>
       </div>
     </div>
   `;
 }
+
+/**
+ * Desenha, dentro do card de repasse, a mesma fileira de fotinhos que
+ * já existe no pop-up de detalhe da tarefa — assim dá pra ver se já
+ * tem uma "Sequência de responsáveis" configurada sem precisar clicar
+ * em nada. Três estados possíveis:
+ *  - já foi entregue por aqui mesmo (t._repasseEntregue): só um aviso.
+ *  - sem sequência nenhuma: só a sua foto sozinha + criar regra/entregar.
+ *  - com sequência: os pontinhos de sempre + avançar (se tiver alguém
+ *    na frente) ou adicionar próxima pessoa/entregar (se você for o
+ *    último da fila).
+ */
+function renderRepasseSeqHTML(t) {
+  if (t._repasseEntregue) {
+    return `<div class="repasse-seq-row-done">Entregue ✓</div>`;
+  }
+  const seq = t.sequencia || [];
+  if (seq.length === 0) {
+    return `
+      <div class="repasse-seq-dots">
+        <div class="wf-dot current" title="${t.assignee}">${avatarHTML(t.assignee, "avatar-xs", t.assigneeAvatarUrl)}</div>
+        <span class="repasse-seq-empty-label">sem regra ainda</span>
+      </div>
+      <button type="button" class="repasse-seq-btn add" data-action="add" title="Criar sequência de responsáveis">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="repasse-seq-btn deliver" data-action="deliver-direto" title="Entregar tarefa">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    `;
+  }
+  const atualIdx = seq.findIndex(s => s.atual);
+  const semProximo = atualIdx !== -1 && seq[atualIdx].ultimo;
+  return `
+    <div class="repasse-seq-dots">
+      ${seq.map((s, i) => `
+        ${i > 0 ? `<div class="wf-line ${seq[i - 1].concluido ? "done" : ""}"></div>` : ""}
+        <div class="wf-dot ${s.atual ? "current" : ""} ${s.concluido ? "completed" : ""}" title="${s.nome}">
+          ${avatarHTML(s.nome, "avatar-xs", s.foto)}
+          ${s.concluido ? `<span class="wf-check">✓</span>` : ""}
+        </div>
+      `).join("")}
+    </div>
+    ${semProximo ? `
+      <button type="button" class="repasse-seq-btn add" data-action="add" title="Adicionar próxima pessoa na sequência">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="repasse-seq-btn deliver" data-action="deliver-sequencia" title="Entregar tarefa (não tem mais ninguém na frente)">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    ` : `
+      <button type="button" class="repasse-seq-btn advance" data-action="advance" title="Repassar para a próxima pessoa">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    `}
+  `;
+}
+
+/**
+ * Busca (se ainda não tiver) e desenha a sequência dentro de um card
+ * específico da fila de repasse. Chamada pra cada card assim que a
+ * coluna é montada, e de novo depois de qualquer ação (repassar,
+ * adicionar pessoa, entregar).
+ */
+function montarSequenciaCard(t) {
+  const row = document.querySelector(`.repasse-seq-row[data-id="${CSS.escape(String(t.id))}"]`);
+  if (!row) return; // card não está mais na tela (trocou de aba/filtro enquanto buscava)
+  if (t.sequencia === undefined) {
+    garantirClassificacaoSequencia(t).then(() => montarSequenciaCard(t));
+    return;
+  }
+  row.innerHTML = renderRepasseSeqHTML(t);
+  wireRepasseSeqRow(row, t);
+}
+
+function wireRepasseSeqRow(row, t) {
+  const advanceBtn = row.querySelector('[data-action="advance"]');
+  if (advanceBtn) {
+    advanceBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      const proximo = proximoDaSequencia(t.sequencia);
+      if (proximo) abrirConfirmacaoRepasseCard(t, proximo, advanceBtn);
+    });
+  }
+  const addBtn = row.querySelector('[data-action="add"]');
+  if (addBtn) {
+    addBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      repasseModalTaskAtual = t; // pra saber qual card redesenhar quando o modal fechar
+      abrirModalRegra(t); // reaproveita o mesmo modal "Ver regra" usado nos cards do quadro
+    });
+  }
+  const deliverSeqBtn = row.querySelector('[data-action="deliver-sequencia"]');
+  if (deliverSeqBtn) {
+    deliverSeqBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      abrirConfirmacaoEntregarCard(t, deliverSeqBtn, true);
+    });
+  }
+  const deliverDiretoBtn = row.querySelector('[data-action="deliver-direto"]');
+  if (deliverDiretoBtn) {
+    deliverDiretoBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      abrirConfirmacaoEntregarCard(t, deliverDiretoBtn, false);
+    });
+  }
+}
+
+// Pop-up "Repassar para <nome>?" ancorado na barra de baixo do card
+// (mesmo lugar de sempre), mesmo o clique tendo vindo da seta lá em
+// cima, na fileira de fotinhos.
+function abrirConfirmacaoRepasseCard(t, proximo, btn) {
+  const actionsEl = btn.closest(".repasse-card").querySelector(".repasse-card-actions");
+  let menu = actionsEl.querySelector(".repasse-picker");
+  if (menu) { menu.remove(); return; }
+  menu = document.createElement("div");
+  menu.className = "repasse-picker repasse-confirm";
+  menu.innerHTML = `
+    <div class="repasse-confirm-text">Repassar para <strong>${proximo.nome}</strong>?</div>
+    <div class="repasse-confirm-actions">
+      <button type="button" class="repasse-confirm-cancel">Cancelar</button>
+      <button type="button" class="repasse-confirm-ok">Confirmar</button>
+    </div>
+  `;
+  actionsEl.appendChild(menu);
+  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); menu.remove(); });
+  menu.querySelector(".repasse-confirm-ok").addEventListener("click", ev => {
+    ev.stopPropagation();
+    menu.remove();
+    confirmarEAvancarSequenciaCard(t, btn, proximo);
+  });
+  setTimeout(() => {
+    document.addEventListener("click", function fechar(ev) {
+      if (!menu.contains(ev.target) && ev.target !== btn) { menu.remove(); document.removeEventListener("click", fechar); }
+    });
+  }, 0);
+}
+
+// Pop-up de confirmação antes de entregar — texto muda conforme o
+// motivo (você é o último da sequência x a tarefa nem tem sequência).
+function abrirConfirmacaoEntregarCard(t, btn, temSequencia) {
+  const actionsEl = btn.closest(".repasse-card").querySelector(".repasse-card-actions");
+  let menu = actionsEl.querySelector(".repasse-picker");
+  if (menu) { menu.remove(); return; }
+  menu = document.createElement("div");
+  menu.className = "repasse-picker repasse-confirm repasse-confirm-entregar";
+  const texto = temSequencia
+    ? "Você é a última pessoa da sequência — confirmar aqui vai <strong>entregar a tarefa</strong>, não repassar pra ninguém. Tem certeza?"
+    : "Essa tarefa não tem sequência configurada — confirmar aqui vai <strong>entregar a tarefa</strong>. Tem certeza?";
+  menu.innerHTML = `
+    <div class="repasse-confirm-text">${texto}</div>
+    <div class="repasse-confirm-actions">
+      <button type="button" class="repasse-confirm-cancel">Cancelar</button>
+      <button type="button" class="repasse-confirm-ok">Entregar</button>
+    </div>
+  `;
+  actionsEl.appendChild(menu);
+  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); menu.remove(); });
+  menu.querySelector(".repasse-confirm-ok").addEventListener("click", ev => {
+    ev.stopPropagation();
+    menu.remove();
+    if (temSequencia) confirmarEAvancarSequenciaCard(t, btn, null);
+    else confirmarEntregaDiretaCard(t, btn);
+  });
+  setTimeout(() => {
+    document.addEventListener("click", function fechar(ev) {
+      if (!menu.contains(ev.target) && ev.target !== btn) { menu.remove(); document.removeEventListener("click", fechar); }
+    });
+  }, 0);
+}
+
+// Avança a sequência de verdade no Runrun.it (repassar pro próximo OU
+// entregar, se você já era o último — mesmo endpoint faz as duas
+// coisas, ver comentário em avancarWorkflowNoBackend). Não tira o card
+// da tela sozinho: só marca ele como "recém avançado" pra continuar
+// aparecendo até você sair da aba ou recarregar — pedido explícito,
+// pra não perder o card de vista no meio da fila.
+async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
+  btn.disabled = true;
+  const resultado = await avancarWorkflowNoBackend(t.id);
+  if (resultado.ok) {
+    repasseRecemAvancados.add(t.id);
+    if (resultado.novoResponsavel) {
+      t.assignee = resultado.novoResponsavel;
+      t.assigneeAvatarUrl = null;
+    }
+    if (!proximo) t._repasseEntregue = true; // era o último da fila — isso entregou a tarefa de verdade
+    await recarregarSequenciaCard(t);
+    agendarAtualizacaoKanban();
+  } else {
+    btn.disabled = false;
+    mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
+  }
+}
+
+// Entrega direto (tarefa sem nenhuma sequência configurada ainda).
+async function confirmarEntregaDiretaCard(t, btn) {
+  btn.disabled = true;
+  const ok = await entregarTarefaNoBackend(t.id);
+  if (ok) {
+    repasseRecemAvancados.add(t.id);
+    t._repasseEntregue = true;
+    montarSequenciaCard(t);
+    agendarAtualizacaoKanban();
+  } else {
+    btn.disabled = false;
+    mostrarToast("Não consegui entregar essa tarefa agora.", "erro");
+  }
+}
+
+// Enquanto o modal "Ver regra" está aberto a partir de um card de
+// repasse, guarda qual tarefa é essa — pra redesenhar só aquele card
+// (com a regra nova/pessoa adicionada) assim que o modal for fechado.
+let repasseModalTaskAtual = null;
 
 function renderRepasse() {
   const board = document.getElementById("repasseBoard");
@@ -162,6 +406,12 @@ function renderRepasse() {
 
   if (repasseViewMode === "cliente") {
     renderRepasseColunas(board, lista);
+  } else if (repasseViewMode === "prioridade") {
+    // Lista corrida (não agrupada por cliente) só com as tarefas
+    // marcadas como prioridade Alta — cada card ganha uma tagzinha com
+    // o nome do cliente, já que não tem mais coluna pra deixar isso óbvio.
+    const prioritarias = lista.filter(t => t.priority === "alta");
+    renderRepasseListaFlat(board, prioritarias);
   } else {
     // Pros modos "com sequência" / "sem sequência", precisa classificar
     // cada tarefa primeiro (busca sob demanda, cacheada em cada tarefa).
@@ -172,6 +422,31 @@ function renderRepasse() {
       renderRepasseColunas(board, filtrada);
     });
   }
+}
+
+// Aba "Prioridades": mesma ordenação por Entrega das outras abas, mas
+// numa lista corrida só (sem coluna por cliente) — por isso cada card
+// leva a tagzinha do cliente, pra não perder essa informação.
+function renderRepasseListaFlat(board, lista) {
+  lista = lista.slice().sort((a, b) => {
+    if (!a.dueISO) return 1;
+    if (!b.dueISO) return -1;
+    return a.dueISO.localeCompare(b.dueISO);
+  });
+
+  if (lista.length === 0) {
+    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Nenhuma tarefa de prioridade alta esperando repasse 🎉</p>`;
+    return;
+  }
+
+  board.innerHTML = `
+    <div class="repasse-flat-grid">
+      ${lista.map(t => repasseCardHTML(t, true)).join("")}
+    </div>
+  `;
+
+  wireRepasseCards(lista);
+  lista.forEach(t => montarSequenciaCard(t));
 }
 
 function renderRepasseColunas(board, lista) {
@@ -206,6 +481,7 @@ function renderRepasseColunas(board, lista) {
   `).join("");
 
   wireRepasseCards(lista);
+  lista.forEach(t => montarSequenciaCard(t));
 }
 
 function removerCardDeRepasseDaTela(btn) {
@@ -361,44 +637,6 @@ function wireRepasseCards(lista) {
     });
   });
 
-  document.querySelectorAll(".repasse-btn-repassar").forEach(btn => {
-    btn.addEventListener("click", async e => {
-      e.stopPropagation();
-      const t = lista.find(x => String(x.id) === btn.dataset.id);
-      if (!t) return;
-      btn.disabled = true;
-      btn.textContent = "Verificando...";
-      await garantirClassificacaoSequencia(t);
-      btn.disabled = false;
-      btn.textContent = "Repassar";
-
-      if (t._temSequencia) {
-        const proximo = proximoDaSequencia(t._sequenciaCache);
-        if (proximo) {
-          // Já tem alguém definido como próximo na sequência — confirma
-          // com o nome antes de avançar de verdade.
-          abrirConfirmacaoRepasse(t, proximo, btn);
-        } else {
-          // Tem sequência configurada, mas NINGUÉM definido como
-          // próximo (você é a última pessoa dela) — nesse caso, avançar
-          // a etapa no Runrun.it não "repassa" pra ninguém, ENTREGA a
-          // tarefa de verdade (foi assim que o bug apareceu: um clique
-          // em "Repassar" entregava a tarefa sem avisar nada). Por isso
-          // usa uma confirmação diferente, deixando claro o que vai
-          // acontecer, em vez de fazer isso direto.
-          abrirConfirmacaoEntregarSemProximo(t, btn);
-        }
-      } else {
-        // Sem sequência nenhuma configurada ainda: abre o mesmo modal
-        // "Ver regra" usado dentro dos cards, pra criar a regra de
-        // verdade (não só reatribuir uma vez só) — reaproveita a
-        // sequência/workflowId já buscados por garantirClassificacaoSequencia.
-        t.sequencia = t._sequenciaCache || [];
-        t.workflowId = t._workflowIdCache || null;
-        abrirModalRegra(t);
-      }
-    });
-  });
 }
 
 // Acha, na sequência já carregada, quem vem logo depois do responsável
@@ -411,90 +649,6 @@ function proximoDaSequencia(seq) {
     if (!seq[i].concluido) return seq[i];
   }
   return null;
-}
-
-// Pop-up de confirmação "Repassar para <nome>?" antes de mexer em
-// qualquer coisa de verdade no Runrun.it.
-function abrirConfirmacaoRepasse(t, proximo, btn) {
-  let menu = btn.parentElement.querySelector(".repasse-picker");
-  if (menu) { menu.remove(); return; } // clicou de novo — fecha
-  menu = document.createElement("div");
-  menu.className = "repasse-picker repasse-confirm";
-  menu.innerHTML = `
-    <div class="repasse-confirm-text">Repassar para <strong>${proximo.nome}</strong>?</div>
-    <div class="repasse-confirm-actions">
-      <button type="button" class="repasse-confirm-cancel">Cancelar</button>
-      <button type="button" class="repasse-confirm-ok">Confirmar</button>
-    </div>
-  `;
-  btn.parentElement.appendChild(menu);
-  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); menu.remove(); });
-  menu.querySelector(".repasse-confirm-ok").addEventListener("click", ev => {
-    ev.stopPropagation();
-    menu.remove();
-    confirmarEAvancarSequencia(t, btn, proximo);
-  });
-  setTimeout(() => {
-    document.addEventListener("click", function fechar(ev) {
-      if (!menu.contains(ev.target) && ev.target !== btn) {
-        menu.remove();
-        document.removeEventListener("click", fechar);
-      }
-    });
-  }, 0);
-}
-
-// Pop-up de confirmação pro caso em que você é a ÚLTIMA pessoa da
-// sequência — nesse caso "Repassar" na verdade entrega a tarefa de
-// verdade (não tem mais ninguém pra passar), então avisa isso bem
-// claro antes de fazer, em vez de entregar sem perguntar nada.
-function abrirConfirmacaoEntregarSemProximo(t, btn) {
-  let menu = btn.parentElement.querySelector(".repasse-picker");
-  if (menu) { menu.remove(); return; } // clicou de novo — fecha
-  menu = document.createElement("div");
-  menu.className = "repasse-picker repasse-confirm repasse-confirm-entregar";
-  menu.innerHTML = `
-    <div class="repasse-confirm-text">Você é a última pessoa da sequência — confirmar aqui vai <strong>entregar a tarefa</strong>, não repassar pra ninguém. Tem certeza?</div>
-    <div class="repasse-confirm-actions">
-      <button type="button" class="repasse-confirm-cancel">Cancelar</button>
-      <button type="button" class="repasse-confirm-ok">Entregar</button>
-    </div>
-  `;
-  btn.parentElement.appendChild(menu);
-  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); menu.remove(); });
-  menu.querySelector(".repasse-confirm-ok").addEventListener("click", ev => {
-    ev.stopPropagation();
-    menu.remove();
-    confirmarEAvancarSequencia(t, btn, null);
-  });
-  setTimeout(() => {
-    document.addEventListener("click", function fechar(ev) {
-      if (!menu.contains(ev.target) && ev.target !== btn) {
-        menu.remove();
-        document.removeEventListener("click", fechar);
-      }
-    });
-  }, 0);
-}
-
-// Avança a sequência de verdade no Runrun.it (só chamado depois de
-// confirmado).
-async function confirmarEAvancarSequencia(t, btn, proximo) {
-  btn.disabled = true;
-  btn.textContent = "Repassando...";
-  // Usa resultado.ok (não novoResponsavel) pra saber se deu certo: quando
-  // não tem "próximo" (você é a última pessoa — a tarefa foi ENTREGUE em
-  // vez de repassada), o Runrun.it não devolve nome nenhum mesmo tendo
-  // dado certo, e olhar só o nome fazia o Colmeia achar que tinha falhado.
-  const resultado = await avancarWorkflowNoBackend(t.id);
-  if (resultado.ok) {
-    removerCardDeRepasseDaTela(btn);
-    agendarAtualizacaoKanban();
-  } else {
-    btn.disabled = false;
-    btn.textContent = "Repassar";
-    mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
-  }
 }
 
 function mostrarPagina(page) {
@@ -560,6 +714,20 @@ document.getElementById("verTodasBtn").addEventListener("click", () => {
 document.getElementById("nowPlaying").addEventListener("click", () => {
   const idx = tasks.findIndex(t => t.running);
   if (idx !== -1) openDetail(idx);
+});
+
+// Fechou o modal "Ver regra" que foi aberto a partir de um card da
+// fila de repasse (botão "+" na fileira de fotinhos)? Redesenha só
+// aquele card com a sequência atualizada — mesma lógica de
+// recarregarSequenciaCard usada depois de repassar/entregar.
+document.getElementById("ruleModalClose").addEventListener("click", () => {
+  if (repasseModalTaskAtual) { recarregarSequenciaCard(repasseModalTaskAtual); repasseModalTaskAtual = null; }
+});
+document.getElementById("ruleModalOverlay").addEventListener("click", e => {
+  if (e.target.id === "ruleModalOverlay" && repasseModalTaskAtual) {
+    recarregarSequenciaCard(repasseModalTaskAtual);
+    repasseModalTaskAtual = null;
+  }
 });
 
 // ===== Notificações reais (comentários não lidos nas tarefas do designer logado) =====

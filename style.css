@@ -2399,9 +2399,22 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .repasse-column-body { display: flex; flex-direction: column; gap: 10px; }
 
+/* Aba "Prioridades" — lista corrida em grade, sem coluna por cliente
+   (por isso o pill de cliente aparece em cada card, ver .repasse-client-pill). */
+.repasse-flat-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px; width: 100%; flex: 1 1 auto; align-content: start;
+}
+
+.repasse-client-pill {
+  font-size: 11px; font-weight: 600; color: var(--text-secondary);
+  background: var(--page-bg); border-radius: 999px; padding: 4px 10px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%;
+}
+
 .repasse-card {
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
-  padding: 14px; cursor: pointer;
+  padding: 14px; cursor: pointer; position: relative;
   transition: transform var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple);
 }
 .repasse-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
@@ -2449,9 +2462,41 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .repasse-btn:active { transform: scale(0.95); }
 .repasse-btn:disabled { opacity: 0.6; cursor: default; }
-.repasse-btn-repassar { background: var(--kanban-yellow); color: #16181D; }
-.repasse-btn-repassar:hover:not(:disabled) { background: #E0A800; }
 .repasse-btn-ficar { background: var(--page-bg); color: var(--text-primary); }
+
+/* Fileira de fotinhos (Sequência de responsáveis) dentro do card de
+   repasse — mesmo conceito visual do pop-up de detalhe da tarefa
+   (wf-dot/wf-line/wf-check, reaproveitados como estão), só que com
+   borda/cores adaptadas pro fundo claro-ou-escuro do card (o
+   .workflow-seq-dots original foi desenhado pra sentar sobre o pill
+   preto do cabeçalho, não sobre o card). Toda cor de destaque aqui é
+   amarelo (padrão do app) — nada de roxo/azul. */
+.repasse-seq-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.repasse-seq-dots {
+  display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0;
+  border: 1.5px solid var(--border); border-radius: 999px; padding: 3px 6px;
+  overflow-x: auto;
+}
+.repasse-seq-dots::-webkit-scrollbar { display: none; }
+.repasse-seq-empty-label { font-size: 11.5px; color: var(--text-muted); padding: 2px 4px; white-space: nowrap; }
+.repasse-seq-loading { font-size: 11.5px; color: var(--text-muted); }
+.repasse-seq-row-done { font-size: 12px; font-weight: 700; color: #2F9E44; padding: 4px 2px; }
+
+.repasse-seq-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--border);
+  background: transparent; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; cursor: pointer; color: var(--text-secondary);
+  transition: transform var(--dur-fast) var(--ease-apple), background var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple), border-color var(--dur-fast) var(--ease-apple);
+}
+.repasse-seq-btn svg { width: 15px; height: 15px; }
+.repasse-seq-btn:active { transform: scale(0.92); }
+.repasse-seq-btn:disabled { opacity: 0.6; cursor: default; }
+.repasse-seq-btn.advance:hover:not(:disabled) { background: var(--kanban-yellow); color: #16181D; border-color: var(--kanban-yellow); }
+.repasse-seq-btn.add { color: var(--kanban-yellow-text); border-color: var(--kanban-yellow); }
+.repasse-seq-btn.add:hover:not(:disabled) { background: var(--kanban-yellow); color: #16181D; }
+.repasse-seq-btn.deliver { color: #2F9E44; border-color: #2F9E44; }
+.repasse-seq-btn.deliver:hover:not(:disabled) { background: #2F9E44; color: #fff; }
 
 .repasse-picker {
   position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 20;
