@@ -25,6 +25,17 @@ function tarefasParaRepasse() {
   return tasksTodas.filter(t => !t.isMotherCard && (tarefaEstaComAtendimento(t) || repasseRecemAvancados.has(t.id)));
 }
 
+// Resolve o objeto de tarefa "de verdade" (o que está em tasksTodas
+// agora), nunca um que ficou preso numa lista de render de um tempinho
+// atrás. Sem isso, se a atualização automática do quadro trocar os
+// objetos de tarefa por baixo bem no meio de uma ação (repassar,
+// adicionar pessoa, entregar), a ação mexia num objeto "órfão" — parecia
+// ter dado certo na tela na hora, mas sumia nas próximas atualizações.
+function tarefaRepasseViva(t) {
+  if (!t || !t.id) return t;
+  return tasksTodas.find(x => String(x.id) === String(t.id)) || t;
+}
+
 // "Há quanto tempo está parada" — usa a última atividade da tarefa no
 // Runrun.it como aproximação (não existe um campo de "desde quando é
 // dessa pessoa" de verdade disponível na API).
@@ -46,6 +57,7 @@ function formatarTempoParado(isoString) {
 // reabrir nem duplicar a busca que o card de repasse também precisa
 // pra desenhar a fileira de fotinhos.
 async function garantirClassificacaoSequencia(t) {
+  t = tarefaRepasseViva(t);
   if (t._temSequencia !== undefined) return t._temSequencia;
   if (!t.id) { t._temSequencia = false; t.sequencia = []; t.workflowId = null; return false; }
   const resultado = await buscarSequenciaDoBackend(t.id);
@@ -59,6 +71,7 @@ async function garantirClassificacaoSequencia(t) {
 // adicionar alguém na regra, pra pegar o estado real e redesenhar só
 // aquele card.
 async function recarregarSequenciaCard(t) {
+  t = tarefaRepasseViva(t);
   const resultado = await buscarSequenciaDoBackend(t.id);
   t.sequencia = resultado.sequencia;
   t.workflowId = resultado.workflowId;
@@ -395,6 +408,7 @@ async function abrirQuickPickerRegra(t, btn) {
 // construirSequenciaOtimistaComNovaPessoa (regras-briefing.js) pra
 // garantir que sua foto nunca some quando a regra ainda nem existia.
 async function adicionarPessoaViaQuickPicker(t, usuario) {
+  t = tarefaRepasseViva(t);
   if (repasseAcaoJaEmAndamento(t)) return;
   t.sequencia = construirSequenciaOtimistaComNovaPessoa(t, usuario);
   montarSequenciaCard(t);
@@ -403,6 +417,7 @@ async function adicionarPessoaViaQuickPicker(t, usuario) {
   try {
     if (!t.workflowId) {
       const criado = await criarRegraNoBackend(t.id);
+      t = tarefaRepasseViva(t);
       if (!criado.ok) {
         mostrarToast("Não consegui criar a sequência dessa tarefa agora.", "erro");
         await recarregarSequenciaCard(t);
@@ -411,6 +426,7 @@ async function adicionarPessoaViaQuickPicker(t, usuario) {
       t.workflowId = criado.workflowId;
     }
     const ok = await adicionarNaRegraNoBackend(t.workflowId, usuario.id);
+    t = tarefaRepasseViva(t);
     if (!ok) mostrarToast("Não consegui adicionar essa pessoa na sequência agora.", "erro");
     await recarregarSequenciaCard(t); // sincroniza com o estado real (troca a linha "pendente" pela de verdade)
     agendarAtualizacaoKanban();
@@ -515,8 +531,10 @@ function repasseLiberarAcao(t) {
 // de "carregando" — confirma de verdade em segundo plano; se o
 // Runrun.it recusar, desfaz sozinho e avisa com um toast.
 async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
+  t = tarefaRepasseViva(t);
   if (repasseAcaoJaEmAndamento(t)) return;
   await pararCronometroAoTransferir(t); // se por acaso estava rodando, para antes de repassar
+  t = tarefaRepasseViva(t);
 
   const sequenciaAntes = t.sequencia ? t.sequencia.map(s => ({ ...s })) : t.sequencia;
   const entregueAntes = t._repasseEntregue;
@@ -533,6 +551,7 @@ async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
 
   try {
     const resultado = await avancarWorkflowNoBackend(t.id);
+    t = tarefaRepasseViva(t);
     if (resultado.ok) {
       repasseRecemAvancados.add(t.id);
       if (resultado.novoResponsavel) {
@@ -555,8 +574,10 @@ async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
 // Entrega direto (tarefa sem nenhuma sequência configurada ainda) —
 // mesmo tratamento otimista do avanço acima.
 async function confirmarEntregaDiretaCard(t, btn) {
+  t = tarefaRepasseViva(t);
   if (repasseAcaoJaEmAndamento(t)) return;
   await pararCronometroAoTransferir(t); // se por acaso estava rodando, para antes de entregar
+  t = tarefaRepasseViva(t);
 
   const entregueAntes = t._repasseEntregue;
   t._repasseEntregue = true;
@@ -564,6 +585,7 @@ async function confirmarEntregaDiretaCard(t, btn) {
 
   try {
     const ok = await entregarTarefaNoBackend(t.id);
+    t = tarefaRepasseViva(t);
     if (ok) {
       repasseRecemAvancados.add(t.id);
       agendarAtualizacaoKanban();

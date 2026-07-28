@@ -383,7 +383,15 @@ async function atualizarKanbanEmBackground() {
     render();
     updateNowPlaying();
     atualizarBadgeRepasse();
-    if (!document.getElementById("page-repasse").hidden) renderRepasse();
+    // Não redesenha a fila de repasse por baixo de um pop-up que a
+    // pessoa acabou de abrir (confirmar repasse/entrega, ou o "+" de
+    // adicionar pessoa) — senão ele some sozinho no meio da decisão. Os
+    // dados (tasksTodas) já foram atualizados acima de qualquer forma;
+    // a tela só sincroniza visualmente quando o pop-up fechar (próxima
+    // atualização automática, ação do usuário, ou refresh).
+    const repassePagina = document.getElementById("page-repasse");
+    const temPopupAbertoNaFila = document.querySelector("#repasseBoard .repasse-card-popup-aberto");
+    if (repassePagina && !repassePagina.hidden && !temPopupAbertoNaFila) renderRepasse();
   } catch (err) {
     console.error("Falha ao atualizar o kanban em background:", err);
   }

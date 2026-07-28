@@ -111,7 +111,7 @@ function renderNotificacoes() {
           <span class="notif-card-autor">${escaparHTML(n.autor)}</span>
           <span class="notif-card-tempo">${tempoRelativoNotificacao(n.criadoEm)}</span>
         </div>
-        <p class="notif-card-texto">${aplicarMarcadoresDeMencao(linkifyTexto(escaparHTML(formatarMencoes(n.texto))))}</p>
+        <p class="notif-card-texto">${prepararTextoComentario(n.texto)}</p>
         <span class="notif-card-tarefa">${escaparHTML(n.taskTitle)}${n.taskClient ? ` · ${escaparHTML(n.taskClient)}` : ""}</span>
       </div>
       ${n.vista ? "" : `<span class="notif-card-dot" title="Novo"></span>`}

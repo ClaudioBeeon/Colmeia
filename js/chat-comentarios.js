@@ -149,10 +149,15 @@ function formatarHoraComentario(dataISO) {
  * texto de um comentário em links de verdade, clicáveis. Se o texto já
  * vier com um <a> pronto (o Runrun.it às vezes já manda formatado),
  * não mexe em nada pra não linkificar duas vezes.
+ *
+ * IMPORTANTE: o texto passado aqui precisa já estar escapado (ver
+ * prepararTextoComentario) — mas o teste de "já vem com <a> pronto"
+ * só funciona em cima do texto CRU (antes de escapar), porque depois
+ * de escapado o <a> vira "&lt;a" e o teste nunca bate. Por isso essa
+ * checagem não fica mais aqui dentro, e sim em prepararTextoComentario.
  */
 function linkifyTexto(texto) {
   if (!texto) return "";
-  if (/<a\s/i.test(texto)) return texto;
   const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/gi;
   return texto.replace(urlRegex, url => {
     const limpo = url.replace(/[.,;:)\]]+$/, ""); // não pega pontuação colada no final
@@ -160,6 +165,23 @@ function linkifyTexto(texto) {
     const href = limpo.startsWith("http") ? limpo : "https://" + limpo;
     return `<a href="${href}" target="_blank" rel="noopener">${limpo}</a>${sobra}`;
   });
+}
+
+/**
+ * Prepara um texto de comentário/notificação pra exibição: troca
+ * menções por destaque, escapa HTML (segurança) e linkifica URLs
+ * soltas — EXCETO quando o texto já vem com um <a> pronto do
+ * Runrun.it, caso em que só troca as menções e mostra o HTML como
+ * veio (confiando na fonte), sem escapar nem linkificar de novo.
+ * Precisa checar "já tem <a>" no texto CRU, antes de escapar —
+ * depois de escapado o <a> vira "&lt;a" e a checagem nunca bate.
+ */
+function prepararTextoComentario(textoBruto) {
+  if (!textoBruto) return "";
+  const jaTemLinkPronto = /<a\s/i.test(textoBruto);
+  const comMencoes = formatarMencoes(textoBruto);
+  if (jaTemLinkPronto) return aplicarMarcadoresDeMencao(comMencoes);
+  return aplicarMarcadoresDeMencao(linkifyTexto(escaparHTML(comMencoes)));
 }
 
 function renderComentariosHTML(task) {
@@ -179,7 +201,7 @@ function renderComentariosHTML(task) {
       ${minha ? "" : avatarHTML(c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-meta"><span class="comment-author">${minha ? "Você" : c.autor}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span></div>
-        <div class="comment-text">${aplicarMarcadoresDeMencao(linkifyTexto(escaparHTML(formatarMencoes(c.texto))))}</div>
+        <div class="comment-text">${prepararTextoComentario(c.texto)}</div>
         ${(c.reactions || []).length ? `
           <div class="comment-reactions">
             ${c.reactions.map(r => `<span class="comment-reaction-chip" title="${(r.users || []).map(u => u.name).join(", ")}">${r.emoji} ${r.count}</span>`).join("")}
