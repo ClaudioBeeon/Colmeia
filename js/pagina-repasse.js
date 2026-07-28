@@ -266,8 +266,7 @@ function wireRepasseSeqRow(row, t) {
   if (addBtn) {
     addBtn.addEventListener("click", e => {
       e.stopPropagation();
-      repasseModalTaskAtual = t; // pra saber qual card redesenhar quando o modal fechar
-      abrirModalRegra(t); // reaproveita o mesmo modal "Ver regra" usado nos cards do quadro
+      abrirQuickPickerRegra(t, addBtn); // pop-up rápido com as fotos, sem abrir o modal grande
     });
   }
   const deliverSeqBtn = row.querySelector('[data-action="deliver-sequencia"]');
@@ -284,16 +283,159 @@ function wireRepasseSeqRow(row, t) {
       abrirConfirmacaoEntregarCard(t, deliverDiretoBtn, false);
     });
   }
+  // Clicar numa foto da fileira (não nos botões de ação) abre o modal
+  // grande "Ver regra" — a fileira em si só mostra quem é, o pop-up
+  // rápido do "+" é que serve pra decidir rápido quem entra a seguir.
+  row.querySelectorAll(".wf-dot").forEach(dot => {
+    dot.addEventListener("click", e => {
+      e.stopPropagation();
+      repasseModalTaskAtual = t; // pra saber qual card redesenhar quando o modal fechar
+      abrirModalRegra(t);
+    });
+  });
+}
+
+/**
+ * Calcula onde encostar o pop-up rápido perto do botão que abriu ele —
+ * embaixo se tiver espaço na tela, em cima se não tiver (ex: card no
+ * fim da coluna). O pop-up é filho do `.repasse-card` (não só da barra
+ * de baixo, como os de confirmação), porque o botão "+" fica no meio
+ * do card, então a posição precisa ser calculada de verdade em vez de
+ * só grudar embaixo.
+ */
+function posicionarPickerPertoDoBotao(menu, btn) {
+  const card = btn.closest(".repasse-card");
+  if (!card) return;
+  const cardRect = card.getBoundingClientRect();
+  const btnRect = btn.getBoundingClientRect();
+  const alturaMenu = menu.offsetHeight || 220;
+  const espacoAbaixo = window.innerHeight - btnRect.bottom;
+  const abrirParaCima = espacoAbaixo < alturaMenu + 16 && btnRect.top > alturaMenu + 16;
+
+  let left = btnRect.left - cardRect.left - 90; // centraliza aproximadamente sob o botão
+  const larguraMenu = menu.offsetWidth || 220;
+  left = Math.max(4, Math.min(left, cardRect.width - larguraMenu - 4));
+  menu.style.left = left + "px";
+  menu.style.right = "auto";
+
+  if (abrirParaCima) {
+    menu.style.bottom = (cardRect.bottom - btnRect.top + 8) + "px";
+    menu.style.top = "auto";
+  } else {
+    menu.style.top = (btnRect.bottom - cardRect.top + 8) + "px";
+    menu.style.bottom = "auto";
+  }
+}
+
+// Fecha qualquer pop-up (confirmação ou pop-up rápido) já aberto
+// naquele card antes de abrir um novo — evita dois grudados ao mesmo
+// tempo se a pessoa clicar em botões diferentes rapidinho.
+function fecharPickersDoCard(card) {
+  card.querySelectorAll(".repasse-picker").forEach(m => m.remove());
+}
+
+/**
+ * Pop-up rápido e animado com a foto de todo mundo — abre ao clicar no
+ * "+", perto do botão (embaixo ou em cima, conforme o espaço). Clicar
+ * numa pessoa já adiciona ela na sequência na hora (otimista, mesmo
+ * padrão do resto do app), sem precisar abrir o modal "Ver regra"
+ * inteiro só pra isso.
+ */
+async function abrirQuickPickerRegra(t, btn) {
+  const card = btn.closest(".repasse-card");
+  const jaAberto = card.querySelector(".repasse-quick-add");
+  fecharPickersDoCard(card);
+  if (jaAberto) return; // clicou de novo no mesmo botão — só fecha
+
+  const menu = document.createElement("div");
+  menu.className = "repasse-picker repasse-quick-add";
+  menu.innerHTML = `<div class="assignee-menu-loading">Carregando pessoas...</div>`;
+  card.appendChild(menu);
+  posicionarPickerPertoDoBotao(menu, btn);
+
+  const usuarios = await buscarUsuariosRunrun();
+  if (!menu.isConnected) return; // fechou enquanto carregava
+  if (usuarios.length === 0) {
+    menu.innerHTML = `<div class="assignee-menu-loading">Não consegui buscar a lista.</div>`;
+    return;
+  }
+  menu.innerHTML = usuarios.map(u => `
+    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}" data-user-foto="${u.foto || ""}">
+      ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
+    </button>
+  `).join("");
+  posicionarPickerPertoDoBotao(menu, btn); // recalcula já com a altura real da lista
+
+  menu.querySelectorAll("button").forEach(opt => {
+    opt.addEventListener("click", ev => {
+      ev.stopPropagation();
+      menu.remove();
+      adicionarPessoaViaQuickPicker(t, {
+        id: opt.dataset.userId,
+        nome: opt.dataset.userNome,
+        foto: opt.dataset.userFoto || null,
+      });
+    });
+  });
+
+  setTimeout(() => {
+    document.addEventListener("click", function fechar(ev) {
+      if (!menu.contains(ev.target) && ev.target !== btn) { menu.remove(); document.removeEventListener("click", fechar); }
+    });
+  }, 0);
+}
+
+// Adiciona a pessoa escolhida no pop-up rápido — otimista (a fileira já
+// mostra a foto nova na hora, com o anel amarelo de "confirmando..."),
+// confirma de verdade em segundo plano. Mesma ideia de
+// adicionarPessoaOtimista (js/regras-briefing.js), só que redesenhando
+// direto o card de repasse em vez do modal "Ver regra".
+async function adicionarPessoaViaQuickPicker(t, usuario) {
+  const seq = t.sequencia || [];
+  seq.forEach(s => { s.ultimo = false; });
+  seq.push({
+    id: "pendente-" + Date.now(),
+    nome: usuario.nome,
+    foto: usuario.foto,
+    atual: false,
+    concluido: false,
+    ultimo: true,
+    pendente: true,
+  });
+  t.sequencia = seq;
+  montarSequenciaCard(t);
+  marcarSeqRowConfirmando(t.id, true);
+  renderSequenciaNoHeaderSeAberta(t); // se o pop-up de detalhe dessa tarefa também estiver aberto
+
+  try {
+    if (!t.workflowId) {
+      const criado = await criarRegraNoBackend(t.id);
+      if (!criado.ok) {
+        mostrarToast("Não consegui criar a sequência dessa tarefa agora.", "erro");
+        await recarregarSequenciaCard(t);
+        return;
+      }
+      t.workflowId = criado.workflowId;
+    }
+    const ok = await adicionarNaRegraNoBackend(t.workflowId, usuario.id);
+    if (!ok) mostrarToast("Não consegui adicionar essa pessoa na sequência agora.", "erro");
+    await recarregarSequenciaCard(t); // sincroniza com o estado real (troca a linha "pendente" pela de verdade)
+    agendarAtualizacaoKanban();
+  } finally {
+    marcarSeqRowConfirmando(t.id, false);
+  }
 }
 
 // Pop-up "Repassar para <nome>?" ancorado na barra de baixo do card
 // (mesmo lugar de sempre), mesmo o clique tendo vindo da seta lá em
 // cima, na fileira de fotinhos.
 function abrirConfirmacaoRepasseCard(t, proximo, btn) {
-  const actionsEl = btn.closest(".repasse-card").querySelector(".repasse-card-actions");
-  let menu = actionsEl.querySelector(".repasse-picker");
-  if (menu) { menu.remove(); return; }
-  menu = document.createElement("div");
+  const card = btn.closest(".repasse-card");
+  const actionsEl = card.querySelector(".repasse-card-actions");
+  const jaAberto = card.querySelector(".repasse-picker");
+  fecharPickersDoCard(card);
+  if (jaAberto) return;
+  const menu = document.createElement("div");
   menu.className = "repasse-picker repasse-confirm";
   menu.innerHTML = `
     <div class="repasse-confirm-text">Repassar para <strong>${proximo.nome}</strong>?</div>
@@ -319,10 +461,12 @@ function abrirConfirmacaoRepasseCard(t, proximo, btn) {
 // Pop-up de confirmação antes de entregar — texto muda conforme o
 // motivo (você é o último da sequência x a tarefa nem tem sequência).
 function abrirConfirmacaoEntregarCard(t, btn, temSequencia) {
-  const actionsEl = btn.closest(".repasse-card").querySelector(".repasse-card-actions");
-  let menu = actionsEl.querySelector(".repasse-picker");
-  if (menu) { menu.remove(); return; }
-  menu = document.createElement("div");
+  const card = btn.closest(".repasse-card");
+  const actionsEl = card.querySelector(".repasse-card-actions");
+  const jaAberto = card.querySelector(".repasse-picker");
+  fecharPickersDoCard(card);
+  if (jaAberto) return;
+  const menu = document.createElement("div");
   menu.className = "repasse-picker repasse-confirm repasse-confirm-entregar";
   const texto = temSequencia
     ? "Você é a última pessoa da sequência — confirmar aqui vai <strong>entregar a tarefa</strong>, não repassar pra ninguém. Tem certeza?"
