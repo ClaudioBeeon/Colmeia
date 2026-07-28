@@ -16,11 +16,11 @@ Se uma sessão futura receber acesso a essa pasta vazia, pedir acesso à pasta c
 
 - `index.html`, `script.js` (~5.600 linhas), `style.css` = frontend. Publicado automaticamente
   no GitHub Pages a cada push.
-- `Code.gs` = backend, roda no Google Apps Script (serviço separado, NÃO faz parte deste repositório
-  git — não existe cópia local dele nesta pasta nem no histórico do git). Depois de editar Code.gs
-  (em qualquer conversa futura, provavelmente colado pelo usuário ou reconstruído a partir de contexto),
-  é preciso avisar o usuário para colar o conteúdo no editor do Apps Script e criar uma "Nova versão"
-  na implantação — sem isso a mudança não tem efeito no app real.
+- `Código.gs` = backend, roda no Google Apps Script. O nome do arquivo tem que ser exatamente esse
+  (com acento) — é o nome real do arquivo dentro do projeto do Apps Script (confirmado via
+  `clasp clone`); um arquivo local chamado diferente (ex: sem o acento) faria o clasp criar um SEGUNDO
+  arquivo lá dentro, duplicando funções e quebrando tudo. Desde 2026-07-28 o deploy é automático (ver seção
+  "Deploy automático" abaixo) — não é mais preciso colar manualmente no editor do Apps Script.
 - Backend integra com API do Runrun.it, Google Drive e Google Sheets (a planilha é o "banco de dados").
 - Projeto irmão "painel-designers-beeon" (outro Apps Script) fornece tempo médio de criação por
   cliente e vínculos de nomes de cliente. URL dele está em `script.js` como `PAINEL_BEEON_API_URL`.
@@ -54,7 +54,7 @@ prestar atenção a esse padrão.
 - Preferências por designer (ordem de abas etc.) vão em `localStorage`, não no backend — cada
   designer usa seu próprio navegador/login, então não precisa sincronizar entre dispositivos.
   Convenção de nome de chave: `colmeia_<coisa>_v1`.
-- `buscarTarefasRunrun()` (Code.gs) só busca tarefas **abertas** (`is_closed=false`) e **exclui**
+- `buscarTarefasRunrun()` (Código.gs) só busca tarefas **abertas** (`is_closed=false`) e **exclui**
   cards mãe (`tarefaEhCardMae`) — por isso `tasksTodas` no front nunca tem essas duas categorias.
   Pra qualquer feature que precise delas (ex: aba "Entregues"/"Card mãe" no Runrun completo), é
   preciso uma busca EXTRA e separada (`buscarExtrasRunrunCompleto`, ação `buscarExtrasRunrunCompleto`),
@@ -63,12 +63,12 @@ prestar atenção a esse padrão.
 - Runrun.it não tem filtro de data na API de tarefas — pra buscar "coisas dos últimos N dias" sem
   varrer tudo, pede-se ordenado (`sort=updated_at&sortDir=desc`) e para de virar página assim que a
   primeira tarefa fora da janela aparece.
-- Padrão de cache já usado em `Code.gs`: `CacheService.getScriptCache()` com `cache.get`/`cache.put`
+- Padrão de cache já usado em `Código.gs`: `CacheService.getScriptCache()` com `cache.get`/`cache.put`
   (chave string, JSON serializado, TTL em segundos). Usado em `buscarVinculosDoPainel` (10 min) e em
   `buscarUploadsRecentesDoCard` (15s, pra não re-varrer a pasta do Drive a cada poll de 8s do
   front-end enquanto um card fica aberto).
 - Campo `createdAt` (data de criação da tarefa no Runrun.it) foi adicionado em `transformarTarefaParaColmeia`
-  (Code.gs) e `mapearTarefaDoBackend` (script.js) — usar esse campo pra qualquer ordenação
+  (Código.gs) e `mapearTarefaDoBackend` (script.js) — usar esse campo pra qualquer ordenação
   "mais antigo pro mais novo".
 - Vínculo de apelidos (painel de Pessoas): `pessoasSalvas[i].aliases` agora resulta em remover a
   linha do apelido da planilha (`excluirPessoasPorNomesNoBackend`, chama a ação já existente
@@ -81,22 +81,22 @@ prestar atenção a esse padrão.
   momento do clique, nunca guardando a referência do objeto de antes — segue o padrão já usado em
   `priority-wrap`/`assignee-wrap`. Isso evita o bug de referência obsoleta mencionado acima.
 
-## Deploy automático do Code.gs (2026-07-28)
+## Deploy automático do Código.gs (2026-07-28)
 
-O `Code.gs` agora tem deploy 100% automático via GitHub Actions (`.github/workflows/deploy-apps-script.yml`):
-a cada push na branch `main` que muda `Code.gs`, o workflow instala o `clasp` (`package.json`, só serve
+O `Código.gs` agora tem deploy 100% automático via GitHub Actions (`.github/workflows/deploy-apps-script.yml`):
+a cada push na branch `main` que muda `Código.gs`, o workflow instala o `clasp` (`package.json`, só serve
 pra isso — não tem relação com o frontend), restaura o login do clasp a partir do secret
 `CLASP_CREDENTIALS`, gera um `.clasp.json` a partir do secret `SCRIPT_ID`, roda `clasp push --force` e
 depois `clasp deploy --deploymentId <secret CLASP_DEPLOYMENT_ID>` — **atualiza a implantação de produção
 existente, nunca cria uma nova**. Se existir o secret opcional `STAGING_DEPLOYMENT_ID`, também redeploya
 lá como rede de segurança.
 
-**IMPORTANTE — isso significa que não há mais revisão manual**: qualquer push que muda `Code.gs` na
-`main` vai direto pro Apps Script de produção. Ao propor mudanças em `Code.gs`, ter isso em mente —
+**IMPORTANTE — isso significa que não há mais revisão manual**: qualquer push que muda `Código.gs` na
+`main` vai direto pro Apps Script de produção. Ao propor mudanças em `Código.gs`, ter isso em mente —
 o aviso de "cole no Apps Script e crie uma Nova versão" (usado antes disso existir) não se aplica mais;
 em vez disso, avisar que o push já publica sozinho.
 
-`.claspignore` restringe o clasp a só enviar `Code.gs` (+ `appsscript.json` se existir) — sem isso ele
+`.claspignore` restringe o clasp a só enviar `Código.gs` (+ `appsscript.json` se existir) — sem isso ele
 tentaria empurrar `index.html`/`script.js` (do frontend) pro Apps Script também.
 
 ## Fluxo de trabalho
@@ -104,5 +104,5 @@ tentaria empurrar `index.html`/`script.js` (do frontend) pro Apps Script também
 - Validar sintaxe de JS depois de qualquer edição.
 - Fazer commit e push direto no repo git ao terminar uma alteração testada (sem pedir confirmação
   extra, a menos que a mudança seja arriscada).
-- Code.gs exige aviso manual separado (colar no Apps Script + Nova versão) — nunca assumir que
-  o push no GitHub atualiza o backend.
+- Desde 2026-07-28, push que muda `Código.gs`/`appsscript.json` na `main` publica sozinho em produção
+  (ver "Deploy automático" acima) — não pedir mais pra colar manualmente no Apps Script.

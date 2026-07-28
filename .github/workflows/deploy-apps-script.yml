@@ -1,13 +1,15 @@
-name: Deploy Code.gs to Google Apps Script
+name: Deploy Código.gs to Google Apps Script
 
-# Publica o Code.gs no Google Apps Script automaticamente, sem revisão
-# manual, sempre que ele muda na branch principal. Ver CLAUDE.md /
-# aviso no chat sobre os riscos disso antes de mexer aqui.
+# Publica o Código.gs (o arquivo real no Apps Script se chama "Código",
+# com acento) no Google Apps Script automaticamente, sem revisão manual,
+# sempre que ele muda na branch principal. Ver CLAUDE.md / aviso no chat
+# sobre os riscos disso antes de mexer aqui.
 on:
   push:
     branches: [main]
     paths:
-      - "Code.gs"
+      - "Código.gs"
+      - "appsscript.json"
   workflow_dispatch: {} # permite rodar manualmente pela aba "Actions" do GitHub, se precisar
 
 permissions:
@@ -36,7 +38,7 @@ jobs:
       - name: Gerar o .clasp.json (a partir do secret SCRIPT_ID)
         run: |
           cat > .clasp.json << EOF
-          { "scriptId": "${{ secrets.SCRIPT_ID }}", "rootDir": "." }
+          { "scriptId": "${{ secrets.SCRIPT_ID }}", "rootDir": ".", "fileExtension": "gs" }
           EOF
 
       - name: Enviar o código pro Apps Script (clasp push)

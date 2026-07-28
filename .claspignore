@@ -2,7 +2,8 @@
 # desse repositório pro Apps Script — inclusive index.html e script.js,
 # que são do FRONTEND e não têm nada a ver com o backend. Essa lista
 # ignora tudo por padrão e só deixa passar o que é de verdade do
-# Apps Script (Code.gs e o manifesto appsscript.json, se existir).
+# Apps Script (o arquivo real se chama "Código", com acento — não "Code")
+# e o manifesto appsscript.json.
 **/**
-!Code.gs
+!Código.gs
 !appsscript.json
