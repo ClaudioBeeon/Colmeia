@@ -573,11 +573,21 @@ function renderDetail() {
   }
 
   document.getElementById("detailPlay").addEventListener("click", () => {
-    const vaiComecar = !task.running;
-    if (vaiComecar) pararOutrasTarefasRodando(task);
-    task.running = vaiComecar;
-    if (task.running) tocarTarefaNoBackend(task.id, task.title);
-    else pausarTarefaNoBackend(task.id);
+    // Não achado pela busca literal "tasks[detailIdx] === task", mas é
+    // a mesma família de bug: "task" aqui é a referência capturada
+    // quando o pop-up foi desenhado, que pode já estar obsoleta se
+    // atualizarKanbanEmBackground trocou os objetos de tarefa enquanto
+    // o pop-up ficou aberto (sem o usuário clicar em nada nesse meio-
+    // tempo). Mexer em ".running" nesse objeto velho não aparecia em
+    // lugar nenhum, porque renderDetail() sempre lê tasks[detailIdx] de
+    // novo — e pararOutrasTarefasRodando(task) comparava por referência
+    // contra objetos vivos que nunca iam bater, parando tarefas erradas.
+    const tarefaViva = (task.id && tasks.find(x => String(x.id) === String(task.id))) || task;
+    const vaiComecar = !tarefaViva.running;
+    if (vaiComecar) pararOutrasTarefasRodando(tarefaViva);
+    tarefaViva.running = vaiComecar;
+    if (tarefaViva.running) tocarTarefaNoBackend(tarefaViva.id, tarefaViva.title);
+    else pausarTarefaNoBackend(tarefaViva.id);
     renderDetail();
     render();
     applyCommentsState();
@@ -1244,7 +1254,13 @@ setInterval(() => {
       task.timerSeconds++;
       const timerEl = document.querySelector(`.timer-text[data-idx="${idx}"]`);
       if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
-      if (tasks[detailIdx] === task) {
+      // Compara os ÍNDICES (idx === detailIdx), não os objetos por
+      // referência — aqui os dois efetivamente sempre vêm do mesmo
+      // array tasks[] no mesmo instante, então não era um bug de
+      // verdade, mas comparar por índice é mais simples e não deixa
+      // esse padrão (=== entre objetos de tarefa) se espalhar pelo
+      // código feito exemplo pra copiar em outro lugar onde SERIA bug.
+      if (idx === detailIdx) {
         const detailTimerEl = document.getElementById("detailTimer");
         if (detailTimerEl) detailTimerEl.textContent = formatTime(task.timerSeconds);
       }
