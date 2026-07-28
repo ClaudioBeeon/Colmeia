@@ -99,6 +99,26 @@ em vez disso, avisar que o push já publica sozinho.
 `.claspignore` restringe o clasp a só enviar `Código.gs` (+ `appsscript.json` se existir) — sem isso ele
 tentaria empurrar `index.html`/`script.js` (do frontend) pro Apps Script também.
 
+**Coisas que travaram na primeira configuração (2026-07-28), pra não repetir o diagnóstico:**
+1. `package.json` tinha que fixar a MESMA versão major do clasp que rodou o `clasp login` local
+   (aqui, 3.3.0) — a v2 lê o arquivo de credenciais (`~/.clasprc.json`) num formato diferente
+   (`token.access_token`) do da v3 (`tokens.default.access_token`), e dá
+   `Cannot read properties of undefined (reading 'access_token')` se não bater.
+2. O nome real do arquivo no projeto do Apps Script é **`Código`** (com acento), não `Code` — clasp
+   identifica o arquivo remoto pelo nome local (sem extensão), então o arquivo aqui no repo TEM que
+   se chamar `Código.gs` exatamente. `.clasp.json` tem `"fileExtension": "gs"` pra manter consistência.
+3. `clasp push` exige um `appsscript.json` local pra aceitar enviar qualquer coisa (erro "Project
+   contents must include a manifest file named appsscript."). Foi obtido com `clasp clone` numa pasta
+   temporária separada (nunca clonar dentro deste repo — sobrescreveria `Código.gs` com a versão antiga
+   que ainda estava em produção).
+4. A conta Google usada no `clasp login` precisa ter a "Google Apps Script API" habilitada em
+   https://script.google.com/home/usersettings, senão `clasp push` falha com "User has not enabled
+   the Apps Script API".
+
+Secrets do GitHub em uso: `CLASP_CREDENTIALS` (conteúdo de `~/.clasprc.json`), `SCRIPT_ID`,
+`CLASP_DEPLOYMENT_ID` (produção), `STAGING_DEPLOYMENT_ID` (implantação de teste, opcional/rede de
+segurança). O ID de qualquer implantação é o trecho entre `/s/` e `/exec` na URL do Web App dela.
+
 ## Fluxo de trabalho
 
 - Validar sintaxe de JS depois de qualquer edição.
