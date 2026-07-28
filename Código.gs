@@ -1749,7 +1749,7 @@ function gerarBriefingDaTarefa(taskId) {
   // contra resumir demais), sobe esse número — isso invalida sozinho
   // todo o cache antigo (mesmo sem a descrição da tarefa ter mudado),
   // sem precisar apagar a aba "Briefings" na mão.
-  var BRIEFING_PROMPT_VERSAO = 'v4';
+  var BRIEFING_PROMPT_VERSAO = 'v5';
   var hash = hashTexto(descricaoHtml + '|' + BRIEFING_PROMPT_VERSAO);
   var cacheado = buscarBriefingCacheado(taskId, hash);
   if (cacheado) return { ok: true, briefing: cacheado, doCache: true };
@@ -1785,6 +1785,10 @@ function gerarBriefingDaTarefa(taskId) {
     'texto que vai virar copy visível na peça, nem um detalhe de pontuação.\n' +
     '- Vasculhe a descrição inteira e identifique TODAS as perguntas/campos que existirem, mesmo os que ' +
     'parecerem secundários — não pule nenhum.\n' +
+    '- Se a resposta original de um campo só disser que não tem nada (ex: "Nenhuma.", "N/A", "-", ' +
+    '"Nenhum", vazio de verdade), NÃO escreva "Nenhuma." em "resposta" — devolva null nos dois campos ' +
+    '("resposta" e "respostaOriginal"), como se a pergunta não tivesse sido respondida. Isso evita que ' +
+    'uma caixinha inteira apareça no briefing só pra dizer que não tem nada.\n' +
     '- "resumo" NÃO é um resumo que substitui o resto do briefing — é só uma frase curta de CONTEXTO ' +
     '(do que se trata a peça, pra quem, com que objetivo) pra alguém entender o panorama antes de ler ' +
     'os campos detalhados. Nunca coloque em "resumo" uma informação que só existe ali — ela também tem ' +

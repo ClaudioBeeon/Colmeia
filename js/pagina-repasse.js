@@ -332,6 +332,7 @@ function posicionarPickerPertoDoBotao(menu, btn) {
 // tempo se a pessoa clicar em botões diferentes rapidinho.
 function fecharPickersDoCard(card) {
   card.querySelectorAll(".repasse-picker").forEach(m => m.remove());
+  card.classList.remove("repasse-card-popup-aberto");
 }
 
 /**
@@ -346,6 +347,7 @@ async function abrirQuickPickerRegra(t, btn) {
   const jaAberto = card.querySelector(".repasse-quick-add");
   fecharPickersDoCard(card);
   if (jaAberto) return; // clicou de novo no mesmo botão — só fecha
+  card.classList.add("repasse-card-popup-aberto"); // sobe acima dos cards vizinhos
 
   const menu = document.createElement("div");
   menu.className = "repasse-picker repasse-quick-add";
@@ -353,7 +355,7 @@ async function abrirQuickPickerRegra(t, btn) {
   card.appendChild(menu);
   posicionarPickerPertoDoBotao(menu, btn);
 
-  const usuarios = await buscarUsuariosRunrun();
+  const usuarios = ordenarUsuariosParaRegra(await buscarUsuariosRunrun());
   if (!menu.isConnected) return; // fechou enquanto carregava
   if (usuarios.length === 0) {
     menu.innerHTML = `<div class="assignee-menu-loading">Não consegui buscar a lista.</div>`;
@@ -369,7 +371,7 @@ async function abrirQuickPickerRegra(t, btn) {
   menu.querySelectorAll("button").forEach(opt => {
     opt.addEventListener("click", ev => {
       ev.stopPropagation();
-      menu.remove();
+      fecharPickersDoCard(card);
       adicionarPessoaViaQuickPicker(t, {
         id: opt.dataset.userId,
         nome: opt.dataset.userNome,
@@ -380,29 +382,20 @@ async function abrirQuickPickerRegra(t, btn) {
 
   setTimeout(() => {
     document.addEventListener("click", function fechar(ev) {
-      if (!menu.contains(ev.target) && ev.target !== btn) { menu.remove(); document.removeEventListener("click", fechar); }
+      if (!menu.contains(ev.target) && ev.target !== btn) { fecharPickersDoCard(card); document.removeEventListener("click", fechar); }
     });
   }, 0);
 }
 
 // Adiciona a pessoa escolhida no pop-up rápido — otimista (a fileira já
-// mostra a foto nova na hora, com o anel amarelo de "confirmando..."),
+// mostra a foto nova na hora, com o anel amarelo na foto que assumiu),
 // confirma de verdade em segundo plano. Mesma ideia de
 // adicionarPessoaOtimista (js/regras-briefing.js), só que redesenhando
-// direto o card de repasse em vez do modal "Ver regra".
+// direto o card de repasse em vez do modal "Ver regra" — usa a mesma
+// construirSequenciaOtimistaComNovaPessoa (regras-briefing.js) pra
+// garantir que sua foto nunca some quando a regra ainda nem existia.
 async function adicionarPessoaViaQuickPicker(t, usuario) {
-  const seq = t.sequencia || [];
-  seq.forEach(s => { s.ultimo = false; });
-  seq.push({
-    id: "pendente-" + Date.now(),
-    nome: usuario.nome,
-    foto: usuario.foto,
-    atual: false,
-    concluido: false,
-    ultimo: true,
-    pendente: true,
-  });
-  t.sequencia = seq;
+  t.sequencia = construirSequenciaOtimistaComNovaPessoa(t, usuario);
   montarSequenciaCard(t);
   marcarSeqRowConfirmando(t.id, true);
   renderSequenciaNoHeaderSeAberta(t); // se o pop-up de detalhe dessa tarefa também estiver aberto
@@ -435,6 +428,7 @@ function abrirConfirmacaoRepasseCard(t, proximo, btn) {
   const jaAberto = card.querySelector(".repasse-picker");
   fecharPickersDoCard(card);
   if (jaAberto) return;
+  card.classList.add("repasse-card-popup-aberto"); // sobe acima dos cards vizinhos
   const menu = document.createElement("div");
   menu.className = "repasse-picker repasse-confirm";
   menu.innerHTML = `
@@ -445,15 +439,15 @@ function abrirConfirmacaoRepasseCard(t, proximo, btn) {
     </div>
   `;
   actionsEl.appendChild(menu);
-  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); menu.remove(); });
+  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); fecharPickersDoCard(card); });
   menu.querySelector(".repasse-confirm-ok").addEventListener("click", ev => {
     ev.stopPropagation();
-    menu.remove();
+    fecharPickersDoCard(card);
     confirmarEAvancarSequenciaCard(t, btn, proximo);
   });
   setTimeout(() => {
     document.addEventListener("click", function fechar(ev) {
-      if (!menu.contains(ev.target) && ev.target !== btn) { menu.remove(); document.removeEventListener("click", fechar); }
+      if (!menu.contains(ev.target) && ev.target !== btn) { fecharPickersDoCard(card); document.removeEventListener("click", fechar); }
     });
   }, 0);
 }
@@ -466,6 +460,7 @@ function abrirConfirmacaoEntregarCard(t, btn, temSequencia) {
   const jaAberto = card.querySelector(".repasse-picker");
   fecharPickersDoCard(card);
   if (jaAberto) return;
+  card.classList.add("repasse-card-popup-aberto"); // sobe acima dos cards vizinhos
   const menu = document.createElement("div");
   menu.className = "repasse-picker repasse-confirm repasse-confirm-entregar";
   const texto = temSequencia
@@ -479,16 +474,16 @@ function abrirConfirmacaoEntregarCard(t, btn, temSequencia) {
     </div>
   `;
   actionsEl.appendChild(menu);
-  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); menu.remove(); });
+  menu.querySelector(".repasse-confirm-cancel").addEventListener("click", ev => { ev.stopPropagation(); fecharPickersDoCard(card); });
   menu.querySelector(".repasse-confirm-ok").addEventListener("click", ev => {
     ev.stopPropagation();
-    menu.remove();
+    fecharPickersDoCard(card);
     if (temSequencia) confirmarEAvancarSequenciaCard(t, btn, null);
     else confirmarEntregaDiretaCard(t, btn);
   });
   setTimeout(() => {
     document.addEventListener("click", function fechar(ev) {
-      if (!menu.contains(ev.target) && ev.target !== btn) { menu.remove(); document.removeEventListener("click", fechar); }
+      if (!menu.contains(ev.target) && ev.target !== btn) { fecharPickersDoCard(card); document.removeEventListener("click", fechar); }
     });
   }, 0);
 }
@@ -501,10 +496,6 @@ function marcarSeqRowConfirmando(taskId, ligar) {
   const row = document.querySelector(`.repasse-seq-row[data-id="${CSS.escape(String(taskId))}"]`);
   if (!row) return;
   row.classList.toggle("repasse-seq-confirmando", ligar);
-  if (ligar) {
-    const dotAtual = row.querySelector(".wf-dot.current");
-    if (dotAtual) dotAtual.classList.add("confirmando");
-  }
 }
 
 // Avança a sequência de verdade no Runrun.it (repassar pro próximo OU

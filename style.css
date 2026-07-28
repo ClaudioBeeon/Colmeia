@@ -2429,10 +2429,16 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 
 .repasse-card {
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
-  padding: 14px; cursor: pointer; position: relative;
+  padding: 14px; cursor: pointer; position: relative; z-index: 1;
   transition: transform var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple);
 }
 .repasse-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+/* Enquanto um pop-up (confirmar/repassar ou o de adicionar pessoa)
+   está aberto dentro do card, ele sobe acima dos cards vizinhos — sem
+   isso, o pop-up (que "vaza" pra fora do card, pra cima ou pra baixo)
+   ficava escondido atrás do próximo card da coluna, que é pintado por
+   cima por vir depois no HTML. */
+.repasse-card.repasse-card-popup-aberto { z-index: 40; }
 .repasse-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .repasse-card-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); line-height: 1.35; margin-bottom: 10px; }
 .repasse-card-tempo { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
@@ -2515,18 +2521,11 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .repasse-seq-btn.deliver:hover:not(:disabled) { background: #2F9E44; color: #fff; }
 
 /* Estado "confirmando em segundo plano" — a tela já mudou na hora
-   (otimista), isso só avisa visualmente que ainda tá confirmando de
-   verdade com o Runrun.it: um anel amarelo pulsando na foto que está
-   assumindo, e a fileira levemente esmaecida/travada pra evitar clique
-   duplo enquanto isso não termina. */
+   (otimista, o anel amarelo já está na foto que assumiu, do mesmo jeito
+   estático que .wf-dot.current sempre usa — sem piscar), isso só
+   esmaece levemente a fileira e trava clique duplo até a confirmação
+   de verdade com o Runrun.it terminar. */
 .repasse-seq-row.repasse-seq-confirmando { opacity: 0.75; pointer-events: none; }
-.wf-dot.current.confirmando {
-  animation: repasseConfirmandoPulso 0.9s ease-in-out infinite;
-}
-@keyframes repasseConfirmandoPulso {
-  0%, 100% { box-shadow: 0 0 0 2px var(--kanban-yellow); }
-  50% { box-shadow: 0 0 0 5px var(--kanban-yellow); }
-}
 
 .repasse-picker {
   position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 20;

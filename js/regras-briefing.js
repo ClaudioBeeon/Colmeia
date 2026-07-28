@@ -44,8 +44,8 @@ function renderModalRegra(task) {
   });
 
   buscarUsuariosRunrun().then(usuarios => {
-    usuariosParaAdicionarRegra = usuarios;
-    renderizarListaAdicionarRegra(task, usuarios, "");
+    usuariosParaAdicionarRegra = ordenarUsuariosParaRegra(usuarios);
+    renderizarListaAdicionarRegra(task, usuariosParaAdicionarRegra, "");
   });
 }
 
@@ -96,15 +96,33 @@ async function removerDaRegraNoBackend(workflowId, elementId) {
 // a cada letra digitada na busca do modal.
 let usuariosParaAdicionarRegra = [];
 
-function renderizarListaAdicionarRegra(task, usuarios, filtro) {
+// Ordem fixa pra QUALQUER lista de escolher gente pra sequência (modal
+// "Ver regra" e o pop-up rápido da aba de Repasse): Erick primeiro,
+// Gustavo em segundo, todo mundo depois em ordem alfabética — pedido
+// explícito, já que são as pessoas mais escolhidas.
+const ORDEM_FIXA_REGRA = ["erick", "gustavo"];
+function ordenarUsuariosParaRegra(usuarios) {
+  return usuarios.slice().sort((a, b) => {
+    const nomeA = normalizarParaComparar(a.nome);
+    const nomeB = normalizarParaComparar(b.nome);
+    const idxA = ORDEM_FIXA_REGRA.findIndex(nome => nomeA.startsWith(nome));
+    const idxB = ORDEM_FIXA_REGRA.findIndex(nome => nomeB.startsWith(nome));
+    const rankA = idxA === -1 ? ORDEM_FIXA_REGRA.length : idxA;
+    const rankB = idxB === -1 ? ORDEM_FIXA_REGRA.length : idxB;
+    if (rankA !== rankB) return rankA - rankB;
+    return a.nome.localeCompare(b.nome, "pt-BR");
+  });
+}
+
+function renderizarListaAdicionarRegra(task, usuariosOrdenados, filtro) {
   const listEl = document.getElementById("ruleAddList");
   if (!listEl) return;
-  if (usuarios.length === 0) {
+  if (usuariosOrdenados.length === 0) {
     listEl.innerHTML = `<div class="assignee-menu-loading">Não consegui buscar a lista.</div>`;
     return;
   }
   const alvo = normalizarParaComparar(filtro);
-  const filtrados = alvo ? usuarios.filter(u => normalizarParaComparar(u.nome).includes(alvo)) : usuarios;
+  const filtrados = alvo ? usuariosOrdenados.filter(u => normalizarParaComparar(u.nome).includes(alvo)) : usuariosOrdenados;
   listEl.innerHTML = filtrados.map(u => `
     <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}" data-user-foto="${u.foto || ""}">
       ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
@@ -123,15 +141,17 @@ function renderizarListaAdicionarRegra(task, usuarios, filtro) {
 }
 
 /**
- * Adiciona a pessoa na hora na lista (otimista, com um spinner bem
- * discreto na linha dela), sem esperar o Runrun.it responder. Confirma
- * de verdade em segundo plano e substitui pela sequência real quando
- * a resposta chegar.
+ * Monta a lista otimista de depois de adicionar uma pessoa na
+ * sequência — usada tanto pelo modal "Ver regra" quanto pelo pop-up
+ * rápido da aba de Repasse (js/pagina-repasse.js). Se a tarefa ainda
+ * não tinha NENHUMA sequência, o próprio Runrun.it sempre entra com
+ * quem está com a tarefa agora (o responsável atual) como primeiro
+ * elemento assim que uma regra é criada do zero — então a versão
+ * otimista já reflete isso na hora, em vez de mostrar só a pessoa nova
+ * sozinha (o que fazia sua foto "sumir" até a resposta real confirmar).
  */
-async function adicionarPessoaOtimista(task, usuario) {
-  const seq = task.sequencia || [];
-  seq.forEach(s => { s.ultimo = false; });
-  seq.push({
+function construirSequenciaOtimistaComNovaPessoa(task, usuario) {
+  const novoElemento = {
     id: "pendente-" + Date.now(),
     nome: usuario.nome,
     foto: usuario.foto,
@@ -139,8 +159,26 @@ async function adicionarPessoaOtimista(task, usuario) {
     concluido: false,
     ultimo: true,
     pendente: true,
-  });
-  task.sequencia = seq;
+  };
+  const seqAntes = task.sequencia || [];
+  if (seqAntes.length === 0) {
+    return [
+      { id: "eu-atual", nome: task.assignee, foto: task.assigneeAvatarUrl, atual: true, concluido: false, ultimo: false },
+      novoElemento,
+    ];
+  }
+  seqAntes.forEach(s => { s.ultimo = false; });
+  return [...seqAntes, novoElemento];
+}
+
+/**
+ * Adiciona a pessoa na hora na lista (otimista, com um spinner bem
+ * discreto na linha dela), sem esperar o Runrun.it responder. Confirma
+ * de verdade em segundo plano e substitui pela sequência real quando
+ * a resposta chegar.
+ */
+async function adicionarPessoaOtimista(task, usuario) {
+  task.sequencia = construirSequenciaOtimistaComNovaPessoa(task, usuario);
   renderModalRegra(task);
   renderSequenciaNoHeaderSeAberta(task);
   renderRepasseCardSeAberta(task);
@@ -408,6 +446,19 @@ function ehCampoTextoNaArte(pergunta) {
   return (p.includes("texto") || p.includes("textu")) && p.includes("arte");
 }
 
+// Respostas que "tecnicamente" vieram preenchidas mas só dizem que não
+// tem nada (ex: "Nenhuma.", "N/A", "-") não ajudam ninguém ocupando
+// espaço como se fossem informação de verdade — tratamos como campo
+// vazio (some da descrição, vira só uma bolhinha em "Vazios").
+const RESPOSTAS_VAZIAS = ["", "nenhum", "nenhuma", "nenhumas", "nenhuns", "na", "nao", "nda", "sem", "none", "vazio"];
+function respostaEhVazia(resposta) {
+  if (!resposta) return true;
+  // normalizarParaComparar já troca pontuação por espaço e tira acento
+  // — "Nenhuma.", "N/A" e "-" (sozinho) todos caem num desses casos.
+  const normalizado = normalizarParaComparar(resposta).replace(/\s+/g, "");
+  return RESPOSTAS_VAZIAS.includes(normalizado);
+}
+
 // Serviços conhecidos pra reconhecer o link e mostrar "Ver no X" em vez
 // da URL crua. Se não reconhecer o domínio, usa o próprio domínio como
 // nome (ex: "Ver no meusite.com").
@@ -643,8 +694,8 @@ async function gerarBriefingComIA(task) {
         </div>
       ` : ""}
       ${(() => {
-        const preenchidos = camposSecundarios.filter(c => c.resposta);
-        const vazios = camposSecundarios.filter(c => !c.resposta);
+        const preenchidos = camposSecundarios.filter(c => !respostaEhVazia(c.resposta));
+        const vazios = camposSecundarios.filter(c => respostaEhVazia(c.resposta));
         return `
           ${preenchidos.length ? `
             <div class="ai-briefing-preenchidos">
