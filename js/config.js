@@ -44,6 +44,26 @@ const DIAS_SEMANA_ABREV = ["D", "S", "T", "Q", "Q", "S", "S"];
 })();
 
 /**
+ * Posiciona um elemento position:fixed grudado perto de uma âncora —
+ * embaixo se tiver espaço na tela, em cima se não tiver (ex: perto do
+ * fim da tela). Usado por qualquer pop-up "solto" (calendário, avisos
+ * como o de transferir o card mãe) que abre fora do fluxo normal do
+ * layout, direto no body.
+ */
+function posicionarPopupFixo(popupEl, ancoraEl) {
+  const rect = ancoraEl.getBoundingClientRect();
+  const alturaPopup = popupEl.offsetHeight || 220;
+  const larguraPopup = popupEl.offsetWidth || 260;
+  const espacoAbaixo = window.innerHeight - rect.bottom;
+  const abrirParaCima = espacoAbaixo < alturaPopup + 12 && rect.top > alturaPopup + 12;
+
+  let left = Math.min(rect.left, window.innerWidth - larguraPopup - 8);
+  left = Math.max(8, left);
+  popupEl.style.left = left + "px";
+  popupEl.style.top = abrirParaCima ? (rect.top - alturaPopup - 8) + "px" : (rect.bottom + 8) + "px";
+}
+
+/**
  * Calendário próprio do Colmeia — substitui o <input type="date"> nativo
  * do navegador em todo lugar que edita data (card do quadro, pop-up de
  * detalhe, fila de repasse). Abre grudado perto de `ancoraEl` (embaixo
@@ -132,16 +152,7 @@ function abrirCalendarioColmeia({ ancoraEl, valorInicial, onEscolher, onFechar }
   }
 
   function posicionar() {
-    const rect = ancoraEl.getBoundingClientRect();
-    const alturaCal = cal.offsetHeight || 300;
-    const larguraCal = cal.offsetWidth || 260;
-    const espacoAbaixo = window.innerHeight - rect.bottom;
-    const abrirParaCima = espacoAbaixo < alturaCal + 12 && rect.top > alturaCal + 12;
-
-    let left = Math.min(rect.left, window.innerWidth - larguraCal - 8);
-    left = Math.max(8, left);
-    cal.style.left = left + "px";
-    cal.style.top = abrirParaCima ? (rect.top - alturaCal - 8) + "px" : (rect.bottom + 8) + "px";
+    posicionarPopupFixo(cal, ancoraEl);
   }
 
   function fechar() {

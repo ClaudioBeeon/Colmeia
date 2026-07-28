@@ -2110,28 +2110,23 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .repetir-comentario-prompt .repetir-sim { background: var(--kanban-yellow); color: #16181D; }
 .repetir-comentario-prompt .repetir-nao { background: var(--page-bg); color: var(--text-secondary); }
 
-/* Barra que pergunta "quer transferir o card mãe?" depois de concluir
-   uma subtarefa — fica grudada no rodapé do pop-up de detalhe (não do
-   chat, esse é o painel principal), com uma leve subida animada. */
-.detail-bottom-prompt {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 40;
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 20px; background: var(--card-bg); border-top: 1px solid var(--border);
-  box-shadow: 0 -8px 20px rgba(10,10,20,0.10);
-  animation: detailBottomPromptSlide var(--dur-base) var(--ease-apple-spring);
+/* Pop-up que pergunta "quer transferir o card mãe?" depois de concluir
+   uma subtarefa — grudado embaixo do botão de concluir (mesmo estilo e
+   posicionamento do calendário, ver posicionarPopupFixo em js/config.js). */
+.card-mae-transfer-popup {
+  position: fixed; z-index: 500; width: 280px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px; box-shadow: var(--shadow-hover); font-family: var(--font-body);
+  animation: colmeia-modal-pop var(--dur-fast) var(--ease-apple-spring);
 }
-.detail-bottom-prompt-text { flex: 1; font-size: 13px; color: var(--text-primary); line-height: 1.4; }
-.detail-bottom-prompt-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.detail-bottom-prompt-actions button {
-  border: none; border-radius: 999px; padding: 7px 16px;
+.card-mae-transfer-texto { font-size: 13px; color: var(--text-primary); line-height: 1.45; margin-bottom: 10px; }
+.card-mae-transfer-actions { display: flex; gap: 8px; }
+.card-mae-transfer-actions button {
+  flex: 1; border: none; border-radius: 999px; padding: 7px 0;
   font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
 }
-.detail-bottom-prompt-sim { background: var(--kanban-yellow); color: #16181D; }
-.detail-bottom-prompt-nao { background: var(--page-bg); color: var(--text-secondary); }
-@keyframes detailBottomPromptSlide {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
+.card-mae-transfer-sim { background: var(--kanban-yellow); color: #16181D; }
+.card-mae-transfer-nao { background: var(--page-bg); color: var(--text-secondary); }
 
 /* ===== Reações de emoji nos comentários ===== */
 .comment-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

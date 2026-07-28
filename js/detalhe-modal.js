@@ -518,8 +518,6 @@ function renderDetail() {
         ${chatIcon}
         <span class="chat-fab-badge" id="chatFabBadge" hidden>0</span>
       </button>
-
-      <div class="detail-bottom-prompt" id="detailBottomPrompt" hidden></div>
     </div>
 
     <div class="chat-panel" id="chatPanel" hidden>
@@ -1072,6 +1070,15 @@ async function precarregarCardMaeEmBackground(taskId) {
     const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
     chatMaeCache.set(taskId, { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios });
   }
+  // Já aproveita e busca a Sequência de responsáveis do card mãe
+  // também, em segundo plano — assim, se a pessoa concluir a subtarefa
+  // e quiser transferir o card mãe na hora (ver verificarTransferirCardMae
+  // logo abaixo), tanto saber se ele "está com ela" quanto o modal
+  // "Ver regra" que abre em seguida já ficam prontos na hora, sem mais
+  // nenhuma ida ao Runrun.it esperando.
+  const seqResultado = await buscarSequenciaDoBackend(resultado.cardMae.id);
+  resultado.cardMae.sequencia = seqResultado.sequencia;
+  resultado.cardMae.workflowId = seqResultado.workflowId;
 }
 
 async function abrirCardMae(task) {
@@ -1118,9 +1125,13 @@ async function abrirCardMae(task) {
 
 /**
  * Chamada depois de concluir uma subtarefa: se o card mãe dela estiver
- * com VOCÊ agora (você é o responsável atual), pergunta — numa barra no
- * rodapé do pop-up — se quer transferir ele pro próximo já, sem
- * precisar sair da subtarefa pra ir procurar o card mãe.
+ * com VOCÊ agora (você é o responsável atual), pergunta — num pop-up
+ * grudado embaixo do botão de concluir (mesmo estilo do calendário) —
+ * se quer transferir ele pro próximo já, sem precisar sair da
+ * subtarefa pra ir procurar o card mãe. Como o card mãe (e a sequência
+ * dele) já foram pré-carregados assim que a subtarefa abriu (ver
+ * precarregarCardMaeEmBackground), isso normalmente já bate direto no
+ * cache — sem esperar o Runrun.it responder de novo.
  */
 async function verificarTransferirCardMae(task) {
   const resultado = cardMaeCache.get(task.id) || await buscarCardMaeDoBackend(task.id);
@@ -1133,23 +1144,43 @@ async function verificarTransferirCardMae(task) {
 }
 
 function mostrarPromptTransferirCardMae(cardMaeRaw) {
-  const el = document.getElementById("detailBottomPrompt");
-  if (!el) return;
-  el.hidden = false;
-  el.innerHTML = `
-    <span class="detail-bottom-prompt-text">O card mãe <strong>${cardMaeRaw.title}</strong> está com você — quer transferir ele pro próximo responsável agora?</span>
-    <div class="detail-bottom-prompt-actions">
-      <button type="button" class="detail-bottom-prompt-nao">Agora não</button>
-      <button type="button" class="detail-bottom-prompt-sim">Transferir</button>
+  document.querySelectorAll(".card-mae-transfer-popup").forEach(el => el.remove());
+  const btn = document.getElementById("navDeliverBtn");
+  if (!btn) return; // botão de concluir já não está mais na tela (trocou de tarefa nesse meio-tempo)
+
+  const pop = document.createElement("div");
+  pop.className = "card-mae-transfer-popup";
+  pop.innerHTML = `
+    <p class="card-mae-transfer-texto">O card mãe <strong>${cardMaeRaw.title}</strong> está com você — quer transferir ele pro próximo responsável?</p>
+    <div class="card-mae-transfer-actions">
+      <button type="button" class="card-mae-transfer-nao">Agora não</button>
+      <button type="button" class="card-mae-transfer-sim">Transferir</button>
     </div>
   `;
-  el.querySelector(".detail-bottom-prompt-nao").addEventListener("click", () => { el.hidden = true; });
-  el.querySelector(".detail-bottom-prompt-sim").addEventListener("click", () => {
-    el.hidden = true;
+  document.body.appendChild(pop);
+  posicionarPopupFixo(pop, btn);
+
+  function fechar() {
+    pop.remove();
+    document.removeEventListener("click", clickFora);
+  }
+  function clickFora(ev) {
+    if (!pop.contains(ev.target) && ev.target !== btn) fechar();
+  }
+  setTimeout(() => document.addEventListener("click", clickFora), 0);
+
+  pop.querySelector(".card-mae-transfer-nao").addEventListener("click", fechar);
+  pop.querySelector(".card-mae-transfer-sim").addEventListener("click", () => {
+    fechar();
     // Abre o modal "Ver regra" do card mãe por cima, SEM sair da
     // subtarefa — reaproveita um objeto solto (não precisa empurrar
-    // pra tasks[]/navegar pra lá só pra revisar a regra).
-    abrirModalRegra(mapearTarefaDoBackend(cardMaeRaw));
+    // pra tasks[]/navegar pra lá só pra revisar a regra). A sequência
+    // já veio pré-carregada junto com o card mãe, então o modal já
+    // abre pronto, sem spinner de "carregando".
+    const cardMaeTask = mapearTarefaDoBackend(cardMaeRaw);
+    cardMaeTask.sequencia = cardMaeRaw.sequencia;
+    cardMaeTask.workflowId = cardMaeRaw.workflowId;
+    abrirModalRegra(cardMaeTask);
   });
 }
 
