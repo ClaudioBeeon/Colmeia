@@ -137,6 +137,8 @@ function handleRequest(e, method) {
         output = buscarSequenciaResponsaveis(body.taskId);
       } else if (body.acao === 'buscarCardMae') {
         output = buscarCardMae(body.taskId);
+      } else if (body.acao === 'buscarSubtarefasDoCardMae') {
+        output = buscarSubtarefasDoCardMae(body.taskId);
       } else if (body.acao === 'buscarTarefaCompleta') {
         output = buscarTarefaCompleta(body.taskId);
       } else if (body.acao === 'entregarTarefa') {
@@ -1847,6 +1849,23 @@ function buscarTarefaCompleta(taskId) {
   return { ok: true, tarefa: transformarTarefaParaColmeia(t) };
 }
 
+function montarResumoSubtarefas(idsSubtarefas) {
+  return (idsSubtarefas || []).map(function (id) {
+    var t = runrunFetch('/tasks/' + id);
+    if (!t || t.erroFetch) return null;
+    return {
+      id: t.id,
+      title: t.title,
+      etapa: t.board_stage_name || t.task_state_name || '',
+      tipo: t.type_name || '',
+      responsavel: t.responsible_name || '',
+      foto: extrairFotoResponsavel(t),
+      fechada: !!t.is_closed,
+      link: 'https://runrun.it/tasks/' + t.id
+    };
+  }).filter(function (t) { return t !== null; });
+}
+
 function buscarCardMae(subtaskId) {
   if (!subtaskId) return { ok: false, error: 'subtaskId não informado.' };
 
@@ -1863,27 +1882,35 @@ function buscarCardMae(subtaskId) {
     return { ok: false, error: 'Não consegui ler o card mãe no Runrun.it.' };
   }
 
-  var idsSubtarefas = cardMaeRaw.subtask_ids || [];
-  var subtarefas = idsSubtarefas.map(function (id) {
-    var t = runrunFetch('/tasks/' + id);
-    if (!t || t.erroFetch) return null;
-    return {
-      id: t.id,
-      title: t.title,
-      etapa: t.board_stage_name || t.task_state_name || '',
-      tipo: t.type_name || '',
-      responsavel: t.responsible_name || '',
-      foto: extrairFotoResponsavel(t),
-      fechada: !!t.is_closed,
-      link: 'https://runrun.it/tasks/' + t.id
-    };
-  }).filter(function (t) { return t !== null; });
-
   return {
     ok: true,
     temPai: true,
     cardMae: transformarTarefaParaColmeia(cardMaeRaw),
-    subtarefas: subtarefas
+    subtarefas: montarResumoSubtarefas(cardMaeRaw.subtask_ids)
+  };
+}
+
+// Usada quando um card que JÁ é o card mãe aparece direto pro designer
+// (ex: numa etapa normal como "Revisão", sem passar pela etapa "Card
+// mãe"). Diferente de buscarCardMae (que parte de uma SUBtarefa pra
+// achar o pai), essa parte direto do próprio id da tarefa e só devolve
+// alguma coisa se ela realmente tiver subtarefas (subtask_ids).
+function buscarSubtarefasDoCardMae(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  var t = runrunFetch('/tasks/' + taskId);
+  if (!t || t.erroFetch) {
+    return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
+  }
+  var idsSubtarefas = t.subtask_ids || [];
+  if (!idsSubtarefas.length) {
+    return { ok: true, ehCardMae: false };
+  }
+
+  return {
+    ok: true,
+    ehCardMae: true,
+    subtarefas: montarResumoSubtarefas(idsSubtarefas)
   };
 }
 

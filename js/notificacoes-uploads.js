@@ -35,8 +35,14 @@ function iniciarChecagemUploadEmSegundoPlano(task) {
   pararChecagemUploadEmSegundoPlano();
   if (!task.id) return;
   _intervalChecagemUpload = setInterval(() => {
-    if (tasks[detailIdx] !== task) { pararChecagemUploadEmSegundoPlano(); return; }
-    renderNotificacoesUpload(task);
+    // Compara por id, não por referência — atualizarKanbanEmBackground()
+    // recria os objetos de tarefa periodicamente, então "task" (capturado
+    // no momento de abrir o card) deixa de ser === tasks[detailIdx] mesmo
+    // continuando sendo a mesma tarefa. Isso fazia a checagem se
+    // autodesligar sozinha pouco depois de abrir o card.
+    const atual = tasks[detailIdx];
+    if (!atual || String(atual.id) !== String(task.id)) { pararChecagemUploadEmSegundoPlano(); return; }
+    renderNotificacoesUpload(atual);
   }, 8000);
 }
 function pararChecagemUploadEmSegundoPlano() {
@@ -64,7 +70,8 @@ async function renderNotificacoesUpload(task) {
     console.error("Falha ao checar uploads recentes da pasta do card:", err);
     return;
   }
-  if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
+  // Compara por id, não por referência (mesmo motivo do comentário acima).
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return; // trocou de tarefa enquanto carregava
   if (!resultado.ok || !resultado.uploads || !resultado.pastaUrl) {
     container.innerHTML = "";
     return;

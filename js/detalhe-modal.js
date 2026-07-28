@@ -23,6 +23,7 @@ function openDetail(idx, entradaAnimacao) {
   carregarSequencia(tasks[detailIdx]);
   carregarAnexos(tasks[detailIdx]);
   carregarCronometroReal(tasks[detailIdx]);
+  carregarFilhosSeForCardMae(tasks[detailIdx]);
   renderNotificacoesUpload(tasks[detailIdx]);
   iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);
   if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
@@ -1032,6 +1033,37 @@ async function buscarCardMaeDoBackend(taskId) {
     return await res.json();
   } catch (err) {
     console.error("Falha ao buscar o card mãe no Runrun.it:", err);
+    return { ok: false, error: "Falha de conexão com o Runrun.it." };
+  }
+}
+
+/**
+ * Confere se a tarefa aberta é, ela mesma, um card mãe (tem subtarefas)
+ * e liga a setinha pra baixo — mesmo quando ela chegou pro designer
+ * direto numa etapa normal (ex: "Revisão"), sem passar pela etapa
+ * "Card mãe" nem ter sido aberta a partir de uma subtarefa dela.
+ */
+async function carregarFilhosSeForCardMae(task) {
+  if (!task.id || task.isMotherCard || task.parentTaskId) return;
+  const taskId = task.id;
+  const resultado = await buscarSubtarefasDoCardMaeNoBackend(taskId);
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return; // usuário já trocou de tarefa
+  if (!resultado.ok || !resultado.ehCardMae) return;
+  tasks[detailIdx].isMotherCard = true;
+  tasks[detailIdx].subtarefasResumo = resultado.subtarefas || [];
+  renderDetail();
+}
+
+async function buscarSubtarefasDoCardMaeNoBackend(taskId) {
+  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarSubtarefasDoCardMae", taskId }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("Falha ao checar se a tarefa é um card mãe:", err);
     return { ok: false, error: "Falha de conexão com o Runrun.it." };
   }
 }

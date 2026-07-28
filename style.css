@@ -1469,17 +1469,29 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .icon-btn-badge[hidden] { display: none; }
 
-.notif-item {
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 12px; border-radius: 12px; background: var(--page-bg);
+.notif-card {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px; border-radius: 14px; background: var(--page-bg);
   margin-bottom: 8px; cursor: pointer; transition: background .12s var(--ease-apple);
+  position: relative; border: 1px solid transparent;
 }
-.notif-item:hover { background: var(--border); }
-.notif-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.notif-item-titulo { font-size: 12.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.notif-item-count { font-size: 10.5px; font-weight: 700; color: #fff; background: var(--danger); border-radius: 999px; padding: 1px 7px; flex-shrink: 0; }
-.notif-item-preview { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.notif-item-autor { font-weight: 600; color: var(--text-primary); }
+.notif-card:hover { background: var(--border); }
+.notif-card.unread { border-color: var(--accent, #6c5ce7); background: color-mix(in srgb, var(--accent, #6c5ce7) 7%, var(--page-bg)); }
+.notif-card-avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; }
+.notif-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.notif-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.notif-card-autor { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.notif-card-tempo { font-size: 11px; color: var(--text-secondary); flex-shrink: 0; }
+.notif-card-texto { font-size: 12.5px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; margin: 0; }
+.notif-card-texto a { color: var(--accent, #6c5ce7); }
+.notif-card-tarefa {
+  font-size: 11px; color: var(--text-secondary); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
+}
+.notif-card-dot {
+  position: absolute; top: 10px; right: 10px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--danger);
+}
 
 /* ===== Acesso rápido (painel lateral recolhível) ===== */
 .quick-access-panel {

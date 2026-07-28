@@ -539,7 +539,7 @@ async function verificarPastaJaSalva(task, btn) {
   }
 
   await task._pastaCheckPromise;
-  if (tasks[detailIdx] !== task) return; // trocou de tarefa enquanto carregava
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return; // trocou de tarefa enquanto carregava
   if (task.pastaUrlSalva) {
     btn.dataset.pastaUrl = task.pastaUrlSalva;
     const label = btn.querySelector(".pasta-drive-btn-label");

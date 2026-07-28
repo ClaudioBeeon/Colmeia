@@ -152,7 +152,7 @@ function adicionarPessoaOtimista(task, usuario) {
  * desatualizada enquanto o modal está aberto por cima.
  */
 function renderSequenciaNoHeaderSeAberta(task) {
-  if (tasks[detailIdx] !== task) return;
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return;
   const el = document.getElementById("workflowSeqGroup");
   if (el) el.innerHTML = renderSequenciaHTML(task);
 }
@@ -460,12 +460,12 @@ function wireBriefingCopyButtons(resultEl) {
 }
 
 async function gerarBriefingComIA(task) {
-  const resultEl = document.getElementById("briefingResult");
-  if (!resultEl) return;
+  if (!document.getElementById("briefingResult")) return;
 
   if (!COLMEIA_API_URL) {
-    resultEl.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
-    task.briefingHTML = resultEl.innerHTML;
+    const resultElInicial = document.getElementById("briefingResult");
+    resultElInicial.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
+    task.briefingHTML = resultElInicial.innerHTML;
     return;
   }
 
@@ -477,8 +477,19 @@ async function gerarBriefingComIA(task) {
     const data = await res.json();
 
     // Se o usuário já trocou de tarefa enquanto isso carregava, não
-    // atualiza o pop-up de outra tarefa.
-    if (tasks[detailIdx] !== task) return;
+    // atualiza o pop-up de outra tarefa. Compara por id (não por
+    // referência!) porque atualizarKanbanEmBackground() recria os
+    // objetos de tarefa periodicamente — inclusive quando dá play/pausa.
+    const taskAtual = tasks[detailIdx];
+    if (!taskAtual || String(taskAtual.id) !== String(task.id)) return;
+
+    // Busca o elemento DE NOVO (não usa uma referência guardada lá em
+    // cima): se o pop-up foi redesenhado nesse meio-tempo — ex: o
+    // usuário clicou em play/pausa, que chama renderDetail() na hora —
+    // o elemento antigo já foi removido da tela, e escrever nele não
+    // aparece pra ninguém (é como escrever numa folha que já foi pro lixo).
+    const resultEl = document.getElementById("briefingResult");
+    if (!resultEl) return;
 
     if (!data.ok) {
       resultEl.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui gerar o briefing."}</p>`;
@@ -557,9 +568,10 @@ async function gerarBriefingComIA(task) {
     wireBriefingCopyButtons(resultEl);
   } catch (err) {
     console.error("Falha ao gerar briefing com IA:", err);
-    if (tasks[detailIdx] === task) {
-      resultEl.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
-      task.briefingHTML = resultEl.innerHTML;
+    const resultElErro = document.getElementById("briefingResult");
+    if (resultElErro && tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
+      resultElErro.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
+      task.briefingHTML = resultElErro.innerHTML;
     }
   }
 }

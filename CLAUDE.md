@@ -75,9 +75,39 @@ só precisar achar uma função.
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização
 automática do quadro (`atualizarKanbanEmBackground`) recria os objetos de tarefa periodicamente,
-então comparações por referência quebram silenciosamente. Sempre comparar por `task.id`.
+então comparações por referência quebram silenciosamente. Sempre comparar por `task.id`
+(`String(tasks[detailIdx].id) === String(task.id)`).
 Há muitos usos de `tasks[detailIdx]` no código (~38 ocorrências) — ao mexer perto de índice/detalhe,
 prestar atenção a esse padrão.
+
+Em 2026-07-28 esse mesmo bug apareceu em pelo menos 6 lugares diferentes (comparação por `!==`/`===`
+direto no objeto) e causou 2 problemas reportados pelo usuário: (1) o briefing da IA parava de
+carregar depois de clicar em play/pausa (`gerarBriefingComIA`, js/regras-briefing.js) — corrigido
+comparando por id; (2) a notificação de "você subiu um arquivo no Drive" só funcionava uma vez e
+depois nunca mais aparecia (`iniciarChecagemUploadEmSegundoPlano`/`renderNotificacoesUpload`,
+js/notificacoes-uploads.js) — o `setInterval` se autodesligava assim que o quadro atualizava sozinho
+em segundo plano, achando (por referência) que a tarefa tinha mudado. Além da comparação por id, tem
+um segundo cuidado parecido: nunca guardar uma referência de elemento do DOM (`document.getElementById(...)`)
+antes de um `await`/callback assíncrono se algo nesse meio-tempo pode redesenhar aquele pedaço da tela
+(ex: `renderDetail()` sendo chamado de novo) — o elemento antigo é removido da tela e escrever nele não
+aparece pra ninguém. Buscar o elemento de novo (`document.getElementById(...)`) depois do `await`,
+bem perto da hora de usar.
+
+## Notificações do sino (comentários) — 2026-07-28
+
+Antes, o sino só calculava "comentários não lidos" na hora (comparando com o último visto no
+`localStorage`) — assim que abria o sino, a notificação já sumia pra sempre da lista. Agora existe um
+log próprio no `localStorage` (`colmeia_notificacoes_log_v2`, ver js/notificacoes-avisos.js) que
+guarda cada comentário novo (autor, texto completo, tarefa, quando chegou) por até 2 dias
+(`NOTIF_RETENCAO_MS`), independente de já ter sido visto ou não — abrir o sino só zera o contador
+("vista: true"), o card continua na lista até completar os 2 dias. É só por navegador (mesmo padrão
+de preferência por designer), não sincroniza entre dispositivos nem fica salvo na planilha.
+
+- Também: `card mãe` que chega pro designer direto numa etapa normal (ex: "Revisão"), sem passar pela
+  etapa "Card mãe" nem ser aberto a partir de uma subtarefa dela, agora ganha a setinha de "ver
+  subtarefas" mesmo assim — `openDetail` chama `carregarFilhosSeForCardMae` (js/detalhe-modal.js), que
+  usa a ação nova do backend `buscarSubtarefasDoCardMae` (Código.gs) pra checar se aquela tarefa tem
+  `subtask_ids` e, se tiver, liga `task.isMotherCard`/`task.subtarefasResumo` e redesenha o pop-up.
 
 ## Decisões/padrões estabelecidos (2026-07-28)
 

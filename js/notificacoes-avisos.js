@@ -1,35 +1,83 @@
-let notificacoes = []; // [{task, qtdNaoLidas, ultimoAutor, ultimoTexto}]
+// Notificações reais: comentários novos nas tarefas do designer logado,
+// guardadas aqui (nesse navegador) por até NOTIF_RETENCAO_MS, mesmo
+// depois de abertas/lidas — antes, assim que o sino era aberto, a
+// notificação já desaparecia da lista pra sempre. Cada item:
+// {taskId, taskTitle, autor, texto, comentarioId, criadoEm, vista}
+let notificacoes = [];
+const NOTIF_LOG_KEY = "colmeia_notificacoes_log_v2";
+const NOTIF_RETENCAO_MS = 2 * 24 * 60 * 60 * 1000; // 2 dias
+
+function carregarNotificacoesLog() {
+  let bruto = [];
+  try { bruto = JSON.parse(localStorage.getItem(NOTIF_LOG_KEY) || "[]"); } catch (err) { bruto = []; }
+  const agora = Date.now();
+  return bruto.filter(n => n && n.criadoEm && (agora - n.criadoEm) < NOTIF_RETENCAO_MS);
+}
+function salvarNotificacoesLog(lista) {
+  try { localStorage.setItem(NOTIF_LOG_KEY, JSON.stringify(lista)); } catch (err) { /* sem problema */ }
+}
 
 /**
  * Varre as tarefas em aberto do designer logado, busca os comentários
- * de cada uma e reaproveita o mesmo controle de "visto" do chat
- * flutuante (chaveVistoChat) pra saber quais têm comentário novo.
+ * de cada uma e registra no log (localStorage) qualquer comentário de
+ * outra pessoa que ainda não estava lá — dedupe por comentário (não
+ * por "lido"), então o item continua na lista mesmo depois de visto,
+ * até completar os 2 dias de retenção.
  */
 async function verificarNotificacoes() {
   if (!DESIGNER_LOGADO) return;
   const minhasTarefas = tasks.filter(t => t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  let log = carregarNotificacoesLog();
+  const chavesExistentes = new Set(log.map(n => n.taskId + "::" + n.comentarioId));
 
-  const resultados = await Promise.all(minhasTarefas.map(async t => {
+  await Promise.all(minhasTarefas.map(async t => {
     const comentarios = await buscarComentariosDoBackend(t.id);
     t.comments = comentarios; // aproveita e já deixa cacheado pro chat também
-    let visto = 0;
-    try { visto = Number(localStorage.getItem(chaveVistoChat(t.id))) || 0; } catch (err) { /* sem problema */ }
-    const naoLidos = comentarios.filter(c => !nomesCorrespondem(c.autor, DESIGNER_LOGADO) && (c.id || 0) > visto);
-    if (naoLidos.length === 0) return null;
-    const ultimo = naoLidos[naoLidos.length - 1];
-    return { task: t, qtd: naoLidos.length, autor: ultimo.autor, texto: ultimo.texto };
+    comentarios
+      .filter(c => !nomesCorrespondem(c.autor, DESIGNER_LOGADO))
+      .forEach(c => {
+        const chave = t.id + "::" + (c.id || 0);
+        if (chavesExistentes.has(chave)) return;
+        chavesExistentes.add(chave);
+        log.push({
+          taskId: t.id,
+          taskTitle: t.title,
+          autor: c.autor,
+          texto: c.texto,
+          comentarioId: c.id || 0,
+          criadoEm: c.data ? new Date(c.data).getTime() : Date.now(),
+          vista: false,
+        });
+      });
   }));
 
-  notificacoes = resultados.filter(Boolean);
+  log = log.filter(n => (Date.now() - n.criadoEm) < NOTIF_RETENCAO_MS);
+  log.sort((a, b) => b.criadoEm - a.criadoEm);
+  salvarNotificacoesLog(log);
+  notificacoes = log;
   atualizarBadgeNotificacoes();
 }
 
 function atualizarBadgeNotificacoes() {
   const badge = document.getElementById("notificationsBadge");
   if (!badge) return;
-  const total = notificacoes.reduce((s, n) => s + n.qtd, 0);
+  const total = notificacoes.filter(n => !n.vista).length;
   badge.hidden = total === 0;
   badge.textContent = total > 9 ? "9+" : String(total);
+}
+
+// Tempo relativo mais fino que tempoRelativoAviso (minutos importam
+// bastante pra notificação de comentário — "agora há pouco" o dia
+// inteiro não ajuda a saber se é recém-chegada ou de ontem).
+function tempoRelativoNotificacao(criadoEm) {
+  const ms = Date.now() - Number(criadoEm);
+  const minutos = Math.floor(ms / 60000);
+  if (minutos < 1) return "agora mesmo";
+  if (minutos < 60) return `há ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  return `há ${dias} dia${dias > 1 ? "s" : ""}`;
 }
 
 function renderNotificacoes() {
@@ -40,19 +88,27 @@ function renderNotificacoes() {
     return;
   }
   body.innerHTML = notificacoes.map((n, i) => `
-    <div class="notif-item" data-i="${i}">
-      <div class="notif-item-top">
-        <span class="notif-item-titulo">${n.task.title}</span>
-        <span class="notif-item-count">${n.qtd}</span>
+    <div class="notif-card ${n.vista ? "" : "unread"}" data-i="${i}">
+      ${avatarHTML(n.autor, "avatar-sm notif-card-avatar")}
+      <div class="notif-card-body">
+        <div class="notif-card-top">
+          <span class="notif-card-autor">${escaparHTML(n.autor)}</span>
+          <span class="notif-card-tempo">${tempoRelativoNotificacao(n.criadoEm)}</span>
+        </div>
+        <p class="notif-card-texto">${linkifyTexto(escaparHTML(n.texto))}</p>
+        <span class="notif-card-tarefa">${escaparHTML(n.taskTitle)}</span>
       </div>
-      <div class="notif-item-preview"><span class="notif-item-autor">${n.autor}:</span> ${n.texto}</div>
+      ${n.vista ? "" : `<span class="notif-card-dot" title="Novo"></span>`}
     </div>
   `).join("");
-  body.querySelectorAll(".notif-item").forEach(el => {
+  body.querySelectorAll(".notif-card").forEach(el => {
     el.addEventListener("click", async () => {
       const n = notificacoes[Number(el.dataset.i)];
       document.getElementById("notificationsPanel").classList.remove("open");
-      const idxExistente = tasks.indexOf(n.task);
+      // Por id, não por referência — se o quadro atualizou sozinho
+      // enquanto o painel de notificações estava aberto, a tarefa daquele
+      // momento pode não ser mais o mesmo objeto em tasks[].
+      const idxExistente = tasks.findIndex(t => String(t.id) === String(n.taskId));
       if (idxExistente !== -1) {
         mostrarPagina("kanban");
         openDetail(idxExistente);
@@ -71,9 +127,17 @@ document.getElementById("notificationsBtn").addEventListener("click", async () =
     document.getElementById("notificationsBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
     await verificarNotificacoes();
     renderNotificacoes();
-    // Abrir o sino já marca tudo como visto — o contador zera na hora
-    // (a lista continua na tela pra você poder clicar nela normalmente).
-    notificacoes.forEach(n => marcarChatVisto(n.task));
+    // Abrir o sino zera o contador, mas os cards continuam na lista —
+    // só somem sozinhos depois de NOTIF_RETENCAO_MS (2 dias).
+    notificacoes.forEach(n => {
+      n.vista = true;
+      // Mantém o pontinho de "não lido" do chat de cada tarefa em sincronia
+      // com o sino (só funciona se essa tarefa já tinha comentários
+      // carregados nessa sessão — senão não faz diferença).
+      const t = tasks.find(x => String(x.id) === String(n.taskId));
+      if (t) marcarChatVisto(t);
+    });
+    salvarNotificacoesLog(notificacoes);
     const badge = document.getElementById("notificationsBadge");
     if (badge) badge.hidden = true;
   }
