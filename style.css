@@ -317,6 +317,80 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 
 .now-playing-time { font-size: 12.5px; font-weight: 700; color: #16181D; font-variant-numeric: tabular-nums; opacity: 0.75; }
 
+/* Cliente + botão de pausar: escondidos por padrão (pílula compacta,
+   só título + tempo), só aparecem passando o mouse por cima — igual a
+   uma "Dynamic Island" que expande no toque/hover em vez de já vir
+   cheia de informação o tempo todo. */
+.now-playing-extra {
+  display: flex; align-items: center; gap: 8px;
+  max-width: 0; opacity: 0; overflow: hidden;
+  transition: max-width 0.25s var(--ease-apple), opacity 0.15s var(--ease-apple);
+  flex-shrink: 0;
+}
+.now-playing:hover .now-playing-extra { max-width: 220px; opacity: 1; }
+
+.now-playing-client {
+  font-size: 11.5px; font-weight: 600; color: #16181D; opacity: 0.72;
+  white-space: nowrap; padding: 4px 10px; background: rgba(22,24,33,0.08); border-radius: 999px;
+}
+
+.now-playing-pause {
+  width: 26px; height: 26px; border-radius: 50%; background: rgba(22,24,33,0.12);
+  display: flex; align-items: center; justify-content: center; color: #16181D; flex-shrink: 0;
+  transition: background 0.15s var(--ease-apple), transform 0.15s var(--ease-apple);
+}
+.now-playing-pause:hover { background: rgba(22,24,33,0.22); transform: scale(1.08); }
+.now-playing-pause svg { width: 11px; height: 11px; }
+
+/* ===== Ilha do topbar (avisos rápidos) ===== */
+.topbar-ilha {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(430px, calc(100vw - 40px));
+  background: #14151A;
+  color: #fff;
+  border-radius: 999px;
+  padding: 9px 14px 9px 9px;
+  box-shadow: 0 14px 32px rgba(10,10,15,0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -14px) scale(0.94);
+  transition: opacity 0.2s var(--ease-apple), transform 0.28s var(--ease-apple-spring);
+}
+[data-theme="dark"] .topbar-ilha { background: #0A0A0D; }
+.topbar-ilha[hidden] { display: none; }
+.topbar-ilha.ilha-entrando { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+.topbar-ilha.ilha-saindo { opacity: 0; transform: translate(-50%, -10px) scale(0.96); }
+.topbar-ilha.clicavel { cursor: pointer; }
+
+.ilha-icone {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--kanban-yellow); color: #16181D;
+}
+.ilha-icone svg { width: 14px; height: 14px; }
+
+.ilha-texto { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.ilha-titulo { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ilha-subtitulo { font-size: 11.5px; opacity: 0.68; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ilha-acoes { display: flex; gap: 6px; margin-left: 6px; flex-shrink: 0; }
+.ilha-acoes button {
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  border: none; border-radius: 999px; padding: 7px 13px; cursor: pointer;
+  background: rgba(255,255,255,0.14); color: #fff;
+  transition: background 0.15s var(--ease-apple);
+  white-space: nowrap;
+}
+.ilha-acoes button:hover { background: rgba(255,255,255,0.24); }
+.ilha-acoes button.ilha-acao-principal { background: var(--kanban-yellow); color: #16181D; }
+.ilha-acoes button.ilha-acao-principal:hover { background: #E0A800; }
+
 .topbar-dark .theme-switch {
   background: #24252C; border: none; flex-shrink: 0;
 }
@@ -2109,24 +2183,6 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .repetir-comentario-prompt .repetir-sim { background: var(--kanban-yellow); color: #16181D; }
 .repetir-comentario-prompt .repetir-nao { background: var(--page-bg); color: var(--text-secondary); }
-
-/* Pop-up que pergunta "quer transferir o card mãe?" depois de concluir
-   uma subtarefa — grudado embaixo do botão de concluir (mesmo estilo e
-   posicionamento do calendário, ver posicionarPopupFixo em js/config.js). */
-.card-mae-transfer-popup {
-  position: fixed; z-index: 500; width: 280px;
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
-  padding: 14px; box-shadow: var(--shadow-hover); font-family: var(--font-body);
-  animation: colmeia-modal-pop var(--dur-fast) var(--ease-apple-spring);
-}
-.card-mae-transfer-texto { font-size: 13px; color: var(--text-primary); line-height: 1.45; margin-bottom: 10px; }
-.card-mae-transfer-actions { display: flex; gap: 8px; }
-.card-mae-transfer-actions button {
-  flex: 1; border: none; border-radius: 999px; padding: 7px 0;
-  font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
-}
-.card-mae-transfer-sim { background: var(--kanban-yellow); color: #16181D; }
-.card-mae-transfer-nao { background: var(--page-bg); color: var(--text-secondary); }
 
 /* ===== Reações de emoji nos comentários ===== */
 .comment-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

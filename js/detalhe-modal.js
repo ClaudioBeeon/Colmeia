@@ -282,6 +282,11 @@ function wireWorkflowArrows(task) {
           if (tarefaViva) tarefaViva.running = false;
           render();
           updateNowPlaying();
+          mostrarIlha({
+            icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+            titulo: "Entregue ✓",
+            subtitulo: task.title,
+          });
           // Acabou de concluir uma SUBtarefa? Confere se o card mãe dela
           // está com você — se estiver, pergunta se quer transferir ele
           // também, direto daqui, sem precisar ir lá procurar o card mãe.
@@ -1147,44 +1152,34 @@ async function verificarTransferirCardMae(task) {
   mostrarPromptTransferirCardMae(resultado.cardMae);
 }
 
+// Usa a ilha do topbar em vez de um pop-up preso ao botão "Concluir" —
+// aquele pop-up podia ficar escondido atrás do próprio modal de detalhe
+// (que fica por cima dele). A ilha fica sempre visível (position: fixed,
+// z-index acima de tudo) e com botões de ação não some sozinha, só
+// quando a pessoa decidir.
 function mostrarPromptTransferirCardMae(cardMaeRaw) {
-  document.querySelectorAll(".card-mae-transfer-popup").forEach(el => el.remove());
-  const btn = document.getElementById("navDeliverBtn");
-  if (!btn) return; // botão de concluir já não está mais na tela (trocou de tarefa nesse meio-tempo)
-
-  const pop = document.createElement("div");
-  pop.className = "card-mae-transfer-popup";
-  pop.innerHTML = `
-    <p class="card-mae-transfer-texto">O card mãe <strong>${cardMaeRaw.title}</strong> está com você — quer transferir ele pro próximo responsável?</p>
-    <div class="card-mae-transfer-actions">
-      <button type="button" class="card-mae-transfer-nao">Agora não</button>
-      <button type="button" class="card-mae-transfer-sim">Transferir</button>
-    </div>
-  `;
-  document.body.appendChild(pop);
-  posicionarPopupFixo(pop, btn);
-
-  function fechar() {
-    pop.remove();
-    document.removeEventListener("click", clickFora);
-  }
-  function clickFora(ev) {
-    if (!pop.contains(ev.target) && ev.target !== btn) fechar();
-  }
-  setTimeout(() => document.addEventListener("click", clickFora), 0);
-
-  pop.querySelector(".card-mae-transfer-nao").addEventListener("click", fechar);
-  pop.querySelector(".card-mae-transfer-sim").addEventListener("click", () => {
-    fechar();
-    // Abre o modal "Ver regra" do card mãe por cima, SEM sair da
-    // subtarefa — reaproveita um objeto solto (não precisa empurrar
-    // pra tasks[]/navegar pra lá só pra revisar a regra). A sequência
-    // já veio pré-carregada junto com o card mãe, então o modal já
-    // abre pronto, sem spinner de "carregando".
-    const cardMaeTask = mapearTarefaDoBackend(cardMaeRaw);
-    cardMaeTask.sequencia = cardMaeRaw.sequencia;
-    cardMaeTask.workflowId = cardMaeRaw.workflowId;
-    abrirModalRegra(cardMaeTask);
+  mostrarIlha({
+    icone: reopenIcon,
+    titulo: "Transferir o card mãe?",
+    subtitulo: cardMaeRaw.title,
+    acoes: [
+      { label: "Agora não" },
+      {
+        label: "Transferir",
+        principal: true,
+        onClick: () => {
+          // Abre o modal "Ver regra" do card mãe por cima, SEM sair da
+          // subtarefa — reaproveita um objeto solto (não precisa empurrar
+          // pra tasks[]/navegar pra lá só pra revisar a regra). A sequência
+          // já veio pré-carregada junto com o card mãe, então o modal já
+          // abre pronto, sem spinner de "carregando".
+          const cardMaeTask = mapearTarefaDoBackend(cardMaeRaw);
+          cardMaeTask.sequencia = cardMaeRaw.sequencia;
+          cardMaeTask.workflowId = cardMaeRaw.workflowId;
+          abrirModalRegra(cardMaeTask);
+        },
+      },
+    ],
   });
 }
 
@@ -1276,11 +1271,28 @@ function updateNowPlaying() {
     if (idle) idle.hidden = true;
     document.getElementById("nowPlayingTitle").textContent = running.title;
     document.getElementById("nowPlayingTime").textContent = formatTime(running.timerSeconds);
+    const clienteEl = document.getElementById("nowPlayingClient");
+    if (clienteEl) clienteEl.textContent = running.client || "";
   } else {
     el.hidden = true;
     if (idle) idle.hidden = false;
   }
 }
+
+// Pausar direto pela pílula do topbar, sem precisar abrir a tarefa — só
+// existe uma tarefa rodando por vez (a pílula só mostra quando tem
+// alguma), então aqui é sempre "pausar", nunca "tocar".
+document.getElementById("nowPlayingPause").addEventListener("click", (ev) => {
+  ev.stopPropagation(); // não deixa o clique também abrir a tarefa (listener do próprio #nowPlaying)
+  const running = tasks.find(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  if (!running) return;
+  running.running = false;
+  pausarTarefaNoBackend(running.id);
+  if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(running.id)) renderDetail();
+  render();
+  applyCommentsState();
+  updateNowPlaying();
+});
 
 // avança a barra de progresso e o cronômetro das tarefas em execução
 setInterval(() => {

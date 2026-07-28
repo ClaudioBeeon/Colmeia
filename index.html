@@ -92,6 +92,12 @@
           <span class="now-playing-dot"></span>
           <span class="now-playing-title" id="nowPlayingTitle"></span>
           <span class="now-playing-time" id="nowPlayingTime"></span>
+          <span class="now-playing-extra">
+            <span class="now-playing-client" id="nowPlayingClient"></span>
+            <span class="now-playing-pause" id="nowPlayingPause" title="Pausar tarefa" aria-label="Pausar tarefa">
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+            </span>
+          </span>
         </button>
         <div class="now-playing-idle" id="nowPlayingIdle">Nenhuma tarefa sendo executada no momento</div>
 
@@ -121,6 +127,12 @@
         </button>
       </div>
     </header>
+
+    <!-- "Ilha" flutuante do topbar — avisos rápidos que aparecem por
+         cima de tudo (comentário novo, aviso, upload no Drive, tarefa
+         recebida via repasse, tarefa entregue, card mãe pra transferir)
+         e somem sozinhos. Ver mostrarIlha() em js/config.js. -->
+    <div class="topbar-ilha" id="topbarIlha" hidden></div>
 
     <div class="page-heading-row" id="pageHeadingRow">
       <h2 id="pageHeadingTitle">Quadro de Tarefas</h2>

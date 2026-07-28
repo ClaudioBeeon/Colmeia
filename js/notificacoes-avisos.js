@@ -39,11 +39,19 @@ async function buscarComentariosComCache(taskId) {
   return comentarios;
 }
 
+// Se true, é a primeira checagem dessa sessão (assim que o Colmeia
+// carrega) — nesse caso não mostra a ilha pra cada comentário "novo"
+// encontrado, senão a pessoa levaria uma enxurrada de avisos só de
+// abrir o app depois de um tempo fora. A ilha só avisa de comentário
+// que chegou DE VERDADE enquanto a pessoa já estava usando o Colmeia.
+let _primeiraChecagemNotificacoes = true;
+
 async function verificarNotificacoes() {
   if (!DESIGNER_LOGADO) return;
   const minhasTarefas = tasks.filter(t => t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
   let log = carregarNotificacoesLog();
   const chavesExistentes = new Set(log.map(n => n.taskId + "::" + n.comentarioId));
+  const novos = [];
 
   await Promise.all(minhasTarefas.map(async t => {
     const comentarios = await buscarComentariosComCache(t.id);
@@ -54,7 +62,7 @@ async function verificarNotificacoes() {
         const chave = t.id + "::" + (c.id || 0);
         if (chavesExistentes.has(chave)) return;
         chavesExistentes.add(chave);
-        log.push({
+        const item = {
           taskId: t.id,
           taskTitle: t.title,
           taskClient: t.client,
@@ -63,7 +71,9 @@ async function verificarNotificacoes() {
           comentarioId: c.id || 0,
           criadoEm: c.data ? new Date(c.data).getTime() : Date.now(),
           vista: false,
-        });
+        };
+        log.push(item);
+        novos.push(item);
       });
   }));
 
@@ -72,6 +82,25 @@ async function verificarNotificacoes() {
   salvarNotificacoesLog(log);
   notificacoes = log;
   atualizarBadgeNotificacoes();
+
+  if (!_primeiraChecagemNotificacoes) {
+    novos.forEach(n => {
+      mostrarIlha({
+        icone: chatIcon,
+        titulo: `${n.autor} comentou`,
+        subtitulo: n.taskTitle,
+        onClick: async () => {
+          const idx = tasks.findIndex(x => String(x.id) === String(n.taskId));
+          if (idx === -1) return;
+          mostrarPagina("kanban");
+          openDetail(idx);
+          await esperar(150);
+          abrirChatPanel(tasks[detailIdx]);
+        },
+      });
+    });
+  }
+  _primeiraChecagemNotificacoes = false;
 }
 
 function atualizarBadgeNotificacoes() {
@@ -278,6 +307,11 @@ document.getElementById("avisosNovoBtn").addEventListener("click", async () => {
   }
 });
 
+// Mesma lógica do _primeiraChecagemNotificacoes: não avisa na ilha pra
+// cada aviso "novo" encontrado na primeira checagem da sessão (senão
+// enche a tela de aviso velho só de abrir o Colmeia).
+let _primeiraChecagemAvisos = true;
+
 // Checa avisos novos sozinho de vez em quando (mesmo sem o painel
 // aberto), pra acender o sino quando chegar aviso novo.
 async function atualizarBadgeAvisos() {
@@ -285,9 +319,21 @@ async function atualizarBadgeAvisos() {
   if (!badge || !COLMEIA_API_URL) return;
   avisosCache = await buscarAvisosDoBackend();
   const vistos = idsAvisosVistos();
-  const novos = avisosCache.filter(a => !vistos.has(a.id)).length;
-  if (novos > 0) { badge.textContent = novos > 99 ? "99+" : String(novos); badge.hidden = false; }
+  const novosAvisos = avisosCache.filter(a => !vistos.has(a.id));
+  if (novosAvisos.length > 0) { badge.textContent = novosAvisos.length > 99 ? "99+" : String(novosAvisos.length); badge.hidden = false; }
   else badge.hidden = true;
+
+  if (!_primeiraChecagemAvisos) {
+    novosAvisos.forEach(a => {
+      mostrarIlha({
+        icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M3 11l18-7-7 18-2.5-7.5L3 11z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+        titulo: `Aviso de ${a.autor}`,
+        subtitulo: a.texto,
+        onClick: () => document.getElementById("avisosBtn").click(),
+      });
+    });
+  }
+  _primeiraChecagemAvisos = false;
 }
 atualizarBadgeAvisos();
 setInterval(atualizarBadgeAvisos, 5 * 60 * 1000); // a cada 5 minutos

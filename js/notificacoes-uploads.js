@@ -113,6 +113,20 @@ async function renderNotificacoesUpload(task) {
   const nomesArquivos = arquivosRelevantes.map(u => u.arquivo);
   const grupos = [{ pasta: resultado.pastaNome || "pasta do card", link: resultado.pastaUrl, arquivos: nomesArquivos, chave: chaveConjunto }];
 
+  mostrarIlha({
+    icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v13m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+    titulo: `${nomesArquivos.length} arquivo${nomesArquivos.length > 1 ? "s" : ""} no Drive`,
+    subtitulo: task.title,
+    acoes: [
+      { label: "Depois" },
+      {
+        label: "Adicionar ao comentário",
+        principal: true,
+        onClick: () => adicionarComentarioDeUpload(task, container, resultado.pastaUrl, nomesArquivos.length, chaveConjunto),
+      },
+    ],
+  });
+
   container.innerHTML = grupos.map(g => `
     <div class="upload-notif" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}">
       <button type="button" class="upload-notif-dismiss" data-chave="${escaparHTML(g.chave)}" aria-label="Dispensar">×</button>
@@ -125,30 +139,8 @@ async function renderNotificacoesUpload(task) {
   `).join("");
 
   container.querySelectorAll(".upload-notif-copy").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      // Em vez de só copiar o link pra você colar manualmente, já posta
-      // o comentário sozinho no Runrun.it com o link da pasta — um
-      // clique a menos.
-      if (!task.id) return;
-      btn.disabled = true;
-      const original = btn.textContent;
-      btn.textContent = "Adicionando...";
-      const qtd = Number(btn.dataset.qtd) || 1;
-      const texto = `${qtd > 1 ? "Arquivos adicionados" : "Arquivo adicionado"} na pasta: ${btn.dataset.link}`;
-      const ok = await enviarComentarioNoBackend(task.id, texto);
-      if (ok) {
-        btn.textContent = "Adicionado ✓";
-        marcarUploadVisto(btn.dataset.chave);
-        if (chatThreadAtivo === "aqui" && chatAlvoTaskId === task.id) recarregarThreadAtiva();
-        setTimeout(() => {
-          const el = container.querySelector(`.upload-notif[data-chave="${CSS.escape(btn.dataset.chave)}"]`);
-          if (el) el.remove();
-        }, 900);
-      } else {
-        btn.disabled = false;
-        btn.textContent = original;
-        alert("Não consegui adicionar o comentário agora. Tenta de novo em alguns segundos.");
-      }
+    btn.addEventListener("click", () => {
+      adicionarComentarioDeUpload(task, container, btn.dataset.link, Number(btn.dataset.qtd) || 1, btn.dataset.chave, btn);
     });
   });
   container.querySelectorAll(".upload-notif-dismiss").forEach(btn => {
@@ -158,6 +150,33 @@ async function renderNotificacoesUpload(task) {
       if (el) el.remove();
     });
   });
+}
+
+// Posta um comentário no Runrun.it com o link da pasta — usado tanto
+// pelo botão "Adicionar ao comentário" dentro da aba Comentários quanto
+// pela ação equivalente na ilha do topbar (mostrarIlha), que pode ser
+// clicada bem depois, quando o `btn` original talvez nem exista mais na
+// tela — por isso essa função nunca depende de um elemento de botão
+// específico pra funcionar, só usa `btn` (opcional) pra dar feedback
+// visual quando ele existe.
+async function adicionarComentarioDeUpload(task, container, link, qtd, chave, btn) {
+  if (!task.id) return;
+  const original = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Adicionando..."; }
+  const texto = `${qtd > 1 ? "Arquivos adicionados" : "Arquivo adicionado"} na pasta: ${link}`;
+  const ok = await enviarComentarioNoBackend(task.id, texto);
+  if (ok) {
+    if (btn) btn.textContent = "Adicionado ✓";
+    marcarUploadVisto(chave);
+    if (chatThreadAtivo === "aqui" && chatAlvoTaskId === task.id) recarregarThreadAtiva();
+    setTimeout(() => {
+      const el = container.querySelector(`.upload-notif[data-chave="${CSS.escape(chave)}"]`);
+      if (el) el.remove();
+    }, 900);
+  } else {
+    if (btn) { btn.disabled = false; btn.textContent = original; }
+    mostrarToast("Não consegui adicionar o comentário agora. Tenta de novo em alguns segundos.", "erro");
+  }
 }
 
 /**

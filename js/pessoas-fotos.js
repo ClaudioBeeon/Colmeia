@@ -320,6 +320,12 @@ async function atualizarKanbanEmBackground() {
     // de abrir, bem na hora de clicar).
     const antigasPorId = {};
     tasksTodas.forEach(t => { antigasPorId[t.id] = t; });
+    // Detecta "alguém acabou de te repassar essa tarefa" comparando o
+    // responsável antes/depois — só depois da primeira carga (tasksTodas
+    // começa vazio no load inicial, então antiga nunca existe ali, e por
+    // sorte isso já evita disparar aviso pra toda a fila de uma vez só
+    // quando o Colmeia abre).
+    const recebidasAgora = [];
     todasMapeadas.forEach(nova => {
       const antiga = antigasPorId[nova.id];
       if (antiga && antiga.sequencia !== undefined) {
@@ -328,6 +334,22 @@ async function atualizarKanbanEmBackground() {
         nova._temSequencia = antiga._temSequencia;
         if (antiga._repasseEntregue) nova._repasseEntregue = antiga._repasseEntregue;
       }
+      if (antiga && DESIGNER_LOGADO
+        && !nomesCorrespondem(antiga.assignee, DESIGNER_LOGADO)
+        && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)) {
+        recebidasAgora.push(nova);
+      }
+    });
+    recebidasAgora.forEach(t => {
+      mostrarIlha({
+        icone: reopenIcon,
+        titulo: "Você recebeu uma tarefa",
+        subtitulo: t.title,
+        onClick: () => {
+          const idx = tasks.findIndex(x => String(x.id) === String(t.id));
+          if (idx !== -1) openDetail(idx);
+        },
+      });
     });
 
     tasksTodas = todasMapeadas;
@@ -383,6 +405,7 @@ async function atualizarKanbanEmBackground() {
     render();
     updateNowPlaying();
     atualizarBadgeRepasse();
+    verificarNotificacoes();
     // Não redesenha a fila de repasse por baixo de um pop-up que a
     // pessoa acabou de abrir (confirmar repasse/entrega, ou o "+" de
     // adicionar pessoa) — senão ele some sozinho no meio da decisão. Os

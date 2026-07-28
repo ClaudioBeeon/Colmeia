@@ -248,3 +248,97 @@ function mostrarToast(mensagem, tipo) {
   }, 4200);
 }
 
+/**
+ * "Ilha" do topbar — pílula que aparece por cima de tudo (position:
+ * fixed, sempre visível, nunca escondida atrás de modal nenhum) pra
+ * avisar de um evento rápido: comentário novo, aviso novo, upload no
+ * Drive, tarefa recebida via repasse, tarefa entregue, card mãe
+ * esperando transferência. Some sozinha depois de alguns segundos —
+ * exceto quando tem botões de ação (aí espera a pessoa decidir).
+ *
+ * Se vários eventos chegarem juntos, entram numa fila e aparecem um de
+ * cada vez (nunca dois empilhados ao mesmo tempo).
+ *
+ * mostrarIlha({
+ *   icone: "<svg>...</svg>",
+ *   titulo: "texto principal",
+ *   subtitulo: "texto secundário (opcional)",
+ *   duracaoMs: 5000,               // ignorado se tiver `acoes`
+ *   onClick: () => {...},          // clique no corpo (opcional)
+ *   acoes: [{ label, principal, onClick }],  // botões (opcional)
+ * })
+ */
+const _ilhaFila = [];
+let _ilhaMostrandoAgora = false;
+let _ilhaTimeoutAtual = null;
+
+function mostrarIlha(evento) {
+  _ilhaFila.push(evento);
+  _processarProximaIlha();
+}
+
+function _processarProximaIlha() {
+  if (_ilhaMostrandoAgora) return;
+  const proxima = _ilhaFila.shift();
+  if (!proxima) return;
+  _ilhaMostrandoAgora = true;
+  _renderIlha(proxima);
+}
+
+function _renderIlha(evento) {
+  const ilha = document.getElementById("topbarIlha");
+  if (!ilha) { _ilhaMostrandoAgora = false; _processarProximaIlha(); return; }
+
+  ilha.innerHTML = `
+    <span class="ilha-icone">${evento.icone || chatIcon}</span>
+    <div class="ilha-texto">
+      <span class="ilha-titulo">${evento.titulo}</span>
+      ${evento.subtitulo ? `<span class="ilha-subtitulo">${evento.subtitulo}</span>` : ""}
+    </div>
+    ${evento.acoes ? `
+      <div class="ilha-acoes">
+        ${evento.acoes.map((a, i) => `<button type="button" class="${a.principal ? "ilha-acao-principal" : ""}" data-i="${i}">${a.label}</button>`).join("")}
+      </div>
+    ` : ""}
+  `;
+  ilha.hidden = false;
+  ilha.classList.remove("ilha-saindo");
+  requestAnimationFrame(() => ilha.classList.add("ilha-entrando"));
+
+  ilha.onclick = evento.onClick
+    ? (ev) => { if (ev.target.closest(".ilha-acoes")) return; evento.onClick(); _fecharIlhaAtual(); }
+    : null;
+  ilha.classList.toggle("clicavel", !!evento.onClick);
+
+  if (evento.acoes) {
+    ilha.querySelectorAll(".ilha-acoes button").forEach(btn => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const acao = evento.acoes[Number(btn.dataset.i)];
+        _fecharIlhaAtual();
+        if (acao.onClick) acao.onClick();
+      });
+    });
+  }
+
+  clearTimeout(_ilhaTimeoutAtual);
+  // Evento com botões de ação fica até a pessoa decidir — não some
+  // sozinho (senão a decisão se perde sem querer).
+  if (!evento.acoes) {
+    _ilhaTimeoutAtual = setTimeout(_fecharIlhaAtual, evento.duracaoMs || 5000);
+  }
+}
+
+function _fecharIlhaAtual() {
+  const ilha = document.getElementById("topbarIlha");
+  if (!ilha) return;
+  clearTimeout(_ilhaTimeoutAtual);
+  ilha.classList.remove("ilha-entrando");
+  ilha.classList.add("ilha-saindo");
+  setTimeout(() => {
+    ilha.hidden = true;
+    _ilhaMostrandoAgora = false;
+    _processarProximaIlha();
+  }, 220);
+}
+
