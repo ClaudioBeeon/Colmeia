@@ -282,13 +282,17 @@ function wireWorkflowArrows(task) {
           if (tarefaViva) tarefaViva.running = false;
           render();
           updateNowPlaying();
-          await esperar(450);
-          await carregarSequencia(task);
-          agendarAtualizacaoKanban();
           // Acabou de concluir uma SUBtarefa? Confere se o card mãe dela
           // está com você — se estiver, pergunta se quer transferir ele
           // também, direto daqui, sem precisar ir lá procurar o card mãe.
+          // Chamado JÁ AQUI (antes da espera/recarga da sequência abaixo,
+          // que não tem nada a ver com o card mãe) porque os dados do
+          // card mãe já vieram pré-carregados em segundo plano — não
+          // tem por que o aviso esperar mais ~2s pra aparecer.
           if (task.parentTaskId) verificarTransferirCardMae(task);
+          await esperar(450);
+          await carregarSequencia(task);
+          agendarAtualizacaoKanban();
         } else {
           // Runrun.it recusou — volta tudo sozinho pro estado original
           // (ícone de concluir e o clique certo de novo inclusos).
