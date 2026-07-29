@@ -401,6 +401,7 @@ setInterval(atualizarBadgeAvisos, 5 * 60 * 1000); // a cada 5 minutos
 // (a conta que roda o Web App já enxerga a agenda de todo mundo).
 const calendarIcon = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const _reunioesJaAvisadas = new Set();
+let _reunioesDeHojeCache = [];
 async function verificarReunioesProximas() {
   if (!COLMEIA_API_URL || !DESIGNER_LOGADO) return;
   try {
@@ -410,12 +411,15 @@ async function verificarReunioesProximas() {
     });
     const data = await res.json();
     if (!data.ok) return;
+    _reunioesDeHojeCache = data.reunioes;
     const agora = Date.now();
     data.reunioes.forEach(r => {
       const faltamMs = r.inicio - agora;
-      // Só avisa quando falta até 15 min pra começar (e ainda não
-      // começou) — e só uma vez por reunião (por id), mesmo que essa
-      // checagem rode de novo várias vezes antes dela começar.
+      // Só avisa (pop-up) quando falta até 15 min pra começar (e ainda
+      // não começou) — e só uma vez por reunião (por id), mesmo que essa
+      // checagem rode de novo várias vezes antes dela começar. O selo
+      // FIXO (ver atualizarSeloReuniao) é separado disso — esse aqui é
+      // só o aviso passageiro, de 15 min pra frente.
       if (faltamMs > 0 && faltamMs <= 15 * 60 * 1000 && !_reunioesJaAvisadas.has(r.id)) {
         _reunioesJaAvisadas.add(r.id);
         const minutos = Math.max(1, Math.round(faltamMs / 60000));
@@ -427,12 +431,69 @@ async function verificarReunioesProximas() {
         });
       }
     });
+    atualizarSeloReuniao();
   } catch (err) {
     console.error("Falha ao checar reuniões da agenda:", err);
   }
 }
 verificarReunioesProximas();
 setInterval(verificarReunioesProximas, 3 * 60 * 1000); // a cada 3 minutos
+
+// Degraus do selo fixo (nunca conta minuto a minuto) — o maior degrau
+// que ainda não foi ultrapassado é o que aparece. Ex: 52 min restantes
+// ainda mostra "1h" (só passa pra "45m" quando cruzar a marca de 45).
+const DEGRAUS_SELO_REUNIAO = [
+  { min: 45, label: "1h" },
+  { min: 30, label: "45m" },
+  { min: 15, label: "30m" },
+  { min: 10, label: "15m" },
+  { min: 5, label: "10m" },
+  { min: 1, label: "5m" },
+  { min: 0, label: "1m" },
+];
+function labelDoSeloReuniao(minutosRestantes) {
+  for (const degrau of DEGRAUS_SELO_REUNIAO) {
+    if (minutosRestantes > degrau.min) return degrau.label;
+  }
+  return "agora";
+}
+
+// Selo fixo (não passageiro) no canto da pílula amarela, visível o
+// tempo todo enquanto falta até 1h pra próxima reunião — some sozinho
+// ~2 min depois do horário marcado (dá tempo de entrar na call sem o
+// selo insistir "agora" pra sempre). Roda com mais frequência que a
+// busca no backend (essa parte não precisa de rede, só reler o cache).
+let _reuniaoAtualId = null;
+function atualizarSeloReuniao() {
+  const badge = document.getElementById("reuniaoBadge");
+  const wrap = document.getElementById("nowPlayingWrap");
+  const textoEl = document.getElementById("reuniaoBadgeTexto");
+  if (!badge || !wrap || !textoEl) return;
+
+  const agora = Date.now();
+  // Entre as reuniões de hoje, pega a mais próxima que ainda faz sentido
+  // mostrar (começa em até 1h, ou começou há até 2 min).
+  const candidata = _reunioesDeHojeCache
+    .filter(r => (r.inicio - agora) <= 60 * 60 * 1000 && (r.inicio - agora) >= -2 * 60 * 1000)
+    .sort((a, b) => a.inicio - b.inicio)[0];
+
+  if (!candidata) {
+    badge.hidden = true;
+    wrap.classList.remove("tem-reuniao-proxima");
+    _reuniaoAtualId = null;
+    return;
+  }
+
+  const minutosRestantes = (candidata.inicio - agora) / 60000;
+  textoEl.textContent = `Reunião em ${labelDoSeloReuniao(minutosRestantes)}`;
+  badge.title = candidata.titulo;
+  badge.onclick = candidata.link ? () => window.open(candidata.link, "_blank") : null;
+  badge.classList.toggle("clicavel", !!candidata.link);
+  badge.hidden = false;
+  wrap.classList.add("tem-reuniao-proxima");
+  _reuniaoAtualId = candidata.id;
+}
+setInterval(atualizarSeloReuniao, 20 * 1000); // recalcula o texto a cada 20s (sem precisar de rede)
 
 // Acesso rápido — painel lateral recolhível
 const quickAccessPanel = document.getElementById("quickAccessPanel");

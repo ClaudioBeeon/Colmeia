@@ -135,6 +135,18 @@
           </button>
           <div class="now-playing-idle" id="nowPlayingIdle">Nenhuma tarefa sendo executada no momento</div>
           <div class="pill-notif" id="pillNotif" hidden></div>
+          <!-- Selo fixo de reunião próxima (Google Agenda) — some espaço no
+               canto direito da pílula enquanto falta até 1h pra uma reunião
+               começar; NÃO participa do carrossel sobe/desce acima (por
+               isso é um irmão fora da pilha deslizante), fica sempre visível
+               nesse período. Ver verificarReunioesProximas/atualizarSeloReuniao
+               em js/notificacoes-avisos.js. -->
+          <div class="reuniao-badge" id="reuniaoBadge" hidden>
+            <span class="reuniao-badge-icone">
+              <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="13" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 10.5l5-3v9l-5-3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="reuniao-badge-texto" id="reuniaoBadgeTexto"></span>
+          </div>
         </div>
 
         <div class="theme-switch" id="themeSwitch">

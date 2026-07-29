@@ -307,6 +307,17 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   transform: translateY(-100%);
 }
 
+/* Enquanto o selo de reunião próxima está visível (ver .reuniao-badge
+   abaixo), reserva espaço à direita pra ele — sem isso o conteúdo
+   centralizado de cada estado (tarefa rodando/ociosa/notificação)
+   ficaria "por baixo" do selo ou descentralizado de verdade em relação
+   ao espaço que sobra. */
+.now-playing-wrap.tem-reuniao-proxima .now-playing,
+.now-playing-wrap.tem-reuniao-proxima .now-playing-idle,
+.now-playing-wrap.tem-reuniao-proxima .pill-notif {
+  right: 108px;
+}
+
 .now-playing {
   display: flex; align-items: center; gap: 9px;
   background: var(--kanban-yellow); border: none; border-radius: 999px;
@@ -365,6 +376,30 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .pill-notif-icone svg { width: 11px; height: 11px; }
 .pill-notif-texto { font-size: 13px; font-weight: 700; color: #16181D; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Selo fixo de reunião próxima — fica no canto inferior direito da
+   pílula amarela, sempre visível enquanto falta até 1h pra reunião
+   (não participa do carrossel sobe/desce das outras pílulas, por isso
+   fica FORA da pilha deslizante, direto dentro de .now-playing-wrap,
+   com z-index acima de tudo). O texto muda em degraus (1h, 45m, 30m,
+   15m, 10m, 5m, 1m, agora — nunca conta minuto a minuto), ver
+   atualizarSeloReuniao em js/notificacoes-avisos.js. */
+.reuniao-badge {
+  position: absolute; bottom: 4px; right: 6px; z-index: 5;
+  display: flex; align-items: center; gap: 5px;
+  background: #16181D; color: var(--kanban-yellow);
+  border-radius: 999px; padding: 5px 10px 5px 6px;
+  font-family: var(--font-body); font-size: 11px; font-weight: 700;
+  white-space: nowrap;
+}
+.reuniao-badge[hidden] { display: none; }
+.reuniao-badge.clicavel { cursor: pointer; }
+.reuniao-badge-icone {
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center;
+}
+.reuniao-badge-icone svg { width: 10px; height: 10px; }
 
 .now-playing-dot {
   width: 8px; height: 8px; border-radius: 50%; background: #16181D;
