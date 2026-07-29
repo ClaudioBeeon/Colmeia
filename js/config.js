@@ -271,6 +271,11 @@ function mostrarToast(mensagem, tipo) {
 const _ilhaFila = [];
 let _ilhaMostrandoAgora = false;
 let _ilhaTimeoutAtual = null;
+// Guarda o evento que está aparecendo na ilha AGORA (não só os que
+// ainda estão esperando na fila) — precisa disso pra poder "migrar" ele
+// de volta pra pílula se a aba de tarefa fechar enquanto ele ainda está
+// na tela (ver migrarIlhaAmbienteParaPill mais abaixo).
+let _ilhaEventoAtual = null;
 
 function mostrarIlha(evento) {
   _ilhaFila.push(evento);
@@ -286,8 +291,9 @@ function _processarProximaIlha() {
 }
 
 function _renderIlha(evento) {
+  _ilhaEventoAtual = evento;
   const ilha = document.getElementById("topbarIlha");
-  if (!ilha) { _ilhaMostrandoAgora = false; _processarProximaIlha(); return; }
+  if (!ilha) { _ilhaMostrandoAgora = false; _ilhaEventoAtual = null; _processarProximaIlha(); return; }
 
   ilha.innerHTML = `
     <span class="ilha-icone">${evento.icone || chatIcon}</span>
@@ -338,8 +344,38 @@ function _fecharIlhaAtual() {
   setTimeout(() => {
     ilha.hidden = true;
     _ilhaMostrandoAgora = false;
+    _ilhaEventoAtual = null;
     _processarProximaIlha();
   }, 220);
+}
+
+/**
+ * Chamada quando a aba de tarefa fecha (ver closeDetail em
+ * js/detalhe-modal.js) — se tinha alguma notificação ambiente (a única
+ * coisa que ainda usa mostrarIlha hoje: comentário, aviso, upload,
+ * repasse recebido) mostrando ou esperando na ilha flutuante só porque
+ * a pílula estava coberta pelo painel de detalhe, muda ela pra pílula
+ * agora que ela ficou livre de novo — em vez de deixar flutuando à toa
+ * até o tempo dela acabar sozinho.
+ */
+function migrarIlhaAmbienteParaPill() {
+  const pendentes = _ilhaFila.splice(0, _ilhaFila.length);
+  if (_ilhaEventoAtual) pendentes.unshift(_ilhaEventoAtual);
+  if (pendentes.length === 0) return;
+
+  if (_ilhaMostrandoAgora) {
+    const ilha = document.getElementById("topbarIlha");
+    if (ilha) {
+      clearTimeout(_ilhaTimeoutAtual);
+      ilha.classList.remove("ilha-entrando");
+      ilha.classList.add("ilha-saindo");
+      setTimeout(() => { ilha.hidden = true; }, 220);
+    }
+    _ilhaMostrandoAgora = false;
+    _ilhaEventoAtual = null;
+  }
+  pendentes.forEach(ev => _pillNotifFila.push(ev));
+  _processarProximaNotifPill();
 }
 
 /**

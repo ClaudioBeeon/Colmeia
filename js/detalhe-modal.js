@@ -1397,6 +1397,11 @@ function stepDetail(dir) {
 function closeDetail() {
   pararChecagemUploadEmSegundoPlano();
   clearTimeout(_cardMaeFluxoTimeout);
+  // A pílula do topbar acabou de ficar livre de novo (não tem mais
+  // painel de detalhe cobrindo ela) — se tinha alguma notificação
+  // ambiente flutuando na ilha só por causa disso, muda ela pra pílula
+  // agora, em vez de deixar flutuando à toa.
+  migrarIlhaAmbienteParaPill();
   const panel = document.getElementById("taskDetail");
   panel.classList.remove("open");
   document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
