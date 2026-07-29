@@ -82,10 +82,22 @@ async function pausarTarefaNoBackend(taskId) {
  * ou avançar a tarefa enquanto o pause ainda estava "no ar", o
  * Runrun.it podia recusar (tarefa ainda "rodando" do lado de lá) e o
  * ícone/cronômetro pareciam não ter feito nada.
+ *
+ * Busca o objeto VIVO em `tasks` pelo id antes de mexer em `.running`
+ * — quem chama essa função pode estar segurando uma referência de
+ * `task` que já ficou velha (ex: atualizarKanbanEmBackground rodou e
+ * recriou os objetos enquanto o pop-up estava aberto). Sem isso, o
+ * `.running = false` era escrito num objeto "fantasma" que não é mais
+ * o que o cronômetro global (setInterval em detalhe-modal.js) lê a
+ * cada segundo — aí o cronômetro visual continuava rodando mesmo
+ * depois de repassar a tarefa pro próximo (o pause no Runrun.it até
+ * funcionava, só o relógio na tela que não parava). Mesmo bug de
+ * comparação por referência documentado no CLAUDE.md.
  */
 async function pararCronometroAoTransferir(task) {
-  if (!task.running) return true;
-  task.running = false;
+  const tarefaViva = (task.id && tasks.find(t => String(t.id) === String(task.id))) || task;
+  if (!tarefaViva.running) return true;
+  tarefaViva.running = false;
   render();
   updateNowPlaying();
   const detailPlayBtn = document.getElementById("detailPlay");
@@ -94,8 +106,8 @@ async function pararCronometroAoTransferir(task) {
     detailPlayBtn.setAttribute("aria-label", "Iniciar tarefa");
   }
   const detailTimerEl = document.getElementById("detailTimer");
-  if (detailTimerEl) detailTimerEl.textContent = formatTime(task.timerSeconds);
-  return await pausarTarefaNoBackend(task.id);
+  if (detailTimerEl) detailTimerEl.textContent = formatTime(tarefaViva.timerSeconds);
+  return await pausarTarefaNoBackend(tarefaViva.id);
 }
 
 /**

@@ -402,6 +402,29 @@ setInterval(atualizarBadgeAvisos, 5 * 60 * 1000); // a cada 5 minutos
 const calendarIcon = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const _reunioesJaAvisadas = new Set();
 let _reunioesDeHojeCache = [];
+
+// IDs de reunião já vistos nessa sessão (localStorage, sobrevive a
+// fechar/abrir o Colmeia) — usado só pra saber quais são "novas" (convite
+// que acabou de chegar na agenda), pra mostrar a notificação de convite
+// com Aceitar/Recusar. Igual ao padrão de _primeiraChecagemNotificacoes:
+// na PRIMEIRA checagem da sessão isso só populariza o cache sem avisar
+// de nada — senão toda reunião de hoje já cadastrada de antes apareceria
+// como "nova" só por abrir o Colmeia.
+const REUNIOES_VISTAS_KEY = "colmeia_reunioes_vistas_v1";
+function idsReunioesVistas() {
+  try { return new Set(JSON.parse(localStorage.getItem(REUNIOES_VISTAS_KEY) || "[]")); }
+  catch (e) { return new Set(); }
+}
+function marcarReunioesComoVistas(ids) {
+  try {
+    const vistas = idsReunioesVistas();
+    ids.forEach(id => vistas.add(id));
+    // Mantém só as últimas 300 pra não crescer pra sempre no localStorage.
+    localStorage.setItem(REUNIOES_VISTAS_KEY, JSON.stringify(Array.from(vistas).slice(-300)));
+  } catch (e) { /* sem problema */ }
+}
+let _primeiraChecagemReunioes = true;
+
 async function verificarReunioesProximas() {
   if (!COLMEIA_API_URL || !DESIGNER_LOGADO) return;
   try {
@@ -412,6 +435,15 @@ async function verificarReunioesProximas() {
     const data = await res.json();
     if (!data.ok) return;
     _reunioesDeHojeCache = data.reunioes;
+
+    const vistas = idsReunioesVistas();
+    const novas = data.reunioes.filter(r => !vistas.has(r.id));
+    if (!_primeiraChecagemReunioes) {
+      novas.forEach(r => mostrarConviteDeReuniao(r));
+    }
+    marcarReunioesComoVistas(data.reunioes.map(r => r.id));
+    _primeiraChecagemReunioes = false;
+
     const agora = Date.now();
     data.reunioes.forEach(r => {
       const faltamMs = r.inicio - agora;
@@ -438,6 +470,47 @@ async function verificarReunioesProximas() {
 }
 verificarReunioesProximas();
 setInterval(verificarReunioesProximas, 3 * 60 * 1000); // a cada 3 minutos
+// Rechecha na hora assim que a aba volta a ficar em foco — o momento
+// mais comum de ter acabado de aceitar um convite em outra aba/app e
+// voltado pro Colmeia, sem precisar esperar até 3 min pelo próximo poll.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") verificarReunioesProximas();
+});
+
+// Notificação de "convite novo" — mostra dia/hora, quem convidou e os
+// botões de Aceitar/Recusar direto na ilha (a pílula compacta não tem
+// espaço pra dois botões, por isso usa mostrarIlha diretamente em vez
+// de mostrarNotifNaPill).
+function mostrarConviteDeReuniao(r) {
+  const dataObj = new Date(r.inicio);
+  const hoje = new Date();
+  const ehHoje = dataObj.toDateString() === hoje.toDateString();
+  const diaLabel = ehHoje ? "hoje" : dataObj.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const horaLabel = dataObj.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  mostrarIlha({
+    icone: calendarIcon,
+    titulo: `Nova reunião: ${r.titulo}`,
+    subtitulo: `${diaLabel} às ${horaLabel}${r.organizadorNome ? " · convite de " + r.organizadorNome : ""}`,
+    acoes: [
+      { label: "Recusar", onClick: () => responderConviteReuniao(r.id, "nao") },
+      { label: "Aceitar", principal: true, onClick: () => responderConviteReuniao(r.id, "sim") },
+    ],
+  });
+}
+
+async function responderConviteReuniao(eventId, resposta) {
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "responderReuniao", designer: DESIGNER_LOGADO, eventId, resposta }),
+    });
+    const data = await res.json();
+    if (!data.ok) mostrarToast(data.error || "Não consegui responder o convite agora.", "erro");
+  } catch (err) {
+    console.error("Falha ao responder convite de reunião:", err);
+    mostrarToast("Não consegui responder o convite agora.", "erro");
+  }
+}
 
 // Degraus do selo fixo (nunca conta minuto a minuto) — o maior degrau
 // que ainda não foi ultrapassado é o que aparece. Ex: 52 min restantes

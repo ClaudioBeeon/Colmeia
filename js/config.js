@@ -480,4 +480,3 @@ function _avancarNotifPill() {
     }, 320);
   }
 }
-

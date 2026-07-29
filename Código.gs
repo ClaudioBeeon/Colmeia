@@ -185,6 +185,10 @@ function handleRequest(e, method) {
         output = criarPastaDoCardNoDrive(body.cliente, body.tituloCard, body.taskId);
       } else if (body.acao === 'buscarPastaCard') {
         output = buscarPastaSalvaDoCard(body.taskId);
+      } else if (body.acao === 'buscarOuHerdarPastaCard') {
+        output = buscarOuHerdarPastaCard(body.taskId, body.idsRelacionados);
+      } else if (body.acao === 'linkarPastaManual') {
+        output = linkarPastaManualNoDrive(body.taskId, body.url);
       } else if (body.acao === 'buscarUploadsRecentesDoCard') {
         output = buscarUploadsRecentesDoCard(body.taskId, body.cliente);
       } else if (body.acao === 'buscarAtividadesDrive') {
@@ -199,6 +203,8 @@ function handleRequest(e, method) {
         output = restaurarClienteDesigner(body.designer, body.cliente);
       } else if (body.acao === 'buscarReunioesHoje') {
         output = buscarReunioesDeHoje(body.designer);
+      } else if (body.acao === 'responderReuniao') {
+        output = responderReuniao(body.designer, body.eventId, body.resposta);
       } else if (body.acao === 'criarAviso') {
         output = criarAviso(body.autor, body.texto);
       } else if (body.acao === 'listarAvisos') {
@@ -834,6 +840,26 @@ function criarPastaDoCardNoDrive(cliente, tituloCard, taskId) {
   }
 }
 
+/**
+ * Vincula manualmente a pasta certa do Drive numa tarefa — pra quando a
+ * detecção/criação automática (criarPastaDoCardNoDrive) erra o caminho
+ * (ex: a pasta já existia com um nome levemente diferente do título da
+ * tarefa). Confere se o link é mesmo de uma pasta acessível do Drive
+ * antes de salvar (nunca salva um link quebrado/sem acesso sem avisar).
+ */
+function linkarPastaManualNoDrive(taskId, url) {
+  if (!taskId || !url) return { ok: false, error: 'Faltou o id da tarefa ou o link da pasta.' };
+  var match = String(url).match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (!match) return { ok: false, error: 'Isso não parece um link de pasta do Google Drive.' };
+  try {
+    var pasta = DriveApp.getFolderById(match[1]); // dispara erro se não existir/sem acesso
+    salvarPastaDoCard(taskId, pasta.getUrl());
+    return { ok: true, url: pasta.getUrl() };
+  } catch (err) {
+    return { ok: false, error: 'Não consegui acessar essa pasta — confere se o link está certo e se você tem acesso a ela.' };
+  }
+}
+
 // ============ PASTAS DE CARDS JÁ CRIADAS (cache — evita re-perguntar toda vez) ============
 // Guarda numa aba própria "PastasCards": task_id -> url da pasta do
 // Drive criada pra ela. Serve pra: (1) o botão "Criar pasta do card"
@@ -934,6 +960,38 @@ function buscarPastaSalvaDoCard(taskId) {
     }
   }
   return { ok: true, url: null };
+}
+
+/**
+ * Como buscarPastaSalvaDoCard, mas pra uma subtarefa nova (ex: uma
+ * "Alteração 02") que nunca teve o botão "Criar pasta do card" clicado
+ * nela mesma: se ela não tem pasta própria ainda, procura entre os ids
+ * relacionados (o card mãe e as tarefas irmãs, que o front-end já tem
+ * carregados em memória) se alguma já tem pasta registrada — e se
+ * achar, vincula essa mesma pasta na subtarefa também, silenciosamente
+ * (sem perguntar nada), pra não precisar criar uma pasta duplicada nem
+ * a pessoa ter que ir procurar a pasta certa na mão.
+ */
+function buscarOuHerdarPastaCard(taskId, idsRelacionados) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var sheet = getPastasCardsSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var mapaPorId = {};
+  for (var i = 1; i < linhas.length; i++) {
+    if (linhas[i][0]) mapaPorId[String(linhas[i][0])] = linhas[i][1] || null;
+  }
+  if (mapaPorId[String(taskId)]) {
+    return { ok: true, url: mapaPorId[String(taskId)], herdada: false };
+  }
+  var ids = idsRelacionados || [];
+  for (var j = 0; j < ids.length; j++) {
+    var urlEncontrada = mapaPorId[String(ids[j])];
+    if (urlEncontrada) {
+      salvarPastaDoCard(taskId, urlEncontrada);
+      return { ok: true, url: urlEncontrada, herdada: true };
+    }
+  }
+  return { ok: true, url: null, herdada: false };
 }
 
 /**
@@ -1201,19 +1259,48 @@ function buscarReunioesDeHoje(designer) {
     var reunioes = eventos
       .filter(function (ev) { return !ev.isAllDayEvent(); })
       .map(function (ev) {
+        var criadores = ev.getCreators();
+        var organizadorEmail = (criadores && criadores.length) ? criadores[0] : '';
         return {
           id: ev.getId(),
           titulo: ev.getTitle(),
           inicio: ev.getStartTime().getTime(),
           fim: ev.getEndTime().getTime(),
           local: ev.getLocation() || '',
-          link: extrairLinkDaReuniao(ev)
+          link: extrairLinkDaReuniao(ev),
+          organizador: organizadorEmail,
+          organizadorNome: RUNRUN_USUARIOS[organizadorEmail] || organizadorEmail,
+          meuStatus: ev.getMyStatus() ? ev.getMyStatus().toString() : ''
         };
       });
 
     return { ok: true, reunioes: reunioes };
   } catch (err) {
     return { ok: false, error: 'Erro ao ler a agenda: ' + err.message };
+  }
+}
+
+/**
+ * Aceita ou recusa um convite de reunião direto pelo Colmeia (sem
+ * precisar abrir o Google Agenda) — usado pelos botões da notificação
+ * "Nova reunião" (ver verificarReunioesProximas, js/notificacoes-avisos.js).
+ */
+function responderReuniao(designer, eventId, resposta) {
+  if (!designer || !eventId) return { ok: false, error: 'Parâmetros faltando.' };
+  var email = null;
+  for (var e in RUNRUN_USUARIOS) {
+    if (RUNRUN_USUARIOS[e].toLowerCase().trim() === designer.toLowerCase().trim()) { email = e; break; }
+  }
+  if (!email) return { ok: false, error: 'E-mail desse designer não configurado em RUNRUN_USUARIOS.' };
+  try {
+    var agenda = CalendarApp.getCalendarById(email);
+    if (!agenda) return { ok: false, error: 'Não consegui acessar a agenda de ' + designer + '.' };
+    var evento = agenda.getEventById(eventId);
+    if (!evento) return { ok: false, error: 'Não achei esse evento na agenda (pode ter sido cancelado).' };
+    evento.setMyStatus(resposta === 'sim' ? CalendarApp.GuestStatus.YES : CalendarApp.GuestStatus.NO);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao responder o convite: ' + err.message };
   }
 }
 

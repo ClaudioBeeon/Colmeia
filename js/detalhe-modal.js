@@ -166,6 +166,14 @@ function wireWorkflowArrows(task) {
       nextBtn.disabled = true;
       await pararCronometroAoTransferir(task);
 
+      // Guarda quem estava com a tarefa ANTES de mexer em qualquer coisa
+      // (nem a animação otimista logo abaixo ainda) — usado depois pra
+      // conferir com o estado real do Runrun.it se a transferência
+      // aconteceu de verdade, mesmo que a chamada abaixo devolva erro
+      // (ex: Apps Script sobrecarregado/lento nesse instante).
+      const atualIdxAntesDeTudo = task.sequencia && task.sequencia.length ? task.sequencia.findIndex(s => s.atual) : -1;
+      const nomeAtualAntes = atualIdxAntesDeTudo !== -1 ? task.sequencia[atualIdxAntesDeTudo].nome : null;
+
       // Animação otimista: já mostra a transferência acontecendo na
       // hora (mesmo sem confirmação do Runrun.it ainda) — se a chamada
       // de baixo falhar, o carregarSequencia final busca o estado real
@@ -193,8 +201,13 @@ function wireWorkflowArrows(task) {
       }
       if (!resultadoAvanco.ok) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
       // Sincroniza com o Runrun.it de verdade (confirma ou desfaz a
-      // animação otimista de cima, se o Runrun.it recusou).
+      // animação otimista de cima, se o Runrun.it recusou) ANTES de
+      // decidir se mostra o erro — só reclama se de fato não avançou.
       await carregarSequencia(task);
+      const atualIdxDepois = task.sequencia && task.sequencia.length ? task.sequencia.findIndex(s => s.atual) : -1;
+      const nomeAtualDepois = atualIdxDepois !== -1 ? task.sequencia[atualIdxDepois].nome : null;
+      const realmenteNaoAvancou = nomeAtualDepois === nomeAtualAntes;
+      if (!resultadoAvanco.ok && realmenteNaoAvancou) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
     });
   }
   const addPersonBtn = document.getElementById("navAddPersonBtn");
@@ -303,6 +316,55 @@ function wireWorkflowArrows(task) {
   }
 }
 
+/**
+ * Abre o menu de escolher etapa como um pop-up de verdade, grudado no
+ * botão (mesma técnica de posicionamento do calendário e do pop-up de
+ * transferir card mãe — position: fixed, gruda no <body>, se posiciona
+ * sozinho por JS). Antes, o menu vivia dentro do pill do cabeçalho
+ * (position: absolute) e ficava fisicamente cortado por ela, mesmo
+ * mandando abrir pra baixo — escapar pro <body> resolve isso de vez.
+ */
+function abrirMenuEtapa(task, statusBadge) {
+  document.querySelectorAll(".status-menu").forEach(el => el.remove());
+
+  const menu = document.createElement("div");
+  menu.className = "status-menu";
+  menu.innerHTML = columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("");
+  document.body.appendChild(menu);
+  posicionarPopupFixo(menu, statusBadge);
+  requestAnimationFrame(() => menu.classList.add("open"));
+
+  function fechar() {
+    menu.classList.remove("open");
+    setTimeout(() => menu.remove(), 160);
+    document.removeEventListener("click", clickFora);
+  }
+  function clickFora(ev) {
+    if (!menu.contains(ev.target) && ev.target !== statusBadge) fechar();
+  }
+  setTimeout(() => document.addEventListener("click", clickFora), 0);
+
+  menu.querySelectorAll("button").forEach(opt => {
+    opt.addEventListener("click", async e => {
+      e.stopPropagation();
+      fechar();
+      const statusAntigo = task.status;
+      task.status = opt.dataset.status;
+      renderDetail();
+      render();
+      const ok = await moverEtapaNoBackend(task.id, opt.dataset.status);
+      if (!ok) {
+        task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
+        renderDetail();
+        render();
+        mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
+      } else {
+        agendarAtualizacaoKanban();
+      }
+    });
+  });
+}
+
 function renderDetail() {
   const task = tasks[detailIdx];
   const type = typeLabels[task.type];
@@ -350,9 +412,6 @@ function renderDetail() {
             </div>
             <div class="status-wrap">
               <button type="button" class="status-badge" id="statusBadge">${columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa"}</button>
-              <div class="status-menu" id="statusMenu">
-                ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("")}
-              </div>
             </div>
           </div>
           </div>
@@ -454,6 +513,7 @@ function renderDetail() {
                 <svg viewBox="0 0 24 24" fill="none"><path d="M9 12a4 4 0 004 4h1a4 4 0 000-8h-1M15 12a4 4 0 00-4-4H10a4 4 0 000 8h1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span>Copiar link da pasta</span>
               </button>
+              <button type="button" class="pasta-link-manual-btn" id="pastaLinkManualBtn">Linkar pasta certa</button>
             </div>
           ` : ""}
           <div class="side-block">
@@ -623,6 +683,8 @@ function renderDetail() {
       });
     });
   }
+  const linkManualBtn = document.getElementById("pastaLinkManualBtn");
+  if (linkManualBtn) linkManualBtn.addEventListener("click", () => abrirLinkarPastaManual(task, criarPastaBtn));
 
   wireEdicaoEntregaDesejada(task);
 
@@ -646,33 +708,13 @@ function renderDetail() {
   });
 
   const statusBadge = document.getElementById("statusBadge");
-  const statusMenu = document.getElementById("statusMenu");
   // O card mãe também pode ser movido de etapa — a trava que bloqueava
   // isso não fazia sentido, já que o Runrun.it trata ele como uma
   // tarefa normal (só fica numa etapa própria, "Cards Mães", até
   // alguém mudar).
   statusBadge.addEventListener("click", e => {
     e.stopPropagation();
-    statusMenu.classList.toggle("open");
-  });
-  statusMenu.querySelectorAll("button").forEach(opt => {
-    opt.addEventListener("click", async e => {
-      e.stopPropagation();
-      const statusAntigo = task.status;
-      task.status = opt.dataset.status;
-      statusMenu.classList.remove("open");
-      renderDetail();
-      render();
-      const ok = await moverEtapaNoBackend(task.id, opt.dataset.status);
-      if (!ok) {
-        task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
-        renderDetail();
-        render();
-        mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
-      } else {
-        agendarAtualizacaoKanban();
-      }
-    });
+    abrirMenuEtapa(task, statusBadge);
   });
 
   const moreBtn = document.getElementById("detailMore");
@@ -1156,6 +1198,12 @@ async function precarregarCardMaeEmBackground(taskId) {
   const seqResultado = await buscarSequenciaDoBackend(resultado.cardMae.id);
   resultado.cardMae.sequencia = seqResultado.sequencia;
   resultado.cardMae.workflowId = seqResultado.workflowId;
+  // Idem pra descrição do card mãe (aba "Descrição card mãe") — sem
+  // isso, ela só era buscada na hora de clicar na aba, deixando a
+  // troca lenta mesmo com o card mãe todo já pré-carregado. É a
+  // descrição ORIGINAL crua, direto do Runrun.it — essa aba nunca usa
+  // IA (isso é só o briefing da própria subtarefa).
+  resultado.cardMae.descricao = await buscarDescricaoDoBackend(resultado.cardMae.id);
 }
 
 async function abrirCardMae(task) {

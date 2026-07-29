@@ -502,6 +502,7 @@ async function confirmarECriarPastaDoCard(task) {
     task.pastaUrlSalva = data.url; // guarda no objeto da tarefa — reconhece na hora se reabrir de novo
     trocarTextoBotaoPasta("Acessar pasta do card");
     mostrarPillCopiarLinkDaPasta(data.url);
+    atualizarLabelLinkManual(true);
   } catch (err) {
     console.error("Falha ao criar pasta do card no Drive:", err);
     btn.disabled = false;
@@ -544,9 +545,29 @@ async function verificarPastaJaSalva(task, btn) {
   if (!task._pastaCheckPromise) {
     task._pastaCheckPromise = (async () => {
       try {
+        // Subtarefa nova (ex: uma "Alteração 02" recém-criada) nunca
+        // teve o botão "Criar pasta do card" clicado nela mesma — antes
+        // de checar só o id dela, também busca o card mãe e as tarefas
+        // irmãs (já carregados em segundo plano assim que a subtarefa
+        // abriu, ver precarregarCardMaeEmBackground) e, se alguma já
+        // tiver pasta registrada, o backend vincula essa mesma pasta
+        // aqui também, silenciosamente — sem perguntar nada, sem correr
+        // o risco de criar uma pasta duplicada (buscarOuHerdarPastaCard).
+        let idsRelacionados = [];
+        if (task.parentTaskId) {
+          const cardMaeInfo = cardMaeCache.get(task.id) || await buscarCardMaeDoBackend(task.id);
+          if (cardMaeInfo && cardMaeInfo.ok && cardMaeInfo.temPai && cardMaeInfo.cardMae) {
+            idsRelacionados = [cardMaeInfo.cardMae.id, ...(cardMaeInfo.subtarefas || []).map(s => s.id)]
+              .filter(id => String(id) !== String(task.id));
+          }
+        }
         const res = await fetch(COLMEIA_API_URL, {
           method: "POST",
-          body: JSON.stringify({ acao: "buscarPastaCard", taskId: task.id }),
+          body: JSON.stringify(
+            idsRelacionados.length
+              ? { acao: "buscarOuHerdarPastaCard", taskId: task.id, idsRelacionados }
+              : { acao: "buscarPastaCard", taskId: task.id }
+          ),
         });
         const data = await res.json();
         task.pastaUrlSalva = (data.ok && data.url) ? data.url : null;
@@ -568,6 +589,88 @@ async function verificarPastaJaSalva(task, btn) {
     const label = btn.querySelector(".pasta-drive-btn-label");
     if (label) label.textContent = "Acessar pasta do card";
     mostrarPillCopiarLinkDaPasta(task.pastaUrlSalva);
+  }
+  atualizarLabelLinkManual(task.pastaUrlSalva);
+}
+
+// Texto do link minimalista muda conforme já tem pasta vinculada ou não
+// — "Linkar pasta certa" (primeira vez) vira "Trocar pasta vinculada"
+// depois de já ter uma, deixando claro que dá pra corrigir se a
+// automática detectou/criou a pasta errada.
+function atualizarLabelLinkManual(jaTemPasta) {
+  const linkManualBtn = document.getElementById("pastaLinkManualBtn");
+  if (linkManualBtn) linkManualBtn.textContent = jaTemPasta ? "Trocar pasta vinculada" : "Linkar pasta certa";
+}
+
+/**
+ * Opção minimalista pra vincular manualmente a pasta certa do Drive —
+ * útil quando a criação/detecção automática (criarPastaDoCardNoDrive)
+ * erra o caminho (ex: pasta já existia com nome levemente diferente).
+ * Troca o próprio botão por um campo de texto simples, sem modal.
+ */
+async function abrirLinkarPastaManual(task, criarPastaBtn) {
+  const linkBtn = document.getElementById("pastaLinkManualBtn");
+  if (!linkBtn || document.getElementById("pastaLinkManualForm")) return;
+
+  linkBtn.insertAdjacentHTML("afterend", `
+    <div class="pasta-link-manual-form" id="pastaLinkManualForm">
+      <input type="text" class="pasta-link-manual-input" id="pastaLinkManualInput" placeholder="Cole o link da pasta do Drive">
+      <button type="button" class="pasta-link-manual-salvar" id="pastaLinkManualSalvar">Salvar</button>
+      <button type="button" class="pasta-link-manual-cancelar" id="pastaLinkManualCancelar" aria-label="Cancelar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  `);
+  linkBtn.hidden = true;
+  const form = document.getElementById("pastaLinkManualForm");
+  const input = document.getElementById("pastaLinkManualInput");
+  input.focus();
+
+  function fechar() {
+    form.remove();
+    linkBtn.hidden = false;
+  }
+  document.getElementById("pastaLinkManualCancelar").addEventListener("click", fechar);
+
+  async function salvar() {
+    const url = input.value.trim();
+    if (!url) { fechar(); return; }
+    input.disabled = true;
+    document.getElementById("pastaLinkManualSalvar").disabled = true;
+    const resultado = await linkarPastaManualNoBackend(task.id, url);
+    if (resultado.ok) {
+      const urlFinal = resultado.url || url;
+      task.pastaUrlSalva = urlFinal;
+      if (criarPastaBtn) {
+        criarPastaBtn.dataset.pastaUrl = urlFinal;
+        const label = criarPastaBtn.querySelector(".pasta-drive-btn-label");
+        if (label) label.textContent = "Acessar pasta do card";
+      }
+      mostrarPillCopiarLinkDaPasta(urlFinal);
+      atualizarLabelLinkManual(true);
+      mostrarToast("Pasta vinculada.");
+      fechar();
+    } else {
+      input.disabled = false;
+      document.getElementById("pastaLinkManualSalvar").disabled = false;
+      mostrarToast(resultado.error || "Não consegui vincular essa pasta agora.", "erro");
+    }
+  }
+  document.getElementById("pastaLinkManualSalvar").addEventListener("click", salvar);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") salvar(); });
+}
+
+async function linkarPastaManualNoBackend(taskId, url) {
+  if (!COLMEIA_API_URL || !taskId || !url) return { ok: false, error: "Faltou o link da pasta." };
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "linkarPastaManual", taskId, url }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("Falha ao vincular pasta manualmente:", err);
+    return { ok: false, error: "Falha de conexão." };
   }
 }
 

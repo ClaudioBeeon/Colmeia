@@ -80,6 +80,15 @@ function renderModalRegra(task) {
     nextArrow.addEventListener("click", async () => {
       nextArrow.disabled = true;
       await pararCronometroAoTransferir(task);
+      // Guarda quem estava com a tarefa ANTES de tentar avançar, pra
+      // poder conferir com o estado real do Runrun.it depois — o
+      // Apps Script às vezes demora demais e devolve erro mesmo quando
+      // a transferência aconteceu de verdade do outro lado (ex: outras
+      // checagens em segundo plano sobrecarregando ele no mesmo
+      // instante). Sem essa conferência, o usuário via um "erro" que
+      // não era real.
+      const atualIdxAntes = (task.sequencia || []).findIndex(s => s.atual);
+      const nomeAtualAntes = atualIdxAntes !== -1 ? task.sequencia[atualIdxAntes].nome : null;
       const resultado = await avancarWorkflowNoBackend(task.id);
       if (resultado.novoResponsavel) {
         task.assignee = resultado.novoResponsavel;
@@ -87,8 +96,11 @@ function renderModalRegra(task) {
         render();
         agendarAtualizacaoKanban();
       }
-      if (!resultado.ok) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
-      await atualizarSequenciaEModal(task);
+      await atualizarSequenciaEModal(task); // sincroniza com o real ANTES de decidir se mostra erro
+      const atualIdxDepois = (task.sequencia || []).findIndex(s => s.atual);
+      const nomeAtualDepois = atualIdxDepois !== -1 ? task.sequencia[atualIdxDepois].nome : null;
+      const realmenteNaoAvancou = nomeAtualDepois === nomeAtualAntes;
+      if (!resultado.ok && realmenteNaoAvancou) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
     });
   }
 
