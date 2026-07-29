@@ -153,18 +153,23 @@ async function renderNotificacoesUpload(task) {
 async function adicionarComentarioDeUpload(task, container, link, qtd, chave, btn) {
   if (!task.id) return;
   const original = btn ? btn.textContent : null;
-  if (btn) { btn.disabled = true; btn.textContent = "Adicionando..."; }
+  // Feedback NA HORA do clique — texto "Adicionado ✓" e o sumiço da
+  // notificação acontecem antes de qualquer resposta do Runrun.it, sem
+  // esperar a ida e volta (mesmo padrão otimista do resto do app). Só
+  // desfaz tudo (e avisa por toast) se o Runrun.it recusar de verdade.
+  if (btn) { btn.disabled = true; btn.textContent = "Adicionado ✓"; }
+  const removerTimeout = setTimeout(() => {
+    const el = container.querySelector(`.upload-notif[data-chave="${CSS.escape(chave)}"]`);
+    if (el) el.remove();
+  }, 900);
+
   const texto = `${qtd > 1 ? "Arquivos adicionados" : "Arquivo adicionado"} na pasta: ${link}`;
   const ok = await enviarComentarioNoBackend(task.id, texto);
   if (ok) {
-    if (btn) btn.textContent = "Adicionado ✓";
     marcarUploadVisto(chave);
     if (chatThreadAtivo === "aqui" && chatAlvoTaskId === task.id) recarregarThreadAtiva();
-    setTimeout(() => {
-      const el = container.querySelector(`.upload-notif[data-chave="${CSS.escape(chave)}"]`);
-      if (el) el.remove();
-    }, 900);
   } else {
+    clearTimeout(removerTimeout);
     if (btn) { btn.disabled = false; btn.textContent = original; }
     mostrarToast("Não consegui adicionar o comentário agora. Tenta de novo em alguns segundos.", "erro");
   }
