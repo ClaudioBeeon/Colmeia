@@ -49,6 +49,7 @@ function pararOutrasTarefasRodando(exceto) {
   tasks.forEach(t => {
     if (t.running && t !== exceto) {
       t.running = false;
+      t._runningToggleEm = Date.now();
       pausarTarefaNoBackend(t.id);
     }
   });

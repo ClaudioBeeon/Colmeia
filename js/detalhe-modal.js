@@ -586,6 +586,7 @@ function renderDetail() {
     const vaiComecar = !tarefaViva.running;
     if (vaiComecar) pararOutrasTarefasRodando(tarefaViva);
     tarefaViva.running = vaiComecar;
+    tarefaViva._runningToggleEm = Date.now();
     if (tarefaViva.running) tocarTarefaNoBackend(tarefaViva.id, tarefaViva.title);
     else pausarTarefaNoBackend(tarefaViva.id);
     renderDetail();
@@ -1551,6 +1552,7 @@ document.getElementById("nowPlayingPause").addEventListener("click", (ev) => {
   const running = tasks.find(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
   if (!running) return;
   running.running = false;
+  running._runningToggleEm = Date.now();
   pausarTarefaNoBackend(running.id);
   if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(running.id)) renderDetail();
   render();

@@ -437,6 +437,7 @@ function attachCardDragHandlers() {
       const vaiComecar = !task.running;
       if (vaiComecar) pararOutrasTarefasRodando(task);
       task.running = vaiComecar;
+      task._runningToggleEm = Date.now();
       if (task.running) tocarTarefaNoBackend(task.id, task.title);
       else pausarTarefaNoBackend(task.id);
       render(); // atualiza o ícone dessa tarefa E o da outra que parou junto

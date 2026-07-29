@@ -415,6 +415,22 @@ async function atualizarKanbanEmBackground() {
         // objeto novo sem comentários, e quem estivesse com o card
         // aberto via eles "sumirem" até recarregar de novo.
         if (antiga.comments !== undefined) nova.comments = antiga.comments;
+        // Mesmo problema do timerSeconds acima, mas pro "está rodando":
+        // o Runrun.it às vezes demora alguns segundos pra confirmar o
+        // play/pause (mesmo já tendo aceitado a chamada) — sem essa
+        // proteção, uma atualização automática do quadro que caísse
+        // bem nesse meio-tempo trazia "running: false" de volta do
+        // Runrun.it e desfazia visualmente o play que a pessoa acabou
+        // de dar (o card voltava, o pill amarelo sumia), mesmo a tarefa
+        // já estando rodando de verdade lá. Confia no estado local por
+        // uns segundos depois de QUALQUER toggle (play OU pause,
+        // próprio ou de outra tarefa parada junto), depois volta a
+        // confiar no Runrun.it normalmente.
+        const RECEM_MEXIDO_MS = 8000;
+        if (antiga._runningToggleEm && (Date.now() - antiga._runningToggleEm) < RECEM_MEXIDO_MS) {
+          nova.running = antiga.running;
+          nova._runningToggleEm = antiga._runningToggleEm;
+        }
       }
     });
 
