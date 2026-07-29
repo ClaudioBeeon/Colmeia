@@ -451,13 +451,32 @@ function buildAtendimentoPage() {
  * "carregando" — uma pode demorar mais que a outra sem travar a outra.
  */
 function buildHistoricoPage() {
-  carregarHistoricoPlays();
+  carregarHistoricoPlays(_historicoJanelaAtual);
   carregarAtividadesDrive();
 }
 
-async function carregarHistoricoPlays() {
+// Janela de tempo escolhida no filtro (Hoje/Últimas 48h/Última semana) —
+// fica guardada aqui pra sobreviver a um buildHistoricoPage() chamado de
+// novo (ex: reabrindo a aba), até a pessoa trocar de novo.
+let _historicoJanelaAtual = "hoje";
+const HISTORICO_JANELA_LABEL = { hoje: "hoje", "48h": "nas últimas 48h", semana: "na última semana" };
+
+document.querySelectorAll("#hojeListFiltro .historico-filtro-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (btn.classList.contains("active")) return;
+    document.querySelectorAll("#hojeListFiltro .historico-filtro-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    _historicoJanelaAtual = btn.dataset.janela;
+    carregarHistoricoPlays(_historicoJanelaAtual);
+  });
+});
+
+async function carregarHistoricoPlays(janela) {
+  janela = janela || "hoje";
   const lista = document.getElementById("hojeList");
   if (!lista) return;
+  const tituloEl = document.getElementById("hojeListTitulo");
+  if (tituloEl) tituloEl.textContent = `O que você deu play ${HISTORICO_JANELA_LABEL[janela] || "hoje"}`;
   lista.innerHTML = `<div class="historico-loading"><span class="rule-row-spinner"></span><p>Carregando...</p></div>`;
   if (!COLMEIA_API_URL || !DESIGNER_LOGADO) {
     lista.innerHTML = `<p class="workflow-seq-empty">Backend não configurado.</p>`;
@@ -466,15 +485,15 @@ async function carregarHistoricoPlays() {
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "buscarTarefasHoje", designer: DESIGNER_LOGADO }),
+      body: JSON.stringify({ acao: "buscarTarefasHoje", designer: DESIGNER_LOGADO, janela }),
     });
     const data = await res.json();
     if (!data.ok) {
-      lista.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui buscar seu histórico de hoje."}</p>`;
+      lista.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui buscar seu histórico."}</p>`;
       return;
     }
     if (data.tarefas.length === 0) {
-      lista.innerHTML = `<p class="workflow-seq-empty">Você ainda não deu play em nenhuma tarefa hoje.</p>`;
+      lista.innerHTML = `<p class="workflow-seq-empty">Você ainda não deu play em nenhuma tarefa ${HISTORICO_JANELA_LABEL[janela] || "hoje"}.</p>`;
       return;
     }
 

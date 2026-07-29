@@ -106,7 +106,7 @@ function handleRequest(e, method) {
       } else if (body.acao === 'tocarTarefa') {
         output = tocarTarefa(body.taskId, body.taskTitle, body.designer);
       } else if (body.acao === 'buscarTarefasHoje') {
-        output = buscarPlaysDeHoje(body.designer);
+        output = buscarPlaysDeHoje(body.designer, body.janela);
       } else if (body.acao === 'pausarTarefa') {
         output = pausarTarefa(body.taskId);
       } else if (body.acao === 'listarComentarios') {
@@ -1564,18 +1564,32 @@ function registrarPlay(taskId, taskTitle, designer) {
 
 /**
  * Devolve, pro designer informado, a lista de tarefas que tiveram play
- * hoje — 1 item por tarefa (mesmo com vários plays no dia), já com o
- * horário (em milissegundos) do 1º e do último play.
+ * dentro da janela pedida — 1 item por tarefa (mesmo com vários plays
+ * na janela), já com o horário (em milissegundos) do 1º e do último
+ * play. `janela` aceita "hoje" (desde a meia-noite de hoje, horário de
+ * Brasília), "48h" (últimas 48h corridas) ou "semana" (últimos 7 dias
+ * corridos) — usa o timestamp de verdade (quando), não a data em texto,
+ * pra "48h"/"semana" cortarem na hora certa, não só no dia.
  */
-function buscarPlaysDeHoje(designer) {
+function buscarPlaysDeHoje(designer, janela) {
   if (!designer) return { ok: false, error: 'designer não informado.' };
   var sheet = getLogPlaysSheet();
   var linhas = sheet.getDataRange().getValues();
-  var hojeISO = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  var agora = new Date();
+  var corte;
+  if (janela === '48h') {
+    corte = agora.getTime() - 48 * 60 * 60 * 1000;
+  } else if (janela === 'semana') {
+    corte = agora.getTime() - 7 * 24 * 60 * 60 * 1000;
+  } else {
+    // "hoje" (padrão): meia-noite de hoje, horário de Brasília.
+    var hojeISO = Utilities.formatDate(agora, 'America/Sao_Paulo', 'yyyy-MM-dd');
+    corte = new Date(hojeISO + 'T00:00:00-03:00').getTime();
+  }
   var porTarefa = {};
   for (var i = 1; i < linhas.length; i++) {
-    var taskId = linhas[i][0], titulo = linhas[i][1], nomeDesigner = linhas[i][2], quando = linhas[i][3], data = linhas[i][4];
-    if (data !== hojeISO) continue;
+    var taskId = linhas[i][0], titulo = linhas[i][1], nomeDesigner = linhas[i][2], quando = linhas[i][3];
+    if (Number(quando) < corte) continue;
     if (String(nomeDesigner).toLowerCase().trim() !== String(designer).toLowerCase().trim()) continue;
     if (!porTarefa[taskId]) {
       porTarefa[taskId] = { taskId: taskId, titulo: titulo, primeiroPlay: quando, ultimoPlay: quando };

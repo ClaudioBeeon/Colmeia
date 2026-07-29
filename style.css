@@ -2891,10 +2891,21 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
    arredondado. */
 .historico-secao { flex-shrink: 0; margin-bottom: 28px; }
 .historico-secao:last-child { margin-bottom: 8px; }
+.historico-secao-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.historico-secao-head .historico-secao-titulo { margin-bottom: 0; }
 .historico-secao-titulo {
   font-family: var(--font-display); font-size: 18px; font-weight: 600;
   margin-bottom: 14px; color: var(--text-primary);
 }
+
+.historico-filtro { display: flex; align-items: center; gap: 4px; background: var(--page-bg); border-radius: 999px; padding: 3px; flex-shrink: 0; }
+.historico-filtro-btn {
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+  background: transparent; border: none; border-radius: 999px; padding: 7px 14px; cursor: pointer;
+  white-space: nowrap; transition: background 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
+}
+.historico-filtro-btn:hover { color: var(--text-primary); }
+.historico-filtro-btn.active { background: #fff; color: var(--text-primary); box-shadow: 0 1px 4px rgba(20,20,30,0.10); }
 
 .hoje-list, .atividades-list {
   display: flex; flex-direction: row; gap: 20px;

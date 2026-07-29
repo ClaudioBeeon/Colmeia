@@ -314,7 +314,14 @@
 
     <section class="app-page" id="page-hoje" hidden>
       <div class="historico-secao">
-        <h3 class="historico-secao-titulo">O que você deu play hoje</h3>
+        <div class="historico-secao-head">
+          <h3 class="historico-secao-titulo" id="hojeListTitulo">O que você deu play hoje</h3>
+          <div class="historico-filtro" id="hojeListFiltro">
+            <button type="button" class="historico-filtro-btn active" data-janela="hoje">Hoje</button>
+            <button type="button" class="historico-filtro-btn" data-janela="48h">Últimas 48h</button>
+            <button type="button" class="historico-filtro-btn" data-janela="semana">Última semana</button>
+          </div>
+        </div>
         <div class="hoje-list" id="hojeList"></div>
       </div>
       <div class="historico-secao">
