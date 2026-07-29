@@ -1082,6 +1082,7 @@ function buscarAtividadesDrive(designer) {
 
     var atividades = [];
     var cachePastas = {};
+    var cacheBreadcrumbs = {};
     var checados = 0;
     while (resultados.hasNext() && checados < 60 && atividades.length < MAX_ATIVIDADES_DRIVE) {
       var arquivo = resultados.next();
@@ -1103,7 +1104,22 @@ function buscarAtividadesDrive(designer) {
       }
       if (!nomeCliente) continue;
 
-      atividades.push({ cliente: nomeCliente, arquivo: arquivo.getName(), quando: quando, pastaUrl: pastaPublicacao.getUrl() });
+      var breadcrumb;
+      if (cacheBreadcrumbs.hasOwnProperty(parentId)) {
+        breadcrumb = cacheBreadcrumbs[parentId];
+      } else {
+        breadcrumb = montarBreadcrumbPasta(pastaPublicacao, clientesId);
+        cacheBreadcrumbs[parentId] = breadcrumb;
+      }
+
+      atividades.push({
+        cliente: nomeCliente,
+        arquivo: arquivo.getName(),
+        quando: quando,
+        pastaUrl: pastaPublicacao.getUrl(),
+        pastaNome: pastaPublicacao.getName(),
+        breadcrumb: breadcrumb
+      });
     }
 
     atividades.sort(function (a, b) { return b.quando - a.quando; });
@@ -1132,6 +1148,23 @@ function acharClienteDaPastaDoDrive(pastaInicial, clientesId) {
     profundidade++;
   }
   return null;
+}
+
+// Monta o "caminho" da pasta pro card de atividade (ex: "Alden 348 >
+// Publicações > 2026 > Julho") — sobe de pastaInicial até (mas sem
+// incluir) a pasta "Clientes", juntando os nomes na ordem certa.
+function montarBreadcrumbPasta(pastaInicial, clientesId) {
+  var nomes = [];
+  var atual = pastaInicial;
+  var profundidade = 0;
+  while (atual && profundidade < 10) {
+    if (atual.getId() === clientesId) break;
+    nomes.unshift(atual.getName());
+    var pais = atual.getParents();
+    atual = pais.hasNext() ? pais.next() : null;
+    profundidade++;
+  }
+  return nomes.join(' > ');
 }
 
 // Igual getOuCriarPastaMes, mas NUNCA cria pasta — só serve pra
