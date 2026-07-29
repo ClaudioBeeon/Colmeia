@@ -325,6 +325,14 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Sem isso, o "display: flex" logo acima ganha do [hidden] nativo do
+   navegador (mesma especificidade, e o `hidden` sozinho não tem
+   `!important`) — updateNowPlaying() marcava idle.hidden = true com uma
+   tarefa rodando, mas a mensagem "Nenhuma tarefa..." continuava visível
+   por cima da pílula amarela (as duas são position:absolute no mesmo
+   lugar — ver .now-playing-wrap .now-playing-idle acima —, e o idle vem
+   depois no HTML, então pintava por cima mesmo "escondido"). */
+.now-playing-idle[hidden] { display: none; }
 
 /* Notificação "ambiente" dentro da própria pílula (comentário, aviso,
    upload no Drive, tarefa recebida via repasse) — só usada quando não
