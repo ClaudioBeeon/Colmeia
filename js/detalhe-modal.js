@@ -217,24 +217,14 @@ function wireWorkflowArrows(task) {
     } else {
       deliverBtn.addEventListener("click", async () => {
         // Tudo isso acontece NA HORA, antes de qualquer resposta do
-        // Runrun.it: já marca como entregue, já re-renderiza o botão
-        // inteiro (não só o ícone!) mostrando reciclagem, e já faz o
-        // pill preto varrer de verde. Re-renderizar o GRUPO inteiro
-        // (não só trocar o innerHTML do ícone) é importante — é o que
-        // garante que o clique do botão já fica ligado no "reabrir"
-        // de verdade, em vez de continuar ligado no "concluir" antigo
-        // (esse era o bug: o ícone mudava mas o clique continuava
-        // sendo o de concluir, então "reabrir" nunca funcionava).
+        // Runrun.it: já marca como entregue e já sobe o carrossel do pill
+        // mostrando "Entregue ✓" (mesma técnica do fluxo de transferir
+        // card mãe) — sem esperar a ida e volta ao backend pra reagir.
         const entregueOtimista = task.entregue;
         const sequenciaOtimista = task.sequencia;
         task.entregue = true;
 
-        const pillEl = document.querySelector(".detail-header-pill");
-        if (pillEl) {
-          pillEl.classList.remove("entregando"); // reinicia se já tinha rodado antes
-          void pillEl.offsetWidth; // força o navegador a "esquecer" a animação anterior
-          pillEl.classList.add("entregando");
-        }
+        mostrarEntregueNoPill();
 
         const seqEl = document.getElementById("workflowSeqGroup");
         if (seqEl) {
@@ -282,7 +272,6 @@ function wireWorkflowArrows(task) {
           if (tarefaViva) tarefaViva.running = false;
           render();
           updateNowPlaying();
-          mostrarEntregueNoPill();
           // Acabou de concluir uma SUBtarefa? Confere se o card mãe dela
           // está com você — se estiver, pergunta se quer transferir ele
           // também, direto ali dentro do próprio pill (ver
@@ -301,7 +290,7 @@ function wireWorkflowArrows(task) {
           // (ícone de concluir e o clique certo de novo inclusos).
           task.entregue = entregueOtimista;
           task.sequencia = sequenciaOtimista;
-          if (pillEl) pillEl.classList.remove("entregando");
+          esconderFluxoCardMaeNoPill();
           if (seqEl) {
             seqEl.innerHTML = renderSequenciaHTML(task);
             wireWorkflowArrows(task);
@@ -1266,8 +1255,8 @@ function renderFacePillRegraCardMae(cardMaeTask) {
           ${renderSequenciaHTML(cardMaeTask)}
         </div>
       </span>
-      <button type="button" class="pill-cardmae-fechar" id="pillCardMaeFechar" title="Concluir e fechar">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <button type="button" class="pill-cardmae-fechar" id="pillCardMaeFechar" title="Voltar (sem alterar a regra)">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
       </button>
     </span>
   `;

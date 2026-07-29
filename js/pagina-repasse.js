@@ -897,12 +897,14 @@ document.querySelectorAll(".nav-ic[data-page]").forEach(link => {
 document.getElementById("searchInput").addEventListener("input", e => {
   searchQuery = e.target.value;
   render();
+  if (!document.getElementById("page-runrun").hidden) buildRunrunCompletoPage();
 });
 
 document.getElementById("verTodasBtn").addEventListener("click", () => {
   searchQuery = "";
   document.getElementById("searchInput").value = "";
   render();
+  if (!document.getElementById("page-runrun").hidden) buildRunrunCompletoPage();
 });
 
 document.getElementById("nowPlaying").addEventListener("click", () => {

@@ -334,6 +334,12 @@ async function atualizarKanbanEmBackground() {
         nova._temSequencia = antiga._temSequencia;
         if (antiga._repasseEntregue) nova._repasseEntregue = antiga._repasseEntregue;
       }
+      // O backend não devolve "entregue" (é um estado só de sessão, marcado
+      // na hora que a pessoa clica em concluir — ver detalhe-modal.js). Sem
+      // preservar aqui, toda atualização automática do quadro recriava a
+      // tarefa do zero sem esse flag, e o botão de reabrir sumia sozinho
+      // (voltava a mostrar "concluir" como se nunca tivesse sido entregue).
+      if (antiga && antiga.entregue) nova.entregue = true;
       if (antiga && DESIGNER_LOGADO
         && !nomesCorrespondem(antiga.assignee, DESIGNER_LOGADO)
         && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)) {

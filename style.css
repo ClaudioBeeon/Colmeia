@@ -808,9 +808,6 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   background: #14151A; border-radius: 999px; padding: 8px 8px 8px 8px;
   position: relative;
 }
-/* Todo filho direto vira "elemento posicionado" pra garantir que fica
-   por cima da varredura verde (ver .detail-header-pill::before), não
-   importa a ordem de pintura do flexbox. */
 .detail-header-pill > * { position: relative; z-index: 2; }
 
 /* Conteúdo normal do pill (play, tempo, nome, sequência do card
@@ -842,7 +839,11 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
    ver esconderFluxoCardMaeNoPill em js/detalhe-modal.js — senão o pill
    voltaria pro tamanho normal ANTES da pílula do card mãe terminar de
    descer, cortando a própria animação de saída. */
-.detail-header-pill.card-mae-modo { height: 46px; overflow: hidden; }
+/* 56px (não 46px) — a etapa da regra (status-badge + fileira de
+   fotinhos com bordas) precisa de ~34px de altura de conteúdo; com o
+   padding de 8px em cima/embaixo do pill, 46px só sobrava 30px e
+   cortava essas peças na borda de cima/baixo. */
+.detail-header-pill.card-mae-modo { height: 56px; overflow: hidden; }
 .detail-header-pill.card-mae-modo .pill-face {
   position: absolute; inset: 0;
   transition: transform var(--dur-slow) var(--ease-apple-spring), opacity 0.24s var(--ease-apple);
@@ -907,12 +908,16 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
+/* "X" de voltar/fechar — de propósito NÃO é verde/check: só sai dessa
+   etapa e volta o pill pro normal, não conclui nem entrega nada (quem
+   entrega é a flechinha de entregar dentro da própria regra, reaproveitada
+   de renderSequenciaHTML). */
 .pill-cardmae-fechar {
-  width: 26px; height: 26px; border-radius: 50%; background: #2F9E44; color: #fff;
+  width: 26px; height: 26px; border-radius: 50%; background: #24252C; color: #fff;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer;
   border: none; transition: background 0.15s var(--ease-apple);
 }
-.pill-cardmae-fechar:hover { background: #248037; }
+.pill-cardmae-fechar:hover { background: #33343B; }
 .pill-cardmae-fechar svg { width: 12px; height: 12px; }
 
 /* Pop-up de "adicionar pessoa" do fluxo do card mãe dentro do pill —
@@ -931,29 +936,6 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   color: var(--text-primary); padding: 8px; border-radius: 8px; cursor: pointer; width: 100%;
 }
 .pill-cardmae-quickpick button:hover { background: var(--page-bg); }
-
-/* Animação de "concluir tarefa": o pill preto inteiro varre de verde,
-   saindo de onde fica o botão de concluir (canto direito), cobre tudo,
-   segura um instante, e volta pro preto sozinho — puramente visual,
-   não depende de re-render nem de resposta do Runrun.it. */
-.detail-header-pill::before {
-  content: "";
-  position: absolute; inset: 0;
-  background: #2F9E44;
-  border-radius: inherit;
-  clip-path: circle(0% at 95% 50%);
-  z-index: 1;
-  pointer-events: none;
-}
-.detail-header-pill.entregando::before {
-  animation: colmeia-pill-deliver 900ms var(--ease-apple-spring);
-}
-@keyframes colmeia-pill-deliver {
-  0%   { clip-path: circle(0% at 95% 50%); }
-  40%  { clip-path: circle(150% at 95% 50%); }
-  75%  { clip-path: circle(150% at 95% 50%); }
-  100% { clip-path: circle(0% at 95% 50%); }
-}
 
 .detail-header-pill-right { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
 

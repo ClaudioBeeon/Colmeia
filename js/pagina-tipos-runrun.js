@@ -183,7 +183,9 @@ function buildRunrunCompletoPage() {
     ? (filtroDesignerCoordenador === "eu" ? DESIGNER_LOGADO : filtroDesignerCoordenador)
     : (PAPEL_LOGADO === "coordenador" ? null : DESIGNER_LOGADO); // null = "Todos juntos"
 
-  const pertenceAoDesigner = t => t.id && (!designerAlvo || nomesCorrespondem(t.assignee, designerAlvo));
+  const alvoBusca = searchQuery ? normalizarParaComparar(searchQuery) : "";
+  const pertenceAoDesigner = t => t.id && (!designerAlvo || nomesCorrespondem(t.assignee, designerAlvo))
+    && (!alvoBusca || normalizarParaComparar(t.title).includes(alvoBusca) || normalizarParaComparar(t.client).includes(alvoBusca));
   const lista = tasksTodas.filter(pertenceAoDesigner);
 
   if (lista.length === 0 && !extrasRunrunCompleto) {
