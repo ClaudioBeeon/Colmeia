@@ -380,6 +380,20 @@ async function atualizarKanbanEmBackground() {
             if (idx !== -1) openDetail(idx);
           },
         });
+        // Também registra no sino (não só na pill passageira) — ver
+        // registrarNotificacaoGenerica em js/notificacoes-avisos.js.
+        // Usa o timestamp na chave porque a mesma tarefa pode ser
+        // repassada de novo mais tarde e continuar sendo "nova" de novo.
+        if (typeof registrarNotificacaoGenerica === "function") {
+          registrarNotificacaoGenerica({
+            tipo: "repasse",
+            chave: "repasse::" + t.id + "::" + Date.now(),
+            titulo: "Você recebeu uma tarefa",
+            subtitulo: t.title,
+            icone: reopenIcon,
+            taskId: t.id,
+          });
+        }
       });
     emAjustesAgora
       .filter(t => !_jaNotificadoRecentemente("ajustes::" + t.id))
@@ -394,6 +408,16 @@ async function atualizarKanbanEmBackground() {
             if (idx !== -1) openDetail(idx);
           },
         });
+        if (typeof registrarNotificacaoGenerica === "function") {
+          registrarNotificacaoGenerica({
+            tipo: "ajustes",
+            chave: "ajustes::" + t.id + "::" + Date.now(),
+            titulo: "Tarefa em Ajustes",
+            subtitulo: t.title,
+            icone: reopenIcon,
+            taskId: t.id,
+          });
+        }
       });
 
     tasksTodas = todasMapeadas;

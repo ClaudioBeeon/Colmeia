@@ -385,7 +385,7 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
    15m, 10m, 5m, 1m, agora — nunca conta minuto a minuto), ver
    atualizarSeloReuniao em js/notificacoes-avisos.js. */
 .reuniao-badge {
-  position: absolute; bottom: 4px; right: 6px; z-index: 5;
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%); z-index: 5;
   display: flex; align-items: center; gap: 5px;
   background: #16181D; color: var(--kanban-yellow);
   border-radius: 999px; padding: 5px 10px 5px 6px;
@@ -1765,6 +1765,15 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   position: absolute; top: 10px; right: 10px;
   width: 8px; height: 8px; border-radius: 50%; background: var(--danger);
 }
+
+/* Notificação sem "autor" (reunião, card repassado, card em ajustes) —
+   mesmo cartão, mas com um ícone redondo no lugar da foto. */
+.notif-card-icone {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--kanban-yellow); color: #16181D;
+}
+.notif-card-icone svg { width: 16px; height: 16px; }
 
 /* ===== Acesso rápido (painel lateral recolhível) ===== */
 .quick-access-panel {

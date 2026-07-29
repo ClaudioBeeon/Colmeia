@@ -110,6 +110,8 @@ async function _verificarNotificacoesImpl() {
         if (chavesExistentes.has(chave)) return;
         chavesExistentes.add(chave);
         const item = {
+          tipo: "comentario",
+          chave: t.id + "::" + (c.id || 0),
           taskId: t.id,
           taskTitle: t.title,
           taskClient: t.client,
@@ -167,6 +169,28 @@ function atualizarBadgeNotificacoes() {
   badge.textContent = total > 9 ? "9+" : String(total);
 }
 
+/**
+ * Registra no MESMO log/painel dos comentários (o sino) qualquer outro
+ * tipo de notificação (reunião nova, card repassado pra você, card que
+ * entrou em Ajustes com você) — antes essas só apareciam como pill/ilha
+ * passageira e, se a pessoa não visse na hora, sumiam pra sempre. Agora
+ * ficam registradas por até NOTIF_RETENCAO_MS igual comentário, mesmo
+ * depois de vistas. `chave` precisa ser única e estável (ex: sempre a
+ * mesma pra aquele evento/tarefa) — é o que evita duplicar entrada a
+ * cada checagem repetida da mesma coisa.
+ */
+function registrarNotificacaoGenerica({ tipo, chave, titulo, subtitulo, icone, taskId, link }) {
+  let log = carregarNotificacoesLog();
+  if (log.some(n => n.chave === chave)) return;
+  const item = { chave, tipo, titulo, subtitulo, icone, taskId, link, criadoEm: Date.now(), registradoEm: Date.now(), vista: false };
+  log.push(item);
+  log = log.filter(n => (Date.now() - (n.registradoEm || n.criadoEm)) < NOTIF_RETENCAO_MS);
+  log.sort((a, b) => b.criadoEm - a.criadoEm);
+  salvarNotificacoesLog(log);
+  notificacoes = log;
+  atualizarBadgeNotificacoes();
+}
+
 // Tempo relativo mais fino que tempoRelativoAviso (minutos importam
 // bastante pra notificação de comentário — "agora há pouco" o dia
 // inteiro não ajuda a saber se é recém-chegada ou de ontem).
@@ -185,27 +209,51 @@ function renderNotificacoes() {
   const body = document.getElementById("notificationsBody");
   if (!body) return;
   if (notificacoes.length === 0) {
-    body.innerHTML = `<p class="quick-access-empty">Nenhum comentário novo nas suas tarefas.</p>`;
+    body.innerHTML = `<p class="quick-access-empty">Nenhuma notificação por enquanto.</p>`;
     return;
   }
-  body.innerHTML = notificacoes.map((n, i) => `
-    <div class="notif-card ${n.vista ? "" : "unread"}" data-i="${i}">
-      ${avatarHTML(n.autor, "avatar-sm notif-card-avatar")}
-      <div class="notif-card-body">
-        <div class="notif-card-top">
-          <span class="notif-card-autor">${escaparHTML(n.autor)}</span>
-          <span class="notif-card-tempo">${tempoRelativoNotificacao(n.criadoEm)}</span>
+  body.innerHTML = notificacoes.map((n, i) => {
+    // Comentário mostra a foto de quem comentou; os outros tipos
+    // (reunião, card repassado, card em ajustes) mostram um ícone —
+    // não tem "autor" nesse sentido.
+    if (n.tipo && n.tipo !== "comentario") {
+      return `
+        <div class="notif-card notif-card-generica ${n.vista ? "" : "unread"}" data-i="${i}">
+          <span class="notif-card-icone">${n.icone || chatIcon}</span>
+          <div class="notif-card-body">
+            <div class="notif-card-top">
+              <span class="notif-card-autor">${escaparHTML(n.titulo)}</span>
+              <span class="notif-card-tempo">${tempoRelativoNotificacao(n.criadoEm)}</span>
+            </div>
+            <p class="notif-card-texto">${escaparHTML(n.subtitulo || "")}</p>
+          </div>
+          ${n.vista ? "" : `<span class="notif-card-dot" title="Novo"></span>`}
         </div>
-        <p class="notif-card-texto">${prepararTextoComentario(n.texto)}</p>
-        <span class="notif-card-tarefa">${escaparHTML(n.taskTitle)}${n.taskClient ? ` · ${escaparHTML(n.taskClient)}` : ""}</span>
+      `;
+    }
+    return `
+      <div class="notif-card ${n.vista ? "" : "unread"}" data-i="${i}">
+        ${avatarHTML(n.autor, "avatar-sm notif-card-avatar")}
+        <div class="notif-card-body">
+          <div class="notif-card-top">
+            <span class="notif-card-autor">${escaparHTML(n.autor)}</span>
+            <span class="notif-card-tempo">${tempoRelativoNotificacao(n.criadoEm)}</span>
+          </div>
+          <p class="notif-card-texto">${prepararTextoComentario(n.texto)}</p>
+          <span class="notif-card-tarefa">${escaparHTML(n.taskTitle)}${n.taskClient ? ` · ${escaparHTML(n.taskClient)}` : ""}</span>
+        </div>
+        ${n.vista ? "" : `<span class="notif-card-dot" title="Novo"></span>`}
       </div>
-      ${n.vista ? "" : `<span class="notif-card-dot" title="Novo"></span>`}
-    </div>
-  `).join("");
+    `;
+  }).join("");
   body.querySelectorAll(".notif-card").forEach(el => {
     el.addEventListener("click", async () => {
       const n = notificacoes[Number(el.dataset.i)];
       document.getElementById("notificationsPanel").classList.remove("open");
+      if (n.tipo === "reuniao") {
+        if (n.link) window.open(n.link, "_blank");
+        return;
+      }
       // Por id, não por referência — se o quadro atualizou sozinho
       // enquanto o painel de notificações estava aberto, a tarefa daquele
       // momento pode não ser mais o mesmo objeto em tasks[].
@@ -214,8 +262,10 @@ function renderNotificacoes() {
         mostrarPagina("kanban");
         openDetail(idxExistente);
       }
-      await esperar(150);
-      abrirChatPanel(tasks[detailIdx]);
+      if (!n.tipo || n.tipo === "comentario") {
+        await esperar(150);
+        abrirChatPanel(tasks[detailIdx]);
+      }
     });
   });
 }
@@ -234,9 +284,12 @@ document.getElementById("notificationsBtn").addEventListener("click", async () =
       n.vista = true;
       // Mantém o pontinho de "não lido" do chat de cada tarefa em sincronia
       // com o sino (só funciona se essa tarefa já tinha comentários
-      // carregados nessa sessão — senão não faz diferença).
-      const t = tasks.find(x => String(x.id) === String(n.taskId));
-      if (t) marcarChatVisto(t);
+      // carregados nessa sessão — senão não faz diferença), só faz
+      // sentido pra notificação de comentário.
+      if (!n.tipo || n.tipo === "comentario") {
+        const t = tasks.find(x => String(x.id) === String(n.taskId));
+        if (t) marcarChatVisto(t);
+      }
     });
     salvarNotificacoesLog(notificacoes);
     const badge = document.getElementById("notificationsBadge");
@@ -450,7 +503,17 @@ async function verificarReunioesProximas() {
     const vistas = idsReunioesVistas();
     const novas = data.reunioes.filter(r => !vistas.has(r.id));
     if (!_primeiraChecagemReunioes) {
-      novas.forEach(r => mostrarConviteDeReuniao(r));
+      novas.forEach(r => {
+        mostrarConviteDeReuniao(r);
+        registrarNotificacaoGenerica({
+          tipo: "reuniao",
+          chave: "reuniao::" + r.id,
+          titulo: `Nova reunião: ${r.titulo}`,
+          subtitulo: `${new Date(r.inicio).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${new Date(r.inicio).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}${r.organizadorNome ? " · convite de " + r.organizadorNome : ""}`,
+          icone: calendarIcon,
+          link: r.link || null,
+        });
+      });
     }
     marcarReunioesComoVistas(data.reunioes.map(r => r.id));
     _primeiraChecagemReunioes = false;

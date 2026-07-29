@@ -87,16 +87,22 @@ function renderSequenciaHTML(task) {
   }
   const atualIdx = task.sequencia.findIndex(s => s.atual);
   const semNinguemNaFrente = atualIdx !== -1 && task.sequencia[atualIdx].ultimo;
+  // Mesma janela de 3 usada na fila de repasse (ver renderRepasseSeqHTML,
+  // js/pagina-repasse.js) — regra longa cortava os últimos pontinhos pra
+  // fora do espaço fixo do cabeçalho do card. Mostra sempre só quem veio
+  // antes (pra dar pra voltar), o atual (centralizado) e o próximo/último.
+  const idxCentro = atualIdx !== -1 ? atualIdx : 0;
+  const janela = [idxCentro - 1, idxCentro, idxCentro + 1].filter(i => i >= 0 && i < task.sequencia.length);
   return `
     <button type="button" class="nav-arrow" id="navPrevArrow" title="Desfazer (voltar etapa)">
       <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="workflow-seq-dots">
-      ${task.sequencia.map((s, i) => `
-        ${i > 0 ? `<div class="wf-line ${task.sequencia[i - 1].concluido ? "done" : ""}"></div>` : ""}
-        <div class="wf-dot ${s.atual ? "current" : ""} ${s.concluido ? "completed" : ""}" title="${s.nome}">
-          ${avatarHTML(s.nome, "avatar-xs", s.foto)}
-          ${s.concluido ? `<span class="wf-check">✓</span>` : ""}
+      ${janela.map((idx, pos) => `
+        ${pos > 0 ? `<div class="wf-line ${task.sequencia[janela[pos - 1]].concluido ? "done" : ""}"></div>` : ""}
+        <div class="wf-dot ${task.sequencia[idx].atual ? "current" : ""} ${task.sequencia[idx].concluido ? "completed" : ""}" title="${task.sequencia[idx].nome}">
+          ${avatarHTML(task.sequencia[idx].nome, "avatar-xs", task.sequencia[idx].foto)}
+          ${task.sequencia[idx].concluido ? `<span class="wf-check">✓</span>` : ""}
         </div>
       `).join("")}
     </div>
