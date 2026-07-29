@@ -7,6 +7,23 @@ let notificacoes = [];
 const NOTIF_LOG_KEY = "colmeia_notificacoes_log_v2";
 const NOTIF_RETENCAO_MS = 2 * 24 * 60 * 60 * 1000; // 2 dias
 
+// Marca o instante em que o Colmeia abriu — usado pra garantir que o
+// pop-up (a pílula/ilha) só aparece pra coisa que aconteceu DE VERDADE
+// depois disso, nunca pra comentário antigo (ex: uma tarefa que só
+// agora entrou na lista de "minhas tarefas" traz junto um monte de
+// comentário de dias atrás, e sem esse corte cada um virava um pop-up).
+// O painel do sino (histórico) continua mostrando tudo, sem esse corte.
+const _colmeiaIniciadoEm = Date.now();
+
+// O Runrun.it manda menção como "<mention>Nome</mention>" dentro do
+// texto cru do comentário — só isso vira pop-up (ver verificarNotificacoes
+// abaixo); comentário comum, sem te mencionar, só entra no sino.
+function comentarioMencionaDesigner(texto) {
+  if (!texto || !DESIGNER_LOGADO) return false;
+  const mencoes = [...texto.matchAll(/<mention>(.*?)<\/mention>/gi)].map(m => m[1]);
+  return mencoes.some(nome => nomesCorrespondem(nome, DESIGNER_LOGADO));
+}
+
 function carregarNotificacoesLog() {
   let bruto = [];
   try { bruto = JSON.parse(localStorage.getItem(NOTIF_LOG_KEY) || "[]"); } catch (err) { bruto = []; }
@@ -115,21 +132,28 @@ async function _verificarNotificacoesImpl() {
   atualizarBadgeNotificacoes();
 
   if (!primeiraVez) {
-    novos.forEach(n => {
-      mostrarNotifNaPill({
-        icone: chatIcon,
-        titulo: `${n.autor} comentou`,
-        subtitulo: n.taskTitle,
-        onClick: async () => {
-          const idx = tasks.findIndex(x => String(x.id) === String(n.taskId));
-          if (idx === -1) return;
-          mostrarPagina("kanban");
-          openDetail(idx);
-          await esperar(150);
-          abrirChatPanel(tasks[detailIdx]);
-        },
+    // Pop-up (pílula/ilha) só pra menção de verdade, acontecendo agora
+    // — nunca pra comentário comum nem pra coisa de antes do Colmeia
+    // abrir (ver _colmeiaIniciadoEm/comentarioMencionaDesigner acima).
+    // Comentário sem menção continua entrando no sino normalmente, só
+    // não interrompe com pop-up.
+    novos
+      .filter(n => n.criadoEm >= _colmeiaIniciadoEm && comentarioMencionaDesigner(n.texto))
+      .forEach(n => {
+        mostrarNotifNaPill({
+          icone: chatIcon,
+          titulo: `${n.autor} te mencionou`,
+          subtitulo: n.taskTitle,
+          onClick: async () => {
+            const idx = tasks.findIndex(x => String(x.id) === String(n.taskId));
+            if (idx === -1) return;
+            mostrarPagina("kanban");
+            openDetail(idx);
+            await esperar(150);
+            abrirChatPanel(tasks[detailIdx]);
+          },
+        });
       });
-    });
   }
 }
 
@@ -337,11 +361,6 @@ document.getElementById("avisosNovoBtn").addEventListener("click", async () => {
   }
 });
 
-// Mesma lógica do _primeiraChecagemNotificacoes: não avisa na ilha pra
-// cada aviso "novo" encontrado na primeira checagem da sessão (senão
-// enche a tela de aviso velho só de abrir o Colmeia).
-let _primeiraChecagemAvisos = true;
-
 // Checa avisos novos sozinho de vez em quando (mesmo sem o painel
 // aberto), pra acender o sino quando chegar aviso novo.
 async function atualizarBadgeAvisos() {
@@ -352,18 +371,10 @@ async function atualizarBadgeAvisos() {
   const novosAvisos = avisosCache.filter(a => !vistos.has(a.id));
   if (novosAvisos.length > 0) { badge.textContent = novosAvisos.length > 99 ? "99+" : String(novosAvisos.length); badge.hidden = false; }
   else badge.hidden = true;
-
-  if (!_primeiraChecagemAvisos) {
-    novosAvisos.forEach(a => {
-      mostrarNotifNaPill({
-        icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M3 11l18-7-7 18-2.5-7.5L3 11z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-        titulo: `Aviso de ${a.autor}`,
-        subtitulo: a.texto,
-        onClick: () => document.getElementById("avisosBtn").click(),
-      });
-    });
-  }
-  _primeiraChecagemAvisos = false;
+  // Aviso não interrompe mais com pop-up (pílula/ilha) — só acende o
+  // sino (badge acima). Pop-up ficou reservado só pra menção em
+  // comentário e tarefa recebida, ver pedido do Cláudio em 2026-07-29
+  // na memória "barra_amarela_dynamic_island".
 }
 atualizarBadgeAvisos();
 setInterval(atualizarBadgeAvisos, 5 * 60 * 1000); // a cada 5 minutos

@@ -983,7 +983,7 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .status-badge {
   font-family: var(--font-body); font-size: 12px; font-weight: 600;
   color: var(--text-secondary); background: var(--page-bg); border: none;
-  padding: 9px 16px; border-radius: 999px; cursor: pointer;
+  padding: 9px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap;
 }
 .status-badge:hover { color: var(--text-primary); }
 

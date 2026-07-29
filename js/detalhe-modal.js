@@ -1164,6 +1164,26 @@ async function verificarTransferirCardMae(task) {
  */
 let _cardMaeFluxoTimeout = null;
 
+// Ajusta a altura do pill pro tamanho real do conteúdo da face do card
+// mãe — CALCULADO, não chutado (dois chutes fixos, 46px e depois 56px,
+// ainda cortavam em produção: fonte/renderização real deixa o conteúdo
+// mais alto do que no teste). O filho direto de #pillCardMaeFace
+// (.pill-cardmae-conteudo/.pill-cardmae-regra) não é esticado
+// (align-items:center no pai), então o offsetHeight dele já reflete o
+// espaço que o conteúdo precisa de verdade, mesmo com o pill ainda
+// "trancado" na altura antiga (position:absolute não impede medir o
+// filho, só limita o que fica visível). Chamar sempre que o innerHTML
+// da face mudar.
+function ajustarAlturaCardMaeNoPill() {
+  const pill = document.getElementById("detailHeaderPill");
+  const face = document.getElementById("pillCardMaeFace");
+  const conteudo = face && face.firstElementChild;
+  if (!pill || !conteudo) return;
+  const PADDING_VERTICAL_PILL = 16; // 8px em cima + 8px embaixo (.detail-header-pill)
+  const FOLGA = 4; // margininha de segurança (arredondamento de sub-pixel)
+  pill.style.height = Math.max(46, conteudo.offsetHeight + PADDING_VERTICAL_PILL + FOLGA) + "px";
+}
+
 function mostrarEntregueNoPill() {
   const pill = document.getElementById("detailHeaderPill");
   const face = document.getElementById("pillCardMaeFace");
@@ -1176,6 +1196,7 @@ function mostrarEntregueNoPill() {
     </span>
   `;
   pill.classList.add("card-mae-modo", "card-mae-ativo");
+  ajustarAlturaCardMaeNoPill();
 }
 
 // Volta o pill pro normal (desliza pra baixo) — some sozinho depois de
@@ -1194,6 +1215,7 @@ function esconderFluxoCardMaeNoPill() {
       face.hidden = true;
       face.innerHTML = "";
       pill.classList.remove("card-mae-modo");
+      pill.style.height = ""; // volta a crescer livre (era calculado na hora, via ajustarAlturaCardMaeNoPill)
     }
   }, 340);
 }
@@ -1214,6 +1236,7 @@ function mostrarPerguntaTransferirNoPill(cardMaeRaw, taskAtualId) {
     </span>
   `;
   pill.classList.add("card-mae-modo", "card-mae-ativo");
+  ajustarAlturaCardMaeNoPill();
   document.getElementById("pillCardMaeNao").addEventListener("click", esconderFluxoCardMaeNoPill);
   document.getElementById("pillCardMaeSim").addEventListener("click", () => mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId));
 }
@@ -1270,6 +1293,7 @@ function rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId) {
   if (!face) return;
   face.innerHTML = renderFacePillRegraCardMae(cardMaeTask);
   wireFacePillRegraCardMae(cardMaeTask, taskAtualId);
+  ajustarAlturaCardMaeNoPill();
 }
 
 // Busca a sequência real do card mãe de novo e redesenha — usado depois

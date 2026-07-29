@@ -113,17 +113,11 @@ async function renderNotificacoesUpload(task) {
   const nomesArquivos = arquivosRelevantes.map(u => u.arquivo);
   const grupos = [{ pasta: resultado.pastaNome || "pasta do card", link: resultado.pastaUrl, arquivos: nomesArquivos, chave: chaveConjunto }];
 
-  mostrarNotifNaPill({
-    icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v13m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-    titulo: `${nomesArquivos.length} arquivo${nomesArquivos.length > 1 ? "s" : ""} no Drive`,
-    subtitulo: task.title,
-    // Clicar já adiciona o comentário direto (a pílula é compacta demais
-    // pra dois botões) — quem quiser só "ver depois" simplesmente ignora,
-    // a notificação some sozinha e o aviso continua disponível na aba
-    // Comentários (container.innerHTML logo abaixo).
-    onClick: () => adicionarComentarioDeUpload(task, container, resultado.pastaUrl, nomesArquivos.length, chaveConjunto),
-  });
-
+  // Upload não interrompe mais com pop-up (pílula/ilha) — só aparece
+  // como aviso dentro da própria aba Comentários da tarefa
+  // (container.innerHTML abaixo). Pop-up ficou reservado só pra menção
+  // em comentário e tarefa recebida, ver pedido do Cláudio em
+  // 2026-07-29 na memória "barra_amarela_dynamic_island".
   container.innerHTML = grupos.map(g => `
     <div class="upload-notif" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}">
       <button type="button" class="upload-notif-dismiss" data-chave="${escaparHTML(g.chave)}" aria-label="Dispensar">×</button>
