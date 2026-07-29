@@ -313,6 +313,19 @@ function _renderIlha(evento) {
   ilha.classList.remove("ilha-saindo");
   requestAnimationFrame(() => ilha.classList.add("ilha-entrando"));
 
+  // Centraliza verticalmente com a pílula amarela (o CSS usava um
+  // "top" fixo que não bate com a altura real da pílula em toda tela/
+  // zoom — mede a posição de verdade e alinha os dois centros. Espera
+  // o próximo frame pra já ter a altura certa do conteúdo que acabou
+  // de entrar no innerHTML.
+  const pillWrap = document.getElementById("nowPlayingWrap");
+  if (pillWrap) {
+    const centroY = pillWrap.getBoundingClientRect().top + pillWrap.getBoundingClientRect().height / 2;
+    requestAnimationFrame(() => {
+      ilha.style.top = (centroY - ilha.getBoundingClientRect().height / 2) + "px";
+    });
+  }
+
   ilha.onclick = evento.onClick
     ? (ev) => { if (ev.target.closest(".ilha-acoes")) return; evento.onClick(); _fecharIlhaAtual(); }
     : null;

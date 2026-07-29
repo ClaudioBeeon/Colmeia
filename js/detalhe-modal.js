@@ -571,7 +571,7 @@ function renderDetail() {
           <div class="side-block attach-block">
             <div class="side-label-row">
               <span class="side-label">Anexos</span>
-              <button type="button" class="download-all-btn" id="downloadAllBtn" onclick="return false" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
+              <button type="button" class="download-all-btn" id="downloadAllBtn" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
             </div>
             <div class="attach-box">
               <div class="attach-list" id="attachList">

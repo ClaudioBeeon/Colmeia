@@ -224,13 +224,19 @@ function renderRepasseSeqHTML(t) {
   }
   const atualIdx = seq.findIndex(s => s.atual);
   const semProximo = atualIdx !== -1 && seq[atualIdx].ultimo;
+  // Antes mostrava a fila inteira de pontinhos — numa regra longa, os
+  // últimos ficavam cortados pra fora do card (largura fixa). Agora
+  // mostra sempre no máximo 3: quem veio antes (pra dar pra voltar), o
+  // atual (centralizado) e o próximo/último.
+  const idxCentro = atualIdx !== -1 ? atualIdx : 0;
+  const janela = [idxCentro - 1, idxCentro, idxCentro + 1].filter(i => i >= 0 && i < seq.length);
   return `
     <div class="repasse-seq-dots">
-      ${seq.map((s, i) => `
-        ${i > 0 ? `<div class="wf-line ${seq[i - 1].concluido ? "done" : ""}"></div>` : ""}
-        <div class="wf-dot ${s.atual ? "current" : ""} ${s.concluido ? "completed" : ""}" title="${s.nome}">
-          ${avatarHTML(s.nome, "avatar-xs", s.foto)}
-          ${s.concluido ? `<span class="wf-check">✓</span>` : ""}
+      ${janela.map((idx, pos) => `
+        ${pos > 0 ? `<div class="wf-line ${seq[janela[pos - 1]].concluido ? "done" : ""}"></div>` : ""}
+        <div class="wf-dot ${seq[idx].atual ? "current" : ""} ${seq[idx].concluido ? "completed" : ""}" title="${seq[idx].nome}">
+          ${avatarHTML(seq[idx].nome, "avatar-xs", seq[idx].foto)}
+          ${seq[idx].concluido ? `<span class="wf-check">✓</span>` : ""}
         </div>
       `).join("")}
     </div>

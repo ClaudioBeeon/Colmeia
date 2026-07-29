@@ -320,8 +320,10 @@ async function carregarAnexos(task) {
   if (!tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de tarefa enquanto carregava
   const listaEl = document.getElementById("attachList");
   if (!listaEl) return;
+  const allBtn = document.getElementById("downloadAllBtn");
   if (anexos.length === 0) {
     listaEl.innerHTML = `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`;
+    if (allBtn) allBtn.hidden = true;
     return;
   }
   listaEl.innerHTML = anexos.map(a => `
@@ -333,6 +335,27 @@ async function carregarAnexos(task) {
   listaEl.querySelectorAll(".attach-item").forEach(btn => {
     btn.addEventListener("click", () => baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn));
   });
+  if (allBtn) allBtn.onclick = () => baixarTodosAnexos(anexos, allBtn);
+}
+
+/**
+ * Baixa todos os anexos da tarefa de uma vez (botão "Baixar todos").
+ * Dispara um download por vez, com um pequeno intervalo entre eles —
+ * downloads simultâneos demais no mesmo instante costumam ser
+ * bloqueados pelo navegador (parece pop-up em massa).
+ */
+async function baixarTodosAnexos(anexos, allBtn) {
+  const original = allBtn.textContent;
+  allBtn.disabled = true;
+  for (let i = 0; i < anexos.length; i++) {
+    allBtn.textContent = `Baixando ${i + 1}/${anexos.length}...`;
+    const a = anexos[i];
+    const fakeBtn = document.createElement("button"); // só pra reaproveitar o baixarAnexo sem mexer no botão de cada linha
+    await baixarAnexo(a.id, a.nome, fakeBtn);
+    if (i < anexos.length - 1) await new Promise(r => setTimeout(r, 400));
+  }
+  allBtn.disabled = false;
+  allBtn.textContent = original;
 }
 
 /**
