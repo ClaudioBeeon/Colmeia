@@ -586,24 +586,6 @@ async function responderConviteReuniao(eventId, resposta) {
   }
 }
 
-// Degraus do selo fixo (nunca conta minuto a minuto) — o maior degrau
-// que ainda não foi ultrapassado é o que aparece. Ex: 52 min restantes
-// ainda mostra "1h" (só passa pra "45m" quando cruzar a marca de 45).
-const DEGRAUS_SELO_REUNIAO = [
-  { min: 45, label: "1h" },
-  { min: 30, label: "45m" },
-  { min: 15, label: "30m" },
-  { min: 10, label: "15m" },
-  { min: 5, label: "10m" },
-  { min: 1, label: "5m" },
-  { min: 0, label: "1m" },
-];
-function labelDoSeloReuniao(minutosRestantes) {
-  for (const degrau of DEGRAUS_SELO_REUNIAO) {
-    if (minutosRestantes > degrau.min) return degrau.label;
-  }
-  return "agora";
-}
 
 // Selo fixo (não passageiro) no canto da pílula amarela, visível o
 // tempo todo enquanto falta até 1h pra próxima reunião — some sozinho
@@ -631,8 +613,12 @@ function atualizarSeloReuniao() {
     return;
   }
 
-  const minutosRestantes = (candidata.inicio - agora) / 60000;
-  textoEl.textContent = `Reunião em ${labelDoSeloReuniao(minutosRestantes)}`;
+  // Mostra o horário exato (ex: "Reunião às 15:30") em vez de uma
+  // contagem em minutos — a contagem tinha que ficar sendo reavaliada
+  // toda hora e passava a impressão de errar/pular quando o degrau
+  // mudava; o horário fixo não muda nunca até a reunião acontecer.
+  const horaLabel = new Date(candidata.inicio).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  textoEl.textContent = `Reunião às ${horaLabel}`;
   badge.title = candidata.titulo;
   badge.onclick = candidata.link ? () => window.open(candidata.link, "_blank") : null;
   badge.classList.toggle("clicavel", !!candidata.link);
