@@ -11,7 +11,17 @@ function carregarNotificacoesLog() {
   let bruto = [];
   try { bruto = JSON.parse(localStorage.getItem(NOTIF_LOG_KEY) || "[]"); } catch (err) { bruto = []; }
   const agora = Date.now();
-  return bruto.filter(n => n && n.criadoEm && (agora - n.criadoEm) < NOTIF_RETENCAO_MS);
+  // A retenção de 2 dias tem que contar a partir de quando O COLMEIA
+  // VIU o comentário (registradoEm), NUNCA da data do comentário em si
+  // (criadoEm) — um comentário de semanas atrás que a pessoa nunca
+  // tinha visto antes (ex: tarefa velha reaberta) é "novo" pra nós no
+  // dia em que apareceu. Usar criadoEm aqui fazia esse comentário ser
+  // filtrado pra fora do log LOGO DEPOIS de ser salvo (já nasce "velho"
+  // pelos padrões dos 2 dias) — daí a próxima checagem não achava mais
+  // ele salvo, achava de novo que era novo, mostrava a notificação nele,
+  // salvava, filtrava de novo... um loop sem fim mostrando a mesma
+  // notificação de comentário antigo repetidamente.
+  return bruto.filter(n => n && (n.registradoEm || n.criadoEm) && (agora - (n.registradoEm || n.criadoEm)) < NOTIF_RETENCAO_MS);
 }
 function salvarNotificacoesLog(lista) {
   try { localStorage.setItem(NOTIF_LOG_KEY, JSON.stringify(lista)); } catch (err) { /* sem problema */ }
@@ -90,6 +100,7 @@ async function _verificarNotificacoesImpl() {
           texto: c.texto,
           comentarioId: c.id || 0,
           criadoEm: c.data ? new Date(c.data).getTime() : Date.now(),
+          registradoEm: Date.now(), // quando O COLMEIA viu esse comentário pela 1a vez — ver carregarNotificacoesLog
           vista: false,
         };
         log.push(item);
@@ -97,7 +108,7 @@ async function _verificarNotificacoesImpl() {
       });
   }));
 
-  log = log.filter(n => (Date.now() - n.criadoEm) < NOTIF_RETENCAO_MS);
+  log = log.filter(n => (Date.now() - (n.registradoEm || n.criadoEm)) < NOTIF_RETENCAO_MS);
   log.sort((a, b) => b.criadoEm - a.criadoEm);
   salvarNotificacoesLog(log);
   notificacoes = log;
