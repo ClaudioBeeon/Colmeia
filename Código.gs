@@ -197,6 +197,8 @@ function handleRequest(e, method) {
         output = ocultarClienteDesigner(body.designer, body.cliente);
       } else if (body.acao === 'restaurarCliente') {
         output = restaurarClienteDesigner(body.designer, body.cliente);
+      } else if (body.acao === 'buscarReunioesHoje') {
+        output = buscarReunioesDeHoje(body.designer);
       } else if (body.acao === 'criarAviso') {
         output = criarAviso(body.autor, body.texto);
       } else if (body.acao === 'listarAvisos') {
@@ -1165,6 +1167,66 @@ function montarBreadcrumbPasta(pastaInicial, clientesId) {
     profundidade++;
   }
   return nomes.join(' > ');
+}
+
+// ============ GOOGLE AGENDA ============
+
+/**
+ * Devolve as reuniões de hoje (a partir de agora) do designer informado.
+ * Funciona porque o Web App roda com a conta de quem implantou (ver
+ * "executeAs": "USER_DEPLOYING" no appsscript.json) — como essa conta
+ * corporativa já enxerga a agenda de todo mundo, CalendarApp.getCalendarById
+ * consegue ler o calendário de qualquer designer sem precisar de login
+ * separado de cada um. Se for a PRIMEIRA vez que o projeto usa
+ * CalendarApp, é preciso abrir o editor do Apps Script e rodar essa
+ * função uma vez manualmente pra autorizar o escopo novo (Agenda) —
+ * depois disso o Web App já implantado passa a funcionar sozinho.
+ */
+function buscarReunioesDeHoje(designer) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  var email = null;
+  for (var e in RUNRUN_USUARIOS) {
+    if (RUNRUN_USUARIOS[e].toLowerCase().trim() === designer.toLowerCase().trim()) { email = e; break; }
+  }
+  if (!email) return { ok: false, error: 'E-mail desse designer não configurado em RUNRUN_USUARIOS.' };
+
+  try {
+    var agenda = CalendarApp.getCalendarById(email);
+    if (!agenda) return { ok: false, error: 'Não consegui acessar a agenda de ' + designer + '.' };
+
+    var agora = new Date();
+    var fimDoDia = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59);
+    var eventos = agenda.getEvents(agora, fimDoDia);
+
+    var reunioes = eventos
+      .filter(function (ev) { return !ev.isAllDayEvent(); })
+      .map(function (ev) {
+        return {
+          id: ev.getId(),
+          titulo: ev.getTitle(),
+          inicio: ev.getStartTime().getTime(),
+          fim: ev.getEndTime().getTime(),
+          local: ev.getLocation() || '',
+          link: extrairLinkDaReuniao(ev)
+        };
+      });
+
+    return { ok: true, reunioes: reunioes };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao ler a agenda: ' + err.message };
+  }
+}
+
+// O Apps Script não tem um jeito direto de pegar o link do Meet/Zoom de
+// um evento (isso só vem pela API avançada do Calendar) — como
+// alternativa simples, procura por um link conhecido na descrição ou no
+// campo de local do evento (o Google já cola o link do Meet ali quando
+// a reunião é criada com videochamada).
+function extrairLinkDaReuniao(ev) {
+  var texto = (ev.getDescription() || '') + ' ' + (ev.getLocation() || '');
+  var match = texto.match(/https:\/\/meet\.google\.com\/[a-z0-9-]+/i)
+    || texto.match(/https:\/\/[a-z0-9.-]*zoom\.us\/\S+/i);
+  return match ? match[0] : '';
 }
 
 // Igual getOuCriarPastaMes, mas NUNCA cria pasta — só serve pra

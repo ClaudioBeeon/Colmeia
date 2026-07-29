@@ -394,6 +394,46 @@ async function atualizarBadgeAvisos() {
 atualizarBadgeAvisos();
 setInterval(atualizarBadgeAvisos, 5 * 60 * 1000); // a cada 5 minutos
 
+// ===== Reuniões da Google Agenda =====
+// Avisa (pop-up na pílula) quando uma reunião de hoje está prestes a
+// começar — o backend lê direto do Google Agenda de cada designer (ver
+// buscarReunioesDeHoje em Código.gs), sem precisar de login separado
+// (a conta que roda o Web App já enxerga a agenda de todo mundo).
+const calendarIcon = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const _reunioesJaAvisadas = new Set();
+async function verificarReunioesProximas() {
+  if (!COLMEIA_API_URL || !DESIGNER_LOGADO) return;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarReunioesHoje", designer: DESIGNER_LOGADO }),
+    });
+    const data = await res.json();
+    if (!data.ok) return;
+    const agora = Date.now();
+    data.reunioes.forEach(r => {
+      const faltamMs = r.inicio - agora;
+      // Só avisa quando falta até 15 min pra começar (e ainda não
+      // começou) — e só uma vez por reunião (por id), mesmo que essa
+      // checagem rode de novo várias vezes antes dela começar.
+      if (faltamMs > 0 && faltamMs <= 15 * 60 * 1000 && !_reunioesJaAvisadas.has(r.id)) {
+        _reunioesJaAvisadas.add(r.id);
+        const minutos = Math.max(1, Math.round(faltamMs / 60000));
+        mostrarNotifNaPill({
+          icone: calendarIcon,
+          titulo: `Reunião em ${minutos} min`,
+          subtitulo: r.titulo,
+          onClick: r.link ? () => window.open(r.link, "_blank") : undefined,
+        });
+      }
+    });
+  } catch (err) {
+    console.error("Falha ao checar reuniões da agenda:", err);
+  }
+}
+verificarReunioesProximas();
+setInterval(verificarReunioesProximas, 3 * 60 * 1000); // a cada 3 minutos
+
 // Acesso rápido — painel lateral recolhível
 const quickAccessPanel = document.getElementById("quickAccessPanel");
 document.getElementById("quickAccessBtn").addEventListener("click", () => {
