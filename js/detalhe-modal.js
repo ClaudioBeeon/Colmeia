@@ -1209,7 +1209,7 @@ function mostrarPerguntaTransferirNoPill(cardMaeRaw, taskAtualId) {
   if (!pill || !face) return;
   face.hidden = false;
   face.innerHTML = `
-    <span class="pill-cardmae-conteudo">
+    <span class="pill-cardmae-conteudo centralizado">
       <span class="pill-cardmae-icone">${reopenIcon}</span>
       <span class="pill-cardmae-texto">Transferir o card mãe também?</span>
       <span class="pill-cardmae-acoes">
@@ -1224,11 +1224,14 @@ function mostrarPerguntaTransferirNoPill(cardMaeRaw, taskAtualId) {
 }
 
 // Etapa final: a própria regra (sequência) do card mãe, editável ali
-// dentro do pill — bolinhas de quem já está na fila, "+" pra adicionar
-// (abre um pop-up rápido perto do botão) e passar o mouse numa bolinha
-// mostra o "x" de remover. Otimista: mexe na tela na hora, confirma de
-// verdade com o Runrun.it em segundo plano (mesmo padrão do resto do
-// app), e sempre re-busca a sequência real depois pra sincronizar.
+// dentro do pill — 3 zonas: etapa (status) na esquerda, nome + regra
+// centralizados no meio, fechar na direita. A regra reaproveita
+// renderSequenciaHTML/as mesmas flechinhas (voltar/avançar/adicionar/
+// entregar) já usadas no pill normal — mesmo padrão visual do resto do
+// app, só redesenhando #pillCardMaeSeq em vez de #workflowSeqGroup
+// depois de cada ação (é outra tarefa, o card mãe, não a que está
+// aberta). Otimista: mexe na tela na hora, confirma de verdade com o
+// Runrun.it em segundo plano.
 function mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId) {
   const pill = document.getElementById("detailHeaderPill");
   const face = document.getElementById("pillCardMaeFace");
@@ -1238,62 +1241,130 @@ function mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId) {
   cardMaeTask.workflowId = cardMaeRaw.workflowId || null;
 
   face.hidden = false;
-  face.innerHTML = renderFacePillRegraCardMae(cardMaeTask);
   pill.classList.add("card-mae-ativo");
-  wireFacePillRegraCardMae(cardMaeTask, taskAtualId);
+  rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
 }
 
 function renderFacePillRegraCardMae(cardMaeTask) {
-  const seq = cardMaeTask.sequencia || [];
   return `
-    <span class="pill-cardmae-conteudo">
-      <button type="button" class="pill-cardmae-voltar" id="pillCardMaeVoltar" title="Voltar">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <span class="pill-cardmae-nome">${cardMaeTask.title}</span>
-      <span class="pill-cardmae-seq" id="pillCardMaeSeq">
-        ${seq.map(s => `
-          <span class="pill-cardmae-dot" title="${s.nome}" data-element-id="${s.id}">
-            ${avatarHTML(s.nome, "avatar-xs", s.foto)}
-            ${(!s.concluido && !s.atual) ? `<span class="pill-cardmae-dot-remover" data-element-id="${s.id}">✕</span>` : ""}
-          </span>
-        `).join("")}
-        <button type="button" class="pill-cardmae-add" id="pillCardMaeAdd" title="Adicionar pessoa">+</button>
+    <span class="pill-cardmae-conteudo pill-cardmae-regra">
+      <div class="status-wrap">
+        <button type="button" class="status-badge" id="pillCardMaeStatusBadge">${columnsDef.find(c => c.key === cardMaeTask.status)?.label || cardMaeTask.runrunStage || "Sem etapa"}</button>
+        <div class="status-menu" id="pillCardMaeStatusMenu">
+          ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === cardMaeTask.status ? "active" : ""}">${c.label}</button>`).join("")}
+        </div>
+      </div>
+      <span class="pill-cardmae-regra-centro">
+        <span class="pill-cardmae-nome">${cardMaeTask.title}</span>
+        <div class="nav-dots-group" id="pillCardMaeSeq">
+          ${renderSequenciaHTML(cardMaeTask)}
+        </div>
       </span>
+      <button type="button" class="pill-cardmae-fechar" id="pillCardMaeFechar" title="Concluir e fechar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </span>
   `;
 }
 
-function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
-  const voltarBtn = document.getElementById("pillCardMaeVoltar");
-  if (voltarBtn) voltarBtn.addEventListener("click", esconderFluxoCardMaeNoPill);
-
-  document.querySelectorAll(".pill-cardmae-dot-remover").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const elementId = btn.dataset.elementId;
-      cardMaeTask.sequencia = cardMaeTask.sequencia.filter(s => String(s.id) !== String(elementId));
-      const dotEl = btn.closest(".pill-cardmae-dot");
-      if (dotEl) dotEl.remove();
-      await removerDaRegraNoBackend(cardMaeTask.workflowId, elementId);
-      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
-    });
-  });
-
-  const addBtn = document.getElementById("pillCardMaeAdd");
-  if (addBtn) addBtn.addEventListener("click", () => abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, addBtn));
+// Só redesenha a partir do que já está em memória em cardMaeTask (sem
+// ida ao Runrun.it) — usado depois de uma mudança otimista (ex: trocar
+// a etapa) que não afeta a sequência.
+function rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId) {
+  const face = document.getElementById("pillCardMaeFace");
+  if (!face) return;
+  face.innerHTML = renderFacePillRegraCardMae(cardMaeTask);
+  wireFacePillRegraCardMae(cardMaeTask, taskAtualId);
 }
 
+// Busca a sequência real do card mãe de novo e redesenha — usado depois
+// de qualquer ação que mexe nela (avançar, desfazer, adicionar, remover
+// pessoa), pra sincronizar com o estado de verdade no Runrun.it.
 async function recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId) {
   const resultado = await buscarSequenciaDoBackend(cardMaeTask.id);
   cardMaeTask.sequencia = resultado.sequencia || [];
   cardMaeTask.workflowId = resultado.workflowId || cardMaeTask.workflowId;
   // Já saiu dessa etapa (voltou, fechou a tarefa) enquanto isso rodava?
-  const seqEl = document.getElementById("pillCardMaeSeq");
-  const face = document.getElementById("pillCardMaeFace");
-  if (!seqEl || !face) return;
-  face.innerHTML = renderFacePillRegraCardMae(cardMaeTask);
-  wireFacePillRegraCardMae(cardMaeTask, taskAtualId);
+  if (!document.getElementById("pillCardMaeSeq")) return;
+  rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+}
+
+function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
+  const fecharBtn = document.getElementById("pillCardMaeFechar");
+  if (fecharBtn) fecharBtn.addEventListener("click", esconderFluxoCardMaeNoPill);
+
+  const statusBadge = document.getElementById("pillCardMaeStatusBadge");
+  const statusMenu = document.getElementById("pillCardMaeStatusMenu");
+  if (statusBadge && statusMenu) {
+    statusBadge.addEventListener("click", e => {
+      e.stopPropagation();
+      statusMenu.classList.toggle("open");
+    });
+    statusMenu.querySelectorAll("button").forEach(opt => {
+      opt.addEventListener("click", async e => {
+        e.stopPropagation();
+        const statusAntigo = cardMaeTask.status;
+        cardMaeTask.status = opt.dataset.status;
+        rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId); // otimista, não mexe na sequência
+        const ok = await moverEtapaNoBackend(cardMaeTask.id, opt.dataset.status);
+        if (!ok) {
+          cardMaeTask.status = statusAntigo;
+          rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+          mostrarToast("Não consegui mover o card mãe de etapa agora.", "erro");
+        } else {
+          agendarAtualizacaoKanban();
+        }
+      });
+    });
+  }
+
+  const prevBtn = document.getElementById("navPrevArrow");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", async () => {
+      prevBtn.disabled = true;
+      await pararCronometroAoTransferir(cardMaeTask);
+      const novoResponsavel = await desfazerWorkflowNoBackend(cardMaeTask.id);
+      if (novoResponsavel) { cardMaeTask.assignee = novoResponsavel; agendarAtualizacaoKanban(); }
+      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
+    });
+  }
+  const nextBtn = document.getElementById("navNextArrow");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", async () => {
+      nextBtn.disabled = true;
+      await pararCronometroAoTransferir(cardMaeTask);
+      const resultadoAvanco = await avancarWorkflowNoBackend(cardMaeTask.id);
+      if (resultadoAvanco.novoResponsavel) { cardMaeTask.assignee = resultadoAvanco.novoResponsavel; agendarAtualizacaoKanban(); }
+      if (!resultadoAvanco.ok) mostrarToast("Não consegui avançar a sequência do card mãe agora.", "erro");
+      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
+    });
+  }
+  const addPersonBtn = document.getElementById("navAddPersonBtn");
+  if (addPersonBtn) {
+    addPersonBtn.addEventListener("click", () => abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, addPersonBtn));
+  }
+  const deliverBtn = document.getElementById("navDeliverBtn");
+  if (deliverBtn && !cardMaeTask.entregue) {
+    deliverBtn.addEventListener("click", async () => {
+      deliverBtn.disabled = true;
+      await pararCronometroAoTransferir(cardMaeTask);
+      let ok;
+      if (cardMaeTask.sequencia && cardMaeTask.sequencia.length > 0) {
+        const resultadoAvanco = await avancarWorkflowNoBackend(cardMaeTask.id);
+        ok = resultadoAvanco.ok;
+      } else {
+        ok = await entregarTarefaNoBackend(cardMaeTask.id);
+      }
+      if (ok) {
+        mostrarToast("Card mãe entregue.");
+        esconderFluxoCardMaeNoPill();
+        agendarAtualizacaoKanban();
+      } else {
+        deliverBtn.disabled = false;
+        mostrarToast("Não consegui entregar o card mãe agora.", "erro");
+      }
+    });
+  }
 }
 
 async function abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, btn) {

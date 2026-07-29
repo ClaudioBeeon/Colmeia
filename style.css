@@ -854,6 +854,10 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .pill-cardmae-conteudo.centralizado { justify-content: center; }
 
 .pill-cardmae-acoes { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+/* Quando o conteúdo é centralizado como um grupo só (ver .centralizado
+   acima), os botões ficam grudados no texto em vez de empurrados pra
+   ponta — senão o grupo inteiro não fica realmente no centro do pill. */
+.pill-cardmae-conteudo.centralizado .pill-cardmae-acoes { margin-left: 0; }
 .pill-cardmae-acoes button {
   font-family: var(--font-body); font-size: 11.5px; font-weight: 700; border: none;
   border-radius: 999px; padding: 6px 13px; cursor: pointer; white-space: nowrap;
@@ -864,38 +868,34 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .pill-cardmae-acoes button.principal { background: var(--kanban-yellow); color: #16181D; }
 .pill-cardmae-acoes button.principal:hover { background: #E0B400; }
 
-/* Etapa final (D): a própria regra do card mãe, editável ali dentro. */
-.pill-cardmae-voltar {
-  width: 26px; height: 26px; border-radius: 50%; background: #24252C; color: #fff;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer;
-  border: none; transition: background 0.15s var(--ease-apple);
+/* Etapa final (D): a própria regra do card mãe, editável ali dentro —
+   3 zonas (grid), pra nada ficar "jogado" numa ponta só: etapa (status)
+   na esquerda, nome + regra centralizados no meio, fechar na direita.
+   A regra em si reaproveita renderSequenciaHTML/wireWorkflowArrows (as
+   MESMAS flechinhas de voltar/avançar/adicionar/entregar do pill normal
+   — ver js/detalhe-modal.js), só redesenhando #pillCardMaeSeq em vez de
+   #workflowSeqGroup depois de cada ação. */
+.pill-cardmae-regra {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
-.pill-cardmae-voltar:hover { background: #33343B; }
-.pill-cardmae-voltar svg { width: 12px; height: 12px; }
-.pill-cardmae-seq {
-  flex: 1; display: flex; align-items: center; gap: 2px; min-width: 0;
-  border: 1.5px solid #3A3B44; border-radius: 999px; padding: 3px 5px;
-  overflow-x: auto;
+.pill-cardmae-regra-centro {
+  display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0;
 }
 .pill-cardmae-nome {
   color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; margin-right: 4px;
+  overflow: hidden; text-overflow: ellipsis;
 }
-.pill-cardmae-add {
-  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
-  border: 1.5px dashed #55565F; color: #8A8D9A; background: transparent;
-  display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px;
-  transition: border-color 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
+.pill-cardmae-fechar {
+  width: 26px; height: 26px; border-radius: 50%; background: #2F9E44; color: #fff;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer;
+  border: none; transition: background 0.15s var(--ease-apple);
 }
-.pill-cardmae-add:hover { border-color: var(--kanban-yellow); color: var(--kanban-yellow); }
-.pill-cardmae-dot { position: relative; width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; cursor: default; }
-.pill-cardmae-dot .avatar-xs { width: 100%; height: 100%; font-size: 10px; }
-.pill-cardmae-dot-remover {
-  position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,0.6);
-  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px;
-  opacity: 0; transition: opacity 0.15s var(--ease-apple); cursor: pointer;
-}
-.pill-cardmae-dot:hover .pill-cardmae-dot-remover { opacity: 1; }
+.pill-cardmae-fechar:hover { background: #248037; }
+.pill-cardmae-fechar svg { width: 12px; height: 12px; }
 
 /* Pop-up de "adicionar pessoa" do fluxo do card mãe dentro do pill —
    mesmo tratamento visual do .repasse-quick-add, só que position:fixed
