@@ -105,7 +105,7 @@ async function _verificarNotificacoesImpl() {
 
   if (!primeiraVez) {
     novos.forEach(n => {
-      mostrarIlha({
+      mostrarNotifNaPill({
         icone: chatIcon,
         titulo: `${n.autor} comentou`,
         subtitulo: n.taskTitle,
@@ -344,7 +344,7 @@ async function atualizarBadgeAvisos() {
 
   if (!_primeiraChecagemAvisos) {
     novosAvisos.forEach(a => {
-      mostrarIlha({
+      mostrarNotifNaPill({
         icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M3 11l18-7-7 18-2.5-7.5L3 11z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
         titulo: `Aviso de ${a.autor}`,
         subtitulo: a.texto,

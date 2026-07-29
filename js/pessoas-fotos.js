@@ -341,7 +341,7 @@ async function atualizarKanbanEmBackground() {
       }
     });
     recebidasAgora.forEach(t => {
-      mostrarIlha({
+      mostrarNotifNaPill({
         icone: reopenIcon,
         titulo: "Você recebeu uma tarefa",
         subtitulo: t.title,

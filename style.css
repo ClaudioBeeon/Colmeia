@@ -284,24 +284,79 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .date-pill svg { width: 15px; height: 15px; flex-shrink: 0; }
 
+/* Envelope do "carrossel" vertical da pílula — a pílula normal (tarefa
+   rodando/ociosa) e a notificação (#pillNotif) ficam empilhadas aqui,
+   uma cobrindo a outra; a classe .pill-notif-ativa (ver mostrarNotifNaPill
+   em js/config.js) desliza as duas ao mesmo tempo: a normal sobe e some,
+   a notificação sobe e aparece — e tirar a classe faz o caminho contrário
+   (desce), sem precisar de nenhuma animação separada pra cada sentido. */
+.now-playing-wrap {
+  flex: 1; min-width: 0; height: 40px; position: relative; overflow: hidden; border-radius: 999px;
+}
+/* Os três "estados" (tarefa rodando, ociosa, notificação) ficam
+   empilhados exatamente um por cima do outro (position: absolute,
+   preenchendo o envelope inteiro) — só assim dá pra deslizar um saindo
+   por cima enquanto o outro entra por baixo, no mesmo espaço. */
+.now-playing-wrap .now-playing,
+.now-playing-wrap .now-playing-idle {
+  position: absolute; inset: 0; width: 100%; margin: 0;
+  transition: transform var(--dur-slow) var(--ease-apple-spring), background 0.15s var(--ease-apple);
+}
+.now-playing-wrap.pill-notif-ativa .now-playing,
+.now-playing-wrap.pill-notif-ativa .now-playing-idle {
+  transform: translateY(-100%);
+}
+
 .now-playing {
   display: flex; align-items: center; gap: 9px;
   background: var(--kanban-yellow); border: none; border-radius: 999px;
-  padding: 10px 20px; margin: 0; cursor: pointer;
+  padding: 10px 20px; cursor: pointer;
   font-family: var(--font-body);
-  flex: 1; min-width: 0; justify-content: center;
-  transition: background 0.15s var(--ease-apple);
+  min-width: 0; justify-content: center;
 }
 .now-playing[hidden] { display: none; }
 .now-playing:hover { background: #E0A800; }
 
 .now-playing-idle {
-  flex: 1; min-width: 0; text-align: center;
+  min-width: 0; text-align: center;
   background: var(--kanban-yellow); color: #16181D;
   border-radius: 999px; padding: 12px 20px;
   font-size: 13.5px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* Notificação "ambiente" dentro da própria pílula (comentário, aviso,
+   upload no Drive, tarefa recebida via repasse) — só usada quando não
+   tem nenhuma aba de tarefa aberta (o painel de detalhe cobre a pílula
+   quando aberto; nesse caso a ilha flutuante do topo é usada no lugar,
+   ver mostrarIlha). */
+.pill-notif {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  background: var(--kanban-yellow); border-radius: 999px; padding: 10px 20px;
+  transform: translateY(100%);
+  transition: transform var(--dur-slow) var(--ease-apple-spring);
+}
+.pill-notif[hidden] { display: none; }
+.pill-notif.clicavel { cursor: pointer; }
+.now-playing-wrap.pill-notif-ativa .pill-notif { transform: translateY(0); }
+
+.pill-notif-conteudo {
+  display: flex; align-items: center; gap: 9px; min-width: 0;
+  animation: pillNotifPop 0.3s var(--ease-apple-spring);
+}
+@keyframes pillNotifPop {
+  from { transform: translateY(55%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.pill-notif-icone {
+  width: 22px; height: 22px; border-radius: 50%; background: rgba(22,24,33,0.14);
+  display: flex; align-items: center; justify-content: center; color: #16181D; flex-shrink: 0;
+}
+.pill-notif-icone svg { width: 11px; height: 11px; }
+.pill-notif-texto { font-size: 13px; font-weight: 700; color: #16181D; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .now-playing-dot {
   width: 8px; height: 8px; border-radius: 50%; background: #16181D;

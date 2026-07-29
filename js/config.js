@@ -342,3 +342,77 @@ function _fecharIlhaAtual() {
   }, 220);
 }
 
+/**
+ * Notificação "ambiente" (comentário novo, aviso, upload no Drive,
+ * tarefa recebida via repasse) mostrada DENTRO da própria pílula
+ * amarela — sobe no lugar da tarefa rodando/ociosa, fica um tempinho, e
+ * desce de volta sozinha. Mesma assinatura de mostrarIlha(), sem
+ * suporte a `acoes` (a pílula é compacta demais pra botões — eventos
+ * que precisam de decisão continuam usando mostrarIlha diretamente).
+ *
+ * Só funciona quando não tem nenhuma aba de tarefa aberta — o painel de
+ * detalhe é fixed e cobre a pílula quando está aberto (ver .task-detail
+ * no style.css), então nesse caso cai pra ilha flutuante do topo, que
+ * fica sempre visível independente do que estiver na tela.
+ */
+const _pillNotifFila = [];
+let _pillNotifMostrandoAgora = false;
+let _pillNotifTimeout = null;
+
+function mostrarNotifNaPill(evento) {
+  const detalheAberto = document.getElementById("taskDetail")?.classList.contains("visible");
+  if (detalheAberto) { mostrarIlha(evento); return; }
+  _pillNotifFila.push(evento);
+  _processarProximaNotifPill();
+}
+
+function _processarProximaNotifPill() {
+  if (_pillNotifMostrandoAgora) return;
+  const proxima = _pillNotifFila.shift();
+  if (!proxima) return;
+  _pillNotifMostrandoAgora = true;
+  _renderNotifPill(proxima, /* trocaInterna */ false);
+}
+
+function _renderNotifPill(evento, trocaInterna) {
+  const wrap = document.getElementById("nowPlayingWrap");
+  const notif = document.getElementById("pillNotif");
+  if (!wrap || !notif) { _pillNotifMostrandoAgora = false; _processarProximaNotifPill(); return; }
+
+  notif.innerHTML = `
+    <span class="pill-notif-conteudo">
+      <span class="pill-notif-icone">${evento.icone || chatIcon}</span>
+      <span class="pill-notif-texto">${evento.titulo}${evento.subtitulo ? ` · ${evento.subtitulo}` : ""}</span>
+    </span>
+  `;
+  notif.hidden = false;
+  notif.onclick = evento.onClick ? () => { evento.onClick(); _avancarNotifPill(); } : null;
+  notif.classList.toggle("clicavel", !!evento.onClick);
+
+  // Já estava mostrando outra notificação (troca dentro da fila) — o
+  // "sobe/desce" da pílula já aconteceu antes, só a animaçãozinha de
+  // pop do conteúdo (via CSS, ver .pill-notif-conteudo) já dá o aviso
+  // de troca. Só na primeira dispara o carrossel sobe/desce de verdade.
+  if (!trocaInterna) wrap.classList.add("pill-notif-ativa");
+
+  clearTimeout(_pillNotifTimeout);
+  _pillNotifTimeout = setTimeout(_avancarNotifPill, evento.duracaoMs || 4500);
+}
+
+function _avancarNotifPill() {
+  clearTimeout(_pillNotifTimeout);
+  const proxima = _pillNotifFila.shift();
+  if (proxima) {
+    _renderNotifPill(proxima, /* trocaInterna */ true);
+  } else {
+    const wrap = document.getElementById("nowPlayingWrap");
+    if (wrap) wrap.classList.remove("pill-notif-ativa"); // desce de volta (mesma transição, sentido contrário)
+    setTimeout(() => {
+      const notif = document.getElementById("pillNotif");
+      if (notif) notif.hidden = true;
+      _pillNotifMostrandoAgora = false;
+      _processarProximaNotifPill();
+    }, 320);
+  }
+}
+

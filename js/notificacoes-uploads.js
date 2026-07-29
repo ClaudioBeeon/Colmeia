@@ -113,18 +113,15 @@ async function renderNotificacoesUpload(task) {
   const nomesArquivos = arquivosRelevantes.map(u => u.arquivo);
   const grupos = [{ pasta: resultado.pastaNome || "pasta do card", link: resultado.pastaUrl, arquivos: nomesArquivos, chave: chaveConjunto }];
 
-  mostrarIlha({
+  mostrarNotifNaPill({
     icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v13m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
     titulo: `${nomesArquivos.length} arquivo${nomesArquivos.length > 1 ? "s" : ""} no Drive`,
     subtitulo: task.title,
-    acoes: [
-      { label: "Depois" },
-      {
-        label: "Adicionar ao comentário",
-        principal: true,
-        onClick: () => adicionarComentarioDeUpload(task, container, resultado.pastaUrl, nomesArquivos.length, chaveConjunto),
-      },
-    ],
+    // Clicar já adiciona o comentário direto (a pílula é compacta demais
+    // pra dois botões) — quem quiser só "ver depois" simplesmente ignora,
+    // a notificação some sozinha e o aviso continua disponível na aba
+    // Comentários (container.innerHTML logo abaixo).
+    onClick: () => adicionarComentarioDeUpload(task, container, resultado.pastaUrl, nomesArquivos.length, chaveConjunto),
   });
 
   container.innerHTML = grupos.map(g => `

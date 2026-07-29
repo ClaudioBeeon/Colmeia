@@ -88,18 +88,25 @@
           <span id="topbarDateText"></span>
         </div>
 
-        <button type="button" class="now-playing" id="nowPlaying" hidden>
-          <span class="now-playing-dot"></span>
-          <span class="now-playing-title" id="nowPlayingTitle"></span>
-          <span class="now-playing-time" id="nowPlayingTime"></span>
-          <span class="now-playing-extra">
-            <span class="now-playing-client" id="nowPlayingClient"></span>
-            <span class="now-playing-pause" id="nowPlayingPause" title="Pausar tarefa" aria-label="Pausar tarefa">
-              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        <!-- now-playing-wrap: "carrossel" vertical — a pílula normal
+             (tarefa rodando ou ociosa) e a notificação (#pillNotif) moram
+             empilhadas aqui dentro; mostrarNotifNaPill() (js/config.js)
+             anima a troca entre elas subindo/descendo. -->
+        <div class="now-playing-wrap" id="nowPlayingWrap">
+          <button type="button" class="now-playing" id="nowPlaying" hidden>
+            <span class="now-playing-dot"></span>
+            <span class="now-playing-title" id="nowPlayingTitle"></span>
+            <span class="now-playing-time" id="nowPlayingTime"></span>
+            <span class="now-playing-extra">
+              <span class="now-playing-client" id="nowPlayingClient"></span>
+              <span class="now-playing-pause" id="nowPlayingPause" title="Pausar tarefa" aria-label="Pausar tarefa">
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              </span>
             </span>
-          </span>
-        </button>
-        <div class="now-playing-idle" id="nowPlayingIdle">Nenhuma tarefa sendo executada no momento</div>
+          </button>
+          <div class="now-playing-idle" id="nowPlayingIdle">Nenhuma tarefa sendo executada no momento</div>
+          <div class="pill-notif" id="pillNotif" hidden></div>
+        </div>
 
         <div class="theme-switch" id="themeSwitch">
           <button class="on" data-mode="light" aria-label="Modo claro">
