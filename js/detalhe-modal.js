@@ -282,19 +282,17 @@ function wireWorkflowArrows(task) {
           if (tarefaViva) tarefaViva.running = false;
           render();
           updateNowPlaying();
-          mostrarIlha({
-            icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-            titulo: "Entregue ✓",
-            subtitulo: task.title,
-          });
+          mostrarEntregueNoPill();
           // Acabou de concluir uma SUBtarefa? Confere se o card mãe dela
           // está com você — se estiver, pergunta se quer transferir ele
-          // também, direto daqui, sem precisar ir lá procurar o card mãe.
-          // Chamado JÁ AQUI (antes da espera/recarga da sequência abaixo,
-          // que não tem nada a ver com o card mãe) porque os dados do
-          // card mãe já vieram pré-carregados em segundo plano — não
-          // tem por que o aviso esperar mais ~2s pra aparecer.
+          // também, direto ali dentro do próprio pill (ver
+          // verificarTransferirCardMae/mostrarFluxoCardMaeNoPill mais
+          // abaixo). Chamado JÁ AQUI (antes da espera/recarga da
+          // sequência logo abaixo, que não tem nada a ver com o card
+          // mãe) porque os dados do card mãe já vieram pré-carregados em
+          // segundo plano — não tem por que o aviso esperar mais ~2s.
           if (task.parentTaskId) verificarTransferirCardMae(task);
+          else _cardMaeFluxoTimeout = setTimeout(esconderFluxoCardMaeNoPill, 1000);
           await esperar(450);
           await carregarSequencia(task);
           agendarAtualizacaoKanban();
@@ -323,7 +321,8 @@ function renderDetail() {
   panel.innerHTML = `
     <div class="detail-inner">
       <div class="detail-header">
-        <div class="detail-header-pill">
+        <div class="detail-header-pill" id="detailHeaderPill">
+          <div class="pill-face pill-face-normal">
           <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
           <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
           <span class="detail-sep">|</span>
@@ -366,6 +365,11 @@ function renderDetail() {
               </div>
             </div>
           </div>
+          </div>
+          <!-- "Carrossel" do card mãe (entregue/transferir/regra) — ver
+               mostrarFluxoCardMaeNoPill mais abaixo neste arquivo. Some
+               nesse mesmo espaço quando não está em uso. -->
+          <div class="pill-face pill-face-cardmae" id="pillCardMaeFace" hidden></div>
         </div>
         <div class="detail-header-right">
           <div class="detail-more-wrap">
@@ -1134,8 +1138,8 @@ async function abrirCardMae(task) {
 
 /**
  * Chamada depois de concluir uma subtarefa: se o card mãe dela estiver
- * com VOCÊ agora (você é o responsável atual), pergunta — num pop-up
- * grudado embaixo do botão de concluir (mesmo estilo do calendário) —
+ * com VOCÊ agora (você é o responsável atual), pergunta — dentro do
+ * próprio pill da tarefa (ver mostrarFluxoCardMaeNoPill logo abaixo) —
  * se quer transferir ele pro próximo já, sem precisar sair da
  * subtarefa pra ir procurar o card mãe. Como o card mãe (e a sequência
  * dele) já foram pré-carregados assim que a subtarefa abriu (ver
@@ -1144,43 +1148,193 @@ async function abrirCardMae(task) {
  */
 async function verificarTransferirCardMae(task) {
   const resultado = cardMaeCache.get(task.id) || await buscarCardMaeDoBackend(task.id);
-  if (!resultado.ok || !resultado.temPai || !resultado.cardMae) return;
-  if (!nomesCorrespondem(resultado.cardMae.assignee, DESIGNER_LOGADO)) return; // card mãe não é seu, nada a fazer
-  // Só mostra se a pessoa ainda estiver olhando essa mesma subtarefa
-  // (não trocou de tela nesse meio-tempo).
-  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return;
-  mostrarPromptTransferirCardMae(resultado.cardMae);
+  const devePerguntar = resultado.ok && resultado.temPai && resultado.cardMae
+    && nomesCorrespondem(resultado.cardMae.assignee, DESIGNER_LOGADO);
+  // Dá um tempinho pro "Entregue ✓" (já mostrado antes de chamar essa
+  // função) ser lido antes de trocar de figura — some direto se não tem
+  // nada a perguntar, ou passa pra pergunta de transferir se tem.
+  clearTimeout(_cardMaeFluxoTimeout);
+  _cardMaeFluxoTimeout = setTimeout(() => {
+    // Confere de novo aqui dentro (não só lá fora, antes do delay) — a
+    // pessoa pode ter trocado de tarefa nesses ~700ms de espera.
+    const aindaNaMesmaTarefa = tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id);
+    if (devePerguntar && aindaNaMesmaTarefa) mostrarPerguntaTransferirNoPill(resultado.cardMae, task.id);
+    else esconderFluxoCardMaeNoPill();
+  }, 700);
 }
 
-// Usa a ilha do topbar em vez de um pop-up preso ao botão "Concluir" —
-// aquele pop-up podia ficar escondido atrás do próprio modal de detalhe
-// (que fica por cima dele). A ilha fica sempre visível (position: fixed,
-// z-index acima de tudo) e com botões de ação não some sozinha, só
-// quando a pessoa decidir.
-function mostrarPromptTransferirCardMae(cardMaeRaw) {
-  mostrarIlha({
-    icone: reopenIcon,
-    titulo: "Transferir o card mãe?",
-    subtitulo: cardMaeRaw.title,
-    acoes: [
-      { label: "Agora não" },
-      {
-        label: "Transferir",
-        principal: true,
-        onClick: () => {
-          // Abre o modal "Ver regra" do card mãe por cima, SEM sair da
-          // subtarefa — reaproveita um objeto solto (não precisa empurrar
-          // pra tasks[]/navegar pra lá só pra revisar a regra). A sequência
-          // já veio pré-carregada junto com o card mãe, então o modal já
-          // abre pronto, sem spinner de "carregando".
-          const cardMaeTask = mapearTarefaDoBackend(cardMaeRaw);
-          cardMaeTask.sequencia = cardMaeRaw.sequencia;
-          cardMaeTask.workflowId = cardMaeRaw.workflowId;
-          abrirModalRegra(cardMaeTask);
-        },
-      },
-    ],
+/**
+ * "Carrossel" do fluxo entregar → transferir card mãe → regra, tudo
+ * dentro do próprio pill preto/amarelo do cabeçalho da tarefa (não um
+ * pop-up separado) — protótipo 2 aprovado pelo Cláudio em 2026-07-28
+ * (ver memória "barra_amarela_dynamic_island"). As duas faces do pill
+ * (.pill-face-normal e #pillCardMaeFace) ficam empilhadas uma sobre a
+ * outra; a classe .card-mae-ativo desliza as duas ao mesmo tempo — a
+ * normal sobe e sai, a do card mãe sobe e aparece. Tirar a classe faz
+ * o caminho contrário (desce), sem precisar de nenhuma animação extra.
+ */
+let _cardMaeFluxoTimeout = null;
+
+function mostrarEntregueNoPill() {
+  const pill = document.getElementById("detailHeaderPill");
+  const face = document.getElementById("pillCardMaeFace");
+  if (!pill || !face) return;
+  face.hidden = false;
+  face.innerHTML = `
+    <span class="pill-cardmae-conteudo centralizado">
+      <span class="pill-cardmae-icone entregue"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="pill-cardmae-texto">Entregue ✓</span>
+    </span>
+  `;
+  pill.classList.add("card-mae-ativo");
+}
+
+// Volta o pill pro normal (desliza pra baixo) — some sozinho depois de
+// entregar uma tarefa que não tem card mãe pra perguntar sobre.
+function esconderFluxoCardMaeNoPill() {
+  clearTimeout(_cardMaeFluxoTimeout);
+  const pill = document.getElementById("detailHeaderPill");
+  if (!pill) return;
+  pill.classList.remove("card-mae-ativo");
+  setTimeout(() => {
+    const face = document.getElementById("pillCardMaeFace");
+    // Só esconde de vez se ninguém reativou o carrossel nesse meio-tempo.
+    if (face && !pill.classList.contains("card-mae-ativo")) { face.hidden = true; face.innerHTML = ""; }
+  }, 340);
+}
+
+function mostrarPerguntaTransferirNoPill(cardMaeRaw, taskAtualId) {
+  const pill = document.getElementById("detailHeaderPill");
+  const face = document.getElementById("pillCardMaeFace");
+  if (!pill || !face) return;
+  face.hidden = false;
+  face.innerHTML = `
+    <span class="pill-cardmae-conteudo">
+      <span class="pill-cardmae-icone">${reopenIcon}</span>
+      <span class="pill-cardmae-texto">Transferir o card mãe também?</span>
+      <span class="pill-cardmae-acoes">
+        <button type="button" id="pillCardMaeNao">Não</button>
+        <button type="button" class="principal" id="pillCardMaeSim">Sim</button>
+      </span>
+    </span>
+  `;
+  pill.classList.add("card-mae-ativo");
+  document.getElementById("pillCardMaeNao").addEventListener("click", esconderFluxoCardMaeNoPill);
+  document.getElementById("pillCardMaeSim").addEventListener("click", () => mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId));
+}
+
+// Etapa final: a própria regra (sequência) do card mãe, editável ali
+// dentro do pill — bolinhas de quem já está na fila, "+" pra adicionar
+// (abre um pop-up rápido perto do botão) e passar o mouse numa bolinha
+// mostra o "x" de remover. Otimista: mexe na tela na hora, confirma de
+// verdade com o Runrun.it em segundo plano (mesmo padrão do resto do
+// app), e sempre re-busca a sequência real depois pra sincronizar.
+function mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId) {
+  const pill = document.getElementById("detailHeaderPill");
+  const face = document.getElementById("pillCardMaeFace");
+  if (!pill || !face) return;
+  const cardMaeTask = mapearTarefaDoBackend(cardMaeRaw);
+  cardMaeTask.sequencia = cardMaeRaw.sequencia || [];
+  cardMaeTask.workflowId = cardMaeRaw.workflowId || null;
+
+  face.hidden = false;
+  face.innerHTML = renderFacePillRegraCardMae(cardMaeTask);
+  pill.classList.add("card-mae-ativo");
+  wireFacePillRegraCardMae(cardMaeTask, taskAtualId);
+}
+
+function renderFacePillRegraCardMae(cardMaeTask) {
+  const seq = cardMaeTask.sequencia || [];
+  return `
+    <span class="pill-cardmae-conteudo">
+      <button type="button" class="pill-cardmae-voltar" id="pillCardMaeVoltar" title="Voltar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="pill-cardmae-nome">${cardMaeTask.title}</span>
+      <span class="pill-cardmae-seq" id="pillCardMaeSeq">
+        ${seq.map(s => `
+          <span class="pill-cardmae-dot" title="${s.nome}" data-element-id="${s.id}">
+            ${avatarHTML(s.nome, "avatar-xs", s.foto)}
+            ${(!s.concluido && !s.atual) ? `<span class="pill-cardmae-dot-remover" data-element-id="${s.id}">✕</span>` : ""}
+          </span>
+        `).join("")}
+        <button type="button" class="pill-cardmae-add" id="pillCardMaeAdd" title="Adicionar pessoa">+</button>
+      </span>
+    </span>
+  `;
+}
+
+function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
+  const voltarBtn = document.getElementById("pillCardMaeVoltar");
+  if (voltarBtn) voltarBtn.addEventListener("click", esconderFluxoCardMaeNoPill);
+
+  document.querySelectorAll(".pill-cardmae-dot-remover").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const elementId = btn.dataset.elementId;
+      cardMaeTask.sequencia = cardMaeTask.sequencia.filter(s => String(s.id) !== String(elementId));
+      const dotEl = btn.closest(".pill-cardmae-dot");
+      if (dotEl) dotEl.remove();
+      await removerDaRegraNoBackend(cardMaeTask.workflowId, elementId);
+      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
+    });
   });
+
+  const addBtn = document.getElementById("pillCardMaeAdd");
+  if (addBtn) addBtn.addEventListener("click", () => abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, addBtn));
+}
+
+async function recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId) {
+  const resultado = await buscarSequenciaDoBackend(cardMaeTask.id);
+  cardMaeTask.sequencia = resultado.sequencia || [];
+  cardMaeTask.workflowId = resultado.workflowId || cardMaeTask.workflowId;
+  // Já saiu dessa etapa (voltou, fechou a tarefa) enquanto isso rodava?
+  const seqEl = document.getElementById("pillCardMaeSeq");
+  const face = document.getElementById("pillCardMaeFace");
+  if (!seqEl || !face) return;
+  face.innerHTML = renderFacePillRegraCardMae(cardMaeTask);
+  wireFacePillRegraCardMae(cardMaeTask, taskAtualId);
+}
+
+async function abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, btn) {
+  document.querySelectorAll(".pill-cardmae-quickpick").forEach(el => el.remove());
+  const menu = document.createElement("div");
+  menu.className = "pill-cardmae-quickpick";
+  menu.innerHTML = `<div class="assignee-menu-loading">Carregando pessoas...</div>`;
+  document.body.appendChild(menu);
+  posicionarPopupFixo(menu, btn);
+
+  const usuarios = ordenarUsuariosParaRegra(await buscarUsuariosRunrun());
+  if (!menu.isConnected) return; // fechou enquanto carregava
+  menu.innerHTML = usuarios.map(u => `
+    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}" data-user-foto="${u.foto || ""}">
+      ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
+    </button>
+  `).join("");
+  posicionarPopupFixo(menu, btn); // recalcula já com a altura real da lista
+
+  menu.querySelectorAll("button").forEach(opt => {
+    opt.addEventListener("click", async () => {
+      fechar();
+      if (!cardMaeTask.workflowId) {
+        const criado = await criarRegraNoBackend(cardMaeTask.id);
+        if (!criado.ok) { mostrarToast("Não consegui criar a sequência do card mãe agora.", "erro"); return; }
+        cardMaeTask.workflowId = criado.workflowId;
+      }
+      const ok = await adicionarNaRegraNoBackend(cardMaeTask.workflowId, opt.dataset.userId);
+      if (!ok) mostrarToast("Não consegui adicionar essa pessoa na sequência agora.", "erro");
+      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
+    });
+  });
+
+  function fechar() {
+    menu.remove();
+    document.removeEventListener("click", clickFora);
+  }
+  function clickFora(ev) {
+    if (!menu.contains(ev.target) && ev.target !== btn) fechar();
+  }
+  setTimeout(() => document.addEventListener("click", clickFora), 0);
 }
 
 async function buscarCardMaeDoBackend(taskId) {
@@ -1242,6 +1396,7 @@ function stepDetail(dir) {
 
 function closeDetail() {
   pararChecagemUploadEmSegundoPlano();
+  clearTimeout(_cardMaeFluxoTimeout);
   const panel = document.getElementById("taskDetail");
   panel.classList.remove("open");
   document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
