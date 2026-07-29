@@ -1,6 +1,7 @@
 let detailIdx = null;
 let changeOpen = false;
 let childrenOpen = false;
+let descMaeAberta = false;
 
 // ===== Chat flutuante (comentários em pop-up separado, fora do card) =====
 let chatThreadAtivo = "aqui"; // "aqui" (a tarefa aberta) ou "mae" (o card mãe dela)

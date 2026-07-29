@@ -1093,6 +1093,18 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .desc-stack { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 .desc-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; transition: flex-basis 0.32s var(--ease-apple); }
+.desc-content[hidden] { display: none; }
+
+/* Aba "Descrição card mãe" — mostra o nome do card mãe bem em cima
+   (pra dar contexto na hora, já que a subtarefa pode ter um nome
+   genérico tipo "Alteração 01") e a descrição dele logo abaixo. */
+.descmae-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; }
+.descmae-content[hidden] { display: none; }
+.descmae-titulo {
+  font-family: var(--font-display); font-size: 15px; font-weight: 600;
+  color: var(--text-primary); margin-bottom: 14px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
 
 .change-panel {
   flex: 0 0 0%; overflow: hidden; opacity: 0;

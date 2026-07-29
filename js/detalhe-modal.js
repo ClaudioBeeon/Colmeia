@@ -1,6 +1,7 @@
 function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
+  descMaeAberta = false;
   fecharChatPanel();
   renderDetail();
   const panel = document.getElementById("taskDetail");
@@ -383,6 +384,9 @@ function renderDetail() {
         <div class="detail-pane desc-pane">
           <div class="detail-tabs">
             <button type="button" class="detail-tab active" id="tabDesc">Descrição</button>
+            ${task.parentTaskId ? `
+              <button type="button" class="detail-tab" id="tabDescMae">Descrição card mãe</button>
+            ` : ""}
             ${task.hasChange ? `
               <button type="button" class="detail-tab change-tab" id="tabChange" title="Alteração 01">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
@@ -406,6 +410,12 @@ function renderDetail() {
                 <button type="button" class="desc-edit-cancelar" id="descEditCancelar">Cancelar</button>
               </div>
             </div>
+            ${task.parentTaskId ? `
+              <div class="descmae-content" id="descMaeContent" hidden>
+                <div class="descmae-titulo" id="descMaeTitulo">Carregando...</div>
+                <div class="desc-text-real" id="descMaeTextReal">Carregando...</div>
+              </div>
+            ` : ""}
             ${task.hasChange ? `
               <div class="change-panel" id="changePanel">
                 <div class="change-panel-head">
@@ -772,9 +782,11 @@ function renderDetail() {
     });
   }
 
-  // ===== Abas Descrição / Alteração (sem re-renderizar, com transição) =====
+  // ===== Abas Descrição / Descrição card mãe / Alteração (sem
+  // re-renderizar, com transição) =====
   document.getElementById("tabDesc").addEventListener("click", () => {
     changeOpen = false;
+    descMaeAberta = false;
     applyCommentsState();
   });
   const tabChange = document.getElementById("tabChange");
@@ -782,6 +794,14 @@ function renderDetail() {
     tabChange.addEventListener("click", () => {
       changeOpen = !changeOpen;
       applyCommentsState();
+    });
+  }
+  const tabDescMae = document.getElementById("tabDescMae");
+  if (tabDescMae) {
+    tabDescMae.addEventListener("click", () => {
+      descMaeAberta = true;
+      applyCommentsState();
+      carregarDescricaoCardMae(tasks[detailIdx] || task);
     });
   }
 
@@ -969,12 +989,66 @@ function renderDetail() {
 }
 
 function applyCommentsState() {
+  const tabDesc = document.getElementById("tabDesc");
   const tabChange = document.getElementById("tabChange");
   const changePanel = document.getElementById("changePanel");
   const childrenPanel = document.getElementById("childrenPanel");
+  const tabDescMae = document.getElementById("tabDescMae");
+  const descContent = document.getElementById("descContent");
+  const descMaeContent = document.getElementById("descMaeContent");
   if (tabChange) tabChange.classList.toggle("active", changeOpen);
   if (changePanel) changePanel.classList.toggle("open", changeOpen);
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
+  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta);
+  if (tabDescMae) tabDescMae.classList.toggle("active", descMaeAberta);
+  if (descContent) descContent.hidden = descMaeAberta;
+  if (descMaeContent) descMaeContent.hidden = !descMaeAberta;
+}
+
+/**
+ * Mostra a descrição do CARD MÃE dentro da própria aba de descrição da
+ * subtarefa (aba "Descrição card mãe") — pedido do Cláudio: quando
+ * chega uma subtarefa com nome genérico (ex: "Alteração 01"), não dá
+ * pra saber do que se trata só pelo título; como o card mãe já é
+ * pré-carregado em segundo plano assim que a subtarefa abre (ver
+ * precarregarCardMaeEmBackground/cardMaeCache), só falta buscar a
+ * descrição dele (endpoint separado no Runrun.it, não vem junto) e
+ * mostrar o NOME do card mãe junto, bem em cima, pra dar contexto na
+ * hora — sem precisar sair da subtarefa pra ir ver o card mãe.
+ */
+async function carregarDescricaoCardMae(task) {
+  const tituloEl = document.getElementById("descMaeTitulo");
+  const textoEl = document.getElementById("descMaeTextReal");
+  if (!textoEl) return;
+  const taskId = task.id;
+
+  let resultado = cardMaeCache.get(taskId);
+  if (!resultado) {
+    if (tituloEl) tituloEl.textContent = "Carregando...";
+    textoEl.innerHTML = "Carregando...";
+    resultado = await buscarCardMaeDoBackend(taskId);
+    if (resultado.ok && resultado.temPai) cardMaeCache.set(taskId, resultado);
+  }
+  // A pessoa pode ter trocado de tarefa (ou voltado pra aba Descrição)
+  // enquanto isso carregava — compara por id, nunca por referência.
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId) || !descMaeAberta) return;
+
+  if (!resultado.ok || !resultado.temPai) {
+    if (tituloEl) tituloEl.textContent = "";
+    textoEl.innerHTML = "Essa tarefa não tem card mãe.";
+    return;
+  }
+
+  if (tituloEl) tituloEl.textContent = resultado.cardMae.title;
+
+  if (resultado.cardMae.descricao === undefined) {
+    const descricao = await buscarDescricaoDoBackend(resultado.cardMae.id);
+    resultado.cardMae.descricao = descricao || "";
+    if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId) || !descMaeAberta) return;
+  }
+  textoEl.innerHTML = resultado.cardMae.descricao
+    ? formatarDescricaoRunrun(resultado.cardMae.descricao)
+    : "Sem descrição cadastrada no card mãe.";
 }
 
 /**
