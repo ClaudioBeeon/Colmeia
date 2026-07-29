@@ -46,8 +46,28 @@ async function buscarComentariosComCache(taskId) {
 // que chegou DE VERDADE enquanto a pessoa já estava usando o Colmeia.
 let _primeiraChecagemNotificacoes = true;
 
+// Trava contra chamadas simultâneas — verificarNotificacoes agora roda
+// depois de QUALQUER ação no app (atualizarKanbanEmBackground chama ela),
+// que dispara com muita frequência. Sem essa trava, duas chamadas podiam
+// se sobrepor: as duas liam o mesmo log do localStorage ANTES de
+// qualquer uma salvar, então as duas achavam os mesmos comentários
+// "novos" e mostravam a ilha em dobro (ou mais) pra cada um — era isso
+// que fazia a notificação parecer não parar de aparecer.
+let _verificandoNotificacoes = false;
+
 async function verificarNotificacoes() {
-  if (!DESIGNER_LOGADO) return;
+  if (!DESIGNER_LOGADO || _verificandoNotificacoes) return;
+  _verificandoNotificacoes = true;
+  try {
+    await _verificarNotificacoesImpl();
+  } finally {
+    _verificandoNotificacoes = false;
+  }
+}
+
+async function _verificarNotificacoesImpl() {
+  const primeiraVez = _primeiraChecagemNotificacoes;
+  _primeiraChecagemNotificacoes = false;
   const minhasTarefas = tasks.filter(t => t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
   let log = carregarNotificacoesLog();
   const chavesExistentes = new Set(log.map(n => n.taskId + "::" + n.comentarioId));
@@ -83,7 +103,7 @@ async function verificarNotificacoes() {
   notificacoes = log;
   atualizarBadgeNotificacoes();
 
-  if (!_primeiraChecagemNotificacoes) {
+  if (!primeiraVez) {
     novos.forEach(n => {
       mostrarIlha({
         icone: chatIcon,
@@ -100,7 +120,6 @@ async function verificarNotificacoes() {
       });
     });
   }
-  _primeiraChecagemNotificacoes = false;
 }
 
 function atualizarBadgeNotificacoes() {
