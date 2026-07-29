@@ -1186,7 +1186,7 @@ function mostrarEntregueNoPill() {
       <span class="pill-cardmae-texto">Entregue ✓</span>
     </span>
   `;
-  pill.classList.add("card-mae-ativo");
+  pill.classList.add("card-mae-modo", "card-mae-ativo");
 }
 
 // Volta o pill pro normal (desliza pra baixo) — some sozinho depois de
@@ -1198,8 +1198,14 @@ function esconderFluxoCardMaeNoPill() {
   pill.classList.remove("card-mae-ativo");
   setTimeout(() => {
     const face = document.getElementById("pillCardMaeFace");
-    // Só esconde de vez se ninguém reativou o carrossel nesse meio-tempo.
-    if (face && !pill.classList.contains("card-mae-ativo")) { face.hidden = true; face.innerHTML = ""; }
+    // Só esconde de vez (e só tira o pill do "modo carrossel", voltando
+    // a crescer livre pro tamanho natural do conteúdo normal) se
+    // ninguém reativou o carrossel nesse meio-tempo.
+    if (face && !pill.classList.contains("card-mae-ativo")) {
+      face.hidden = true;
+      face.innerHTML = "";
+      pill.classList.remove("card-mae-modo");
+    }
   }, 340);
 }
 
@@ -1218,7 +1224,7 @@ function mostrarPerguntaTransferirNoPill(cardMaeRaw, taskAtualId) {
       </span>
     </span>
   `;
-  pill.classList.add("card-mae-ativo");
+  pill.classList.add("card-mae-modo", "card-mae-ativo");
   document.getElementById("pillCardMaeNao").addEventListener("click", esconderFluxoCardMaeNoPill);
   document.getElementById("pillCardMaeSim").addEventListener("click", () => mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId));
 }
@@ -1241,7 +1247,7 @@ function mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId) {
   cardMaeTask.workflowId = cardMaeRaw.workflowId || null;
 
   face.hidden = false;
-  pill.classList.add("card-mae-ativo");
+  pill.classList.add("card-mae-modo", "card-mae-ativo");
   rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
 }
 

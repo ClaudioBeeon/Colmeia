@@ -806,33 +806,51 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .detail-header-pill {
   display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;
   background: #14151A; border-radius: 999px; padding: 8px 8px 8px 8px;
-  position: relative; height: 46px;
+  position: relative;
 }
-/* Só corta o que passa da borda ENQUANTO o carrossel do card mãe está
-   ativo — o resto do tempo overflow fica visível de propósito, senão os
-   menus que abrem pra baixo (status da etapa, lista de subtarefas) iam
-   ficar cortados/escondidos, já que eles "escapam" da altura do pill. */
-.detail-header-pill.card-mae-ativo { overflow: hidden; }
 /* Todo filho direto vira "elemento posicionado" pra garantir que fica
    por cima da varredura verde (ver .detail-header-pill::before), não
    importa a ordem de pintura do flexbox. */
 .detail-header-pill > * { position: relative; z-index: 2; }
 
+/* Conteúdo normal do pill (play, tempo, nome, sequência do card
+   aberto, status...) — em uso quase o tempo todo, então SEM altura
+   fixa nem overflow cortado aqui: o pill cresce pro tamanho natural do
+   conteúdo (importante pro card mãe aberto direto, que tem uma fileira
+   de fotinhos mais alta que os 46px do botão de play sozinho — com
+   altura fixa esse conteúdo ficava cortado/vazando pra fora do fundo
+   preto arredondado). */
+.pill-face-normal {
+  display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;
+}
+
 /* "Carrossel" do fluxo de entregar/transferir card mãe (ver
-   mostrarFluxoCardMaeNoPill em js/detalhe-modal.js): as duas faces
-   (conteúdo normal do pill x o fluxo do card mãe) ficam empilhadas
-   exatamente uma sobre a outra dentro do pill — a classe
-   .card-mae-ativo desliza as duas ao mesmo tempo: a normal sobe e sai,
-   a do card mãe sobe e aparece; tirar a classe faz o caminho contrário
-   (desce), mesma técnica já usada na pílula do topbar (now-playing-wrap).*/
-.detail-header-pill .pill-face {
+   mostrarFluxoCardMaeNoPill em js/detalhe-modal.js): SÓ enquanto esse
+   fluxo está ativo (.card-mae-modo) o pill vira um "palco" de altura
+   fixa com as duas faces (conteúdo normal x fluxo do card mãe)
+   empilhadas exatamente uma sobre a outra — a classe .card-mae-ativo
+   desliza as duas ao mesmo tempo: a normal sobe e sai, a do card mãe
+   sobe e aparece; tirar a classe faz o caminho contrário (desce), mesma
+   técnica já usada na pílula do topbar (now-playing-wrap). A altura
+   fixa + overflow cortado só existem NESSE modo — o resto do tempo o
+   pill volta a crescer livre pro tamanho natural do conteúdo normal
+   (ver .pill-face-normal acima), senão os menus que abrem pra baixo
+   (status da etapa, lista de subtarefas) ficariam cortados/escondidos,
+   já que eles "escapam" da altura do pill.
+   IMPORTANTE: .card-mae-modo entra JUNTO com .card-mae-ativo, mas sai
+   um pouquinho DEPOIS (só depois da animação de descida terminar) —
+   ver esconderFluxoCardMaeNoPill em js/detalhe-modal.js — senão o pill
+   voltaria pro tamanho normal ANTES da pílula do card mãe terminar de
+   descer, cortando a própria animação de saída. */
+.detail-header-pill.card-mae-modo { height: 46px; overflow: hidden; }
+.detail-header-pill.card-mae-modo .pill-face {
   position: absolute; inset: 0;
-  display: flex; align-items: center; gap: 10px;
   transition: transform var(--dur-slow) var(--ease-apple-spring), opacity 0.24s var(--ease-apple);
 }
-.detail-header-pill.card-mae-ativo .pill-face-normal { transform: translateY(-100%); opacity: 0; }
-.pill-face-cardmae { transform: translateY(100%); opacity: 0; }
-.detail-header-pill.card-mae-ativo .pill-face-cardmae { transform: translateY(0); opacity: 1; }
+.detail-header-pill.card-mae-modo .pill-face-cardmae { transform: translateY(100%); opacity: 0; }
+.detail-header-pill.card-mae-modo.card-mae-ativo .pill-face-normal { transform: translateY(-100%); opacity: 0; }
+.detail-header-pill.card-mae-modo.card-mae-ativo .pill-face-cardmae { transform: translateY(0); opacity: 1; }
+.pill-face-cardmae { display: flex; align-items: center; gap: 10px; }
 .pill-face-cardmae[hidden] { display: none; }
 
 .pill-cardmae-conteudo {
