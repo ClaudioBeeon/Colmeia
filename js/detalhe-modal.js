@@ -149,8 +149,18 @@ async function carregarSequencia(task) {
  * sequência é redesenhado (as setas são recriadas do zero).
  */
 function wireWorkflowArrows(task) {
-  const prevBtn = document.getElementById("navPrevArrow");
-  const nextBtn = document.getElementById("navNextArrow");
+  // Escopado dentro de #workflowSeqGroup (não document.getElementById
+  // solto) — o mesmo id (navPrevArrow/navNextArrow/navAddPersonBtn/
+  // navDeliverBtn) também existe dentro do pill do card mãe quando ele
+  // está mostrando a própria regra ao mesmo tempo (ver comentário grande
+  // em wireFacePillRegraCardMae mais abaixo nesse arquivo). Sem escopar,
+  // document.getElementById pegava o botão ERRADO (o do card mãe) e
+  // ligava dois cliques ao mesmo tempo no mesmo botão — foi isso que
+  // fazia clicar em "+" abrir o pop-up rápido do card mãe E o modal
+  // "Ver regra" da tarefa aberta, juntos.
+  const grupo = document.getElementById("workflowSeqGroup");
+  const prevBtn = grupo ? grupo.querySelector("#navPrevArrow") : null;
+  const nextBtn = grupo ? grupo.querySelector("#navNextArrow") : null;
   if (prevBtn) {
     prevBtn.addEventListener("click", async () => {
       prevBtn.disabled = true;
@@ -216,11 +226,11 @@ function wireWorkflowArrows(task) {
       if (!resultadoAvanco.ok && realmenteNaoAvancou) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
     });
   }
-  const addPersonBtn = document.getElementById("navAddPersonBtn");
+  const addPersonBtn = grupo ? grupo.querySelector("#navAddPersonBtn") : null;
   if (addPersonBtn) {
     addPersonBtn.addEventListener("click", () => abrirModalRegra(task));
   }
-  const deliverBtn = document.getElementById("navDeliverBtn");
+  const deliverBtn = grupo ? grupo.querySelector("#navDeliverBtn") : null;
   if (deliverBtn) {
     if (task.entregue) {
       deliverBtn.addEventListener("click", async () => {
@@ -253,7 +263,7 @@ function wireWorkflowArrows(task) {
         }
         // Pega o botão novo (o de cima foi substituído no re-render
         // acima) pra poder desabilitar enquanto fala com o Runrun.it.
-        const novoDeliverBtn = document.getElementById("navDeliverBtn");
+        const novoDeliverBtn = seqEl ? seqEl.querySelector("#navDeliverBtn") : null;
         if (novoDeliverBtn) novoDeliverBtn.disabled = true;
 
         await pararCronometroAoTransferir(task);

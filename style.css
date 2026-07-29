@@ -886,7 +886,12 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
    fotinhos com bordas) precisa de ~34px de altura de conteúdo; com o
    padding de 8px em cima/embaixo do pill, 46px só sobrava 30px e
    cortava essas peças na borda de cima/baixo. */
-.detail-header-pill.card-mae-modo { height: 56px; overflow: hidden; }
+/* transition de height: sem isso, trocar de estado (ex: da regra pro
+   "Entregue ✓", que é bem mais baixo) mudava a altura da pílula na
+   hora (ajustarAlturaCardMaeNoPill escreve pill.style.height direto,
+   sem transição) enquanto o conteúdo deslizava suave por cima —
+   os dois movimentos descompassados pareciam um "pulo". */
+.detail-header-pill.card-mae-modo { height: 56px; overflow: hidden; transition: height var(--dur-slow) var(--ease-apple-spring); }
 .detail-header-pill.card-mae-modo .pill-face {
   position: absolute; inset: 0;
   transition: transform var(--dur-slow) var(--ease-apple-spring), opacity 0.24s var(--ease-apple);
@@ -899,8 +904,15 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 
 .pill-cardmae-conteudo {
   display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0;
+  box-sizing: border-box; padding: 0 8px;
   animation: colmeia-pill-face-pop 0.3s var(--ease-apple-spring);
 }
+/* .pill-face (o "palco" do card mãe) usa position:absolute; inset:0 —
+   isso ignora o padding do .detail-header-pill (8px) e deixa o conteúdo
+   encostado exatamente na curva do canto arredondado (999px de raio
+   numa pílula de 56px de altura), cortando visualmente o canto do
+   status-badge (esquerda) e do botão de fechar (direita). O padding
+   acima devolve essa margem de segurança. */
 @keyframes colmeia-pill-face-pop {
   from { transform: translateY(55%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
