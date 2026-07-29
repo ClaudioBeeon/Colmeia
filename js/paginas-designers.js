@@ -504,14 +504,17 @@ function historicoCardHTML(t) {
   const type = typeLabels[t.type] || { label: t.type || "Tarefa", class: "" };
   const hora = new Date(Number(t.ultimoPlay)).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   return `
-    <div class="task-card historico-card" data-id="${t.id}">
-      <div class="card-top">
+    <div class="card-organico historico-card" data-id="${t.id}">
+      <button type="button" class="card-organico-bolha" title="Abrir tarefa" aria-label="Abrir tarefa">${abrirCantoIcon}</button>
+      <div class="card-organico-top">
         <span class="badge ${type.class}">${type.label}</span>
         <span class="historico-card-hora">${hora}</span>
       </div>
-      <div class="card-title">${t.title}</div>
-      ${t.client ? `<div class="card-client">${t.client}</div>` : ""}
-      ${t.assignee ? `<div class="card-bottom">${avatarHTML(t.assignee, "avatar-sm", t.assigneeAvatarUrl)}</div>` : ""}
+      <div class="card-organico-title">${t.title}</div>
+      <div class="card-organico-footer">
+        <span class="card-client">${t.client || ""}</span>
+        ${t.assignee ? avatarHTML(t.assignee, "avatar-sm", t.assigneeAvatarUrl) : ""}
+      </div>
     </div>
   `;
 }
@@ -551,12 +554,13 @@ async function carregarAtividadesDrive() {
 
 function atividadeCardHTML(a) {
   return `
-    <a class="task-card atividade-card" href="${a.pastaUrl || "#"}" target="_blank" rel="noopener">
-      <div class="card-top">
+    <a class="card-organico atividade-card" href="${a.pastaUrl || "#"}" target="_blank" rel="noopener">
+      <span class="card-organico-bolha" title="Abrir no Drive">${abrirCantoIcon}</span>
+      <div class="card-organico-top">
         <span class="badge badge-cliente">${a.cliente}</span>
         <span class="historico-card-hora">${tempoRelativoNotificacao(a.quando)}</span>
       </div>
-      <div class="card-title">${a.arquivo}</div>
+      <div class="card-organico-title">${a.arquivo}</div>
     </a>
   `;
 }

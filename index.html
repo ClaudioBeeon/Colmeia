@@ -12,6 +12,28 @@
 </head>
 <body>
 
+<!-- Silhueta orgânica dos cards da página Histórico (ver .card-organico em
+     style.css) — um clipPath só, reaproveitado por todo card ali. Usa
+     clipPathUnits="objectBoundingBox" (coordenadas de 0 a 1) de propósito:
+     assim o recorte se adapta sozinho a qualquer tamanho de card, sem
+     precisar de um path fixo em pixels pra cada um. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <clipPath id="cardOrganicoShape" clipPathUnits="objectBoundingBox">
+      <path d="M 0.08 0
+               L 0.78 0
+               C 0.89 0, 1 0.11, 1 0.22
+               L 1 0.90
+               C 1 0.95, 0.95 1, 0.90 1
+               C 0.72 1.018, 0.32 1.018, 0.14 1
+               C 0.07 1, 0 0.93, 0 0.86
+               C 0 0.64, 0.016 0.30, 0 0.08
+               C 0 0.04, 0.04 0, 0.08 0
+               Z" />
+    </clipPath>
+  </defs>
+</svg>
+
 <div class="login-screen" id="loginScreen">
   <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785079704/Firefly_gpt-image_Retirar_os_textos_deixar_apenas_a_imagem_de_fundo_500924_six5xc.png" class="login-bg" alt="">
   <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Horiontal_texto_branco_bpfzkw.png" class="login-logo" alt="Colmeia">

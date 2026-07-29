@@ -2875,31 +2875,73 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .pasta-copy-link-pill:hover { background: var(--border); color: var(--text-primary); }
 .pasta-copy-link-pill[hidden] { display: none; }
 
-/* ===== Página "Histórico" (plays de hoje + atividades do Drive) ===== */
-.historico-secao { flex-shrink: 0; margin-bottom: 26px; }
+/* ===== Página "Histórico" (plays de hoje + atividades do Drive) =====
+   Cards com silhueta orgânica/esculpida (ref. visual passada por
+   Cláudio em 2026-07-29 — dashboard estilo HubSpot) — NUNCA um
+   retângulo com border-radius. O recorte de verdade é feito por
+   clip-path: url(#cardOrganicoShape), um <clipPath> só (ver index.html,
+   logo depois do <body>) com clipPathUnits="objectBoundingBox" — as
+   coordenadas do path são frações (0 a 1) do próprio card, então o
+   MESMO recorte se adapta sozinho a qualquer largura/altura de
+   conteúdo, sem precisar de um path fixo em pixels por card. A forma
+   tem os 4 cantos com raios DIFERENTES entre si (não é só
+   border-radius uniforme), uma leve saliência pra fora no meio da
+   borda de baixo, e uma leve entrada pra dentro no meio da borda da
+   esquerda — dá a sensação de peça moldada, não de retângulo
+   arredondado. */
+.historico-secao { flex-shrink: 0; margin-bottom: 28px; }
 .historico-secao:last-child { margin-bottom: 8px; }
 .historico-secao-titulo {
   font-family: var(--font-display); font-size: 18px; font-weight: 600;
-  margin-bottom: 12px; color: var(--text-primary);
+  margin-bottom: 14px; color: var(--text-primary);
 }
 
-.hoje-list {
-  display: flex; flex-direction: row; gap: 14px;
-  overflow-x: auto; overflow-y: hidden; padding: 4px 2px 10px;
+.hoje-list, .atividades-list {
+  display: flex; flex-direction: row; gap: 20px;
+  overflow-x: auto; overflow-y: hidden;
+  padding: 6px 6px 18px;
 }
-.hoje-list .historico-card { min-width: 240px; max-width: 240px; flex-shrink: 0; }
 
-.atividades-list {
-  display: flex; flex-direction: column; gap: 10px;
-  max-height: 360px; overflow-y: auto; padding: 4px 2px 6px;
+.card-organico {
+  position: relative; flex-shrink: 0;
+  min-width: 232px; max-width: 232px;
+  background: #fff; color: var(--text-primary);
+  clip-path: url(#cardOrganicoShape);
+  padding: 22px 24px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+  text-decoration: none; cursor: pointer;
+  box-shadow: 0 14px 34px rgba(30,30,45,0.07), 0 3px 8px rgba(30,30,45,0.05);
+  transition: box-shadow 0.22s var(--ease-apple), transform 0.22s var(--ease-apple);
 }
+.card-organico:hover {
+  box-shadow: 0 20px 44px rgba(30,30,45,0.11), 0 5px 12px rgba(30,30,45,0.06);
+  transform: translateY(-3px);
+}
+
+/* Bolha do canto: NÃO faz parte do clip-path (precisa poder sair pra
+   fora da silhueta do card) — mesmo acabamento (fundo branco, sombra
+   suave) faz ela parecer esculpida ali, não um botão colado por cima. */
+.card-organico-bolha {
+  position: absolute; top: -9px; right: 6%;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #fff; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 0 8px 20px rgba(30,30,45,0.10), 0 2px 6px rgba(30,30,45,0.05);
+  transition: background 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
+}
+.card-organico-bolha svg { width: 13px; height: 13px; }
+.card-organico:hover .card-organico-bolha { background: var(--kanban-yellow); color: #16181D; }
+
+.card-organico-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 20px; }
+.card-organico-title {
+  font-size: 14.5px; font-weight: 600; line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.card-organico-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
+.card-organico-footer .card-client { margin-bottom: 0; font-size: 12.5px; }
 
 .historico-card-hora { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
-
-.atividade-card {
-  display: block; text-decoration: none; color: inherit; cursor: pointer;
-  padding: 14px 16px;
-}
 
 .historico-loading {
   display: flex; align-items: center; gap: 10px;
