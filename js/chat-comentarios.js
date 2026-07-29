@@ -333,9 +333,9 @@ async function carregarAnexos(task) {
     </button>
   `).join("");
   listaEl.querySelectorAll(".attach-item").forEach(btn => {
-    btn.addEventListener("click", () => baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn));
+    btn.addEventListener("click", () => baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn, task.id));
   });
-  if (allBtn) allBtn.onclick = () => baixarTodosAnexos(anexos, allBtn);
+  if (allBtn) allBtn.onclick = () => baixarTodosAnexos(anexos, allBtn, task.id);
 }
 
 /**
@@ -344,14 +344,14 @@ async function carregarAnexos(task) {
  * downloads simultâneos demais no mesmo instante costumam ser
  * bloqueados pelo navegador (parece pop-up em massa).
  */
-async function baixarTodosAnexos(anexos, allBtn) {
+async function baixarTodosAnexos(anexos, allBtn, taskId) {
   const original = allBtn.textContent;
   allBtn.disabled = true;
   for (let i = 0; i < anexos.length; i++) {
     allBtn.textContent = `Baixando ${i + 1}/${anexos.length}...`;
     const a = anexos[i];
     const fakeBtn = document.createElement("button"); // só pra reaproveitar o baixarAnexo sem mexer no botão de cada linha
-    await baixarAnexo(a.id, a.nome, fakeBtn);
+    await baixarAnexo(a.id, a.nome, fakeBtn, taskId);
     if (i < anexos.length - 1) await new Promise(r => setTimeout(r, 400));
   }
   allBtn.disabled = false;
@@ -384,7 +384,7 @@ async function carregarCronometroReal(task) {
  * Baixa o anexo de verdade: pede o arquivo em base64 pro backend (que
  * busca autenticado no Runrun.it) e monta o download no navegador.
  */
-async function baixarAnexo(documentId, nome, btnEl) {
+async function baixarAnexo(documentId, nome, btnEl, taskId) {
   const original = btnEl.innerHTML;
   btnEl.disabled = true;
   btnEl.innerHTML = `<span>Baixando...</span>`;
@@ -394,7 +394,17 @@ async function baixarAnexo(documentId, nome, btnEl) {
       body: JSON.stringify({ acao: "baixarAnexo", documentId }),
     });
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || "Falha ao baixar.");
+    if (!data.ok) {
+      // Arquivo grande demais pra passar pelo Colmeia (limite do Apps
+      // Script) — em vez de só avisar, já abre a tarefa no Runrun.it,
+      // onde dá pra baixar o anexo direto, sem passar por aqui.
+      if (data.arquivoGrande && taskId) {
+        window.open("https://runrun.it/tasks/" + taskId, "_blank");
+        mostrarToast(data.error + " Abri a tarefa no Runrun.it — baixa o anexo direto de lá.", "erro");
+        return;
+      }
+      throw new Error(data.error || "Falha ao baixar.");
+    }
 
     const binario = atob(data.base64);
     const bytes = new Uint8Array(binario.length);
@@ -411,7 +421,11 @@ async function baixarAnexo(documentId, nome, btnEl) {
     URL.revokeObjectURL(url);
   } catch (err) {
     console.error("Falha ao baixar anexo:", err);
-    alert("Não consegui baixar esse anexo agora. Tenta de novo em alguns segundos.");
+    // Antes mostrava sempre a mesma mensagem genérica, escondendo o
+    // motivo real que o backend devolveu (ex: arquivo grande demais,
+    // Runrun.it recusou, documento não existe mais) — agora mostra o
+    // motivo de verdade quando tem um.
+    alert("Não consegui baixar esse anexo agora: " + (err.message || "erro desconhecido") + "\nTenta de novo em alguns segundos.");
   } finally {
     btnEl.disabled = false;
     btnEl.innerHTML = original;

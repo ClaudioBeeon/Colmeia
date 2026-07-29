@@ -2080,9 +2080,18 @@ function baixarDocumentoAnexo(documentId) {
       return { ok: false, error: 'Runrun.it recusou o download (status ' + codigo + ').' };
     }
     var blob = res.getBlob();
+    var bytes = blob.getBytes();
+    // Apps Script tem um limite de tamanho pra resposta do Web App (~50MB)
+    // e base64 aumenta o tamanho em ~33% — sem essa checagem, um anexo
+    // grande (ex: vídeo) não dava erro claro nenhum, só a mensagem
+    // genérica de "não consegui baixar", sem dar pra saber o motivo real.
+    var LIMITE_BYTES = 25 * 1024 * 1024;
+    if (bytes.length > LIMITE_BYTES) {
+      return { ok: false, arquivoGrande: true, error: 'Esse arquivo tem ' + Math.round(bytes.length / 1024 / 1024) + ' MB, grande demais pra baixar por aqui. Abre direto no Runrun.it.' };
+    }
     return {
       ok: true,
-      base64: Utilities.base64Encode(blob.getBytes()),
+      base64: Utilities.base64Encode(bytes),
       mimeType: blob.getContentType() || 'application/octet-stream'
     };
   } catch (err) {

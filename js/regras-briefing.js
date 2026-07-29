@@ -71,6 +71,12 @@ function renderModalRegra(task) {
         task.assigneeAvatarUrl = null;
         render();
         agendarAtualizacaoKanban();
+        // Mesma proteção do botão de avançar direto no card da fila de
+        // Repasse (ver confirmarEAvancarSequenciaCard, js/pagina-repasse.js):
+        // sem isso, transferir por AQUI (dentro do modal "Ver regra") fazia
+        // o card sumir da fila sozinho assim que a atualização em segundo
+        // plano rodava, porque a tarefa deixava de ser seu "de verdade".
+        if (typeof repasseRecemAvancados !== "undefined") repasseRecemAvancados.add(task.id);
       }
       await atualizarSequenciaEModal(task); // sincroniza com o real — desfaz sozinho se recusou
     });
@@ -95,6 +101,8 @@ function renderModalRegra(task) {
         task.assigneeAvatarUrl = null;
         render();
         agendarAtualizacaoKanban();
+        // Ver comentário equivalente no prevArrow acima.
+        if (typeof repasseRecemAvancados !== "undefined") repasseRecemAvancados.add(task.id);
       }
       await atualizarSequenciaEModal(task); // sincroniza com o real ANTES de decidir se mostra erro
       const atualIdxDepois = (task.sequencia || []).findIndex(s => s.atual);

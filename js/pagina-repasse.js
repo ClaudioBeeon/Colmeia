@@ -121,9 +121,45 @@ let repasseMontada = false;
 // único jeito de tirar um card na hora.
 let repasseRecemAvancados = new Set();
 
+// Trava a POSIÇÃO de cada card na fila (não só se ele continua
+// aparecendo) — sem isso, toda vez que a atualização em segundo plano
+// rodava, a lista era reordenada por data de novo do zero, e um card
+// que você tinha acabado de mexer "descia" pra outra posição na hora
+// errada. Guarda a ordem (ids) da primeira vez que a aba é montada;
+// dali em diante os cards já conhecidos mantêm a MESMA posição relativa,
+// e só um card genuinamente novo entra no fim (ordenado por data só
+// entre os novos). Só é destravada de novo quando a aba é reaberta
+// (buildRepassePage) ou a página recarrega (F5) — pedido explícito.
+let repasseOrdemFixa = null;
+
+function ordenarComPosicaoFixa(lista) {
+  const porData = (a, b) => {
+    if (!a.dueISO) return 1;
+    if (!b.dueISO) return -1;
+    return a.dueISO.localeCompare(b.dueISO);
+  };
+  if (!repasseOrdemFixa) {
+    const ordenada = lista.slice().sort(porData);
+    repasseOrdemFixa = ordenada.map(t => t.id);
+    return ordenada;
+  }
+  const posicao = new Map(repasseOrdemFixa.map((id, i) => [String(id), i]));
+  const conhecidos = [];
+  const novas = [];
+  lista.forEach(t => {
+    if (posicao.has(String(t.id))) conhecidos.push(t);
+    else novas.push(t);
+  });
+  conhecidos.sort((a, b) => posicao.get(String(a.id)) - posicao.get(String(b.id)));
+  novas.sort(porData);
+  novas.forEach(t => repasseOrdemFixa.push(t.id)); // entra no fim e já fica fixo dali em diante também
+  return conhecidos.concat(novas);
+}
+
 function buildRepassePage() {
   if (!souClaudio()) { mostrarPagina("kanban"); return; } // essa página é só do Cláudio
   repasseRecemAvancados = new Set();
+  repasseOrdemFixa = null; // reabrir a aba destrava a ordem e reordena por data de novo
   if (!repasseMontada) {
     document.querySelectorAll(".repasse-tab").forEach(tab => {
       tab.addEventListener("click", () => {
@@ -645,11 +681,7 @@ function renderRepasse() {
 // numa lista corrida só (sem coluna por cliente) — por isso cada card
 // leva a tagzinha do cliente, pra não perder essa informação.
 function renderRepasseListaFlat(board, lista) {
-  lista = lista.slice().sort((a, b) => {
-    if (!a.dueISO) return 1;
-    if (!b.dueISO) return -1;
-    return a.dueISO.localeCompare(b.dueISO);
-  });
+  lista = ordenarComPosicaoFixa(lista);
 
   if (lista.length === 0) {
     board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Nenhuma tarefa de prioridade alta esperando repasse 🎉</p>`;
@@ -667,11 +699,7 @@ function renderRepasseListaFlat(board, lista) {
 }
 
 function renderRepasseColunas(board, lista) {
-  lista = lista.slice().sort((a, b) => {
-    if (!a.dueISO) return 1;
-    if (!b.dueISO) return -1;
-    return a.dueISO.localeCompare(b.dueISO);
-  });
+  lista = ordenarComPosicaoFixa(lista);
 
   const porCliente = {};
   lista.forEach(t => {
