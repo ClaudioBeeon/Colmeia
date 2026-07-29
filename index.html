@@ -12,35 +12,6 @@
 </head>
 <body>
 
-<!-- Silhueta orgânica dos cards da página Histórico (ver .card-organico em
-     style.css) — um clipPath só, reaproveitado por todo card ali. Path
-     extraído fielmente do arquivo "Card Organico.svg" que Cláudio mandou
-     (343x251 no original), convertido pra fração (0 a 1) de cada
-     coordenada — mantém o recorte no canto superior direito (onde a
-     bolha do canto encaixa) igual ao original, mas com
-     clipPathUnits="objectBoundingBox" o recorte se adapta sozinho a
-     qualquer tamanho de card, sem precisar de um path fixo em pixels. -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <clipPath id="cardOrganicoShape" clipPathUnits="objectBoundingBox">
-      <path d="M 0.7472 0.0069
-               C 0.7711 0.0069 0.7872 0.0422 0.7872 0.0746
-               V 0.1224
-               C 0.7872 0.2082 0.8380 0.2778 0.9009 0.2778
-               H 0.9329
-               C 0.9669 0.2778 0.9942 0.3153 0.9942 0.3615
-               V 0.9153
-               C 0.9942 0.9615 0.9669 0.9990 0.9329 0.9990
-               H 0.0612
-               C 0.0274 0.9990 0 0.9615 0 0.9153
-               V 0.0906
-               C 0 0.0444 0.0274 0.0069 0.0612 0.0069
-               H 0.7472
-               Z" />
-    </clipPath>
-  </defs>
-</svg>
-
 <div class="login-screen" id="loginScreen">
   <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785079704/Firefly_gpt-image_Retirar_os_textos_deixar_apenas_a_imagem_de_fundo_500924_six5xc.png" class="login-bg" alt="">
   <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Horiontal_texto_branco_bpfzkw.png" class="login-logo" alt="Colmeia">
@@ -341,11 +312,19 @@
             <button type="button" class="historico-filtro-btn" data-janela="semana">Última semana</button>
           </div>
         </div>
-        <div class="hoje-list" id="hojeList"></div>
+        <div class="historico-carrossel">
+          <button type="button" class="historico-carrossel-seta prev" id="hojeListPrev" aria-label="Anterior"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="hoje-list" id="hojeList"></div>
+          <button type="button" class="historico-carrossel-seta next" id="hojeListNext" aria-label="Próximo"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
       </div>
       <div class="historico-secao">
         <h3 class="historico-secao-titulo">Atividades recentes</h3>
-        <div class="atividades-list" id="atividadesList"></div>
+        <div class="historico-carrossel">
+          <button type="button" class="historico-carrossel-seta prev" id="atividadesListPrev" aria-label="Anterior"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="atividades-list" id="atividadesList"></div>
+          <button type="button" class="historico-carrossel-seta next" id="atividadesListNext" aria-label="Próximo"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
       </div>
     </section>
 

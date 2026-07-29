@@ -513,6 +513,7 @@ async function carregarHistoricoPlays(janela) {
     lista.querySelectorAll(".historico-card").forEach(card => {
       card.addEventListener("click", () => abrirTarefaPorId(card.dataset.id));
     });
+    montarCarrosselSetas(lista, document.getElementById("hojeListPrev"), document.getElementById("hojeListNext"));
   } catch (err) {
     console.error("Falha ao buscar histórico de plays de hoje:", err);
     lista.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
@@ -524,16 +525,16 @@ function historicoCardHTML(t) {
   const hora = new Date(Number(t.ultimoPlay)).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const etapa = columnsDef.find(c => c.key === t.status)?.label || t.runrunStage || "Sem etapa";
   return `
-    <div class="card-organico historico-card" data-id="${t.id}">
-      <button type="button" class="card-organico-bolha" title="Abrir tarefa" aria-label="Abrir tarefa">${abrirCantoIcon}</button>
-      <div class="card-organico-header">
-        <div class="card-organico-avatar">${t.assignee ? avatarHTML(t.assignee, "", t.assigneeAvatarUrl) : ""}</div>
-        <span class="card-organico-nome">${t.client || "Sem cliente"}</span>
+    <div class="task-card historico-card" data-id="${t.id}">
+      <div class="card-top">
+        <span class="badge ${type.class}">${type.label}</span>
+        <span class="historico-card-hora">${hora}</span>
       </div>
-      <div class="card-organico-corpo">${t.title}</div>
-      <div class="card-organico-rodape">
-        <strong>${etapa}</strong>
-        <span>${type.label} · ${hora}</span>
+      <div class="card-title">${t.title}</div>
+      <div class="card-client">${t.client || "Sem cliente"}</div>
+      <div class="card-bottom">
+        <div class="assignee-wrap">${avatarClienteHTML(t.client, "avatar-sm")}</div>
+        <span class="card-due-simple">${etapa}</span>
       </div>
     </div>
   `;
@@ -566,6 +567,7 @@ async function carregarAtividadesDrive() {
       return;
     }
     lista.innerHTML = data.atividades.map(a => atividadeCardHTML(a)).join("");
+    montarCarrosselSetas(lista, document.getElementById("atividadesListPrev"), document.getElementById("atividadesListNext"));
   } catch (err) {
     console.error("Falha ao buscar atividades do Drive:", err);
     lista.innerHTML = `<p class="workflow-seq-empty">Falha de conexão.</p>`;
@@ -574,16 +576,15 @@ async function carregarAtividadesDrive() {
 
 function atividadeCardHTML(a) {
   return `
-    <a class="card-organico atividade-card" href="${a.pastaUrl || "#"}" target="_blank" rel="noopener">
-      <span class="card-organico-bolha" title="Abrir no Drive">${abrirCantoIcon}</span>
-      <div class="card-organico-header">
-        <div class="card-organico-avatar"></div>
-        <span class="card-organico-nome">${a.cliente}</span>
+    <a class="task-card atividade-card" href="${a.pastaUrl || "#"}" target="_blank" rel="noopener">
+      <div class="card-top">
+        <span class="badge">${a.pastaNome || "Pasta"}</span>
       </div>
-      <div class="card-organico-corpo">${a.arquivo}</div>
-      <div class="card-organico-rodape">
-        <strong>${a.pastaNome || "Pasta"}</strong>
-        <span>${a.breadcrumb || a.cliente}</span>
+      <div class="card-title">${a.arquivo}</div>
+      <div class="card-client">${a.cliente}</div>
+      <div class="card-bottom">
+        <div class="assignee-wrap">${avatarClienteHTML(a.cliente, "avatar-sm")}</div>
+        <span class="historico-card-hora">${a.breadcrumb || ""}</span>
       </div>
     </a>
   `;

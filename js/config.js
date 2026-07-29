@@ -11,6 +11,42 @@ const chatIcon = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1112
 const reopenIcon = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 4v5h5M20 20v-5h-5M4.5 15a8 8 0 0014.5 3.5M19.5 9A8 8 0 005 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 // Seta diagonal da "bolha" do canto dos cards orgânicos (página Histórico).
 const abrirCantoIcon = `<svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// Setas do carrossel (Histórico/Atividades recentes) — avançar/voltar
+// em vez de ter que arrastar o scroll pro lado.
+const carrosselSetaIcon = `<svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+// Avatar de CLIENTE (inicial + cor fixa por nome) — usado em vez da
+// foto de designer nos cards que representam um cliente/atividade (ex:
+// Histórico, Atividades recentes), já que ali "quem é" o card é o
+// cliente, não a pessoa. Mesmo cliente sempre cai na mesma cor (hash
+// simples do nome), sem precisar cadastrar nada.
+const CORES_AVATAR_CLIENTE = ["#F76707", "#1971C2", "#2F9E44", "#E8590C", "#7048E8", "#0CA678", "#C2255C", "#5C7CFA", "#F08C00", "#0C8599", "#D6336C", "#37B24D"];
+function corDoCliente(nomeCliente) {
+  const s = String(nomeCliente || "?");
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return CORES_AVATAR_CLIENTE[hash % CORES_AVATAR_CLIENTE.length];
+}
+function avatarClienteHTML(nomeCliente, sizeClass) {
+  const nome = (nomeCliente || "?").trim();
+  const inicial = (nome.charAt(0) || "?").toUpperCase();
+  return `<div class="avatar avatar-cliente ${sizeClass || ""}" style="background:${corDoCliente(nome)}" title="${nome}">${inicial}</div>`;
+}
+
+// Liga as setas de um carrossel horizontal (troca o "arrastar scroll pro
+// lado" por um botão de avançar/voltar) — usado em Histórico e
+// Atividades recentes. Habilita/desabilita sozinho conforme a posição.
+function montarCarrosselSetas(trackEl, prevBtn, nextBtn) {
+  if (!trackEl || !prevBtn || !nextBtn) return;
+  const atualizar = () => {
+    prevBtn.disabled = trackEl.scrollLeft <= 4;
+    nextBtn.disabled = trackEl.scrollLeft >= trackEl.scrollWidth - trackEl.clientWidth - 4;
+  };
+  prevBtn.onclick = () => trackEl.scrollBy({ left: -(trackEl.clientWidth * 0.9), behavior: "smooth" });
+  nextBtn.onclick = () => trackEl.scrollBy({ left: trackEl.clientWidth * 0.9, behavior: "smooth" });
+  trackEl.onscroll = atualizar;
+  atualizar();
+}
 
 const columnsDef = [
   { key: "pendentes", label: "Pendentes", hex: "var(--text-muted)" },
