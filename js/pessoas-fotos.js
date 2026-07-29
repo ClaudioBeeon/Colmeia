@@ -226,6 +226,11 @@ function mapearTarefaDoBackend(t) {
     // arrastar-e-soltar da página "Runrun completo".
     taskStateId: t.taskStateId || null,
     isOutraEtapa: t.isOutraEtapa,
+    // Estado real de entregue, vindo do backend (is_closed no Runrun.it) —
+    // é o que faz o botão de reabrir (reciclagem) aparecer mesmo numa
+    // tarefa que já estava entregue de antes, não só numa que você
+    // acabou de entregar nessa mesma sessão.
+    entregue: !!t.entregue,
     parentTaskId: t.parentTaskId || null,
     link: t.link,
     attachmentsCount: t.attachmentsCount || 0,

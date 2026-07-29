@@ -537,6 +537,13 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback) {
     runrunStage: nomeEtapa,
     status: chaveColuna,
     isOutraEtapa: chaveColuna === null,
+    // Estado real de entregue (is_closed) — sem isso, o botão de reabrir
+    // (o ícone de reciclagem) só aparecia pra tarefas entregues NA MESMA
+    // sessão, porque o front-end tratava "entregue" como um estado só de
+    // memória. Isso quebrava toda vez que a pessoa abria uma tarefa já
+    // entregue de antes (ex: pela aba "Runrun completo > Entregues") —
+    // o botão de reabrir simplesmente não existia.
+    entregue: !!t.is_closed,
     attachmentsCount: t.attachments_count || 0,
     // Não temos um campo de "desde quando é dessa pessoa" de verdade —
     // isso é a melhor aproximação disponível (data da última mudança na
