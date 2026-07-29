@@ -424,6 +424,7 @@ function marcarReunioesComoVistas(ids) {
   } catch (e) { /* sem problema */ }
 }
 let _primeiraChecagemReunioes = true;
+let _erroReuniaoJaAvisado = false;
 
 async function verificarReunioesProximas() {
   if (!COLMEIA_API_URL || !DESIGNER_LOGADO) return;
@@ -433,7 +434,17 @@ async function verificarReunioesProximas() {
       body: JSON.stringify({ acao: "buscarReunioesHoje", designer: DESIGNER_LOGADO }),
     });
     const data = await res.json();
-    if (!data.ok) return;
+    if (!data.ok) {
+      // Antes isso falhava em silêncio (sem badge, sem notificação, sem
+      // pista nenhuma do motivo). Mostra o erro real UMA vez por sessão
+      // pra dar pra diagnosticar (ex: permissão da agenda não autorizada
+      // pra conta que publicou o Web App).
+      if (!_erroReuniaoJaAvisado) {
+        _erroReuniaoJaAvisado = true;
+        mostrarToast("Não consegui checar sua agenda: " + (data.error || "erro desconhecido"), "erro");
+      }
+      return;
+    }
     _reunioesDeHojeCache = data.reunioes;
 
     const vistas = idsReunioesVistas();
