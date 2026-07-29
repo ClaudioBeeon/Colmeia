@@ -1308,12 +1308,26 @@ async function recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId) {
   rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
 }
 
+// IMPORTANTE: toda busca aqui dentro tem que ser RELATIVA a #pillCardMaeFace
+// (nunca document.getElementById solto). A regra do card mãe reaproveita
+// os MESMOS ids de navegação (navPrevArrow/navNextArrow/navAddPersonBtn/
+// navDeliverBtn) que a sequência normal da tarefa aberta usa — se ela
+// também tiver uma sequência de verdade (ou o botão de concluir, no caso
+// "sem sequência"), esses ids ficam DUPLICADOS no DOM ao mesmo tempo (um
+// dentro de #workflowSeqGroup, escondido atrás do carrossel, e outro
+// dentro de #pillCardMaeSeq). document.getElementById sempre pega o
+// PRIMEIRO (o da tarefa aberta, não o do card mãe) — foi isso que fazia
+// clicar numa seta/botão do card mãe às vezes entregar ou mexer na
+// tarefa aberta por engano, e o clique no X (voltar) esbarrar em outro
+// listener preso sem querer no botão errado.
 function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
-  const fecharBtn = document.getElementById("pillCardMaeFechar");
+  const face = document.getElementById("pillCardMaeFace");
+  if (!face) return;
+  const fecharBtn = face.querySelector("#pillCardMaeFechar");
   if (fecharBtn) fecharBtn.addEventListener("click", esconderFluxoCardMaeNoPill);
 
-  const statusBadge = document.getElementById("pillCardMaeStatusBadge");
-  const statusMenu = document.getElementById("pillCardMaeStatusMenu");
+  const statusBadge = face.querySelector("#pillCardMaeStatusBadge");
+  const statusMenu = face.querySelector("#pillCardMaeStatusMenu");
   if (statusBadge && statusMenu) {
     statusBadge.addEventListener("click", e => {
       e.stopPropagation();
@@ -1337,7 +1351,7 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
     });
   }
 
-  const prevBtn = document.getElementById("navPrevArrow");
+  const prevBtn = face.querySelector("#navPrevArrow");
   if (prevBtn) {
     prevBtn.addEventListener("click", async () => {
       prevBtn.disabled = true;
@@ -1347,7 +1361,7 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
       await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
     });
   }
-  const nextBtn = document.getElementById("navNextArrow");
+  const nextBtn = face.querySelector("#navNextArrow");
   if (nextBtn) {
     nextBtn.addEventListener("click", async () => {
       nextBtn.disabled = true;
@@ -1358,11 +1372,11 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
       await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
     });
   }
-  const addPersonBtn = document.getElementById("navAddPersonBtn");
+  const addPersonBtn = face.querySelector("#navAddPersonBtn");
   if (addPersonBtn) {
     addPersonBtn.addEventListener("click", () => abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, addPersonBtn));
   }
-  const deliverBtn = document.getElementById("navDeliverBtn");
+  const deliverBtn = face.querySelector("#navDeliverBtn");
   if (deliverBtn && !cardMaeTask.entregue) {
     deliverBtn.addEventListener("click", async () => {
       deliverBtn.disabled = true;

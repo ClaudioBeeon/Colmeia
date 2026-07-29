@@ -155,6 +155,8 @@ function handleRequest(e, method) {
         output = reatribuirTarefa(body.taskId, body.responsavelId);
       } else if (body.acao === 'moverEtapa') {
         output = moverEtapaTarefa(body.taskId, body.chaveColuna);
+      } else if (body.acao === 'moverEtapaArbitraria') {
+        output = moverParaEtapaArbitraria(body.taskId, body.taskStateId);
       } else if (body.acao === 'alterarEntrega') {
         output = alterarDataEntregaTarefa(body.taskId, body.novaData);
       } else if (body.acao === 'alterarPublicacao') {
@@ -518,6 +520,11 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback) {
     workedSeconds: tempoTrabalhadoAoVivo(t),
     isRunning: !!t.is_working_on,
     boardStageId: t.board_stage_id || null,
+    // Esse (diferente do boardStageId, que é só leitura) é o campo certo
+    // pra ESCREVER quando move uma tarefa de etapa — usado pelo
+    // arrastar-e-soltar da página "Runrun completo" (ver
+    // moverParaEtapaArbitraria).
+    taskStateId: t.task_state_id || null,
     parentTaskId: t.parent_task_id || null,
     runrunStage: nomeEtapa,
     status: chaveColuna,
@@ -2103,6 +2110,13 @@ function reabrirTarefa(taskId) {
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou reabrir a tarefa (status ' + resultado.status + ').' };
   }
+  // O /reopen do Runrun.it sozinho manda a tarefa de volta pra etapa
+  // dele por padrão ("Aprovação do Cliente"), não pra onde o Colmeia
+  // quer — força explicitamente pra Pendentes logo em seguida. Não
+  // aborta se essa segunda chamada falhar: a tarefa já reabriu de
+  // verdade, só não caiu na coluna certa (a pessoa ainda pode mover à
+  // mão, melhor que a reabertura inteira falhar por causa disso).
+  moverEtapaTarefa(taskId, 'pendentes');
   return { ok: true };
 }
 
@@ -2217,6 +2231,24 @@ function moverEtapaTarefa(taskId, chaveColuna) {
   if (!novoStageId) return { ok: false, error: 'Coluna "' + chaveColuna + '" sem ID configurado em COLUNA_STAGE_IDS.' };
 
   var resultado = runrunRequest('/tasks/' + taskId, 'put', { task_state_id: novoStageId });
+  if (!resultado.ok) {
+    return { ok: false, error: 'Runrun.it recusou mover a etapa (status ' + resultado.status + ').' };
+  }
+  return { ok: true };
+}
+
+/**
+ * Igual moverEtapaTarefa, mas pra QUALQUER etapa de verdade do
+ * Runrun.it (não só as 5 fixas de COLUNA_STAGE_IDS) — usada pelo
+ * arrastar-e-soltar da página "Runrun completo", que mostra as etapas
+ * reais (Design, Revisão de layout, Aprovação do Cliente, etc.), não as
+ * 5 colunas do Kanban principal. taskStateId vem do próprio frontend,
+ * pego de outra tarefa que já está naquela coluna (ver
+ * transformarTarefaParaColmeia -> taskStateId).
+ */
+function moverParaEtapaArbitraria(taskId, taskStateId) {
+  if (!taskId || !taskStateId) return { ok: false, error: 'taskId ou taskStateId ausente.' };
+  var resultado = runrunRequest('/tasks/' + taskId, 'put', { task_state_id: taskStateId });
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou mover a etapa (status ' + resultado.status + ').' };
   }

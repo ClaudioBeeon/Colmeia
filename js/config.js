@@ -391,6 +391,33 @@ function migrarIlhaAmbienteParaPill() {
  * no style.css), então nesse caso cai pra ilha flutuante do topo, que
  * fica sempre visível independente do que estiver na tela.
  */
+// Cooldown genérico por "chave de evento" (ex: "repasse::123"), salvo
+// no localStorage — usado por notificações que comparam dois polls
+// consecutivos (repasse recebido, entrou em Ajustes): sem isso, se o
+// campo comparado "piscar" entre dois valores de um poll pro outro
+// (glitch pontual da API do Runrun.it), a mesma tarefa fica repetindo
+// o mesmo pop-up sem parar. Não serve pra notificação de comentário —
+// essa já dedupe por id de comentário, de forma permanente, no próprio
+// log (ver js/notificacoes-avisos.js).
+const NOTIF_EVENTO_COOLDOWN_MS = 20 * 60 * 1000; // 20 min
+const NOTIF_EVENTO_COOLDOWN_KEY = "colmeia_notif_evento_cooldown_v1";
+function _jaNotificadoRecentemente(chave) {
+  try {
+    const mapa = JSON.parse(localStorage.getItem(NOTIF_EVENTO_COOLDOWN_KEY) || "{}");
+    return !!mapa[chave] && (Date.now() - mapa[chave]) < NOTIF_EVENTO_COOLDOWN_MS;
+  } catch (err) { return false; }
+}
+function _marcarNotificadoAgora(chave) {
+  try {
+    const mapa = JSON.parse(localStorage.getItem(NOTIF_EVENTO_COOLDOWN_KEY) || "{}");
+    mapa[chave] = Date.now();
+    // Aproveita e limpa entradas velhas, senão essa chave cresce pra
+    // sempre no localStorage.
+    Object.keys(mapa).forEach(k => { if ((Date.now() - mapa[k]) > NOTIF_EVENTO_COOLDOWN_MS) delete mapa[k]; });
+    localStorage.setItem(NOTIF_EVENTO_COOLDOWN_KEY, JSON.stringify(mapa));
+  } catch (err) { /* sem problema */ }
+}
+
 const _pillNotifFila = [];
 let _pillNotifMostrandoAgora = false;
 let _pillNotifTimeout = null;

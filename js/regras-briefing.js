@@ -394,6 +394,25 @@ async function moverEtapaNoBackend(taskId, chaveColuna) {
   }
 }
 
+// Igual moverEtapaNoBackend, mas pra qualquer etapa de verdade do
+// Runrun.it (taskStateId, não a chave fixa das 5 colunas) — usada pelo
+// arrastar-e-soltar da página "Runrun completo".
+async function moverEtapaArbitrariaNoBackend(taskId, taskStateId) {
+  if (!COLMEIA_API_URL || !taskId || !taskStateId) return false;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "moverEtapaArbitraria", taskId, taskStateId }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("Runrun.it recusou mover a etapa:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao mover a etapa no Runrun.it:", err);
+    return false;
+  }
+}
+
 async function ajustarEstimativaNoBackend(taskId, minutos) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {

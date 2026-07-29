@@ -132,17 +132,19 @@ async function _verificarNotificacoesImpl() {
   atualizarBadgeNotificacoes();
 
   if (!primeiraVez) {
-    // Pop-up (pílula/ilha) só pra menção de verdade, acontecendo agora
-    // — nunca pra comentário comum nem pra coisa de antes do Colmeia
-    // abrir (ver _colmeiaIniciadoEm/comentarioMencionaDesigner acima).
-    // Comentário sem menção continua entrando no sino normalmente, só
-    // não interrompe com pop-up.
+    // Pop-up (pílula/ilha) pra comentário em tarefa sua (já é sempre o
+    // caso aqui — minhasTarefas só tem tarefa alocada a você) ou que te
+    // mencionou — nunca pra coisa de antes do Colmeia estar aberto (ver
+    // _colmeiaIniciadoEm acima), senão o backlog de comentário antigo de
+    // uma tarefa que só agora entrou na sua lista vira uma enxurrada de
+    // pop-up de uma vez.
     novos
-      .filter(n => n.criadoEm >= _colmeiaIniciadoEm && comentarioMencionaDesigner(n.texto))
+      .filter(n => n.criadoEm >= _colmeiaIniciadoEm)
       .forEach(n => {
+        const mencionou = comentarioMencionaDesigner(n.texto);
         mostrarNotifNaPill({
           icone: chatIcon,
-          titulo: `${n.autor} te mencionou`,
+          titulo: mencionou ? `${n.autor} te mencionou` : `${n.autor} comentou`,
           subtitulo: n.taskTitle,
           onClick: async () => {
             const idx = tasks.findIndex(x => String(x.id) === String(n.taskId));
@@ -361,8 +363,13 @@ document.getElementById("avisosNovoBtn").addEventListener("click", async () => {
   }
 });
 
+// Mesma lógica do _primeiraChecagemNotificacoes: não avisa na pílula
+// pra cada aviso "velho" encontrado na primeira checagem da sessão
+// (senão enche a tela de aviso antigo só de abrir o Colmeia).
+let _primeiraChecagemAvisos = true;
+
 // Checa avisos novos sozinho de vez em quando (mesmo sem o painel
-// aberto), pra acender o sino quando chegar aviso novo.
+// aberto), pra acender o sino e avisar na pílula quando chegar aviso novo.
 async function atualizarBadgeAvisos() {
   const badge = document.getElementById("avisosBadge");
   if (!badge || !COLMEIA_API_URL) return;
@@ -371,10 +378,18 @@ async function atualizarBadgeAvisos() {
   const novosAvisos = avisosCache.filter(a => !vistos.has(a.id));
   if (novosAvisos.length > 0) { badge.textContent = novosAvisos.length > 99 ? "99+" : String(novosAvisos.length); badge.hidden = false; }
   else badge.hidden = true;
-  // Aviso não interrompe mais com pop-up (pílula/ilha) — só acende o
-  // sino (badge acima). Pop-up ficou reservado só pra menção em
-  // comentário e tarefa recebida, ver pedido do Cláudio em 2026-07-29
-  // na memória "barra_amarela_dynamic_island".
+
+  if (!_primeiraChecagemAvisos) {
+    novosAvisos.forEach(a => {
+      mostrarNotifNaPill({
+        icone: `<svg viewBox="0 0 24 24" fill="none"><path d="M3 11l18-7-7 18-2.5-7.5L3 11z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+        titulo: `Aviso de ${a.autor}`,
+        subtitulo: a.texto,
+        onClick: () => document.getElementById("avisosBtn").click(),
+      });
+    });
+  }
+  _primeiraChecagemAvisos = false;
 }
 atualizarBadgeAvisos();
 setInterval(atualizarBadgeAvisos, 5 * 60 * 1000); // a cada 5 minutos

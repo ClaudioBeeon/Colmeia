@@ -221,6 +221,10 @@ function mapearTarefaDoBackend(t) {
     dataPublicacao: t.dataPublicacao || null,
     status: t.status,
     runrunStage: t.runrunStage,
+    // Campo de escrita de verdade pra mover a tarefa de etapa arbitrária
+    // (não confundir com boardStageId, que é só leitura) — usado pelo
+    // arrastar-e-soltar da página "Runrun completo".
+    taskStateId: t.taskStateId || null,
     isOutraEtapa: t.isOutraEtapa,
     parentTaskId: t.parentTaskId || null,
     link: t.link,
@@ -320,12 +324,14 @@ async function atualizarKanbanEmBackground() {
     // de abrir, bem na hora de clicar).
     const antigasPorId = {};
     tasksTodas.forEach(t => { antigasPorId[t.id] = t; });
-    // Detecta "alguém acabou de te repassar essa tarefa" comparando o
-    // responsável antes/depois — só depois da primeira carga (tasksTodas
-    // começa vazio no load inicial, então antiga nunca existe ali, e por
-    // sorte isso já evita disparar aviso pra toda a fila de uma vez só
-    // quando o Colmeia abre).
+    // Detecta "alguém acabou de te repassar essa tarefa" (mudou de
+    // responsável) e "essa tarefa entrou em Ajustes/Refação com você"
+    // (mudou de etapa), comparando com o poll anterior — só depois da
+    // primeira carga (tasksTodas começa vazio no load inicial, então
+    // antiga nunca existe ali, e por sorte isso já evita disparar aviso
+    // pra toda a fila de uma vez só quando o Colmeia abre).
     const recebidasAgora = [];
+    const emAjustesAgora = [];
     todasMapeadas.forEach(nova => {
       const antiga = antigasPorId[nova.id];
       if (antiga && antiga.sequencia !== undefined) {
@@ -345,18 +351,45 @@ async function atualizarKanbanEmBackground() {
         && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)) {
         recebidasAgora.push(nova);
       }
+      if (DESIGNER_LOGADO && nova.status === "ajustes"
+        && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)
+        && (!antiga || antiga.status !== "ajustes")) {
+        emAjustesAgora.push(nova);
+      }
     });
-    recebidasAgora.forEach(t => {
-      mostrarNotifNaPill({
-        icone: reopenIcon,
-        titulo: "Você recebeu uma tarefa",
-        subtitulo: t.title,
-        onClick: () => {
-          const idx = tasks.findIndex(x => String(x.id) === String(t.id));
-          if (idx !== -1) openDetail(idx);
-        },
+    // Cooldown por tarefa+evento: sem isso, uma tarefa cujo campo de
+    // responsável/etapa "pisca" entre dois valores de um poll pro outro
+    // (glitch pontual da API) fica repetindo o mesmo pop-up sem parar —
+    // era esse o bug de "notificação de uma única tarefa não para de
+    // aparecer". Ver _jaNotificadoRecentemente/_marcarNotificadoAgora.
+    recebidasAgora
+      .filter(t => !_jaNotificadoRecentemente("repasse::" + t.id))
+      .forEach(t => {
+        _marcarNotificadoAgora("repasse::" + t.id);
+        mostrarNotifNaPill({
+          icone: reopenIcon,
+          titulo: "Você recebeu uma tarefa",
+          subtitulo: t.title,
+          onClick: () => {
+            const idx = tasks.findIndex(x => String(x.id) === String(t.id));
+            if (idx !== -1) openDetail(idx);
+          },
+        });
       });
-    });
+    emAjustesAgora
+      .filter(t => !_jaNotificadoRecentemente("ajustes::" + t.id))
+      .forEach(t => {
+        _marcarNotificadoAgora("ajustes::" + t.id);
+        mostrarNotifNaPill({
+          icone: reopenIcon,
+          titulo: "Tarefa em Ajustes",
+          subtitulo: t.title,
+          onClick: () => {
+            const idx = tasks.findIndex(x => String(x.id) === String(t.id));
+            if (idx !== -1) openDetail(idx);
+          },
+        });
+      });
 
     tasksTodas = todasMapeadas;
     const novasTarefas = todasMapeadas.filter(t => !t.isOutraEtapa);

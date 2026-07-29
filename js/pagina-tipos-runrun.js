@@ -219,22 +219,31 @@ function buildRunrunCompletoPage() {
   let colunas = etapas.map(etapa => ({ nome: etapa, tarefas: porEtapa[etapa] })).concat(colunasExtras);
   colunas = ordenarColunasRunrunCompletoPelaPreferencia(colunas);
 
-  board.innerHTML = colunas.map(col => `
+  board.innerHTML = colunas.map(col => {
+    // Não tem uma "chave de coluna" fixa aqui (são as etapas de verdade
+    // do Runrun.it, uma pra cada nome real) — pega o taskStateId de
+    // qualquer tarefa que já esteja nessa coluna como alvo de quem for
+    // largado nela. Sem tarefa nenhuma ali (coluna vazia) não dá pra
+    // saber o alvo, então essa coluna não aceita soltar.
+    const taskStateIdAlvo = (col.tarefas.find(t => t.taskStateId) || {}).taskStateId || "";
+    return `
     <div class="column">
       <div class="column-header" draggable="${col.carregando ? "false" : "true"}" data-col-nome="${escaparHTML(col.nome)}">
         <span class="column-hex" style="color:var(--accent);">${hexIcon}</span>
         <h2>${col.nome}</h2>
         ${col.carregando ? `<span class="rule-row-spinner"></span>` : `<span class="column-count">${col.tarefas.length}</span>`}
       </div>
-      <div class="column-cards">${col.carregando
+      <div class="column-cards" data-task-state-id="${taskStateIdAlvo}" data-col-nome="${escaparHTML(col.nome)}">${col.carregando
         ? `<p class="workflow-seq-empty" style="padding:24px;">Carregando...</p>`
         : ordenarPorCriacaoAscendente(col.tarefas).map(t => runrunCompletoCardHTML(t)).join("")}</div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   wireDragDasAbasRunrunCompleto(board, colunas);
 
   const todasAsTarefas = lista.concat(colunasExtras.flatMap(c => c.tarefas));
+  wireDragDosCardsRunrunCompleto(board, todasAsTarefas);
   board.querySelectorAll(".rc-card").forEach(el => {
     el.addEventListener("click", () => {
       const t = todasAsTarefas.find(x => String(x.id) === el.dataset.id);
@@ -243,11 +252,61 @@ function buildRunrunCompletoPage() {
   });
 }
 
+// Arrastar um card pra outra coluna move a tarefa pra etapa de verdade
+// do Runrun.it — igual o Kanban principal já faz, mas aqui a "coluna"
+// é uma etapa real (não uma das 5 fixas), então o alvo é o taskStateId
+// de outra tarefa que já esteja lá (ver data-task-state-id acima).
+function wireDragDosCardsRunrunCompleto(board, todasAsTarefas) {
+  board.querySelectorAll(".rc-card").forEach(card => {
+    card.addEventListener("dragstart", e => {
+      e.stopPropagation(); // não deixa o drag do card também iniciar o drag da aba (dragstart do column-header ancestral)
+      e.dataTransfer.setData("text/plain", card.dataset.id);
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+  });
+
+  board.querySelectorAll(".column-cards").forEach(holder => {
+    const taskStateIdAlvo = holder.dataset.taskStateId;
+    if (!taskStateIdAlvo) return; // coluna vazia ou sem etapa conhecida — não aceita soltar
+    const nomeColunaAlvo = holder.dataset.colNome;
+    holder.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      holder.classList.add("drag-over");
+    });
+    holder.addEventListener("dragleave", () => holder.classList.remove("drag-over"));
+    holder.addEventListener("drop", async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      holder.classList.remove("drag-over");
+      const taskId = e.dataTransfer.getData("text/plain");
+      if (!taskId) return;
+      const t = todasAsTarefas.find(x => String(x.id) === taskId);
+      if (!t || t.taskStateId === taskStateIdAlvo) return;
+      const stageIdAntigo = t.taskStateId;
+      const runrunStageAntigo = t.runrunStage;
+      t.taskStateId = taskStateIdAlvo;
+      t.runrunStage = nomeColunaAlvo; // é o que agrupa os cards nas colunas (buildRunrunCompletoPage)
+      buildRunrunCompletoPage(); // otimista — já move o card na hora
+      const ok = await moverEtapaArbitrariaNoBackend(taskId, taskStateIdAlvo);
+      if (ok) {
+        agendarAtualizacaoKanban();
+      } else {
+        t.taskStateId = stageIdAntigo; // Runrun.it recusou — volta pro estado real
+        t.runrunStage = runrunStageAntigo;
+        buildRunrunCompletoPage();
+        mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
+      }
+    });
+  });
+}
+
 function runrunCompletoCardHTML(t) {
   const type = typeLabels[t.type] || { label: t.type, class: "" };
   const atrasada = t.dueISO && t.dueISO < hojeISO();
   return `
-    <div class="task-card rc-card" data-id="${t.id}">
+    <div class="task-card rc-card" draggable="true" data-id="${t.id}" data-task-state-id="${t.taskStateId || ""}">
       <div class="card-top">
         <span class="badge ${type.class}">${type.label}</span>
       </div>
