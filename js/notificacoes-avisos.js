@@ -311,7 +311,12 @@ document.getElementById("notificationsBtn").addEventListener("click", async () =
   const panel = document.getElementById("notificationsPanel");
   panel.classList.toggle("open");
   if (panel.classList.contains("open")) {
-    document.getElementById("notificationsBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
+    // Mostra NA HORA o que já está guardado no navegador (o log de
+    // notificações dos últimos 2 dias) em vez de exibir "Carregando..." e
+    // esperar a busca de todas as tarefas. A atualização acontece por trás
+    // e a lista se completa sozinha quando termina.
+    if (notificacoes.length === 0) notificacoes = carregarNotificacoesLog();
+    renderNotificacoes();
     await verificarNotificacoes();
     renderNotificacoes();
     // Abrir o sino zera o contador, mas os cards continuam na lista —
@@ -427,7 +432,12 @@ document.getElementById("avisosBtn").addEventListener("click", async () => {
   const novoWrap = document.getElementById("avisosNovoWrap");
   if (novoWrap) novoWrap.hidden = !souClaudio(); // só o Cláudio lança aviso novo — os outros só veem
 
-  document.getElementById("avisosBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
+  // O app já busca os avisos sozinho a cada 5 minutos, então quase sempre
+  // temos a lista em mãos — mostra ela na hora em vez de "Carregando..."
+  // e só atualiza por trás. Sem nada guardado ainda (primeira abertura da
+  // sessão), aí sim mostra o aviso de carregando.
+  if (avisosCache.length > 0) renderAvisos();
+  else document.getElementById("avisosBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
   avisosCache = await buscarAvisosDoBackend();
   renderAvisos();
   // Abrir o painel já marca tudo como visto — o contador zera na hora.

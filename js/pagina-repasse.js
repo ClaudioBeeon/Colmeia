@@ -685,15 +685,55 @@ function renderRepasse() {
     const prioritarias = lista.filter(t => t.priority === "alta");
     renderRepasseListaFlat(board, prioritarias);
   } else {
-    // Pros modos "com sequência" / "sem sequência", precisa classificar
-    // cada tarefa primeiro (busca sob demanda, cacheada em cada tarefa).
-    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Conferindo quais têm sequência configurada...</p>`;
-    Promise.all(lista.map(t => garantirClassificacaoSequencia(t))).then(() => {
-      if (repasseViewMode !== "com_sequencia" && repasseViewMode !== "sem_sequencia") return; // trocou de aba enquanto carregava
-      const filtrada = lista.filter(t => repasseViewMode === "com_sequencia" ? t._temSequencia : !t._temSequencia);
-      renderRepasseColunas(board, filtrada);
-    });
+    // Modos "com sequência" / "sem sequência": cada tarefa precisa ser
+    // classificada, e isso custa uma chamada ao Runrun.it por tarefa.
+    // Antes a tela inteira era apagada e substituída por "Conferindo quais
+    // têm sequência configurada...", só voltando quando TODAS as respostas
+    // chegassem — com muitas tarefas isso era uma espera longa travando
+    // tudo. Agora mostra na hora o que já dá pra mostrar e vai encaixando
+    // as outras conforme as respostas chegam.
+    renderRepasseIncremental(board, lista, repasseViewMode);
   }
+}
+
+// Desenha a aba com o que já se sabe e vai completando. Redesenha de forma
+// "agrupada" (a cada 250ms, não a cada resposta) pra não ficar piscando a
+// tela a cada tarefa que chega.
+let _repasseFillTimeout = null;
+function renderRepasseIncremental(board, lista, modoNoInicio) {
+  const desenhar = () => {
+    // Trocou de aba enquanto as respostas chegavam? Nada a fazer.
+    if (repasseViewMode !== modoNoInicio) return;
+    // Não redesenha por baixo de um pop-up que a pessoa acabou de abrir
+    // (confirmar repasse/entrega ou o "+") — mesmo cuidado que a
+    // atualização automática do quadro já toma.
+    if (document.querySelector("#repasseBoard .repasse-card-popup-aberto")) return;
+
+    const conhecidas = lista.filter(t => t._temSequencia !== undefined);
+    const filtrada = conhecidas.filter(t => modoNoInicio === "com_sequencia" ? t._temSequencia : !t._temSequencia);
+    const faltando = lista.length - conhecidas.length;
+
+    if (filtrada.length === 0 && faltando > 0) {
+      board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Conferindo quais têm sequência configurada...</p>`;
+      return;
+    }
+    renderRepasseColunas(board, filtrada);
+    // Aviso discreto de que ainda tem gente na fila de conferência — sem
+    // isso, a pessoa podia achar que a lista já estava completa.
+    if (faltando > 0) {
+      board.insertAdjacentHTML("beforeend",
+        `<p class="workflow-seq-empty" style="padding:12px 24px;">Conferindo mais ${faltando} tarefa${faltando > 1 ? "s" : ""}...</p>`);
+    }
+  };
+
+  desenhar();
+  lista.forEach(t => {
+    if (t._temSequencia !== undefined) return; // já sabemos, não gasta chamada
+    garantirClassificacaoSequencia(t).then(() => {
+      clearTimeout(_repasseFillTimeout);
+      _repasseFillTimeout = setTimeout(desenhar, 250);
+    });
+  });
 }
 
 // Aba "Prioridades": mesma ordenação por Entrega das outras abas, mas

@@ -262,6 +262,57 @@ function calcularEstimatePct(timerSeconds, tempoMedioMinutos) {
   return Math.max(0, Math.min(100, Math.round((timerSeconds / metaSegundos) * 100)));
 }
 
+// ===== Foto do quadro guardada no navegador (abertura instantânea) =====
+// O Apps Script demora alguns segundos pra "acordar", e nesse tempo o
+// Colmeia só mostrava a tela da abelhinha ("Preparando o melzinho..."):
+// era a maior espera do app. Agora a última resposta boa do backend fica
+// guardada aqui no navegador e é desenhada NA HORA que a pessoa entra,
+// enquanto a versão de verdade chega por trás e substitui.
+// Guarda o formato CRU que veio do backend (não o já mapeado), pra
+// restaurar passando pelo mesmo mapearTarefaDoBackend de sempre.
+const SNAPSHOT_QUADRO_KEY = "colmeia_snapshot_quadro_v1";
+const SNAPSHOT_QUADRO_VALIDADE_MS = 24 * 60 * 60 * 1000; // quadro de dias atrás não ajuda ninguém
+
+function salvarSnapshotDoQuadro(tarefasCruas) {
+  if (!DESIGNER_LOGADO || !Array.isArray(tarefasCruas) || tarefasCruas.length === 0) return;
+  try {
+    localStorage.setItem(SNAPSHOT_QUADRO_KEY, JSON.stringify({
+      designer: DESIGNER_LOGADO,
+      quando: Date.now(),
+      tarefas: tarefasCruas,
+    }));
+  } catch (err) {
+    // Espaço do navegador cheio (ou aba privada): não é problema nenhum —
+    // sem a foto guardada, o Colmeia só volta a abrir com a abelhinha.
+    // Limpa qualquer sobra pela metade pra não restaurar lixo depois.
+    try { localStorage.removeItem(SNAPSHOT_QUADRO_KEY); } catch (e) { /* sem problema */ }
+  }
+}
+
+function restaurarSnapshotDoQuadro() {
+  if (!DESIGNER_LOGADO) return false;
+  let salvo = null;
+  try { salvo = JSON.parse(localStorage.getItem(SNAPSHOT_QUADRO_KEY) || "null"); }
+  catch (err) { return false; }
+  if (!salvo || !Array.isArray(salvo.tarefas) || salvo.tarefas.length === 0) return false;
+  // Só aproveita a foto se for da MESMA pessoa (o computador pode ser
+  // compartilhado) e se ainda estiver recente.
+  if (!nomesCorrespondem(salvo.designer, DESIGNER_LOGADO)) return false;
+  if (!salvo.quando || (Date.now() - salvo.quando) > SNAPSHOT_QUADRO_VALIDADE_MS) return false;
+
+  const todasMapeadas = salvo.tarefas.map(mapearTarefaDoBackend);
+  // NUNCA restaura tarefa como "rodando": o estado do cronômetro é de
+  // agora, não de quando a foto foi tirada. Sem isso, a pílula amarela
+  // podia aparecer dizendo que algo está rodando (e o cronômetro começar a
+  // contar em cima de um número velho) durante os segundos até a resposta
+  // de verdade chegar.
+  todasMapeadas.forEach(t => { t.running = false; });
+  tasksTodas = todasMapeadas;
+  tasks = todasMapeadas.filter(t => !t.isOutraEtapa);
+  carregandoTarefas = false;
+  return true;
+}
+
 async function carregarTarefasReais() {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1) {
     // Web App ainda não configurado — usa os dados fake só nesse caso.
@@ -282,6 +333,7 @@ async function carregarTarefasReais() {
       render();
       return;
     }
+    salvarSnapshotDoQuadro(data.tarefas); // pra próxima abertura ser instantânea
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
     tasksTodas = todasMapeadas;
     tasks = todasMapeadas.filter(t => !t.isOutraEtapa);
@@ -315,6 +367,7 @@ async function atualizarKanbanEmBackground() {
     const data = await res.json();
     if (!data.ok) return;
 
+    salvarSnapshotDoQuadro(data.tarefas); // mantém a foto do quadro sempre fresca
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
 
     // Preserva o cache da "Sequência de responsáveis" (usado na aba de

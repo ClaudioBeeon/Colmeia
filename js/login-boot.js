@@ -11,6 +11,13 @@ function iniciarAppPosLogin() {
   const repasseNav = document.querySelector('.nav-ic[data-page="repasse"]');
   if (repasseNav) repasseNav.hidden = !souClaudio();
 
+  // Desenha na hora a última foto do quadro guardada nesse navegador (ver
+  // restaurarSnapshotDoQuadro, js/pessoas-fotos.js) — assim o quadro
+  // aparece instantâneo em vez de esperar o Apps Script "acordar" com a
+  // tela da abelhinha na frente. A abelhinha continua aparecendo no
+  // primeiro acesso de cada navegador, quando não tem foto guardada ainda.
+  // A versão de verdade chega logo depois, em carregarTarefasReais().
+  restaurarSnapshotDoQuadro();
   buildBoard();
   render();
   mostrarPagina("kanban");
