@@ -269,6 +269,7 @@
 .etapa-transfer.transferindo .etapa-transfer-seta {
   max-width: 0; opacity: 0; transform: scale(.7);
   padding-left: 0; padding-right: 0; margin-right: 0;
+  pointer-events: none; /* encolhidas a zero, mas ainda no DOM — não podem roubar clique */
 }
 /* 3) a etapa de destino chega dando um pulinho e vira verde com o ✓ */
 .etapa-transfer.chegou .etapa-chip.para {

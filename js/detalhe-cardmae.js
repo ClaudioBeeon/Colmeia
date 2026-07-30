@@ -360,7 +360,7 @@ function renderEtapaDoCardMaeHTML(cardMaeTask) {
         <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h13m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <button type="button" class="etapa-chip para" id="pillCardMaeEtapaPara" title="Escolher pra onde o card mãe vai">
-        <span>${escaparHTML(destino.label)}</span>
+        <span class="etapa-chip-texto">${escaparHTML(destino.label)}</span>
         <svg class="etapa-chip-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
@@ -484,14 +484,28 @@ async function transferirCardMaeParaDestino(cardMaeTask, taskAtualId) {
     return;
   }
   agendarAtualizacaoKanban();
+  // De propósito NÃO redesenha a face depois de transferir: o resultado
+  // da animação (o chip verde "Revisão ✓") é o próprio estado certo, e
+  // redesenhar só trocaria ele pelo crachá comum, jogando fora o que
+  // acabou de acontecer na frente da pessoa. O chip continua clicável e
+  // passa a fazer o papel do crachá de etapa — ver o clique em
+  // #pillCardMaeEtapaPara, em wireFacePillRegraCardMae.
+}
 
-  // Deixa a animação terminar antes de redesenhar (o pill volta a mostrar
-  // o crachá normal, já que o card mãe entrou no quadro). Se o Runrun.it
-  // demorou mais que a animação, redesenha na hora.
-  const faltando = Math.max(0, 1000 - (Date.now() - comecouEm));
-  setTimeout(() => {
-    if (document.getElementById("pillCardMaeTransfer")) rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
-  }, faltando);
+/**
+ * Troca a etapa do card mãe pelo chip verde que sobrou da transferência.
+ * Enquanto a etapa nova for uma das 5 colunas, só troca o TEXTO do chip,
+ * sem redesenhar a face — assim o verde e o ✓ continuam onde estão. Só
+ * volta a redesenhar quando o card mãe sai do quadro (ex: voltou pra
+ * "Cards Mães"), porque aí o transferidor precisa aparecer de novo.
+ */
+function aplicarTrocaDeEtapaNoChip(cardMaeTask, taskAtualId) {
+  const texto = document.querySelector("#pillCardMaeEtapaPara .etapa-chip-texto");
+  if (!cardMaeTask.status || !texto) {
+    rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+    return;
+  }
+  texto.textContent = rotuloDaEtapa(cardMaeTask);
 }
 
 // IMPORTANTE: toda busca aqui dentro tem que ser RELATIVA a #pillCardMaeFace
@@ -527,8 +541,24 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
   if (chipPara) {
     chipPara.addEventListener("click", e => {
       e.stopPropagation();
-      // Só ESCOLHE o destino — não mexe em nada no Runrun.it. Quem
-      // transfere de verdade é a setinha do meio.
+      const wrap = face.querySelector("#pillCardMaeTransfer");
+      if (wrap && wrap.classList.contains("chegou")) {
+        // Já transferiu: esse mesmo chip verde agora é o crachá de etapa
+        // do card mãe. Clicar TROCA a etapa — inclusive voltando pra
+        // "Cards Mães", que não é uma das 5 colunas (por isso vai pelo
+        // etapaOriginalStateId, igual ao crachá comum aqui embaixo).
+        abrirMenuEtapa(
+          cardMaeTask,
+          chipPara,
+          () => aplicarTrocaDeEtapaNoChip(cardMaeTask, taskAtualId),
+          cardMaeTask.etapaOriginalStateId
+            ? { label: cardMaeTask.etapaOriginalLabel || "Cards Mães", taskStateId: cardMaeTask.etapaOriginalStateId }
+            : null
+        );
+        return;
+      }
+      // Ainda não transferiu: aqui o chip só ESCOLHE o destino — não mexe
+      // em nada no Runrun.it. Quem transfere é a setinha do meio.
       abrirMenuEscolherDestino(chipPara, destinoDoCardMae().key, chave => {
         guardarDestinoDoCardMae(chave);
         rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
