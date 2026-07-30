@@ -259,8 +259,11 @@ function wireWorkflowArrows(task) {
         deliverBtn.disabled = true;
         const ok = await reabrirTarefaNoBackend(task.id);
         if (ok) {
-          task.entregue = false;
           task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
+          // Busca a etapa/status de verdade (o servidor já moveu pra
+          // Pendentes) — sem isso, task.status/runrunStage ficavam com o
+          // valor antigo (ex: "Entregues") e o crachá não voltava certo.
+          await sincronizarTarefaAposReabrir(task);
           await carregarSequencia(task);
           // Antes só atualizava o crachá de etapa e a fileira de
           // sequência — o cabeçalho inteiro (play/pause, cronômetro,
@@ -271,6 +274,7 @@ function wireWorkflowArrows(task) {
           if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
             renderDetail();
             render();
+            agendarAtualizacaoKanban();
           }
         } else {
           deliverBtn.disabled = false;
@@ -410,6 +414,28 @@ function rotuloDaEtapa(task) {
  * (carrossel do card mãe), e reconstruir o pop-up inteiro cortaria essa
  * animação no meio.
  */
+/**
+ * Depois de reabrir uma tarefa, o servidor já move ela pra Pendentes de
+ * verdade (ver reabrirTarefa, Código.gs) — mas o objeto local só tinha
+ * `task.entregue` zerado; `task.status`/`task.runrunStage` continuavam
+ * com o valor antigo (ex: "Entregues", que nem é uma das 5 colunas de
+ * verdade), então o crachá de etapa ficava preso mostrando isso em vez
+ * de "Pendentes". Busca a tarefa fresca no Runrun.it e sincroniza tudo
+ * que mudou (etapa, sequência, workflow) de uma vez.
+ */
+async function sincronizarTarefaAposReabrir(task) {
+  const resultado = await buscarTarefaCompletaDoBackend(task.id);
+  if (!resultado.ok) return;
+  const fresca = mapearTarefaDoBackend(resultado.tarefa);
+  task.status = fresca.status;
+  task.runrunStage = fresca.runrunStage;
+  task.isOutraEtapa = fresca.isOutraEtapa;
+  task.taskStateId = fresca.taskStateId;
+  task.entregue = fresca.entregue;
+  // Sequência/regra vêm de um endpoint à parte (ver carregarSequencia) —
+  // quem chama essa função também chama carregarSequencia logo em seguida.
+}
+
 function atualizarCrachaDeEtapa(task) {
   const badge = document.getElementById("statusBadge");
   if (!badge || !task) return;
@@ -925,14 +951,17 @@ function renderDetail() {
       const ok = await reabrirTarefaNoBackend(task.id);
       reabrirMenuBtn.disabled = false;
       if (ok) {
-        task.entregue = false;
         task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
+        // Busca a etapa/status de verdade (o servidor já moveu pra
+        // Pendentes) — ver comentário em sincronizarTarefaAposReabrir.
+        await sincronizarTarefaAposReabrir(task);
         await carregarSequencia(task);
         // Mesmo motivo do outro botão de reabrir (ver comentário lá) —
         // precisa refazer o cabeçalho inteiro, não só um pedacinho.
         if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
           renderDetail();
           render();
+          agendarAtualizacaoKanban();
         }
       } else {
         mostrarToast("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");
