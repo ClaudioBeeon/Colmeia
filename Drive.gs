@@ -220,19 +220,23 @@ function buscarUploadsRecentesDoCard(taskId, cliente) {
 
   var uploadsDaPastaDoCard = [];
   var pastaCardUrl = null;
+  var pastaCardNome = null;
   var salvo = buscarPastaSalvaDoCard(taskId);
   if (salvo.ok && salvo.url) {
     pastaCardUrl = salvo.url;
     var folderIdCard = extrairIdDeUrlDrive(salvo.url);
     if (folderIdCard) {
       try {
-        uploadsDaPastaDoCard = listarUploadsRecentesDaPasta(DriveApp.getFolderById(folderIdCard));
+        var folderCard = DriveApp.getFolderById(folderIdCard);
+        pastaCardNome = folderCard.getName(); // nome real da pasta (não um texto fixo)
+        uploadsDaPastaDoCard = listarUploadsRecentesDaPasta(folderCard);
       } catch (e) { /* segue mesmo assim pra checagem do mês */ }
     }
   }
 
   var uploadsDoMes = [];
   var pastaMesUrl = null;
+  var pastaMesNome = null;
   if (cliente) {
     try {
       var beeonFolder = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
@@ -243,6 +247,7 @@ function buscarUploadsRecentesDoCard(taskId, cliente) {
       var pastaMes = pastaAno && getPastaMesSemCriar(pastaAno, new Date().getMonth());
       if (pastaMes) {
         pastaMesUrl = pastaMes.getUrl();
+        pastaMesNome = pastaMes.getName();
         uploadsDoMes = listarUploadsRecentesDaPasta(pastaMes); // arquivos soltos direto no mês
         var subpastas = pastaMes.getFolders();
         while (subpastas.hasNext()) {
@@ -266,7 +271,10 @@ function buscarUploadsRecentesDoCard(taskId, cliente) {
     ok: true,
     uploads: uploads,
     pastaUrl: pastaCardUrl || pastaMesUrl,
-    pastaNome: pastaCardUrl ? 'pasta do card' : 'pasta do mês'
+    // Nome de verdade da pasta (normalmente o próprio título da tarefa),
+    // não mais um texto fixo tipo "pasta do card" — isso fazia a
+    // notificação no front-end mostrar "na pasta pasta do card".
+    pastaNome: pastaCardNome || pastaMesNome || null
   };
   try { cache.put(chaveCache, JSON.stringify(resultado), 15); } catch (e) { /* cache indisponível, segue sem ele */ }
   return resultado;

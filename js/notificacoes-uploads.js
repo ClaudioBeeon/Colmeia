@@ -162,7 +162,11 @@ async function renderNotificacoesUpload(task) {
   }
 
   const nomesArquivos = arquivosRelevantes.map(u => u.arquivo);
-  const grupos = [{ pasta: resultado.pastaNome || "pasta do card", link: resultado.pastaUrl, arquivos: nomesArquivos, chave: chaveConjunto }];
+  // Nome de verdade da pasta (normalmente o título da tarefa) — o
+  // backend não manda mais o texto fixo "pasta do card"; se por algum
+  // motivo vier vazio, cai no título da própria tarefa como último recurso.
+  const nomeDaPasta = resultado.pastaNome || task.title || "a pasta do card";
+  const grupos = [{ pasta: nomeDaPasta, cliente: task.client || "", link: resultado.pastaUrl, arquivos: nomesArquivos, chave: chaveConjunto }];
 
   // Upload não interrompe mais com pop-up (pílula/ilha) — só aparece
   // como aviso dentro da própria aba Comentários da tarefa
@@ -172,7 +176,7 @@ async function renderNotificacoesUpload(task) {
   container.innerHTML = grupos.map(g => `
     <div class="upload-notif" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}">
       <button type="button" class="upload-notif-dismiss" data-chave="${escaparHTML(g.chave)}" aria-label="Dispensar">×</button>
-      <p class="upload-notif-text">Você adicionou ${g.arquivos.length} arquivo${g.arquivos.length > 1 ? "s" : ""} na pasta <strong>${g.pasta}</strong></p>
+      <p class="upload-notif-text">Você adicionou ${g.arquivos.length} arquivo${g.arquivos.length > 1 ? "s" : ""} em <strong>${escaparHTML(g.pasta)}</strong>${g.cliente ? ` <span class="upload-notif-cliente">(${escaparHTML(g.cliente)})</span>` : ""}</p>
       <div class="upload-notif-actions">
         <button type="button" class="upload-notif-copy" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}" data-qtd="${g.arquivos.length}">Adicionar ao comentário</button>
         <a href="${g.link}" target="_blank" rel="noopener" class="upload-notif-ver">Ver</a>
@@ -219,6 +223,10 @@ async function adicionarComentarioDeUpload(task, container, link, qtd, chave, bt
   if (ok) {
     marcarUploadVisto(chave);
     if (chatThreadAtivo === "aqui" && chatAlvoTaskId === task.id) recarregarThreadAtiva();
+    // Mesmo prompt de "repetir no card mãe?" que aparece depois de
+    // qualquer comentário manual (ver detalhe-modal.js) — faltava aqui,
+    // então comentar por esse atalho nunca oferecia replicar pro card mãe.
+    if (task.parentTaskId) mostrarPromptRepetirComentario(task, texto);
   } else {
     clearTimeout(removerTimeout);
     if (btn) { btn.disabled = false; btn.textContent = original; }
