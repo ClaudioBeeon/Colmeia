@@ -47,13 +47,27 @@ jobs:
           done
           exit $erro
 
-      - name: Conferir a sintaxe do backend (Código.gs)
+      - name: Conferir a sintaxe do backend (arquivos .gs)
         run: |
           # O node só entende a extensão .js, então confere numa cópia
-          # temporária (o arquivo de verdade precisa continuar Código.gs —
-          # é o nome real do arquivo dentro do projeto do Apps Script).
-          cp "Código.gs" /tmp/codigo-check.js
-          node --check /tmp/codigo-check.js
+          # temporária de cada um (os arquivos de verdade precisam manter os
+          # nomes .gs — é como o clasp casa cada um com o arquivo lá dentro
+          # do projeto do Apps Script).
+          erro=0
+          for arquivo in *.gs; do
+            cp "$arquivo" /tmp/gs-check.js
+            if node --check /tmp/gs-check.js > /dev/null 2>&1; then
+              echo "ok    $arquivo"
+            else
+              echo "ERRO DE SINTAXE em $arquivo:"
+              node --check /tmp/gs-check.js || true
+              erro=1
+            fi
+          done
+          exit $erro
 
       - name: Conferir se todos os js/ estão carregados no index.html, na ordem certa
         run: node .github/scripts/checar-ordem-dos-scripts.js
+
+      - name: Conferir se todo arquivo .gs está liberado no .claspignore
+        run: node .github/scripts/checar-arquivos-gs.js

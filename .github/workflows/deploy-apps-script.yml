@@ -8,8 +8,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "Código.gs"
+      # O backend foi dividido em vários arquivos .gs por assunto, então
+      # qualquer um deles precisa disparar o deploy — não só o Código.gs.
+      - "*.gs"
       - "appsscript.json"
+      - ".claspignore"
   workflow_dispatch: {} # permite rodar manualmente pela aba "Actions" do GitHub, se precisar
 
 permissions:
@@ -33,18 +36,31 @@ jobs:
       # AQUI e não publica nada. Sem isso, um erro de digitação ia direto
       # pro Apps Script de produção e derrubava o Colmeia pra todo mundo
       # (não há revisão manual nesse fluxo — ver CLAUDE.md).
-      - name: Conferir a sintaxe do Código.gs antes de publicar
+      - name: Conferir a sintaxe de todos os arquivos .gs antes de publicar
         run: |
           # O node só entende a extensão .js, então confere numa cópia
-          # temporária — o arquivo de verdade tem que continuar se chamando
-          # Código.gs (é o nome real dele dentro do projeto do Apps Script).
-          cp "Código.gs" /tmp/codigo-check.js
-          if node --check /tmp/codigo-check.js; then
-            echo "Sintaxe do Código.gs está OK — seguindo pro deploy."
-          else
-            echo "::error::O Código.gs tem erro de sintaxe. Deploy CANCELADO — nada foi publicado em produção."
+          # temporária de cada um — os arquivos de verdade têm que manter os
+          # nomes que estão no .claspignore (o clasp casa cada arquivo remoto
+          # do Apps Script pelo nome local).
+          erro=0
+          for arquivo in *.gs; do
+            cp "$arquivo" /tmp/gs-check.js
+            if node --check /tmp/gs-check.js > /dev/null 2>&1; then
+              echo "ok    $arquivo"
+            else
+              echo "::error::$arquivo tem erro de sintaxe:"
+              node --check /tmp/gs-check.js || true
+              erro=1
+            fi
+          done
+          if [ "$erro" -ne 0 ]; then
+            echo "::error::Deploy CANCELADO — nada foi publicado em produção."
             exit 1
           fi
+          echo "Sintaxe de todos os .gs está OK — seguindo pro deploy."
+
+      - name: Conferir se todo arquivo .gs está liberado no .claspignore
+        run: node .github/scripts/checar-arquivos-gs.js
 
       - name: Instalar o clasp
         run: npm install

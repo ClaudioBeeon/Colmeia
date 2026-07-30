@@ -17,15 +17,43 @@ Se uma sessão futura receber acesso a essa pasta vazia, pedir acesso à pasta c
 - `index.html`, `js/*.js` (frontend, separado por assunto em vários arquivos — ver seção
   "Estrutura do frontend (js/)" abaixo), `style.css` = frontend. Publicado automaticamente
   no GitHub Pages a cada push.
-- `Código.gs` = backend, roda no Google Apps Script. O nome do arquivo tem que ser exatamente esse
-  (com acento) — é o nome real do arquivo dentro do projeto do Apps Script (confirmado via
-  `clasp clone`); um arquivo local chamado diferente (ex: sem o acento) faria o clasp criar um SEGUNDO
-  arquivo lá dentro, duplicando funções e quebrando tudo. Desde 2026-07-28 o deploy é automático (ver seção
-  "Deploy automático" abaixo) — não é mais preciso colar manualmente no editor do Apps Script.
+- Os arquivos `.gs` na raiz = backend, roda no Google Apps Script. Ver "Estrutura do backend (.gs)"
+  abaixo. `Código.gs` tem que se chamar exatamente assim (com acento) — é o nome real do arquivo
+  dentro do projeto do Apps Script (confirmado via `clasp clone`); um arquivo local chamado diferente
+  (ex: sem o acento) faria o clasp criar um SEGUNDO arquivo lá dentro, duplicando funções e quebrando
+  tudo. Desde 2026-07-28 o deploy é automático (ver seção "Deploy automático" abaixo) — não é mais
+  preciso colar manualmente no editor do Apps Script.
 - Backend integra com API do Runrun.it, Google Drive e Google Sheets (a planilha é o "banco de dados").
 - Projeto irmão "painel-designers-beeon" (outro Apps Script) fornece tempo médio de criação por
   cliente e vínculos de nomes de cliente. URL dele está em `js/config.js` como `PAINEL_BEEON_API_URL`.
 - URL do backend Colmeia está em `js/config.js` como `COLMEIA_API_URL`.
+
+## Estrutura do backend (.gs) — dividido em 2026-07-30
+
+O `Código.gs` era um arquivo único de ~3.000 linhas e foi dividido por assunto em 7 arquivos, **sem
+alterar nenhuma linha de código** (só movendo blocos). Diferente do frontend, aqui **a ordem dos
+arquivos NÃO importa**: o Apps Script avalia todos os `.gs` do projeto antes de atender qualquer
+requisição, e todos compartilham o mesmo espaço de nomes — qualquer função chama qualquer outra sem
+"importar" nada.
+
+- `Código.gs` (~350 linhas) — configuração (chaves, usuários, colunas), as **rotas** (`doGet`/`doPost`/
+  `handleRequest`: quem responde a qual ação do front) e a varredura do quadro compartilhada em cache
+  (`getTarefasColmeia`, `guardarNoCacheEmFatias`, `invalidarCacheDoQuadro`).
+- `RunrunLeitura.gs` (~785 linhas) — tudo que só LÊ do Runrun.it: chamadas base (`runrunFetch`),
+  `transformarTarefaParaColmeia`, buscas do quadro/card mãe/sequência/comentários/anexos/descrição.
+- `RunrunEscrita.gs` (~340 linhas) — tudo que ALTERA algo no Runrun.it: play/pause, comentários,
+  avançar/desfazer sequência, entregar/reabrir, mover etapa, datas, reatribuir, estimativa.
+  Separado de propósito: é onde mora o risco de mexer em dado de verdade do time.
+- `Drive.gs` (~525 linhas) — pastas de card, uploads recentes, atividades do Histórico, backup diário.
+- `Planilha.gs` (~640 linhas) — tudo que lê/grava na planilha (links de clientes, pastas de cards,
+  avisos, clientes ocultos, login, pessoas, prioridades, log de plays). Toda gravação passa por
+  `pegarTravaDaPlanilha`.
+- `IA.gs` (~335 linhas) — Groq/Gemini, frase do dia, briefing da tarefa, resumo da alteração.
+- `Agenda.gs` (~100 linhas) — reuniões de hoje e resposta de convite.
+
+**Ao criar um arquivo `.gs` novo:** é obrigatório liberá-lo no `.claspignore` (que ignora tudo por
+padrão), senão o clasp não o envia e o deploy passa "com sucesso" mas as funções dele não existem em
+produção. A checagem automática (`.github/scripts/checar-arquivos-gs.js`) barra esse esquecimento.
 
 ## Estrutura do frontend (index.html)
 

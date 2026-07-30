@@ -1,9 +1,30 @@
 # O clasp, por padrão, tentaria enviar TODO arquivo .js/.html/.json
-# desse repositório pro Apps Script — inclusive index.html e script.js,
+# desse repositório pro Apps Script — inclusive index.html e js/*.js,
 # que são do FRONTEND e não têm nada a ver com o backend. Essa lista
 # ignora tudo por padrão e só deixa passar o que é de verdade do
-# Apps Script (o arquivo real se chama "Código", com acento — não "Code")
-# e o manifesto appsscript.json.
+# Apps Script.
+#
+# O backend era um Código.gs único de ~3.000 linhas e foi dividido por
+# assunto. Cada arquivo abaixo vira um arquivo separado dentro do MESMO
+# projeto do Apps Script, e todos compartilham o mesmo espaço de nomes —
+# é como se ainda fosse um arquivo só, então qualquer função pode chamar
+# qualquer outra sem "importar" nada.
+#
+# O clasp identifica o arquivo remoto pelo NOME local, então esses nomes
+# têm que continuar exatamente assim — em especial "Código.gs", com
+# acento, que é o nome do arquivo que já existia lá (um nome diferente
+# criaria um arquivo NOVO e duplicaria as funções, quebrando tudo).
+#
+# IMPORTANTE: ao criar um arquivo .gs novo, é obrigatório liberá-lo aqui
+# também — senão ele não é enviado e as funções dele simplesmente não
+# existem em produção. A checagem automática (.github/workflows/
+# checagem.yml) confere isso a cada push.
 **/**
 !Código.gs
+!RunrunLeitura.gs
+!RunrunEscrita.gs
+!Drive.gs
+!Planilha.gs
+!IA.gs
+!Agenda.gs
 !appsscript.json
