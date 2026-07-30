@@ -197,7 +197,7 @@ function handleRequest(e, method) {
       } else if (body.acao === 'listarPastasClientesDrive') {
         output = listarPastasDeClientesNoDrive();
       } else if (body.acao === 'criarPastaDoCard') {
-        output = criarPastaDoCardNoDrive(body.cliente, body.tituloCard, body.taskId);
+        output = criarPastaDoCardNoDrive(body.cliente, body.tituloCard, body.taskId, body.projeto);
       } else if (body.acao === 'buscarPastaCard') {
         output = buscarPastaSalvaDoCard(body.taskId);
       } else if (body.acao === 'buscarOuHerdarPastaCard') {

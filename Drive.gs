@@ -47,19 +47,22 @@ var MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Jul
 var MESES_ABREV_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 /**
- * Lê o "mês do projeto" que fica entre colchetes no título da tarefa
- * (ex: "... [MAI26]" → maio/2026) — usado em criarPastaDoCardNoDrive
- * pra criar a pasta no mês de quando o projeto É, não no mês de quando
- * alguém clicou em "Criar pasta do card" (uma tarefa atrasada de maio,
- * criada em julho, tem que cair na pasta de maio). Espelha
- * extrairMesAnoDoTitulo em js/config.js — mudou o formato aqui, muda lá
- * também.
+ * Lê o "mês do projeto" que fica entre colchetes no campo PROJETO da
+ * tarefa no Runrun.it (ex: "APsystems > [MAIO26] INBOUND..." →
+ * maio/2026) — NÃO é no título da tarefa (título costuma ser genérico).
+ * Usado em criarPastaDoCardNoDrive pra criar a pasta no mês de quando o
+ * projeto É, não no mês de quando alguém clicou em "Criar pasta do
+ * card" (uma tarefa atrasada de maio, criada em julho, tem que cair na
+ * pasta de maio). O mês pode vir abreviado (MAI) ou por extenso (MAIO)
+ * — por isso confere só as 3 primeiras letras. Espelha
+ * extrairMesAnoDoProjeto em js/config.js — mudou o formato aqui, muda
+ * lá também.
  */
-function extrairMesAnoDoTitulo(titulo) {
-  if (!titulo) return null;
-  var m = String(titulo).match(/\[\s*([A-Za-zÇç]{3})\D{0,2}(\d{2,4})\s*\]/);
+function extrairMesAnoDoProjeto(projeto) {
+  if (!projeto) return null;
+  var m = String(projeto).match(/\[\s*([A-Za-zÇç]{3,})\D{0,2}(\d{2,4})\s*\]/);
   if (!m) return null;
-  var mesIndex = MESES_ABREV_PT.indexOf(m[1].toLowerCase());
+  var mesIndex = MESES_ABREV_PT.indexOf(m[1].toLowerCase().slice(0, 3));
   if (mesIndex === -1) return null;
   var anoStr = m[2];
   var ano = anoStr.length === 2 ? 2000 + parseInt(anoStr, 10) : parseInt(anoStr, 10);
@@ -118,7 +121,7 @@ function acharPastaDoCliente(clientesFolder, nomeCliente) {
   return getSubfolderParecida(clientesFolder, nomeCliente);
 }
 
-function criarPastaDoCardNoDrive(cliente, tituloCard, taskId) {
+function criarPastaDoCardNoDrive(cliente, tituloCard, taskId, projeto) {
   if (!cliente || !tituloCard) return { ok: false, error: 'Cliente ou título ausente.' };
   try {
     var beeonFolder = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
@@ -135,13 +138,22 @@ function criarPastaDoCardNoDrive(cliente, tituloCard, taskId) {
     if (!pastaPublicacoes) {
       return { ok: false, error: 'Não encontrei a pasta "Publicações" (nem com grafia parecida) dentro do cliente "' + cliente + '". Pra eu não criar uma pasta duplicada, me mostre o caminho certo dela no Drive.' };
     }
-    // Se o título tem o "mês do projeto" entre colchetes (ex: [MAI26]),
-    // usa ELE pra decidir a pasta — não a data de hoje. Uma tarefa
-    // atrasada de maio, criada em julho, tem que cair na pasta de maio.
+    // Se o campo Projeto tem o "mês do projeto" entre colchetes (ex:
+    // [MAIO26]), usa ELE pra decidir a pasta — não a data de hoje. Uma
+    // tarefa atrasada de maio, criada em julho, tem que cair na pasta de
+    // maio. Se o front-end não mandou o projeto (ex: chamada antiga em
+    // cache), busca a tarefa de novo no Runrun.it só pra pegar esse campo.
     var agora = new Date();
-    var projetoNoTitulo = extrairMesAnoDoTitulo(tituloCard);
-    var ano = String(projetoNoTitulo ? projetoNoTitulo.ano : agora.getFullYear());
-    var mesIndex = projetoNoTitulo ? projetoNoTitulo.mesIndex : agora.getMonth();
+    var projetoTexto = projeto;
+    if (!projetoTexto && taskId) {
+      try {
+        var tarefaFresca = runrunFetch('/tasks/' + taskId);
+        projetoTexto = tarefaFresca ? extrairNomeProjeto(tarefaFresca) : '';
+      } catch (e) { /* segue sem — cai no mês atual abaixo */ }
+    }
+    var mesDoProjeto = extrairMesAnoDoProjeto(projetoTexto);
+    var ano = String(mesDoProjeto ? mesDoProjeto.ano : agora.getFullYear());
+    var mesIndex = mesDoProjeto ? mesDoProjeto.mesIndex : agora.getMonth();
     var pastaAno = getOuCriarSubpasta(pastaPublicacoes, ano);
     var pastaMes = getOuCriarPastaMes(pastaAno, mesIndex);
 

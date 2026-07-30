@@ -193,22 +193,26 @@ const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "se
 const MESES_COMPLETOS = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
 
 /**
- * Lê o "mês do projeto" que fica entre colchetes no título da tarefa
- * (ex: "... | Dunito X Calcário [MAI26]" → maio/2026) — pedido do
- * Cláudio pra mostrar isso junto do nome do cliente e, mais importante,
- * pra usar como fonte de verdade na hora de criar a pasta automática no
- * Drive (ver confirmarECriarPastaDoCard, js/chat-comentarios.js): uma
- * tarefa atrasada de maio não pode cair na pasta do mês atual só porque
- * foi CRIADA a pasta hoje — tem que ir pra pasta de maio, que é de
- * quando o projeto É, não de quando alguém clicou no botão.
- * Mesma lógica espelhada no backend em extrairMesAnoDoTitulo (Drive.gs)
+ * Lê o "mês do projeto" que fica entre colchetes no campo PROJETO da
+ * tarefa no Runrun.it (ex: "APsystems > [MAIO26] INBOUND..." → maio/2026)
+ * — NÃO é no título da tarefa (título costuma ser genérico, tipo "Video -
+ * Criativo 3 -"), é um campo separado (ver "Projeto" no card do Runrun.it,
+ * campo `projeto` vindo de extrairNomeProjeto em RunrunLeitura.gs).
+ * Usado pra mostrar isso junto do nome do cliente e, mais importante, pra
+ * usar como fonte de verdade na hora de criar a pasta automática no Drive
+ * (ver confirmarECriarPastaDoCard, js/chat-comentarios.js): uma tarefa
+ * atrasada de maio não pode cair na pasta do mês atual só porque a pasta
+ * foi CRIADA hoje — tem que ir pra pasta de maio, que é de quando o
+ * projeto É. O mês pode vir abreviado (MAI) ou por extenso (MAIO) — por
+ * isso confere só as 3 primeiras letras.
+ * Mesma lógica espelhada no backend em extrairMesAnoDoProjeto (Drive.gs)
  * — se mudar o formato aqui, mudar lá também.
  */
-function extrairMesAnoDoTitulo(titulo) {
-  if (!titulo) return null;
-  const m = String(titulo).match(/\[\s*([A-Za-zÇç]{3})\D{0,2}(\d{2,4})\s*\]/);
+function extrairMesAnoDoProjeto(projeto) {
+  if (!projeto) return null;
+  const m = String(projeto).match(/\[\s*([A-Za-zÇç]{3,})\D{0,2}(\d{2,4})\s*\]/);
   if (!m) return null;
-  const mesIndex = MESES_ABREV.indexOf(m[1].toLowerCase());
+  const mesIndex = MESES_ABREV.indexOf(m[1].toLowerCase().slice(0, 3));
   if (mesIndex === -1) return null;
   const anoStr = m[2];
   const ano = anoStr.length === 2 ? 2000 + Number(anoStr) : Number(anoStr);

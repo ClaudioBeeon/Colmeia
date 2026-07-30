@@ -887,14 +887,15 @@ async function confirmarECriarPastaDoCard(task) {
     return;
   }
 
-  // Se o título tem o "mês do projeto" entre colchetes (ex: [MAI26]),
-  // o backend usa ELE pra decidir a pasta (ver criarPastaDoCardNoDrive,
-  // Drive.gs) — esse preview mostra o MESMO mês, senão a confirmação
-  // mentiria sobre onde a pasta vai ser criada de verdade.
-  const projeto = extrairMesAnoDoTitulo(task.title);
+  // Se o campo Projeto (do Runrun.it, não o título) tem o "mês do
+  // projeto" entre colchetes (ex: [MAIO26]), o backend usa ELE pra
+  // decidir a pasta (ver criarPastaDoCardNoDrive, Drive.gs) — esse
+  // preview mostra o MESMO mês, senão a confirmação mentiria sobre onde
+  // a pasta vai ser criada de verdade.
+  const mesProjeto = extrairMesAnoDoProjeto(task.projeto);
   const agora = new Date();
-  const ano = projeto ? projeto.ano : agora.getFullYear();
-  const mes = MESES_PT_JS[projeto ? projeto.mesIndex : agora.getMonth()];
+  const ano = mesProjeto ? mesProjeto.ano : agora.getFullYear();
+  const mes = MESES_PT_JS[mesProjeto ? mesProjeto.mesIndex : agora.getMonth()];
   const caminho = `${task.client} &gt; Publicações &gt; ${ano} &gt; ${mes} &gt; ${task.title}`;
 
   const confirmado = await confirmarCriacaoDePasta(`Deseja criar a pasta <strong>"${task.title}"</strong> em<br>${caminho}?`);
@@ -906,7 +907,7 @@ async function confirmarECriarPastaDoCard(task) {
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "criarPastaDoCard", cliente: task.client, tituloCard: task.title, taskId: task.id }),
+      body: JSON.stringify({ acao: "criarPastaDoCard", cliente: task.client, tituloCard: task.title, taskId: task.id, projeto: task.projeto }),
     });
     const data = await res.json();
     btn.disabled = false;

@@ -418,6 +418,12 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback, contexto) {
     // Data de criação da tarefa no Runrun.it — usada pra ordenar listas
     // "do mais antigo pro mais novo" (ex: página Runrun completo).
     createdAt: t.created_at || null,
+    // Campo "Projeto" do Runrun.it (ex: "APsystems > [MAIO26] INBOUND...")
+    // — é ONDE o mês/ano do projeto mora de verdade (não no título da
+    // tarefa). Usado pro pill de mês no hub do cliente e pra decidir em
+    // que mês criar a pasta automática do card (ver extrairMesAnoDoProjeto
+    // em js/config.js e Drive.gs).
+    projeto: extrairNomeProjeto(t),
     link: 'https://runrun.it/tasks/' + t.id
   };
 }

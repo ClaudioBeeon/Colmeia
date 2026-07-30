@@ -236,6 +236,9 @@ function mapearTarefaDoBackend(t) {
     attachmentsCount: t.attachmentsCount || 0,
     lastActivityAt: t.lastActivityAt || null,
     createdAt: t.createdAt || null,
+    // Campo "Projeto" do Runrun.it — é onde mora o mês/ano de verdade do
+    // projeto (ex: "APsystems > [MAIO26] INBOUND..."), não no título.
+    projeto: t.projeto || "",
     assignee: t.assignee,
     // ID de verdade de quem está com a tarefa — usado por ehMinhaTarefa pra
     // decidir "essa tarefa é minha?" sem depender de nome parecido.

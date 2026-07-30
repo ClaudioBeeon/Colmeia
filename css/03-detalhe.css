@@ -773,8 +773,8 @@
   background: #FFF4CC; color: #7A5C00;
 }
 /* Linha com o badge do cliente + o badge do mês do projeto (lido do
-   título entre colchetes, ex: [MAI26]) lado a lado — ver
-   extrairMesAnoDoTitulo em js/config.js. */
+   campo Projeto do Runrun.it, ex: [MAIO26]) lado a lado — ver
+   extrairMesAnoDoProjeto em js/config.js. */
 .side-badges-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .side-block .badge-projeto { background: #16181D; color: var(--kanban-yellow); align-self: auto; }
 

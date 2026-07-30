@@ -703,8 +703,8 @@ function renderDetail() {
             <div class="side-badges-row">
               <span class="badge badge-cliente">${escaparHTML(task.client)}</span>
               ${(() => {
-                const projeto = extrairMesAnoDoTitulo(task.title);
-                return projeto ? `<span class="badge badge-projeto" title="Mês do projeto (lido do título da tarefa)">${projeto.label}</span>` : "";
+                const mesProjeto = extrairMesAnoDoProjeto(task.projeto);
+                return mesProjeto ? `<span class="badge badge-projeto" title="Mês do projeto (campo Projeto do Runrun.it)">${mesProjeto.label}</span>` : "";
               })()}
             </div>
           </div>
