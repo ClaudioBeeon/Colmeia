@@ -34,6 +34,14 @@ function iniciarAppPosLogin() {
   // ciclo (até 5 min pros avisos, até 3 min pra agenda).
   atualizarBadgeAvisos();
   verificarReunioesProximas();
+  // Lista de pessoas do Runrun.it (usada pra reatribuir e pra "Adicionar
+  // próxima pessoa" no modal "Ver regra") — pré-carregada aqui, em segundo
+  // plano, já no login. Antes só era buscada na hora que alguém abria um
+  // desses dois lugares pela primeira vez (usuariosRunrunCache ainda vazio,
+  // ver js/regras-briefing.js), e aí aparecia "Carregando pessoas..." por
+  // um instante. Buscando cedo, o cache já está pronto quando a pessoa
+  // realmente precisa dele.
+  buscarUsuariosRunrun();
   // Poda as marcações velhas guardadas no navegador (uploads dispensados e
   // chats lidos) — elas nunca eram limpas e só cresciam.
   limparLixoAntigoDoNavegador();

@@ -156,13 +156,19 @@ async function verificarTransferirCardMae(task) {
   // função) ser lido antes de trocar de figura — some direto se não tem
   // nada a perguntar, ou passa pra pergunta de transferir se tem.
   clearTimeout(_cardMaeFluxoTimeout);
+  // O "Entregue ✓" já ficou visível durante toda a ida e volta ao
+  // Runrun.it que aconteceu ANTES desta função ser chamada (ver
+  // enviarComentarioNoBackend/avancarWorkflowNoBackend no chamador) —
+  // isso já dá tempo de sobra pra ler. Por isso a pausa aqui é curta
+  // (mesma duração usada no resto do app pra dar um respiro entre
+  // trocas de tela, ver `esperar(450)`), só pra não ficar abrupto.
   _cardMaeFluxoTimeout = setTimeout(() => {
     // Confere de novo aqui dentro (não só lá fora, antes do delay) — a
-    // pessoa pode ter trocado de tarefa nesses ~700ms de espera.
+    // pessoa pode ter trocado de tarefa nesse meio-tempo.
     const aindaNaMesmaTarefa = tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id);
     if (devePerguntar && aindaNaMesmaTarefa) mostrarPerguntaTransferirNoPill(resultado.cardMae, task.id);
     else esconderFluxoCardMaeNoPill();
-  }, 700);
+  }, 350);
 }
 
 /**
