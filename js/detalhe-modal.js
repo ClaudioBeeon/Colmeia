@@ -541,7 +541,7 @@ function renderDetail() {
       <div class="detail-header">
         <div class="detail-header-pill" id="detailHeaderPill">
           <div class="pill-face pill-face-normal">
-          <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
+          ${task.entregue ? "" : `<button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>`}
           <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
           <span class="detail-sep">|</span>
           ${task.isMotherCard ? `
@@ -814,7 +814,9 @@ function renderDetail() {
     });
   }
 
-  document.getElementById("detailPlay").addEventListener("click", () => {
+  // Some quando a tarefa está entregue (só volta quando reabrir) — dá pra
+  // ser null aqui.
+  document.getElementById("detailPlay")?.addEventListener("click", () => {
     // Não achado pela busca literal "tasks[detailIdx] === task", mas é
     // a mesma família de bug: "task" aqui é a referência capturada
     // quando o pop-up foi desenhado, que pode já estar obsoleta se
