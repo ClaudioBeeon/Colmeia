@@ -79,6 +79,17 @@ var COLUNA_STAGE_IDS = {
 
 // ============ ENTRADA (doGet / doPost) ============
 
+// Ações que mexem em algo que aparece no quadro — depois de qualquer uma
+// delas, a varredura guardada do quadro é descartada (ver
+// invalidarCacheDoQuadro, no fim deste arquivo).
+var ACOES_QUE_MUDAM_O_QUADRO = [
+  'tocarTarefa', 'pausarTarefa', 'definirPrioridade',
+  'avancarWorkflow', 'desfazerWorkflow', 'entregarTarefa', 'reabrirTarefa',
+  'reatribuir', 'moverEtapa', 'moverEtapaArbitraria',
+  'alterarEntrega', 'alterarPublicacao', 'ajustarEstimativa',
+  'criarRegra', 'adicionarNaRegra', 'removerDaRegra'
+];
+
 function doGet(e) {
   return handleRequest(e, 'GET');
 }
@@ -213,6 +224,15 @@ function handleRequest(e, method) {
         output = excluirAviso(body.id);
       } else {
         output = { ok: false, error: 'Ação POST desconhecida: ' + body.acao };
+      }
+
+      // Toda ação que muda algo que APARECE no quadro joga fora a
+      // varredura guardada (ver invalidarCacheDoQuadro). Sem isso, quem
+      // acabou de mover/entregar/repassar uma tarefa podia ver a tela
+      // "voltar" ao estado de antes por até 45 segundos, porque a próxima
+      // leitura vinha do que foi guardado ANTES da ação.
+      if (output && output.ok && ACOES_QUE_MUDAM_O_QUADRO.indexOf(body.acao) !== -1) {
+        invalidarCacheDoQuadro();
       }
     } else {
       output = { ok: false, error: 'Use ?tipo=tarefas pra buscar o quadro.' };
@@ -2547,7 +2567,63 @@ function listarTodosUsuariosRunrun() {
 
 // ============ JUNTA TUDO PRO FRONT-END ============
 
+// ===== Varredura do quadro compartilhada entre quem está logado =====
+// Antes, cada navegador aberto pedia a sua própria varredura completa do
+// Runrun.it a cada 60s. Com 3 pessoas logadas, o backend varria TUDO três
+// vezes por minuto buscando exatamente a mesma coisa — trabalho triplicado
+// que competia com as ações de verdade e sobrecarregava o Apps Script.
+// Agora o resultado pronto fica guardado por alguns segundos e as outras
+// pessoas aproveitam a mesma varredura.
+//
+// O CacheService tem limite de tamanho por chave, e o quadro do time
+// inteiro passa disso — por isso o texto é fatiado em pedaços numeradas e
+// remontado na leitura (ver guardarNoCacheEmFatias/lerDoCacheEmFatias).
+var CACHE_QUADRO_CHAVE = 'quadroColmeia';
+var CACHE_QUADRO_SEGUNDOS = 45;
+var CACHE_FATIA_TAMANHO = 90000; // ~90 KB por pedaço, com folga pro limite
+
+function guardarNoCacheEmFatias(cache, chaveBase, texto, segundos) {
+  try {
+    var fatias = [];
+    for (var i = 0; i < texto.length; i += CACHE_FATIA_TAMANHO) {
+      fatias.push(texto.substring(i, i + CACHE_FATIA_TAMANHO));
+    }
+    var mapa = {};
+    for (var j = 0; j < fatias.length; j++) mapa[chaveBase + '_' + j] = fatias[j];
+    mapa[chaveBase + '_n'] = String(fatias.length);
+    cache.putAll(mapa, segundos);
+  } catch (e) {
+    // Cache indisponível ou pedaço grande demais: não é problema, só
+    // significa que essa varredura não vai ser aproveitada por ninguém.
+  }
+}
+
+function lerDoCacheEmFatias(cache, chaveBase) {
+  try {
+    var total = Number(cache.get(chaveBase + '_n'));
+    if (!total) return null;
+    var chaves = [];
+    for (var i = 0; i < total; i++) chaves.push(chaveBase + '_' + i);
+    var pedacos = cache.getAll(chaves);
+    var texto = '';
+    for (var j = 0; j < total; j++) {
+      // Um pedaço vencido/ausente invalida o conjunto — melhor varrer de
+      // novo do que devolver um quadro pela metade.
+      if (!pedacos[chaveBase + '_' + j]) return null;
+      texto += pedacos[chaveBase + '_' + j];
+    }
+    return texto;
+  } catch (e) {
+    return null;
+  }
+}
+
 function getTarefasColmeia() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = lerDoCacheEmFatias(cache, CACHE_QUADRO_CHAVE);
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* varre de novo abaixo */ }
+  }
   try {
     var tarefas = buscarTarefasRunrun();
     var prioridadesSalvas = getPrioridadesSalvas();
@@ -2562,10 +2638,32 @@ function getTarefasColmeia() {
       }
     });
 
-    return { ok: true, tarefas: tarefas, colunas: Object.keys(COLUNAS_PRINCIPAIS) };
+    var resultado = { ok: true, tarefas: tarefas, colunas: Object.keys(COLUNAS_PRINCIPAIS) };
+    // Guarda pra quem pedir nos próximos segundos aproveitar a mesma
+    // varredura (nunca guarda resposta de erro — senão o erro ficaria
+    // "grudado" por 45s pra todo mundo).
+    guardarNoCacheEmFatias(cache, CACHE_QUADRO_CHAVE, JSON.stringify(resultado), CACHE_QUADRO_SEGUNDOS);
+    return resultado;
   } catch (err) {
     return { ok: false, error: 'Erro ao buscar tarefas do Runrun.it: ' + err.message };
   }
+}
+
+/**
+ * Joga fora a varredura guardada, pra próxima leitura do quadro vir
+ * fresquinha do Runrun.it. Chamado depois de qualquer ação que muda o
+ * quadro (mover etapa, avançar sequência, entregar, reatribuir...) — sem
+ * isso, a pessoa que acabou de agir podia ver a tela "voltar" ao estado
+ * anterior por até 45 segundos, guardado do momento antes da ação.
+ */
+function invalidarCacheDoQuadro() {
+  try {
+    var cache = CacheService.getScriptCache();
+    var total = Number(cache.get(CACHE_QUADRO_CHAVE + '_n')) || 0;
+    var chaves = [CACHE_QUADRO_CHAVE + '_n', CACHE_CARD_MAE_ABERTOS];
+    for (var i = 0; i < total; i++) chaves.push(CACHE_QUADRO_CHAVE + '_' + i);
+    cache.removeAll(chaves);
+  } catch (e) { /* sem cache pra limpar, segue */ }
 }
 
 /**

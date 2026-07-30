@@ -29,6 +29,23 @@ jobs:
         with:
           node-version: "20"
 
+      # REDE DE PROTEÇÃO: se a sintaxe do Código.gs estiver quebrada, para
+      # AQUI e não publica nada. Sem isso, um erro de digitação ia direto
+      # pro Apps Script de produção e derrubava o Colmeia pra todo mundo
+      # (não há revisão manual nesse fluxo — ver CLAUDE.md).
+      - name: Conferir a sintaxe do Código.gs antes de publicar
+        run: |
+          # O node só entende a extensão .js, então confere numa cópia
+          # temporária — o arquivo de verdade tem que continuar se chamando
+          # Código.gs (é o nome real dele dentro do projeto do Apps Script).
+          cp "Código.gs" /tmp/codigo-check.js
+          if node --check /tmp/codigo-check.js; then
+            echo "Sintaxe do Código.gs está OK — seguindo pro deploy."
+          else
+            echo "::error::O Código.gs tem erro de sintaxe. Deploy CANCELADO — nada foi publicado em produção."
+            exit 1
+          fi
+
       - name: Instalar o clasp
         run: npm install
 
