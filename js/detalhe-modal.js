@@ -26,15 +26,11 @@ function openDetail(idx, entradaAnimacao) {
       });
     }
   }
-  carregarComentarios(tasks[detailIdx]);
-  carregarDescricao(tasks[detailIdx]);
-  carregarSequencia(tasks[detailIdx]);
-  carregarAnexos(tasks[detailIdx]);
-  // carregarCronometroReal já resolve o "isso é card mãe?" com a MESMA
-  // resposta que usa pro cronômetro (ver js/chat-comentarios.js) — por
-  // isso carregarFilhosSeForCardMae não é mais chamada aqui direto: era
-  // uma segunda leitura da mesma tarefa no Runrun.it a cada abertura.
-  carregarCronometroReal(tasks[detailIdx]);
+  // UM pedido só traz comentários, descrição, sequência, anexos,
+  // cronômetro, "é card mãe?" e a pasta do Drive (ver carregarTudoDaTarefa
+  // em js/chat-comentarios.js). Antes eram de 8 a 12 pedidos separados, e
+  // era por isso que o card aparecia em pedaços.
+  carregarTudoDaTarefa(tasks[detailIdx]);
   if (tasks[detailIdx].parentTaskId) precarregarCardMaeEmBackground(tasks[detailIdx].id);
   renderNotificacoesUpload(tasks[detailIdx]);
   iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);

@@ -433,6 +433,122 @@ function formatarTamanhoArquivo(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * Carrega TUDO que o pop-up da tarefa precisa num único pedido ao backend
+ * (ação "abrirTarefa") e distribui o resultado pela tela.
+ *
+ * Antes, abrir um card disparava de 8 a 12 pedidos separados — é por isso
+ * que ele aparecia em pedaços, com vários "Carregando..." ao mesmo tempo.
+ * Agora é um pedido só; lá dentro o backend busca do Runrun.it em paralelo.
+ *
+ * Se essa ação não existir no backend (janela de alguns minutos entre a
+ * publicação do site e a do backend, ou backend antigo), volta sozinho pro
+ * jeito antigo — um pedido por assunto. Assim nada quebra durante a troca.
+ */
+async function carregarTudoDaTarefa(task) {
+  if (!task.id) return;
+  const taskId = task.id;
+  // Avisa que a pasta do card já vem NESSA resposta, pra verificarPastaJaSalva
+  // (chamada pelo renderDetail, que roda antes disso terminar) não sair
+  // fazendo um pedido próprio em paralelo à toa.
+  task._abrindoTudo = true;
+
+  let data = null;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "abrirTarefa", taskId }),
+    });
+    data = await res.json();
+  } catch (err) {
+    console.error("Falha ao abrir a tarefa:", err);
+  }
+  task._abrindoTudo = false;
+
+  if (!data || !data.ok) {
+    // Backend ainda não conhece "abrirTarefa" (ou deu erro): faz do jeito
+    // antigo, cada coisa no seu pedido.
+    if (data && data.error && String(data.error).indexOf("desconhecida") !== -1) {
+      console.error("Backend antigo: usando o modo antigo de abrir o card (um pedido por assunto).");
+    }
+    carregarComentarios(task);
+    carregarDescricao(task);
+    carregarSequencia(task);
+    carregarAnexos(task);
+    carregarCronometroReal(task);
+    const btnPastaFallback = document.getElementById("criarPastaDriveBtn");
+    if (btnPastaFallback) verificarPastaJaSalva(task, btnPastaFallback);
+    return;
+  }
+
+  // Trocou de tarefa enquanto carregava? Compara por id, nunca por
+  // referência (bug recorrente do CLAUDE.md).
+  const aindaNaMesma = () => tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId);
+
+  // --- Cronômetro: nunca deixa o tempo voltar pra trás ---
+  const fresco = mapearTarefaDoBackend(data.tarefa);
+  task.timerSeconds = Math.max(task.timerSeconds || 0, fresco.timerSeconds);
+  task.tempoMedioMinutos = fresco.tempoMedioMinutos;
+  task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
+  task.attachmentsCount = fresco.attachmentsCount;
+
+  // --- Sequência de responsáveis ---
+  task.sequencia = data.sequencia || [];
+  task.workflowId = data.workflowId || null;
+
+  // --- Comentários ---
+  task.comments = data.comentarios || [];
+
+  // --- Pasta do Drive (veio de leitura na planilha, sem tocar no Drive) ---
+  if (data.pastaUrl !== undefined) task.pastaUrlSalva = data.pastaUrl;
+
+  if (!aindaNaMesma()) return;
+
+  // Agora desenha tudo de uma vez.
+  const timerEl = document.getElementById("detailTimer");
+  if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
+
+  const descEl = document.getElementById("descTextReal");
+  if (descEl) descEl.innerHTML = data.descricao
+    ? formatarDescricaoRunrun(data.descricao)
+    : "Sem descrição cadastrada nessa tarefa.";
+
+  const seqEl = document.getElementById("workflowSeqGroup");
+  if (seqEl) {
+    seqEl.innerHTML = renderSequenciaHTML(task);
+    wireWorkflowArrows(task);
+  }
+
+  atualizarBadgeChat(task);
+  const chatPanel = document.getElementById("chatPanel");
+  if (chatPanel && !chatPanel.hidden && chatThreadAtivo === "aqui") {
+    marcarChatVisto(task);
+    atualizarBadgeChat(task);
+    const thread = document.getElementById("commentsThread");
+    if (thread) { thread.innerHTML = renderComentariosHTML(task); wireExcluirComentario(); }
+  }
+
+  if (task.pastaUrlSalva) {
+    const btnPasta = document.getElementById("criarPastaDriveBtn");
+    if (btnPasta) {
+      btnPasta.dataset.pastaUrl = task.pastaUrlSalva;
+      const label = btnPasta.querySelector(".pasta-drive-btn-label");
+      if (label) label.textContent = "Acessar pasta do card";
+      mostrarPillCopiarLinkDaPasta(task.pastaUrlSalva);
+    }
+    atualizarLabelLinkManual(true);
+  }
+
+  // Anexos: vieram junto (no Runrun.it eles moram dentro dos comentários).
+  // Numa subtarefa de alteração ainda falta buscar os da tarefa original,
+  // então nesse caso deixa carregarAnexos cuidar de tudo.
+  if (ehTarefaDeAlteracao(task)) carregarAnexos(task);
+  else desenharAnexos(task, data.anexos || []);
+
+  // "É card mãe?" também já veio na mesma resposta.
+  if (data.temSubtarefas) carregarFilhosSeForCardMae(task);
+}
+
 async function buscarAnexosDeUmaTarefa(taskId) {
   try {
     const res = await fetch(COLMEIA_API_URL, {
@@ -471,14 +587,27 @@ async function carregarAnexos(task) {
     }
   }
   if (!tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de tarefa enquanto carregava
+  desenharAnexos(task, anexos);
+}
+
+/**
+ * Desenha a lista de anexos na tela. Separado da BUSCA porque agora os
+ * anexos podem chegar de dois caminhos: junto com todo o resto, no pedido
+ * único de abrir o card (carregarTudoDaTarefa — no Runrun.it os anexos
+ * moram dentro dos comentários, então vêm de graça), ou numa busca própria
+ * (subtarefa de alteração, que também precisa dos anexos da tarefa
+ * original). Os dois caminhos desenham igual, por aqui.
+ */
+function desenharAnexos(task, anexos) {
   const listaEl = document.getElementById("attachList");
   if (!listaEl) return;
   const allBtn = document.getElementById("downloadAllBtn");
-  if (anexos.length === 0) {
+  if (!anexos || anexos.length === 0) {
     listaEl.innerHTML = `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`;
     if (allBtn) allBtn.hidden = true;
     return;
   }
+  if (allBtn) allBtn.hidden = false;
   listaEl.innerHTML = anexos.map(a => `
     <button type="button" class="attach-item" data-doc-id="${a.id}" data-nome="${escaparHTML(a.nome)}">
       <span>${escaparHTML(a.nome)}${a._daOriginal ? ` <span class="attach-origem">da tarefa original</span>` : ""}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}</span>
@@ -733,6 +862,9 @@ function mostrarPillCopiarLinkDaPasta(url) {
 
 async function verificarPastaJaSalva(task, btn) {
   if (!task.id) return;
+  // A abertura do card já traz a pasta na mesma resposta (ver
+  // carregarTudoDaTarefa) — não faz um pedido separado em paralelo com ela.
+  if (task._abrindoTudo) return;
 
   if (task.pastaUrlSalva !== undefined) {
     if (task.pastaUrlSalva) {

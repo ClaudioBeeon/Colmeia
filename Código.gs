@@ -154,6 +154,8 @@ function handleRequest(e, method) {
         output = buscarSubtarefasDoCardMae(body.taskId);
       } else if (body.acao === 'buscarTarefaCompleta') {
         output = buscarTarefaCompleta(body.taskId);
+      } else if (body.acao === 'abrirTarefa') {
+        output = abrirTarefaParaColmeia(body.taskId);
       } else if (body.acao === 'entregarTarefa') {
         output = entregarTarefa(body.taskId);
       } else if (body.acao === 'reabrirTarefa') {

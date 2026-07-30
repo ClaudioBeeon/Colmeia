@@ -34,6 +34,53 @@ function runrunFetch(caminho) {
   }
 }
 
+/**
+ * Como runrunFetch, mas busca VÁRIOS endereços do Runrun.it AO MESMO TEMPO
+ * (UrlFetchApp.fetchAll) em vez de um depois do outro.
+ *
+ * Por que isso importa: sem isso, juntar várias buscas numa única chamada
+ * do Colmeia sairia mais LENTO do que o jeito antigo. Antes, o navegador
+ * pedia 8 a 12 coisas em paralelo; se o backend fosse buscar tudo em fila
+ * indiana, o tempo total seria a soma de todas. Com fetchAll, o Colmeia
+ * paga uma ida ao Apps Script só (o que é caro) e as buscas no Runrun.it
+ * acontecem juntas (o que é rápido).
+ *
+ * Devolve uma lista na MESMA ordem dos caminhos pedidos. Um endereço que
+ * falhar vira { erroFetch: true } naquela posição, sem derrubar os outros.
+ */
+function runrunFetchAll(caminhos) {
+  if (!caminhos || !caminhos.length) return [];
+  var pedidos = caminhos.map(function (caminho) {
+    return {
+      url: RUNRUN_BASE_URL + caminho,
+      method: 'get',
+      headers: {
+        'App-Key': RUNRUN_APP_KEY,
+        'User-Token': RUNRUN_USER_TOKEN,
+        'Content-Type': 'application/json'
+      },
+      muteHttpExceptions: true
+    };
+  });
+  var respostas;
+  try {
+    respostas = UrlFetchApp.fetchAll(pedidos);
+  } catch (e) {
+    // fetchAll indisponível ou recusado — cai pro jeito um-a-um, que
+    // funciona igual, só mais devagar.
+    return caminhos.map(function (c) { return runrunFetch(c); });
+  }
+  return respostas.map(function (res) {
+    var codigo = res.getResponseCode();
+    var corpo = res.getContentText();
+    try {
+      return JSON.parse(corpo);
+    } catch (e) {
+      return { erroFetch: true, status: codigo, corpoBruto: corpo.substring(0, 300) };
+    }
+  });
+}
+
 function runrunRequest(caminho, metodo, payload) {
   var opcoes = {
     method: metodo,
@@ -653,6 +700,123 @@ function listarComentarios(taskId) {
     })
     .sort(function (a, b) { return new Date(a.data || 0) - new Date(b.data || 0); });
   return { ok: true, comentarios: comentarios };
+}
+
+/**
+ * TUDO que o pop-up de uma tarefa precisa, numa única resposta.
+ *
+ * Antes, abrir um card disparava de 8 a 12 pedidos separados ao Apps
+ * Script (comentários, descrição, sequência, anexos, cronômetro, "é card
+ * mãe?", pasta do Drive, briefing...). Cada pedido desses tem um custo fixo
+ * alto de partida — é por isso que o card aparecia em pedaços. Aqui é UM
+ * pedido, e as buscas no Runrun.it acontecem em paralelo lá dentro
+ * (runrunFetchAll), em duas rodadas: a segunda depende do que a primeira
+ * descobre (o id da sequência de responsáveis).
+ *
+ * Os anexos saem DE GRAÇA: no Runrun.it eles vivem dentro dos comentários,
+ * que já estamos buscando — então não custa nenhuma chamada a mais.
+ *
+ * O briefing por IA e o card mãe continuam à parte de propósito: o briefing
+ * porque pode demorar (é a IA) e não deve segurar o resto do card; o card
+ * mãe porque já é um pré-carregamento em segundo plano que não bloqueia
+ * nada.
+ */
+function abrirTarefaParaColmeia(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  // Rodada 1: a tarefa, os comentários e a descrição — nada aqui depende
+  // de nada, então vão todos juntos.
+  var r1 = runrunFetchAll([
+    '/tasks/' + taskId,
+    '/tasks/' + taskId + '/comments',
+    '/tasks/' + taskId + '/description'
+  ]);
+  var tarefaCrua = r1[0];
+  var comentariosCrus = r1[1];
+  var descricaoCrua = r1[2];
+
+  if (!tarefaCrua || tarefaCrua.erroFetch) {
+    return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
+  }
+
+  // Rodada 2: a sequência de responsáveis, que só dá pra pedir depois de
+  // saber o workflow_id (que veio na tarefa acima).
+  var sequencia = [];
+  if (tarefaCrua.workflow_id) {
+    var elementos = runrunFetch('/workflows/' + tarefaCrua.workflow_id + '/workflow_elements');
+    if (Array.isArray(elementos)) {
+      sequencia = elementos
+        .sort(function (a, b) { return a.order - b.order; })
+        .map(function (el, i, lista) {
+          return {
+            id: el.id,
+            nome: el.user_name,
+            foto: el.user_avatar_url || null,
+            atual: !!el.is_current,
+            concluido: !!el.is_completed,
+            ultimo: i === lista.length - 1
+          };
+        });
+    }
+  }
+
+  // Comentários e anexos, os dois vindos da MESMA resposta.
+  var comentarios = [];
+  var anexos = [];
+  if (Array.isArray(comentariosCrus)) {
+    comentarios = comentariosCrus
+      .filter(function (c) { return !c.is_system_message; })
+      .map(function (c) {
+        var autor = c.commenter_name || c.user_name || (c.user_id ? formatarNomeSlug(c.user_id) : null) || 'Desconhecido';
+        return {
+          id: c.id,
+          autor: autor,
+          texto: c.text || c.description || '',
+          data: c.created_at || c.date || null,
+          reactions: c.reactions || []
+        };
+      })
+      .sort(function (a, b) { return new Date(a.data || 0) - new Date(b.data || 0); });
+
+    comentariosCrus.forEach(function (c) {
+      (c.documents || []).forEach(function (d) {
+        if (d.is_deleted) return;
+        anexos.push({
+          id: d.id,
+          nome: d.file_name || 'Anexo',
+          tamanho: d.file_size || 0,
+          extensao: d.file_extension || ''
+        });
+      });
+    });
+  }
+
+  var descricao = '';
+  if (typeof descricaoCrua === 'string') {
+    descricao = descricaoCrua;
+  } else if (descricaoCrua && typeof descricaoCrua === 'object' && !descricaoCrua.erroFetch) {
+    descricao = descricaoCrua.description || descricaoCrua.text || descricaoCrua.html || descricaoCrua.content || '';
+  }
+
+  // Leitura na planilha (instantânea, não toca no Drive): a pasta do card,
+  // que antes era mais um pedido separado do navegador.
+  var pastaUrl = null;
+  try {
+    var salvo = buscarPastaSalvaDoCard(taskId);
+    if (salvo.ok) pastaUrl = salvo.url || null;
+  } catch (e) { /* segue sem a pasta — o botão volta a checar sozinho */ }
+
+  return {
+    ok: true,
+    tarefa: transformarTarefaParaColmeia(tarefaCrua),
+    temSubtarefas: !!(tarefaCrua.subtask_ids && tarefaCrua.subtask_ids.length),
+    comentarios: comentarios,
+    anexos: anexos,
+    descricao: descricao,
+    sequencia: sequencia,
+    workflowId: tarefaCrua.workflow_id || null,
+    pastaUrl: pastaUrl
+  };
 }
 
 function buscarTarefaCompleta(taskId) {
