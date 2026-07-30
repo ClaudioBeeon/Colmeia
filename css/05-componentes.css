@@ -464,6 +464,15 @@
 }
 [data-theme="dark"] .attach-origem { background: rgba(253,236,210,0.20); color: #F0A860; }
 
+/* Anexo grande demais pra passar pelo Colmeia: o clique leva direto pro
+   Runrun.it (ver abrirAnexoNoRunrun). O aviso fica no próprio botão pra
+   ninguém clicar esperando um download que não vai acontecer. */
+.attach-runrun {
+  font-size: 10px; font-weight: 700; color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 1px 6px; margin-left: 4px; white-space: nowrap;
+}
+
 /* Resumo por IA do que o cliente pediu pra mudar, no topo da aba
    "Tarefa original" de uma subtarefa de alteração (ver resumirAlteracao). */
 .alteracao-resumo { margin-bottom: 16px; }

@@ -608,16 +608,67 @@ function desenharAnexos(task, anexos) {
     return;
   }
   if (allBtn) allBtn.hidden = false;
-  listaEl.innerHTML = anexos.map(a => `
-    <button type="button" class="attach-item" data-doc-id="${a.id}" data-nome="${escaparHTML(a.nome)}">
-      <span>${escaparHTML(a.nome)}${a._daOriginal ? ` <span class="attach-origem">da tarefa original</span>` : ""}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}</span>
-      <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  listaEl.innerHTML = anexos.map(a => {
+    const grande = anexoEhGrandeDemais(a.tamanho);
+    return `
+    <button type="button" class="attach-item${grande ? " grande" : ""}" data-doc-id="${a.id}" data-nome="${escaparHTML(a.nome)}" data-grande="${grande ? "1" : ""}">
+      <span>${escaparHTML(a.nome)}${a._daOriginal ? ` <span class="attach-origem">da tarefa original</span>` : ""}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}${grande ? ` <span class="attach-runrun">abre no Runrun.it</span>` : ""}</span>
+      ${grande ? ICONE_ABRIR_FORA : ICONE_BAIXAR}
     </button>
-  `).join("");
+  `;
+  }).join("");
   listaEl.querySelectorAll(".attach-item").forEach(btn => {
-    btn.addEventListener("click", () => baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn, task.id));
+    btn.addEventListener("click", () => {
+      // Arquivo grande já é desviado pro Runrun.it AQUI, no clique de
+      // verdade — assim a aba nova nunca é barrada pelo navegador (o que
+      // acontecia quando ela só era aberta depois de esperar a resposta
+      // do backend, e sobrava só uma mensagem de erro vermelha na tela).
+      if (btn.dataset.grande) abrirAnexoNoRunrun(task.id, btn.dataset.nome);
+      else baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn, task.id);
+    });
   });
   if (allBtn) allBtn.onclick = () => baixarTodosAnexos(anexos, allBtn, task.id);
+}
+
+const ICONE_BAIXAR = `<svg viewBox="0 0 24 24" fill="none"><path d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICONE_ABRIR_FORA = `<svg viewBox="0 0 24 24" fill="none"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+// Tem que ser o MESMO número do LIMITE_BYTES em baixarDocumentoAnexo
+// (RunrunLeitura.gs): acima disso o arquivo não cabe na resposta do
+// Apps Script e o download por aqui não tem como funcionar. Saber o
+// tamanho antes de clicar (o Runrun.it já manda junto com a lista de
+// anexos) é o que permite desviar pro Runrun.it na hora, em vez de
+// tentar, falhar e avisar depois.
+const LIMITE_ANEXO_BYTES = 25 * 1024 * 1024;
+
+function anexoEhGrandeDemais(tamanho) {
+  return Number(tamanho) > LIMITE_ANEXO_BYTES;
+}
+
+/**
+ * Manda a pessoa pro Runrun.it, onde o anexo pode ser baixado direto,
+ * sem passar pelo Colmeia. Não é erro nenhum — é o caminho certo pra
+ * arquivo grande —, então o aviso é o normal (cinza), não o vermelho.
+ * Se o navegador bloquear a aba nova, mostra um botão pra abrir: clicar
+ * nele é um clique de verdade, e esse nunca é bloqueado.
+ */
+function abrirAnexoNoRunrun(taskId, nome) {
+  if (!taskId) {
+    mostrarToast(`"${nome}" é grande demais pra baixar pelo Colmeia — abre a tarefa no Runrun.it pra pegar de lá.`, "erro");
+    return false;
+  }
+  const url = "https://runrun.it/tasks/" + taskId;
+  const recado = nome ? `"${nome}" é grande demais pro Colmeia` : "Anexo grande demais pro Colmeia";
+  if (window.open(url, "_blank")) {
+    mostrarToast(`${recado} — abri a tarefa no Runrun.it pra você baixar de lá.`);
+    return true;
+  }
+  mostrarIlha({
+    titulo: `${recado}`,
+    subtitulo: "Dá pra baixar direto no Runrun.it.",
+    acoes: [{ label: "Abrir no Runrun.it", principal: true, onClick: () => window.open(url, "_blank") }],
+  });
+  return false;
 }
 
 /**
@@ -629,15 +680,23 @@ function desenharAnexos(task, anexos) {
 async function baixarTodosAnexos(anexos, allBtn, taskId) {
   const original = allBtn.textContent;
   allBtn.disabled = true;
-  for (let i = 0; i < anexos.length; i++) {
-    allBtn.textContent = `Baixando ${i + 1}/${anexos.length}...`;
-    const a = anexos[i];
+  // Os grandes demais ficam de fora do laço: eles vão pro Runrun.it, e
+  // abrir uma aba pra cada um seria um monte de janela na cara da pessoa.
+  // No fim, se teve algum, abre a tarefa UMA vez só.
+  const cabem = anexos.filter(a => !anexoEhGrandeDemais(a.tamanho));
+  const grandes = anexos.length - cabem.length;
+  for (let i = 0; i < cabem.length; i++) {
+    allBtn.textContent = `Baixando ${i + 1}/${cabem.length}...`;
+    const a = cabem[i];
     const fakeBtn = document.createElement("button"); // só pra reaproveitar o baixarAnexo sem mexer no botão de cada linha
     await baixarAnexo(a.id, a.nome, fakeBtn, taskId);
-    if (i < anexos.length - 1) await new Promise(r => setTimeout(r, 400));
+    if (i < cabem.length - 1) await new Promise(r => setTimeout(r, 400));
   }
   allBtn.disabled = false;
   allBtn.textContent = original;
+  if (grandes > 0) {
+    abrirAnexoNoRunrun(taskId, grandes === 1 ? "1 anexo" : grandes + " anexos");
+  }
 }
 
 /**
@@ -683,12 +742,13 @@ async function baixarAnexo(documentId, nome, btnEl, taskId) {
     });
     const data = await res.json();
     if (!data.ok) {
-      // Arquivo grande demais pra passar pelo Colmeia (limite do Apps
-      // Script) — em vez de só avisar, já abre a tarefa no Runrun.it,
-      // onde dá pra baixar o anexo direto, sem passar por aqui.
-      if (data.arquivoGrande && taskId) {
-        window.open("https://runrun.it/tasks/" + taskId, "_blank");
-        mostrarToast(data.error + " Abri a tarefa no Runrun.it — baixa o anexo direto de lá.", "erro");
+      // Rede de segurança: normalmente o desvio pro Runrun.it já
+      // aconteceu no clique (o tamanho vem junto com a lista de anexos).
+      // Isso aqui cobre o caso do Runrun.it não ter informado o tamanho —
+      // aí só o backend descobre que o arquivo é grande, e mesmo assim a
+      // pessoa é levada pro Runrun.it em vez de ver um erro.
+      if (data.arquivoGrande) {
+        abrirAnexoNoRunrun(taskId, nome);
         return;
       }
       throw new Error(data.error || "Falha ao baixar.");
