@@ -6,6 +6,117 @@
 // aqui, então nada aqui pode depender deles.
 // ============================================
 
+// ============================================
+// PAINEL DE DIAGNÓSTICO (atalho Ctrl + Shift + D)
+// ============================================
+// Guarda os últimos erros que aconteceram no Colmeia, com hora, pra você
+// copiar e mandar em vez de descrever "deu erro" — é o que permite achar o
+// problema rápido depois.
+//
+// O truque pra isso não exigir mexer em 100 lugares: todo o Colmeia já
+// avisa de falha chamando console.error(...). Aqui a gente "embrulha" o
+// console.error UMA vez — ele continua funcionando igual (o texto segue
+// aparecendo no console do navegador, F12), e de brinde cada aviso desses
+// também é anotado nessa lista. Também captura erro de programação solto e
+// promessa rejeitada sem tratamento, que antes não apareciam em lugar
+// nenhum. Como este é o primeiro arquivo carregado, pega tudo dos outros.
+const DIAGNOSTICO_CHAVE = "colmeia_diagnostico_v1";
+const DIAGNOSTICO_MAX = 60;
+let _diagnosticoLista = [];
+try {
+  _diagnosticoLista = JSON.parse(localStorage.getItem(DIAGNOSTICO_CHAVE) || "[]");
+} catch (err) { _diagnosticoLista = []; }
+
+function registrarNoDiagnostico(tipo, texto) {
+  try {
+    _diagnosticoLista.push({ quando: Date.now(), tipo, texto: String(texto).slice(0, 800) });
+    if (_diagnosticoLista.length > DIAGNOSTICO_MAX) {
+      _diagnosticoLista = _diagnosticoLista.slice(-DIAGNOSTICO_MAX);
+    }
+    localStorage.setItem(DIAGNOSTICO_CHAVE, JSON.stringify(_diagnosticoLista));
+  } catch (err) { /* aba privada / espaço cheio — segue sem anotar */ }
+}
+
+(function ligarCapturaDeErros() {
+  const consoleErrorOriginal = console.error.bind(console);
+  console.error = function () {
+    const partes = Array.prototype.slice.call(arguments).map(function (a) {
+      if (a instanceof Error) return a.message;
+      if (typeof a === "object") { try { return JSON.stringify(a); } catch (e) { return String(a); } }
+      return String(a);
+    });
+    registrarNoDiagnostico("erro", partes.join(" "));
+    consoleErrorOriginal.apply(console, arguments);
+  };
+  window.addEventListener("error", ev => {
+    registrarNoDiagnostico("quebrou", (ev.message || "erro") + " — " + (ev.filename || "") + ":" + (ev.lineno || ""));
+  });
+  window.addEventListener("unhandledrejection", ev => {
+    const motivo = ev.reason && ev.reason.message ? ev.reason.message : String(ev.reason);
+    registrarNoDiagnostico("quebrou", "promessa sem tratamento: " + motivo);
+  });
+})();
+
+function abrirPainelDiagnostico() {
+  document.querySelectorAll(".diagnostico-overlay").forEach(el => el.remove());
+  const overlay = document.createElement("div");
+  overlay.className = "diagnostico-overlay";
+
+  const linhas = _diagnosticoLista.slice().reverse();
+  const comoTexto = linhas.map(l =>
+    new Date(l.quando).toLocaleString("pt-BR") + " [" + l.tipo + "] " + l.texto
+  ).join("\n");
+
+  overlay.innerHTML = `
+    <div class="diagnostico-caixa">
+      <div class="diagnostico-head">
+        <h3>Diagnóstico — últimos erros</h3>
+        <div class="diagnostico-head-acoes">
+          <button type="button" class="diagnostico-copiar">Copiar tudo</button>
+          <button type="button" class="diagnostico-limpar">Limpar</button>
+          <button type="button" class="diagnostico-fechar" aria-label="Fechar">✕</button>
+        </div>
+      </div>
+      <p class="diagnostico-dica">Isso fica só no seu navegador. Copie e me mande junto com o que você estava fazendo na hora.</p>
+      <div class="diagnostico-corpo">
+        ${linhas.length
+          ? linhas.map(l => `
+              <div class="diagnostico-item">
+                <span class="diagnostico-hora">${new Date(l.quando).toLocaleString("pt-BR")}</span>
+                <span class="diagnostico-tipo ${l.tipo}">${l.tipo}</span>
+                <span class="diagnostico-texto">${escaparHTML(l.texto)}</span>
+              </div>
+            `).join("")
+          : `<p class="quick-access-empty">Nenhum erro registrado. Ótimo sinal.</p>`}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector(".diagnostico-fechar").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", ev => { if (ev.target === overlay) overlay.remove(); });
+  overlay.querySelector(".diagnostico-limpar").addEventListener("click", () => {
+    _diagnosticoLista = [];
+    try { localStorage.removeItem(DIAGNOSTICO_CHAVE); } catch (e) { /* sem problema */ }
+    overlay.remove();
+    mostrarToast("Diagnóstico limpo.");
+  });
+  overlay.querySelector(".diagnostico-copiar").addEventListener("click", () => {
+    navigator.clipboard.writeText(comoTexto || "(nenhum erro registrado)").then(
+      () => mostrarToast("Copiado. Cola aqui no chat pra eu ver."),
+      () => mostrarToast("Não consegui copiar — dá pra selecionar o texto na mão.", "erro")
+    );
+  });
+}
+
+document.addEventListener("keydown", ev => {
+  // Ctrl + Shift + D (ou Cmd + Shift + D no Mac) abre o diagnóstico.
+  if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && (ev.key === "D" || ev.key === "d")) {
+    ev.preventDefault();
+    abrirPainelDiagnostico();
+  }
+});
+
 const dueIcon = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const playIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg>`;
 const pauseIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
