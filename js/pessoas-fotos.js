@@ -261,6 +261,24 @@ function calcularEstimatePct(timerSeconds, tempoMedioMinutos) {
   return Math.max(0, Math.min(100, Math.round((timerSeconds / metaSegundos) * 100)));
 }
 
+/**
+ * "Assinatura" do que está desenhado no quadro: junta, de cada tarefa, só
+ * os campos que o desenho do card realmente usa. Se a assinatura não
+ * mudou de uma atualização automática pra outra, não tem nada novo pra
+ * mostrar — e redesenhar seria só piscar a tela à toa.
+ *
+ * Não inclui cronômetro nem barra de progresso de propósito: eles mudam a
+ * cada segundo e já são atualizados direto no lugar, sem redesenho.
+ */
+let _ultimaAssinaturaQuadro = null;
+
+function assinaturaDoQuadro(lista) {
+  return lista.map(t => [
+    t.id, t.status, t.priority, t.title, t.client, t.type,
+    t.dueISO, t.assignee, t.running ? 1 : 0,
+  ].join("~")).join("|");
+}
+
 // ===== Foto do quadro guardada no navegador (abertura instantânea) =====
 // O Apps Script demora alguns segundos pra "acordar", e nesse tempo o
 // Colmeia só mostrava a tela da abelhinha ("Preparando o melzinho..."):
@@ -552,7 +570,19 @@ async function atualizarKanbanEmBackground() {
       }
     }
 
-    render();
+    // Só redesenha o quadro se algo que APARECE nele mudou de verdade.
+    // Antes, a cada 60 segundos o quadro inteiro era reconstruído e todos
+    // os cliques religados mesmo sem nenhuma mudança — é o que causava
+    // aquelas "piscadas" e menus que fechavam sozinhos na cara da pessoa.
+    // O cronômetro e a barrinha de progresso não entram nessa comparação
+    // de propósito: eles mudam a cada segundo e já são atualizados
+    // direto no lugar, sem redesenhar o quadro (ver o setInterval de 1s
+    // em js/detalhe-modal.js).
+    const assinaturaAgora = assinaturaDoQuadro(tasks);
+    if (assinaturaAgora !== _ultimaAssinaturaQuadro) {
+      _ultimaAssinaturaQuadro = assinaturaAgora;
+      render();
+    }
     updateNowPlaying();
     atualizarBadgeRepasse();
     verificarNotificacoes();

@@ -34,6 +34,9 @@ function iniciarAppPosLogin() {
   // ciclo (até 5 min pros avisos, até 3 min pra agenda).
   atualizarBadgeAvisos();
   verificarReunioesProximas();
+  // Poda as marcações velhas guardadas no navegador (uploads dispensados e
+  // chats lidos) — elas nunca eram limpas e só cresciam.
+  limparLixoAntigoDoNavegador();
 }
 
 // Algumas coisas (Fila de Repasse, lançar Avisos) são só do Cláudio,

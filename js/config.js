@@ -1,6 +1,9 @@
 // ============================================
-// DADOS FAKE — só para visualização do protótipo.
-// Nenhuma conexão real com planilha, Drive ou Runrun.it ainda.
+// Base do front-end: ícones, definição das colunas do quadro, URLs das
+// APIs (Colmeia e painel-designers-beeon), calendário próprio, avisinhos
+// (toast/ilha/pílula) e a notificação que sobe dentro da pílula amarela.
+// É o primeiro arquivo carregado — todos os outros contam com o que está
+// aqui, então nada aqui pode depender deles.
 // ============================================
 
 const dueIcon = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;

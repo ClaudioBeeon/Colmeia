@@ -937,26 +937,3 @@ function wireExcluirComentario() {
 }
 
 
-function taskDescription(task) {
-  return `Produção de conteúdo do tipo ${typeLabels[task.type].label.toLowerCase()} para o cliente ${task.client}. Seguir o briefing combinado com o time de atendimento, manter a identidade visual do cliente e alinhar qualquer dúvida antes da entrega final.`;
-}
-
-const formatsByType = {
-  estatico: [
-    { label: "Feed 1x1", cls: "fb-purple" },
-    { label: "Stories 9:16", cls: "fb-pink" },
-  ],
-  video: [
-    { label: "Vídeo Feed 1x1", cls: "fb-blue" },
-    { label: "Vídeo Stories 9:16", cls: "fb-teal" },
-  ],
-  email: [
-    { label: "Banner desktop", cls: "fb-orange" },
-    { label: "Banner mobile", cls: "fb-purple" },
-  ],
-};
-
-function priorityVar(p) {
-  return p === "alta" ? "danger" : p === "media" ? "warning" : "success";
-}
-

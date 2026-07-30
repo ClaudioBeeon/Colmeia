@@ -1764,18 +1764,6 @@ async function buscarSubtarefasDoCardMaeNoBackend(taskId) {
   }
 }
 
-function stepDetail(dir) {
-  const order = tasks.map((t, i) => i).filter(i => tasks[i].status === tasks[detailIdx].status);
-  const pos = order.indexOf(detailIdx);
-  const next = order[(pos + dir + order.length) % order.length];
-  detailIdx = next;
-  fecharChatPanel();
-  renderDetail();
-  document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
-  const cardEl = document.querySelector(`.task-card[data-idx="${detailIdx}"]`);
-  if (cardEl) cardEl.classList.add("selected");
-}
-
 function closeDetail() {
   pararChecagemUploadEmSegundoPlano();
   clearTimeout(_cardMaeFluxoTimeout);

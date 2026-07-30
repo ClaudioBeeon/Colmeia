@@ -663,9 +663,14 @@ function escaparHTML(str) {
   return div.innerHTML;
 }
 
+// Existiam DUAS funções quase iguais pra transformar link em clicável
+// (essa e linkifyTexto, em js/chat-comentarios.js), então qualquer
+// correção tinha que ser feita nas duas. Agora essa só escapa o texto e
+// entrega pra outra fazer o trabalho — de brinde, os campos do briefing
+// passaram a reconhecer link começando com "www." e a não engolir
+// pontuação colada no fim do endereço, que a outra já tratava.
 function linkificarTexto(texto) {
-  const escapado = escaparHTML(texto);
-  return escapado.replace(/(https?:\/\/[^\s<]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+  return linkifyTexto(escaparHTML(texto));
 }
 
 /**

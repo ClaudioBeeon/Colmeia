@@ -941,6 +941,23 @@ function linkarPastaManualNoDrive(taskId, url) {
 // quando a pessoa reabre a tarefa; (2) achar rapidinho a pasta certa
 // pra checar uploads recentes, sem precisar procurar por nome de novo.
 
+/**
+ * Pega a "trava" de escrita da planilha — ou avisa alto e claro que não
+ * conseguiu.
+ *
+ * Antes, todos os pontos de gravação chamavam lock.tryLock(5000) e
+ * IGNORAVAM a resposta: se a trava não viesse em 5 segundos, o código
+ * escrevia na planilha do mesmo jeito, e duas gravações simultâneas podiam
+ * se atropelar (uma sobrescrevendo a linha da outra). Agora, se não
+ * conseguir, o erro sobe até handleRequest e o Colmeia mostra "não
+ * consegui salvar" — bem melhor do que salvar torto em silêncio.
+ */
+function pegarTravaDaPlanilha(lock) {
+  if (!lock.tryLock(15000)) {
+    throw new Error('A planilha está ocupada com outra gravação agora. Tenta de novo em alguns segundos.');
+  }
+}
+
 function getPastasCardsSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('PastasCards');
@@ -953,7 +970,7 @@ function getPastasCardsSheet() {
 
 function salvarPastaDoCard(taskId, url) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getPastasCardsSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1482,7 +1499,7 @@ function listarLinksClientes() {
 function salvarLinksCliente(cliente, dados) {
   if (!cliente) return { ok: false, error: 'Cliente não informado.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getLinksClientesSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1521,7 +1538,7 @@ function salvarLinksCliente(cliente, dados) {
 function excluirClientesPorNomes(nomes) {
   if (!nomes || !nomes.length) return { ok: false, error: 'Nenhum nome informado.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getLinksClientesSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1562,7 +1579,7 @@ function listarClientesOcultos() {
 function ocultarClienteDesigner(designer, cliente) {
   if (!designer || !cliente) return { ok: false, error: 'Designer ou cliente ausente.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getClientesOcultosSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1581,7 +1598,7 @@ function ocultarClienteDesigner(designer, cliente) {
 function restaurarClienteDesigner(designer, cliente) {
   if (!designer || !cliente) return { ok: false, error: 'Designer ou cliente ausente.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getClientesOcultosSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1719,7 +1736,7 @@ function listarPessoasSalvas() {
 function salvarPessoa(nome, foto, aliases, discord) {
   if (!nome) return { ok: false, error: 'Nome não informado.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getPessoasSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1745,7 +1762,7 @@ function salvarPessoa(nome, foto, aliases, discord) {
 function excluirPessoasPorNomes(nomes) {
   if (!nomes || !nomes.length) return { ok: false, error: 'Nenhum nome informado.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getPessoasSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1789,7 +1806,7 @@ function definirPrioridade(taskId, prioridade) {
   }
 
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getExtrasSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1848,7 +1865,7 @@ function getLogPlaysSheet() {
 function registrarPlay(taskId, taskTitle, designer) {
   if (!taskId || !designer) return;
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getLogPlaysSheet();
     var agora = new Date();
@@ -2033,7 +2050,7 @@ function buscarBriefingCacheado(taskId, hash) {
 
 function salvarBriefingCacheado(taskId, hash, briefing) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getBriefingsSheet();
     var linhas = sheet.getDataRange().getValues();
