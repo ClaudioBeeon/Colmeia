@@ -64,9 +64,10 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 ## Estrutura do frontend (js/)
 
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
+(em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17)
 menores dentro da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não
 tem bundler, TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os
-15 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
+17 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
 
@@ -87,14 +88,21 @@ Arquivos, na ordem em que são carregados (`js/`):
 8. `clientes-hub.js` — links/hub por cliente (Drive, banco de imagens, etc.).
 9. `chat-comentarios.js` — chat flutuante (`abrirChatPanel`, `abrirThreadAqui`), comentários,
    edição de entrega desejada.
-10. `detalhe-modal.js` — `openDetail(idx)`, `renderDetail()`, `closeDetail()`, `stepDetail(dir)`
-    (modal de detalhe da tarefa).
-11. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
+10. `detalhe-modal.js` — `openDetail(idx)`, `renderDetail()`, `closeDetail()`, `applyCommentsState()`,
+    a sequência de responsáveis do cabeçalho (`renderSequenciaHTML`/`wireWorkflowArrows`), o menu de
+    etapa, o cronômetro de 1s e o modo escuro. (Base do pop-up de detalhe da tarefa.)
+11. `detalhe-cardmae.js` — fluxo do CARD MÃE: `buscarCardMaeDoBackend`, `abrirCardMae`,
+    `precarregarCardMaeEmBackground`, aba "Descrição card mãe" e o "carrossel" do pill do cabeçalho
+    (entregue → transferir o card mãe → editar a regra dele ali mesmo).
+12. `detalhe-alteracao.js` — subtarefas de ALTERAÇÃO: `ehTarefaDeAlteracao`,
+    `acharTarefaOriginalDaAlteracao`, `nomeDaPecaOriginalRapido` (usado no card do quadro),
+    `carregarResumoDaAlteracao` (resumo por IA do que mudou) e a aba "Tarefa original".
+13. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
     e "Clientes por atendimento".
-12. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
-13. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
-14. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
-15. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+14. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
+15. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
+16. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
+17. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
