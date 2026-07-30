@@ -420,8 +420,21 @@ const ETAPA_SUGERIDA_SAINDO_DE_FORA = "revisao";
  *                               quem chama redesenhar o que for dele. Sem
  *                               isso, redesenha o pop-up e o quadro (que é o
  *                               certo quando a tarefa é a que está aberta).
+ * @param {{label: string, taskStateId: string}} [voltarInfo]  quando a
+ *                               tarefa tem uma etapa ORIGINAL fora das 5
+ *                               colunas (guardada de antes, ex: card mãe
+ *                               que já foi transferido pra "Revisão" mas
+ *                               veio de "Cards Mães" — ver
+ *                               etapaOriginalStateId em js/detalhe-cardmae.js),
+ *                               mostra um atalho pra voltar pra ela. Sem
+ *                               isso não tem como desfazer, já que "Cards
+ *                               Mães" não é uma das 5 colunas com
+ *                               moverEtapaNoBackend/COLUNA_STAGE_IDS —
+ *                               usa moverEtapaArbitrariaNoBackend com o
+ *                               taskStateId de verdade em vez de uma
+ *                               chave de coluna.
  */
-function abrirMenuEtapa(task, statusBadge, aoMudar) {
+function abrirMenuEtapa(task, statusBadge, aoMudar, voltarInfo) {
   document.querySelectorAll(".status-menu").forEach(el => el.remove());
 
   const redesenhar = aoMudar || (() => { renderDetail(); render(); });
@@ -439,9 +452,21 @@ function abrirMenuEtapa(task, statusBadge, aoMudar) {
     <div class="status-menu-sep"></div>
   ` : "";
 
+  // Caminho de volta pra etapa original (fora do quadro) — só faz sentido
+  // quando a tarefa JÁ está dentro de uma das 5 colunas (senão já é a
+  // própria etapa atual, o atalho acima já cobre o caminho de ida).
+  const voltarHTML = (voltarInfo && task.status) ? `
+    <button type="button" class="status-menu-atalho" data-voltar-state-id="${escaparHTML(voltarInfo.taskStateId)}" data-voltar-label="${escaparHTML(voltarInfo.label)}">
+      <span class="status-menu-atalho-de">${escaparHTML(task.runrunStage || "Etapa atual")}</span>
+      <span class="status-menu-atalho-seta">→</span>
+      <span class="status-menu-atalho-para">${escaparHTML(voltarInfo.label)}</span>
+    </button>
+    <div class="status-menu-sep"></div>
+  ` : "";
+
   const menu = document.createElement("div");
   menu.className = "status-menu";
-  menu.innerHTML = atalhoHTML
+  menu.innerHTML = voltarHTML + atalhoHTML
     + columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("");
   document.body.appendChild(menu);
   posicionarPopupFixo(menu, statusBadge);
@@ -457,7 +482,29 @@ function abrirMenuEtapa(task, statusBadge, aoMudar) {
   }
   setTimeout(() => document.addEventListener("click", clickFora), 0);
 
-  menu.querySelectorAll("button").forEach(opt => {
+  const voltarBtn = menu.querySelector("[data-voltar-state-id]");
+  if (voltarBtn) {
+    voltarBtn.addEventListener("click", async e => {
+      e.stopPropagation();
+      fechar();
+      const statusAntigo = task.status;
+      const runrunStageAntigo = task.runrunStage;
+      task.status = null;
+      task.runrunStage = voltarBtn.dataset.voltarLabel;
+      redesenhar();
+      const ok = await moverEtapaArbitrariaNoBackend(task.id, voltarBtn.dataset.voltarStateId);
+      if (!ok) {
+        task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
+        task.runrunStage = runrunStageAntigo;
+        redesenhar();
+        mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
+      } else {
+        agendarAtualizacaoKanban();
+      }
+    });
+  }
+
+  menu.querySelectorAll("button[data-status]").forEach(opt => {
     opt.addEventListener("click", async e => {
       e.stopPropagation();
       fechar();

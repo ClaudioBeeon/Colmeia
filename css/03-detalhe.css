@@ -123,7 +123,6 @@
 .pill-cardmae-conteudo {
   display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0;
   box-sizing: border-box; padding: 0 8px;
-  animation: colmeia-pill-face-pop 0.3s var(--ease-apple-spring);
 }
 /* .pill-face (o "palco" do card mãe) usa position:absolute; inset:0 —
    isso ignora o padding do .detail-header-pill (8px) e deixa o conteúdo
@@ -131,6 +130,16 @@
    numa pílula de 56px de altura), cortando visualmente o canto do
    status-badge (esquerda) e do botão de fechar (direita). O padding
    acima devolve essa margem de segurança. */
+/* Só toca a animação de "subir e aparecer" quando o pill está trocando de
+   TELA de verdade (ex: Entregue -> pergunta -> regra) — não em toda
+   atualização de conteúdo dentro da MESMA tela (trocar a etapa,
+   transferir, avançar/desfazer a sequência). Sem essa separação, o
+   carrossel inteiro "pulava"/reaparecia do zero a cada clique pequeno,
+   mesmo já estando aberto. Ver o parâmetro `pop` em
+   renderFacePillRegraCardMae/rerenderFacePillRegraCardMae (js/detalhe-cardmae.js). */
+.pill-cardmae-pop {
+  animation: colmeia-pill-face-pop 0.3s var(--ease-apple-spring);
+}
 @keyframes colmeia-pill-face-pop {
   from { transform: translateY(55%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }

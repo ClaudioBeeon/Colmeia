@@ -203,7 +203,7 @@ function mostrarEntregueNoPill() {
   if (!pill || !face) return;
   face.hidden = false;
   face.innerHTML = `
-    <span class="pill-cardmae-conteudo centralizado">
+    <span class="pill-cardmae-conteudo centralizado pill-cardmae-pop">
       <span class="pill-cardmae-icone entregue"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       <span class="pill-cardmae-texto">Entregue ✓</span>
     </span>
@@ -239,7 +239,7 @@ function mostrarPerguntaTransferirNoPill(cardMaeRaw, taskAtualId) {
   if (!pill || !face) return;
   face.hidden = false;
   face.innerHTML = `
-    <span class="pill-cardmae-conteudo centralizado">
+    <span class="pill-cardmae-conteudo centralizado pill-cardmae-pop">
       <span class="pill-cardmae-icone">${reopenIcon}</span>
       <span class="pill-cardmae-texto">Transferir o card mãe também?</span>
       <span class="pill-cardmae-acoes">
@@ -270,10 +270,19 @@ function mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId) {
   const cardMaeTask = mapearTarefaDoBackend(cardMaeRaw);
   cardMaeTask.sequencia = cardMaeRaw.sequencia || [];
   cardMaeTask.workflowId = cardMaeRaw.workflowId || null;
+  // Guarda a etapa/estado ORIGINAL em que o card mãe estava quando foi
+  // buscado (normalmente "Cards Mães", de verdade no Runrun.it) — ela
+  // não é uma das 5 colunas fixas do quadro (sem chave em
+  // COLUNA_STAGE_IDS no backend), então sem guardar isso não teria como
+  // oferecer "voltar pra Cards Mães" no menu de etapa depois que a
+  // pessoa transfere/muda pra outra (ex: Revisão). moverEtapaArbitrariaNoBackend
+  // usa esse taskStateId direto, sem precisar de uma coluna fixa.
+  cardMaeTask.etapaOriginalLabel = cardMaeTask.runrunStage;
+  cardMaeTask.etapaOriginalStateId = cardMaeTask.taskStateId;
 
   face.hidden = false;
   pill.classList.add("card-mae-modo", "card-mae-ativo");
-  rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+  rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId, true);
 }
 
 // Pra onde o card mãe costuma ir quando sai de "Cards Mães". Fica
@@ -328,9 +337,15 @@ function renderEtapaDoCardMaeHTML(cardMaeTask) {
   `;
 }
 
-function renderFacePillRegraCardMae(cardMaeTask) {
+// `pop`: só true quando essa tela está aparecendo pela primeira vez
+// (troca de tela de verdade, ex: pergunta -> regra) — nas atualizações
+// em cima da MESMA tela (trocar etapa, transferir, avançar/desfazer a
+// sequência) fica false, pra não tocar a animação de entrada de novo em
+// cima de conteúdo que já estava visível (ver .pill-cardmae-pop no
+// css/03-detalhe.css).
+function renderFacePillRegraCardMae(cardMaeTask, pop) {
   return `
-    <span class="pill-cardmae-conteudo pill-cardmae-regra">
+    <span class="pill-cardmae-conteudo pill-cardmae-regra${pop ? " pill-cardmae-pop" : ""}">
       ${renderEtapaDoCardMaeHTML(cardMaeTask)}
       <span class="pill-cardmae-regra-centro">
         <span class="pill-cardmae-nome">${escaparHTML(cardMaeTask.title)}</span>
@@ -348,10 +363,10 @@ function renderFacePillRegraCardMae(cardMaeTask) {
 // Só redesenha a partir do que já está em memória em cardMaeTask (sem
 // ida ao Runrun.it) — usado depois de uma mudança otimista (ex: trocar
 // a etapa) que não afeta a sequência.
-function rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId) {
+function rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId, pop = false) {
   const face = document.getElementById("pillCardMaeFace");
   if (!face) return;
-  face.innerHTML = renderFacePillRegraCardMae(cardMaeTask);
+  face.innerHTML = renderFacePillRegraCardMae(cardMaeTask, pop);
   wireFacePillRegraCardMae(cardMaeTask, taskAtualId);
   ajustarAlturaCardMaeNoPill();
 }
@@ -511,9 +526,14 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
       // sem dar pra escolher a etapa (ex: mandar pra Revisão).
       // Como o card mãe fica em "Cards Mães" (fora das 5 colunas), o menu
       // já mostra em destaque o atalho de um clique pra Revisão.
+      // Depois que o card mãe já está numa das 5 colunas (ex: Revisão),
+      // esse crachá normal é a ÚNICA forma de mexer na etapa dele aqui —
+      // por isso também oferece o caminho de volta pra "Cards Mães" (a
+      // etapa original guardada em etapaOriginalStateId), senão não
+      // tinha como desfazer.
       abrirMenuEtapa(cardMaeTask, statusBadge, () => {
         rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
-      });
+      }, cardMaeTask.etapaOriginalStateId ? { label: cardMaeTask.etapaOriginalLabel || "Cards Mães", taskStateId: cardMaeTask.etapaOriginalStateId } : null);
     });
   }
 
