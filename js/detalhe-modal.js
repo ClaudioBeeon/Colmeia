@@ -551,6 +551,11 @@ function renderDetail() {
       <div class="detail-header">
         <div class="detail-header-pill ${task.entregue ? "entregue-modo" : ""}" id="detailHeaderPill">
           <div class="pill-face pill-face-normal">
+          ${task.entregue ? "" : `
+            <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
+            <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
+            <span class="detail-sep">|</span>
+          `}
           ${task.isMotherCard ? `
             <div class="children-btn-wrap">
               <button type="button" class="mother-card-btn" id="childrenBtn" title="Ver subtarefas">
@@ -574,15 +579,8 @@ function renderDetail() {
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           ` : ""}
-          ${task.entregue ? `
-            <span class="detail-taskname">${escaparHTML(task.title)}</span>
-            <span class="pill-horas-trabalhadas" title="Tempo total trabalhado nessa tarefa">${formatTime(task.timerSeconds)}</span>
-          ` : `
-            <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
-            <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
-            <span class="detail-sep">|</span>
-            <span class="detail-taskname">${escaparHTML(task.title)}</span>
-          `}
+          <span class="detail-taskname">${escaparHTML(task.title)}</span>
+          ${task.entregue ? `<span class="pill-horas-trabalhadas" title="Tempo total trabalhado nessa tarefa">${formatTime(task.timerSeconds)}</span>` : ""}
           <button type="button" class="detail-taskname-copy" id="detailTaskNameCopy" title="Copiar nome da tarefa" aria-label="Copiar nome da tarefa">
             <svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
