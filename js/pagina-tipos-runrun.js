@@ -86,11 +86,7 @@ async function carregarExtrasRunrunCompletoSeNecessario() {
   if (carregandoExtrasRunrunCompleto) return;
   carregandoExtrasRunrunCompleto = true;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarExtrasRunrunCompleto" }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "buscarExtrasRunrunCompleto" });
     if (data.ok) {
       extrasRunrunCompleto = {
         cardMae: data.cardMae.map(mapearTarefaDoBackend),

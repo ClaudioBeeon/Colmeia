@@ -33,11 +33,7 @@ async function salvarPrioridadeNoBackend(taskId, prioridade) {
 async function tocarTarefaNoBackend(taskId, taskTitle) {
   if (!COLMEIA_API_URL || !taskId) return;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO });
     if (!data.ok) console.error("Runrun.it recusou o play:", data.error);
   } catch (err) {
     console.error("Falha ao dar play no Runrun.it:", err);
@@ -70,11 +66,7 @@ function pararOutrasTarefasRodando(exceto) {
 async function pausarTarefaNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "pausarTarefa", taskId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "pausarTarefa", taskId });
     if (!data.ok) console.error("Runrun.it recusou o pause:", data.error);
     return !!data.ok;
   } catch (err) {
@@ -142,11 +134,7 @@ async function pararCronometroAoTransferir(task) {
 async function avancarWorkflowNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return { ok: false, novoResponsavel: null };
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "avancarWorkflow", taskId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "avancarWorkflow", taskId });
     if (!data.ok) console.error("Runrun.it recusou avançar a sequência:", data.error);
     return { ok: !!data.ok, novoResponsavel: data.novoResponsavel || null };
   } catch (err) {
@@ -158,11 +146,7 @@ async function avancarWorkflowNoBackend(taskId) {
 async function reatribuirTarefaNoBackend(taskId, responsavelId) {
   if (!COLMEIA_API_URL || !taskId || !responsavelId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "reatribuir", taskId, responsavelId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "reatribuir", taskId, responsavelId });
     if (!data.ok) console.error("Runrun.it recusou reatribuir:", data.error);
     return data.ok;
   } catch (err) {
@@ -187,11 +171,7 @@ async function reatribuirTarefaNoBackend(taskId, responsavelId) {
 async function buscarSequenciaDoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return { sequencia: [], workflowId: null, erro: true };
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarSequencia", taskId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "buscarSequencia", taskId });
     if (!data.ok) {
       console.error("Erro ao buscar sequência de responsáveis:", data.error);
       return { sequencia: [], workflowId: null, erro: true };
@@ -209,11 +189,7 @@ async function buscarSequenciaDoBackend(taskId) {
 async function criarRegraNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "criarRegra", taskId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "criarRegra", taskId });
     if (!data.ok) console.error("Runrun.it recusou criar a sequência do zero:", data.error);
     return data;
   } catch (err) {
@@ -228,11 +204,7 @@ async function adicionarNaRegraNoBackend(workflowId, userId) {
     return false;
   }
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "adicionarNaRegra", workflowId, userId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "adicionarNaRegra", workflowId, userId });
     if (!data.ok) console.error("Runrun.it recusou adicionar na regra:", data.error);
     return data.ok;
   } catch (err) {

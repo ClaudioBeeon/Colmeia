@@ -46,8 +46,17 @@ const ORDEM_ESPERADA = [
 const raiz = path.join(__dirname, "..", "..");
 const html = fs.readFileSync(path.join(raiz, "index.html"), "utf8");
 
+// As tags do index.html levam uma "versão" no fim (ex: "js/config.js?v=2026-07-30a").
+// Isso serve pra forçar o navegador a baixar o arquivo novo depois de um
+// push, em vez de continuar usando a cópia velha que ele guardou. Pra
+// efeito de checagem, o que importa é só o caminho do arquivo — então tira
+// o "?v=..." antes de comparar.
+function semVersao(caminho) {
+  return caminho.split("?")[0];
+}
+
 // Pega, em ordem, todo src="js/..." das tags <script> do index.html.
-const carregados = [...html.matchAll(/<script\s+src="([^"]+)"\s*>/g)].map(m => m[1]);
+const carregados = [...html.matchAll(/<script\s+src="([^"]+)"\s*>/g)].map(m => semVersao(m[1]));
 const noDisco = fs.readdirSync(path.join(raiz, "js"))
   .filter(nome => nome.endsWith(".js"))
   .map(nome => "js/" + nome)
@@ -100,7 +109,7 @@ const cssNoDisco = fs.readdirSync(path.join(raiz, "css"))
   .map(nome => "css/" + nome)
   .sort();
 const cssCarregados = [...html.matchAll(/<link\s+rel="stylesheet"\s+href="([^"]+)"\s*>/g)]
-  .map(m => m[1])
+  .map(m => semVersao(m[1]))
   .filter(src => src.startsWith("css/"));
 
 cssNoDisco.forEach(src => {

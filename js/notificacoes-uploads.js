@@ -110,17 +110,8 @@ async function renderNotificacoesUpload(task) {
   const container = document.getElementById("uploadNotifs");
   if (!container || !task.id) return;
 
-  let resultado;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarUploadsRecentesDoCard", taskId: task.id, cliente: task.client }),
-    });
-    resultado = await res.json();
-  } catch (err) {
-    console.error("Falha ao checar uploads recentes da pasta do card:", err);
-    return;
-  }
+  const resultado = await chamarBackend({ acao: "buscarUploadsRecentesDoCard", taskId: task.id, cliente: task.client });
+  if (caiuARede(resultado)) return; // não chegou: deixa a tela como está
   // Compara por id, não por referência (mesmo motivo do comentário acima).
   if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return; // trocou de tarefa enquanto carregava
   if (!resultado.ok || !resultado.uploads || !resultado.pastaUrl) {

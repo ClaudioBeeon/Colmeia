@@ -94,11 +94,7 @@ document.getElementById("sidebarLogout").addEventListener("click", sairDoColmeia
 async function buscarFraseDoDia() {
   if (!COLMEIA_API_URL) return;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "gerarFraseDoDia" }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "gerarFraseDoDia" });
     if (data.ok && data.frase) {
       const el = document.getElementById("loginFrase");
       if (el) el.textContent = data.frase;
@@ -119,11 +115,7 @@ document.getElementById("loginForm").addEventListener("submit", async e => {
   btn.disabled = true;
 
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "login", senha }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "login", senha });
     btn.disabled = false;
 
     if (!data.ok) {

@@ -30,7 +30,7 @@ async function carregarDescricaoCardMae(task) {
     if (tituloEl) tituloEl.textContent = "Carregando...";
     textoEl.innerHTML = "Carregando...";
     resultado = await buscarCardMaeDoBackend(taskId);
-    if (resultado.ok && resultado.temPai) cardMaeCache.set(taskId, resultado);
+    if (resultado.ok && resultado.temPai) { cardMaeCache.set(taskId, resultado); podarCacheMap(cardMaeCache, MAX_ITENS_CACHE_CARDMAE); }
   }
   // A pessoa pode ter trocado de tarefa (ou voltado pra aba Descrição)
   // enquanto isso carregava — compara por id, nunca por referência.
@@ -44,10 +44,17 @@ async function carregarDescricaoCardMae(task) {
 
   if (tituloEl) tituloEl.textContent = resultado.cardMae.title;
 
-  if (resultado.cardMae.descricao === undefined) {
+  if (resultado.cardMae.descricao === undefined || resultado.cardMae.descricao === null) {
     const descricao = await buscarDescricaoDoBackend(resultado.cardMae.id);
-    resultado.cardMae.descricao = descricao || "";
     if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId) || !descMaeAberta) return;
+    if (descricao === null) {
+      // Não chegou (ver buscarDescricaoDoBackend). Não guarda como "" —
+      // senão o card mãe ficaria dizendo "sem descrição" pra sempre, mesmo
+      // depois da internet voltar, porque nunca mais tentaria de novo.
+      textoEl.innerHTML = "Não consegui carregar a descrição do card mãe agora.";
+      return;
+    }
+    resultado.cardMae.descricao = descricao;
   }
   textoEl.innerHTML = resultado.cardMae.descricao
     ? formatarDescricaoRunrun(resultado.cardMae.descricao)
@@ -73,9 +80,18 @@ async function precarregarCardMaeEmBackground(taskId) {
   const resultado = await buscarCardMaeDoBackend(taskId);
   if (!resultado.ok || !resultado.temPai) return;
   cardMaeCache.set(taskId, resultado);
+  podarCacheMap(cardMaeCache, MAX_ITENS_CACHE_CARDMAE);
   if (!chatMaeCache.has(taskId)) {
     const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
-    chatMaeCache.set(taskId, { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios });
+    // Só guarda em cache se a resposta CHEGOU (`null` = não chegou, ver
+    // buscarComentariosDoBackend). Guardar uma lista vazia aqui deixaria a
+    // aba "Comentários card mãe" vazia até trocar de tarefa, mesmo com a
+    // internet já de volta — este é um pré-carregamento silencioso, então
+    // é melhor não ter cache do que ter cache errado.
+    if (comentarios !== null) {
+      chatMaeCache.set(taskId, { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios });
+      podarCacheMap(chatMaeCache, MAX_ITENS_CACHE_CARDMAE);
+    }
   }
   // Já aproveita e busca a Sequência de responsáveis do card mãe
   // também, em segundo plano — assim, se a pessoa concluir a subtarefa
@@ -90,8 +106,11 @@ async function precarregarCardMaeEmBackground(taskId) {
   // isso, ela só era buscada na hora de clicar na aba, deixando a
   // troca lenta mesmo com o card mãe todo já pré-carregado. É a
   // descrição ORIGINAL crua, direto do Runrun.it — essa aba nunca usa
-  // IA (isso é só o briefing da própria subtarefa).
-  resultado.cardMae.descricao = await buscarDescricaoDoBackend(resultado.cardMae.id);
+  // IA (isso é só o briefing da própria subtarefa). Se não chegar, deixa
+  // `undefined` mesmo (não guarda o `null`): assim a aba tenta buscar de
+  // novo quando for aberta, em vez de exibir "sem descrição" pra sempre.
+  const descricaoMae = await buscarDescricaoDoBackend(resultado.cardMae.id);
+  if (descricaoMae !== null) resultado.cardMae.descricao = descricaoMae;
 }
 
 async function abrirCardMae(task) {
@@ -112,7 +131,7 @@ async function abrirCardMae(task) {
   if (!resultado) {
     mostrarCardEmBranco("Buscando o card mãe...");
     resultado = await buscarCardMaeDoBackend(task.id);
-    if (resultado.ok && resultado.temPai) cardMaeCache.set(task.id, resultado);
+    if (resultado.ok && resultado.temPai) { cardMaeCache.set(task.id, resultado); podarCacheMap(cardMaeCache, MAX_ITENS_CACHE_CARDMAE); }
   }
 
   if (!resultado.ok) {
@@ -639,17 +658,8 @@ async function abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, btn) {
 }
 
 async function buscarCardMaeDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarCardMae", taskId }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Falha ao buscar o card mãe no Runrun.it:", err);
-    return { ok: false, error: "Falha de conexão com o Runrun.it." };
-  }
+  if (!taskId) return { ok: false, error: "Backend não configurado." };
+  return await chamarBackend({ acao: "buscarCardMae", taskId });
 }
 
 /**
@@ -670,15 +680,6 @@ async function carregarFilhosSeForCardMae(task) {
 }
 
 async function buscarSubtarefasDoCardMaeNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarSubtarefasDoCardMae", taskId }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Falha ao checar se a tarefa é um card mãe:", err);
-    return { ok: false, error: "Falha de conexão com o Runrun.it." };
-  }
+  if (!taskId) return { ok: false, error: "Backend não configurado." };
+  return await chamarBackend({ acao: "buscarSubtarefasDoCardMae", taskId });
 }

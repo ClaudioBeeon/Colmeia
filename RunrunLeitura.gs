@@ -169,8 +169,38 @@ function tarefaEhCardMae(tarefa) {
     etapa.indexOf('cards maes') !== -1;
 }
 
-function buscarIdsResponsaveisRunrun() {
+// A lista de usuários do Runrun.it é a MESMA o dia inteiro (id de pessoa
+// não muda), mas era buscada do zero em toda varredura do quadro e em toda
+// abertura do "Ver regra" — uma ida à rede inteira, repetida, no caminho
+// crítico. Agora fica guardada por 6 horas.
+//
+// Chaves separadas de propósito: `usuariosRunrunCompletos` é a lista bruta
+// (nome + foto de TODO mundo, usada pra reatribuir/montar regra) e
+// `idsResponsaveisRunrun` é só o mapinha e-mail -> id dos 3 designers do
+// COLMEIA, que é o que a varredura do quadro precisa.
+var CACHE_USUARIOS_SEGUNDOS = 6 * 60 * 60;
+
+function buscarUsuariosRunrunComCache() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get('usuariosRunrunCompletos');
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* busca de novo abaixo */ }
+  }
   var usuarios = runrunFetch('/users');
+  if (!Array.isArray(usuarios)) return null; // não guarda erro em cache
+  try {
+    cache.put('usuariosRunrunCompletos', JSON.stringify(usuarios), CACHE_USUARIOS_SEGUNDOS);
+  } catch (e) { /* lista grande demais pro cache — segue sem guardar */ }
+  return usuarios;
+}
+
+function buscarIdsResponsaveisRunrun() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get('idsResponsaveisRunrun');
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* recalcula abaixo */ }
+  }
+  var usuarios = buscarUsuariosRunrunComCache();
   var mapa = {};
   if (!Array.isArray(usuarios)) return mapa;
   usuarios.forEach(function (u) {
@@ -178,6 +208,11 @@ function buscarIdsResponsaveisRunrun() {
       mapa[u.email] = u.id;
     }
   });
+  // Só guarda se achou alguém — um mapa vazio grudado por 6h deixaria o
+  // quadro em branco pra todo mundo até o cache vencer.
+  if (Object.keys(mapa).length) {
+    try { cache.put('idsResponsaveisRunrun', JSON.stringify(mapa), CACHE_USUARIOS_SEGUNDOS); } catch (e) { /* segue */ }
+  }
   return mapa;
 }
 
@@ -449,26 +484,50 @@ function buscarTarefasAbertasSeparadas() {
   // contextoDosPaineis) em vez de uma vez por tarefa.
   var contexto = contextoDosPaineis();
 
+  // Quem realmente tem id no Runrun.it (quem não tem, fica de fora).
+  var designers = [];
   Object.keys(RUNRUN_USUARIOS).forEach(function (email) {
-    var nomeDesigner = RUNRUN_USUARIOS[email];
-    var runrunId = idsPorEmail[email];
-    if (!runrunId) return;
+    if (idsPorEmail[email]) {
+      designers.push({ nome: RUNRUN_USUARIOS[email], runrunId: idsPorEmail[email] });
+    }
+  });
+  if (!designers.length) return { normais: [], cardMae: [] };
 
-    var pagina = 1;
-    while (pagina <= 5) {
-      var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
-        '&is_closed=false&sort=desired_date&sortDir=asc&limit=100&page=' + pagina);
-      if (!Array.isArray(lote) || lote.length === 0) break;
+  function caminhoDaPagina(runrunId, pagina) {
+    return '/tasks?responsible_id=' + encodeURIComponent(runrunId) +
+      '&is_closed=false&sort=desired_date&sortDir=asc&limit=100&page=' + pagina;
+  }
 
+  // EM PARALELO, uma RODADA por página. Antes isso era uma fila indiana:
+  // buscava tudo do primeiro designer, esperava terminar, ia pro segundo,
+  // esperava, ia pro terceiro — e essa espera é o que fazia o quadro
+  // demorar a atualizar. Agora a página 1 dos três sai junto (uma única
+  // ida à rede, ver runrunFetchAll), depois a página 2 de quem ainda tem
+  // mais, e assim por diante.
+  //
+  // Como quase sempre cada designer cabe numa página só, na prática isso
+  // vira UMA rodada em vez de três idas seguidas.
+  var pendentes = designers.slice(); // quem ainda pode ter mais página
+  var pagina = 1;
+  while (pendentes.length && pagina <= 5) {
+    var caminhos = pendentes.map(function (d) { return caminhoDaPagina(d.runrunId, pagina); });
+    var lotes = runrunFetchAll(caminhos);
+
+    var aindaPendentes = [];
+    for (var i = 0; i < pendentes.length; i++) {
+      var lote = lotes[i];
+      if (!Array.isArray(lote) || lote.length === 0) continue; // acabou pra esse designer
+      var nomeDesigner = pendentes[i].nome;
       lote.forEach(function (t) {
         if (tarefaEhCardMae(t)) cardMae.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
         else normais.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
       });
-
-      if (lote.length < 100) break;
-      pagina++;
+      // Página cheia = pode ter mais; página pela metade = acabou.
+      if (lote.length >= 100) aindaPendentes.push(pendentes[i]);
     }
-  });
+    pendentes = aindaPendentes;
+    pagina++;
+  }
 
   // Deixa os cards mãe prontos pra página "Runrun completo" pegar sem
   // repetir a varredura. TTL de 120s porque o quadro atualiza a cada 60s,
@@ -946,7 +1005,11 @@ function buscarSequenciaResponsaveis(taskId) {
 }
 
 function listarTodosUsuariosRunrun() {
-  var usuarios = runrunFetch('/users');
+  // Mesma lista cacheada usada pela varredura do quadro (ver
+  // buscarUsuariosRunrunComCache) — antes essa ação buscava tudo de novo,
+  // e ela é chamada toda vez que alguém abre "Ver regra" ou troca o
+  // responsável de uma tarefa.
+  var usuarios = buscarUsuariosRunrunComCache();
   if (!Array.isArray(usuarios)) {
     return { ok: false, error: 'Resposta inesperada do Runrun.it ao listar usuários.' };
   }

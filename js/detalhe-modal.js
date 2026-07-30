@@ -1341,17 +1341,8 @@ async function abrirTarefaPorId(taskId) {
 }
 
 async function buscarTarefaCompletaDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarTarefaCompleta", taskId }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Falha ao buscar tarefa no Runrun.it:", err);
-    return { ok: false, error: "Falha de conexão com o Runrun.it." };
-  }
+  if (!taskId) return { ok: false, error: "Backend não configurado." };
+  return await chamarBackend({ acao: "buscarTarefaCompleta", taskId });
 }
 
 /**

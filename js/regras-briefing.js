@@ -152,11 +152,7 @@ function removerPessoaOtimista(task, elementId) {
 async function removerDaRegraNoBackend(workflowId, elementId) {
   if (!COLMEIA_API_URL || !workflowId || !elementId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "removerDaRegra", workflowId, elementId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "removerDaRegra", workflowId, elementId });
     if (!data.ok) console.error("Runrun.it recusou remover da regra:", data.error);
     return data.ok;
   } catch (err) {
@@ -332,11 +328,7 @@ function animarPessoaSubindo(btn) {
 async function entregarTarefaNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "entregarTarefa", taskId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "entregarTarefa", taskId });
     if (!data.ok) console.error("Runrun.it recusou entregar a tarefa:", data.error);
     return data.ok;
   } catch (err) {
@@ -348,11 +340,7 @@ async function entregarTarefaNoBackend(taskId) {
 async function reabrirTarefaNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "reabrirTarefa", taskId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "reabrirTarefa", taskId });
     if (!data.ok) console.error("Runrun.it recusou reabrir a tarefa:", data.error);
     return data.ok;
   } catch (err) {
@@ -442,11 +430,7 @@ async function ajustarEstimativaNoBackend(taskId, minutos) {
 async function desfazerWorkflowNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return null;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "desfazerWorkflow", taskId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "desfazerWorkflow", taskId });
     if (!data.ok) {
       console.error("Runrun.it recusou desfazer a sequência:", data.error);
       return null;
@@ -466,11 +450,7 @@ async function buscarUsuariosRunrun() {
   if (usuariosRunrunCache) return usuariosRunrunCache;
   if (!COLMEIA_API_URL) return [];
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarUsuarios" }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "listarUsuarios" });
     if (!data.ok) {
       console.error("Erro ao listar usuários do Runrun.it:", data.error);
       return [];
@@ -712,11 +692,7 @@ async function gerarBriefingComIA(task) {
   }
 
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "gerarBriefing", taskId: task.id }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "gerarBriefing", taskId: task.id });
 
     // Se o usuário já trocou de tarefa enquanto isso carregava, não
     // atualiza o pop-up de outra tarefa. Compara por id (não por
@@ -823,23 +799,20 @@ async function gerarBriefingComIA(task) {
   }
 }
 
+/**
+ * Devolve o texto da descrição, `""` quando a tarefa realmente não tem
+ * descrição, e `null` quando NÃO DEU pra perguntar (rede fora, servidor
+ * mudo). Antes devolvia `""` nos três casos — e aí uma piscada de
+ * internet fazia o card AFIRMAR "Sem descrição cadastrada nessa tarefa"
+ * numa tarefa que tinha descrição sim. Quem chama tem que tratar o
+ * `null` preservando o que já está na tela.
+ */
 async function buscarDescricaoDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return "";
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarDescricao", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Erro ao buscar descrição:", data.error);
-      return "";
-    }
-    return data.descricao || "";
-  } catch (err) {
-    console.error("Falha ao buscar descrição no Runrun.it:", err);
-    return "";
-  }
+  if (!taskId) return "";
+  const data = await chamarBackend({ acao: "buscarDescricao", taskId });
+  if (caiuARede(data)) return null;
+  if (!data.ok) return null; // o backend respondeu, mas com erro — também não sabemos a descrição
+  return data.descricao || "";
 }
 
 async function salvarDescricaoNoBackend(taskId, texto) {
@@ -856,23 +829,23 @@ async function salvarDescricaoNoBackend(taskId, texto) {
   }
 }
 
+/**
+ * Devolve a lista de comentários, `[]` quando a tarefa realmente não tem
+ * nenhum, e `null` quando NÃO DEU pra perguntar (rede fora, servidor
+ * mudo).
+ *
+ * Essa distinção é o que impede o pior efeito colateral que o app tinha:
+ * antes, uma falha de rede virava `[]`, o chat era redesenhado com essa
+ * lista vazia e a CONVERSA INTEIRA sumia da tela ("Nenhum comentário
+ * ainda"), mesmo estando tudo salvo no Runrun.it. Quem chama tem que
+ * tratar o `null` preservando o que já está na tela.
+ */
 async function buscarComentariosDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return [];
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarComentarios", taskId }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error("Erro ao buscar comentários:", data.error);
-      return [];
-    }
-    return data.comentarios || [];
-  } catch (err) {
-    console.error("Falha ao buscar comentários no Runrun.it:", err);
-    return [];
-  }
+  if (!taskId) return [];
+  const data = await chamarBackend({ acao: "listarComentarios", taskId });
+  if (caiuARede(data)) return null;
+  if (!data.ok) return null; // o backend respondeu, mas com erro — não é "não tem comentário"
+  return data.comentarios || [];
 }
 
 async function enviarComentarioNoBackend(taskId, texto) {
@@ -892,11 +865,7 @@ async function enviarComentarioNoBackend(taskId, texto) {
 async function reagirComentarioNoBackend(commentId, emoji) {
   if (!COLMEIA_API_URL || !commentId || !emoji) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "reagirComentario", commentId, emoji }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "reagirComentario", commentId, emoji });
     if (!data.ok) console.error("Runrun.it recusou a reação:", data.error);
     return data.ok;
   } catch (err) {
@@ -908,11 +877,7 @@ async function reagirComentarioNoBackend(commentId, emoji) {
 async function excluirComentarioNoBackend(commentId) {
   if (!COLMEIA_API_URL || !commentId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "excluirComentario", commentId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "excluirComentario", commentId });
     if (!data.ok) console.error("Runrun.it recusou excluir o comentário:", data.error);
     return data.ok;
   } catch (err) {
@@ -930,17 +895,13 @@ async function enviarComentarioComAnexoNoBackend(taskId, texto, arquivo) {
       reader.onerror = () => reject(new Error("Falha ao ler o arquivo"));
       reader.readAsDataURL(arquivo);
     });
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({
+    const data = await chamarBackend({
         acao: "adicionarComentarioComAnexo",
         taskId, texto,
         nomeArquivo: arquivo.name,
         mimeType: arquivo.type || "application/octet-stream",
         base64Dados,
-      }),
-    });
-    const data = await res.json();
+      });
     if (!data.ok) console.error("Runrun.it recusou o anexo:", data.error);
     return data.ok;
   } catch (err) {

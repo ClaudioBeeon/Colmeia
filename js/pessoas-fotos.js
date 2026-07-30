@@ -51,11 +51,7 @@ function resolverFotoManual(nome) {
 async function carregarPessoasSalvas() {
   if (!COLMEIA_API_URL) return;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarPessoas" }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "listarPessoas" });
     if (data.ok) {
       pessoasSalvas = data.pessoas || [];
     }
@@ -67,11 +63,7 @@ async function carregarPessoasSalvas() {
 async function salvarPessoaNoBackend(nome, foto, aliases, discord) {
   if (!COLMEIA_API_URL || !nome) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "salvarPessoa", nome, foto, aliases, discord }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "salvarPessoa", nome, foto, aliases, discord });
     return !!data.ok;
   } catch (err) {
     console.error("Falha ao salvar pessoa no backend:", err);
@@ -85,11 +77,7 @@ async function salvarPessoaNoBackend(nome, foto, aliases, discord) {
 async function excluirPessoasPorNomesNoBackend(nomes) {
   if (!COLMEIA_API_URL || !nomes || !nomes.length) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "excluirPessoasPorNomes", nomes }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "excluirPessoasPorNomes", nomes });
     return !!data.ok;
   } catch (err) {
     console.error("Falha ao excluir pessoas vinculadas no backend:", err);
@@ -346,8 +334,7 @@ async function carregarTarefasReais() {
     return;
   }
   try {
-    const res = await fetch(COLMEIA_API_URL + "?tipo=tarefas");
-    const data = await res.json();
+    const data = await chamarBackendGet("?tipo=tarefas");
     if (!data.ok) {
       console.error("Erro ao buscar tarefas do Colmeia:", data.error);
       tasks = tasksFake;
@@ -386,8 +373,7 @@ async function carregarTarefasReais() {
 async function atualizarKanbanEmBackground() {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1) return;
   try {
-    const res = await fetch(COLMEIA_API_URL + "?tipo=tarefas");
-    const data = await res.json();
+    const data = await chamarBackendGet("?tipo=tarefas");
     if (!data.ok) return;
 
     salvarSnapshotDoQuadro(data.tarefas); // mantém a foto do quadro sempre fresca

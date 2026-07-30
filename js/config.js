@@ -189,6 +189,122 @@ const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xm
 // O Colmeia só faz leitura aqui — nunca escreve nada nesse painel.
 const PAINEL_BEEON_API_URL = "https://script.google.com/macros/s/AKfycbzzWtG4jkVpLvPwOAHaj-h9KK9k_8N6YWGUXfFtUDSXRiCj7ILDPvuSy9VJXhglTrzEQQ/exec";
 
+// ============================================
+// CHAMADA AO BACKEND — o caminho único de toda ida ao Apps Script
+// ============================================
+// Antes existiam 56 blocos `fetch(COLMEIA_API_URL, ...)` copiados e
+// colados pelo app, cada um com o seu próprio try/catch. Dois problemas
+// vinham dessa repetição:
+//
+//  1. NENHUM tinha prazo máximo. Se o Apps Script travasse, a tela ficava
+//     "pensando" pra sempre, sem erro e sem nada.
+//  2. Erro de rede virava resposta vazia. Quem chamava não tinha como
+//     distinguir "a tarefa não tem comentário" de "não consegui perguntar",
+//     e o app apagava da tela dados que estavam certos (ver
+//     `caiuARede` logo abaixo).
+//
+// Agora tudo passa por aqui. O contrato é:
+//   - devolve o JSON do backend (com `ok: true/false`) quando a resposta CHEGA;
+//   - devolve `{ ok: false, semRede: true }` quando o pedido NÃO chegou
+//     (internet fora, servidor mudo, estourou o prazo).
+//
+// `semRede: true` é o sinal de "não sei", não de "não tem" — quem chama
+// deve preservar o que já está na tela nesse caso.
+const TIMEOUT_BACKEND_MS = 25000; // Apps Script "acordando" pode levar uns segundos; 25s é folgado sem ser eterno
+
+// Algumas ações são LENTAS por natureza e não podem cair no prazo normal:
+// as de IA (Groq/Gemini pensando), as que varrem o Google Drive e as que
+// paginam meses de tarefas no Runrun.it. Elas ganham um prazo maior — o
+// objetivo do prazo é impedir que a tela fique pendurada PRA SEMPRE, não
+// cortar trabalho que legitimamente demora.
+const TIMEOUT_LONGO_MS = 90000;
+const ACOES_DEMORADAS = [
+  "gerarBriefing",        // IA escrevendo o briefing
+  "gerarFraseDoDia",      // IA
+  "resumoAlteracao",      // IA
+  "buscarExtrasRunrunCompleto", // pagina 15 dias de entregues dos 3 designers
+  "listarPastasClientesDrive",  // varre pastas do Drive
+  "buscarAtividadesDrive",      // varre arquivos recentes do Drive
+  "buscarProgressoClientes",
+  "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
+];
+
+async function chamarBackend(corpo, opcoes) {
+  opcoes = opcoes || {};
+  if (!COLMEIA_API_URL) return { ok: false, semRede: true, error: "Backend não configurado." };
+
+  // AbortController é o jeito padrão do navegador de cancelar um pedido
+  // que demorou demais — sem ele, o fetch fica pendurado indefinidamente.
+  const controller = new AbortController();
+  const prazo = opcoes.timeoutMs
+    || (ACOES_DEMORADAS.indexOf(corpo.acao) !== -1 ? TIMEOUT_LONGO_MS : TIMEOUT_BACKEND_MS);
+  const timeout = setTimeout(() => controller.abort(), prazo);
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify(corpo),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (data && data.ok === false && data.error) {
+      console.error(`Backend recusou "${corpo.acao}":`, data.error);
+    }
+    return data;
+  } catch (err) {
+    // AbortError = estourou o prazo; TypeError = não conseguiu nem sair
+    // do navegador. Os dois significam a mesma coisa pra quem chamou: a
+    // pergunta não chegou ao servidor, então não sabemos a resposta.
+    const motivo = err && err.name === "AbortError" ? "demorou demais" : "falha de conexão";
+    console.error(`Não consegui falar com o backend em "${corpo.acao}" (${motivo}):`, err);
+    return { ok: false, semRede: true, error: motivo };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * "A resposta não chegou?" — atalho de leitura pra quem chama decidir se
+ * preserva o que está na tela. Use sempre isso em vez de checar
+ * `data.semRede` na mão, pra o significado ficar explícito no código.
+ */
+function caiuARede(resposta) {
+  return !!(resposta && resposta.semRede);
+}
+
+/**
+ * Igual ao chamarBackend, mas pra a única leitura que é feita por endereço
+ * (GET) em vez de por ação: a varredura do quadro (`?tipo=tarefas`). Mesmo
+ * contrato — devolve `{ ok: false, semRede: true }` quando não chega.
+ */
+async function chamarBackendGet(query, opcoes) {
+  opcoes = opcoes || {};
+  if (!COLMEIA_API_URL) return { ok: false, semRede: true, error: "Backend não configurado." };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), opcoes.timeoutMs || TIMEOUT_LONGO_MS);
+  try {
+    const res = await fetch(COLMEIA_API_URL + query, { signal: controller.signal });
+    return await res.json();
+  } catch (err) {
+    const motivo = err && err.name === "AbortError" ? "demorou demais" : "falha de conexão";
+    console.error(`Não consegui buscar o quadro (${motivo}):`, err);
+    return { ok: false, semRede: true, error: motivo };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Roda `tarefa(item)` em todos os itens, mas no máximo `tamanhoDoLote` ao
+ * mesmo tempo — o meio-termo entre `Promise.all` (dispara TODOS de uma vez,
+ * e o Apps Script engasga) e um laço com `await` (um de cada vez, lento à
+ * toa). Espera o lote inteiro terminar antes de começar o próximo.
+ */
+async function emLotes(itens, tamanhoDoLote, tarefa) {
+  for (let i = 0; i < itens.length; i += tamanhoDoLote) {
+    await Promise.all(itens.slice(i, i + tamanhoDoLote).map(tarefa));
+  }
+}
+
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const MESES_COMPLETOS = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
 

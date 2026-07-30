@@ -31,17 +31,7 @@ async function carregarResumoDaAlteracao(task, idOriginal) {
   }
 
   el.innerHTML = `<p class="workflow-seq-empty">Vendo o que foi pedido...</p>`;
-  let data;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "resumirAlteracao", taskId, idOriginal }),
-    });
-    data = await res.json();
-  } catch (err) {
-    console.error("Falha ao resumir a alteração:", err);
-    data = { ok: false, error: "Falha de conexão." };
-  }
+  const data = await chamarBackend({ acao: "resumirAlteracao", taskId, idOriginal });
   // Trocou de tarefa/aba enquanto carregava? Compara por id, nunca por
   // referência — e busca o elemento de novo, já que o pop-up pode ter sido
   // redesenhado nesse meio-tempo.
@@ -131,8 +121,16 @@ async function carregarTarefaOriginalDaAlteracao(task) {
   // pessoa vai e volta nessa aba.
   if (original.descricao === undefined) {
     textoEl.innerHTML = "Carregando o briefing da tarefa original...";
-    original.descricao = await buscarDescricaoDoBackend(original.id);
+    const descricao = await buscarDescricaoDoBackend(original.id);
     if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId) || !originalAberta) return;
+    if (descricao === null) {
+      // Não chegou (ver buscarDescricaoDoBackend). Não guarda nada, pra a
+      // aba tentar de novo na próxima abertura em vez de cravar "não tem
+      // descrição" numa tarefa que provavelmente tem.
+      textoEl.innerHTML = "Não consegui carregar o briefing da tarefa original agora.";
+      return;
+    }
+    original.descricao = descricao;
   }
   textoEl.innerHTML = original.descricao
     ? formatarDescricaoRunrun(original.descricao)

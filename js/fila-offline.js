@@ -73,18 +73,15 @@ function enfileirarAcaoOffline(corpo, descricao) {
  * continua desfazendo na tela como sempre.
  */
 async function enviarEscritaNoBackend(corpo, descricao) {
-  if (!COLMEIA_API_URL) return { ok: false, error: "Backend não configurado." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify(corpo) });
-    return await res.json();
-  } catch (err) {
-    console.error(`Falha de conexão em "${descricao}":`, err);
-    if (ACOES_QUE_PODEM_ESPERAR.indexOf(corpo.acao) !== -1) {
-      enfileirarAcaoOffline(corpo, descricao);
-      return { ok: true, enfileirado: true };
-    }
-    return { ok: false, error: "Falha de conexão." };
+  const data = await chamarBackend(corpo);
+  // Só entra na fila quando o pedido NÃO CHEGOU (ver caiuARede em
+  // js/config.js). Uma recusa de verdade do backend (ok:false sem semRede)
+  // continua passando reto pra quem chamou desfazer na tela, como sempre.
+  if (caiuARede(data) && ACOES_QUE_PODEM_ESPERAR.indexOf(corpo.acao) !== -1) {
+    enfileirarAcaoOffline(corpo, descricao);
+    return { ok: true, enfileirado: true };
   }
+  return data;
 }
 
 let _esvaziandoFila = false;
@@ -106,21 +103,23 @@ async function tentarEsvaziarFilaOffline() {
     const agora = Date.now();
     const validas = fila.filter(item => (agora - item.quando) < FILA_OFFLINE_VALIDADE_MS);
     const vencidas = fila.length - validas.length;
+    fila = validas;
     if (vencidas > 0) {
+      // GRAVA a lista já limpa AGORA, antes de qualquer envio. Sem isso as
+      // ações vencidas continuavam guardadas no navegador (a gravação só
+      // acontecia dentro do laço de envio logo abaixo, que nem chega a
+      // rodar quando TODAS venceram) — e o aviso abaixo voltava a cada 30
+      // segundos, pra sempre, porque a cada rodada ele "descobria" de novo
+      // exatamente as mesmas ações vencidas.
+      salvarFilaOffline(fila);
       mostrarToast(`Descartei ${vencidas} ação(ões) guardada(s) de mais de 12 horas atrás.`, "erro");
     }
-    fila = validas;
 
     let enviadas = 0;
     while (fila.length) {
       const item = fila[0];
-      let data;
-      try {
-        const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify(item.corpo) });
-        data = await res.json();
-      } catch (err) {
-        break; // internet ainda fora — para aqui e tenta de novo mais tarde
-      }
+      const data = await chamarBackend(item.corpo);
+      if (caiuARede(data)) break; // internet ainda fora — para aqui e tenta de novo mais tarde
       // Chegou. Tira da fila mesmo se o backend recusou: insistir numa
       // recusa (ex: a tarefa já foi entregue por outra pessoa) repetiria o
       // erro pra sempre. Avisa a pessoa quando isso acontece.

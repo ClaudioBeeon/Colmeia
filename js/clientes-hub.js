@@ -3,11 +3,7 @@ let linksClientes = []; // [{cliente, drive, bancoImagens, bibliotecaAdobe, past
 async function carregarLinksClientes() {
   if (!COLMEIA_API_URL) return;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarLinksClientes" }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "listarLinksClientes" });
     if (data.ok) linksClientes = data.links || [];
   } catch (err) {
     console.error("Falha ao carregar links de clientes:", err);
@@ -17,11 +13,7 @@ async function carregarLinksClientes() {
 async function salvarLinksClienteNoBackend(cliente, dados) {
   if (!COLMEIA_API_URL || !cliente) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "salvarLinksCliente", cliente, dados }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "salvarLinksCliente", cliente, dados });
     return !!data.ok;
   } catch (err) {
     console.error("Falha ao salvar links do cliente:", err);
@@ -35,11 +27,7 @@ let clientesOcultos = []; // [{designer, cliente}] — só filtro do Colmeia
 async function carregarClientesOcultos() {
   if (!COLMEIA_API_URL) return;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarClientesOcultos" }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "listarClientesOcultos" });
     if (data.ok) clientesOcultos = data.ocultos || [];
   } catch (err) {
     console.error("Falha ao carregar clientes ocultos:", err);
@@ -53,11 +41,7 @@ function clienteEstaOculto(designer, cliente) {
 async function ocultarClienteNoBackend(designer, cliente) {
   if (!COLMEIA_API_URL) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "ocultarCliente", designer, cliente }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "ocultarCliente", designer, cliente });
     return data.ok;
   } catch (err) {
     console.error("Falha ao ocultar cliente:", err);
@@ -68,11 +52,7 @@ async function ocultarClienteNoBackend(designer, cliente) {
 async function carregarProgressoClientes() {
   if (!COLMEIA_API_URL) return;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarProgressoClientes" }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "buscarProgressoClientes" });
     if (data.ok) {
       progressoClientes = data.progresso || [];
       if (!document.getElementById("page-clientes").hidden) buildClientsPage();

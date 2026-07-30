@@ -541,11 +541,7 @@ async function carregarHistoricoPlays(janela) {
     return;
   }
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarTarefasHoje", designer: DESIGNER_LOGADO, janela }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "buscarTarefasHoje", designer: DESIGNER_LOGADO, janela });
     if (!data.ok) {
       lista.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui buscar seu histórico."}</p>`;
       return;
@@ -611,11 +607,7 @@ async function carregarAtividadesDrive() {
     // Filtra por dono do arquivo no Drive (o backend acha o e-mail do
     // designer sozinho) — só mostra a atividade da própria pessoa, não a
     // de todo mundo do time.
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarAtividadesDrive", designer: DESIGNER_LOGADO }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "buscarAtividadesDrive", designer: DESIGNER_LOGADO });
     if (!data.ok) {
       lista.innerHTML = `<p class="workflow-seq-empty">${data.error || "Não consegui buscar as atividades do Drive."}</p>`;
       return;

@@ -239,6 +239,59 @@ Secrets do GitHub em uso: `CLASP_CREDENTIALS` (conteúdo de `~/.clasprc.json`), 
 `CLASP_DEPLOYMENT_ID` (produção), `STAGING_DEPLOYMENT_ID` (implantação de teste, opcional/rede de
 segurança). O ID de qualquer implantação é o trecho entre `/s/` e `/exec` na URL do Web App dela.
 
+## Toda ida ao backend passa por `chamarBackend` (2026-07-30)
+
+Existiam 56 blocos `fetch(COLMEIA_API_URL, ...)` copiados pelo app, cada um com o seu try/catch.
+Hoje **todos** passam por `chamarBackend(corpo)` (js/config.js) — a única exceção é a varredura do
+quadro, que é GET e usa `chamarBackendGet("?tipo=tarefas")`. Nunca escrever um `fetch` novo pro
+Colmeia direto; usar sempre esses dois. (Chamadas ao painel-designers-beeon são outra coisa e
+continuam com `fetch` próprio.)
+
+**O contrato, e por que ele importa:**
+- resposta CHEGOU → devolve o JSON do backend (`{ok: true/false, ...}`);
+- resposta NÃO CHEGOU (internet fora, servidor mudo, estourou o prazo) → `{ok: false, semRede: true}`.
+
+Use `caiuARede(resposta)` pra distinguir. Isso separa **"não tem"** de **"não sei"**, que era a
+causa de um bug feio: `buscarComentariosDoBackend` devolvia `[]` numa falha de rede, o chat era
+redesenhado com essa lista e a CONVERSA INTEIRA sumia da tela. Hoje essa função (e
+`buscarDescricaoDoBackend`) devolvem **`null` quando não deu pra perguntar** — quem chama tem que
+tratar o `null` preservando o que já está na tela, nunca sobrescrevendo.
+
+Todas as chamadas têm prazo máximo (25s; 90s pras ações de IA/Drive listadas em `ACOES_DEMORADAS`).
+Antes não havia nenhum e uma tela podia ficar "pensando" pra sempre.
+
+Os `try/catch` que sobraram em volta de várias chamadas hoje protegem só o código de tratamento
+(o `chamarBackend` não estoura erro) — são inofensivos, não são sinal de que algo ficou pela metade.
+
+## Caches — todos têm teto ou validade
+
+- **No navegador:** `cacheComentariosPorTarefa`, `chatMaeCache` e `cardMaeCache` são `Map` que
+  cresciam pra sempre numa aba aberta o dia todo. Agora têm teto (`podarCacheDeComentarios`,
+  `podarCacheMap`) e descartam os mais antigos. Ao criar um `Map` de cache novo, dar teto também.
+- **No backend:** `/users` do Runrun.it fica 6h em cache (`buscarUsuariosRunrunComCache`) — id de
+  pessoa não muda e isso era buscado do zero em toda varredura. As prioridades da planilha ficam
+  5 min (`getPrioridadesSalvas`), e **qualquer gravação de prioridade tem que chamar
+  `invalidarCacheDePrioridades()`**.
+
+## Varredura do quadro é PARALELA (2026-07-30)
+
+`buscarTarefasAbertasSeparadas` (RunrunLeitura.gs) buscava as tarefas dos 3 designers em fila
+indiana. Agora usa `runrunFetchAll` e busca a página 1 dos três de uma vez, depois a página 2 de
+quem ainda tem mais. Mesmo resultado, bem mais rápido. Ao mexer nessa função, lembrar que ela é o
+caminho crítico de TODO refresh do quadro — nada de acrescentar chamada sequencial ali dentro.
+
+Pelo mesmo motivo, `_verificarNotificacoesImpl` busca comentários em **lotes de 4** (`emLotes`),
+não todos de uma vez: a primeira checagem da sessão disparava um pedido por tarefa no mesmo
+instante, justo na abertura do app.
+
+## Versão nas tags `<script>`/`<link>` do index.html
+
+Elas terminam com `?v=AAAA-MM-DDx` (ex: `js/config.js?v=2026-07-30a`). Sem isso, o GitHub Pages
+guarda os arquivos por ~10 min e um designer podia ficar com **HTML novo + JavaScript velho**
+depois de um push, vendo bug que "já foi corrigido". **Ao mudar qualquer arquivo de `js/` ou
+`css/`, trocar essa versão em TODAS as tags do index.html** (mesmo valor pra todas). A checagem
+automática ignora o `?v=` ao conferir ordem e nomes.
+
 ## Fluxo de trabalho
 
 - Validar sintaxe de JS depois de qualquer edição.

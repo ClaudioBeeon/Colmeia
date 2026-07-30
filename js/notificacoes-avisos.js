@@ -58,6 +58,24 @@ function salvarNotificacoesLog(lista) {
 const CACHE_COMENTARIOS_TTL_MS = 30 * 1000;
 const cacheComentariosPorTarefa = new Map(); // taskId -> { comentarios, quando, lastActivityAt }
 
+// Teto de tarefas guardadas nesse cache. Numa aba deixada aberta a semana
+// inteira ele nunca era limpo e só crescia: cada tarefa aberta, entregue ou
+// repassada entrava e ficava pra sempre, com todos os comentários dela na
+// memória do navegador. Ao passar do teto, descarta as MAIS ANTIGAS (Map do
+// JavaScript preserva a ordem de inserção, então as primeiras chaves são as
+// mais velhas).
+const MAX_TAREFAS_NO_CACHE_COMENTARIOS = 120;
+
+function podarCacheDeComentarios() {
+  if (cacheComentariosPorTarefa.size <= MAX_TAREFAS_NO_CACHE_COMENTARIOS) return;
+  const excedente = cacheComentariosPorTarefa.size - MAX_TAREFAS_NO_CACHE_COMENTARIOS;
+  let i = 0;
+  for (const chave of cacheComentariosPorTarefa.keys()) {
+    if (i++ >= excedente) break;
+    cacheComentariosPorTarefa.delete(chave);
+  }
+}
+
 /**
  * Busca os comentários de uma tarefa, mas SÓ vai à rede se algo tiver
  * mudado nela de verdade.
@@ -96,7 +114,14 @@ async function buscarComentariosComCache(taskId, lastActivityAt) {
     if (aindaFresco || nadaMudouNaTarefa) return cache.comentarios;
   }
   const comentarios = await buscarComentariosDoBackend(taskId);
+  // `null` = a resposta não chegou (ver buscarComentariosDoBackend). Não
+  // guarda em cache — guardar um "vazio" que na verdade é "não sei" faria
+  // o sino esquecer comentários de verdade por até 10 minutos. Devolve o
+  // que já tínhamos, ou `null` pra quem chamou saber que não dá pra
+  // concluir nada dessa tarefa nesta rodada.
+  if (comentarios === null) return (cache && cache.comentarios) || null;
   cacheComentariosPorTarefa.set(taskId, { comentarios, quando: Date.now(), lastActivityAt: lastActivityAt || null });
+  podarCacheDeComentarios();
   return comentarios;
 }
 
@@ -134,10 +159,21 @@ async function _verificarNotificacoesImpl() {
   const chavesExistentes = new Set(log.map(n => n.taskId + "::" + n.comentarioId));
   const novos = [];
 
-  await Promise.all(minhasTarefas.map(async t => {
+  // Em LOTES de 4, não todas de uma vez. Na primeira checagem da sessão o
+  // cache está vazio, então `Promise.all` em cima da lista inteira disparava
+  // uma tarefa = um pedido TODOS no mesmo instante (com 15 tarefas, 15
+  // pedidos simultâneos) — justamente no momento em que o app está abrindo
+  // e o Apps Script está mais ocupado. Nos ciclos seguintes quase tudo vem
+  // do cache e nem chega à rede, então isso só pesa na abertura.
+  await emLotes(minhasTarefas, 4, async t => {
     // Passa a data de última atividade da tarefa: se ela não mudou, o
     // cache responde sem gastar chamada nenhuma (ver buscarComentariosComCache).
     const comentarios = await buscarComentariosComCache(t.id, t.lastActivityAt);
+    // Não chegou e não tínhamos nada guardado: pula essa tarefa nesta
+    // rodada em vez de tratar como "sem comentário" (ver
+    // buscarComentariosDoBackend). Sem isso, uma falha de rede apagava os
+    // comentários já carregados da tarefa aberta.
+    if (comentarios === null) return;
     t.comments = comentarios; // aproveita e já deixa cacheado pro chat também
     comentarios
       .filter(c => !nomesCorrespondem(c.autor, DESIGNER_LOGADO))
@@ -161,7 +197,7 @@ async function _verificarNotificacoesImpl() {
         log.push(item);
         novos.push(item);
       });
-  }));
+  });
 
   log = log.filter(n => (Date.now() - (n.registradoEm || n.criadoEm)) < NOTIF_RETENCAO_MS);
   log.sort((a, b) => b.criadoEm - a.criadoEm);
@@ -358,15 +394,8 @@ function marcarAvisosVistos(lista) {
 let avisosCache = [];
 
 async function buscarAvisosDoBackend() {
-  if (!COLMEIA_API_URL) return [];
-  try {
-    const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify({ acao: "listarAvisos" }) });
-    const data = await res.json();
-    return data.ok ? data.avisos : [];
-  } catch (err) {
-    console.error("Falha ao buscar avisos:", err);
-    return [];
-  }
+  const data = await chamarBackend({ acao: "listarAvisos" });
+  return data.ok ? data.avisos : [];
 }
 
 function tempoRelativoAviso(criadoEm) {
@@ -401,25 +430,24 @@ function renderAvisos() {
       e.stopPropagation();
       const id = btn.dataset.id;
       btn.disabled = true;
-      // O try/catch aqui não é enfeite: sem ele, uma queda de internet no
-      // meio do caminho estourava um erro e o botão ficava desabilitado
-      // PARA SEMPRE (só F5 resolvia), sem nenhuma mensagem explicando.
-      // Mesmo cuidado do resto do app — sempre devolver o botão ao normal.
-      try {
-        const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify({ acao: "excluirAviso", id }) });
-        const data = await res.json();
-        if (data.ok) {
-          avisosCache = avisosCache.filter(a => a.id !== id);
-          renderAvisos();
-          return;
-        }
-        btn.disabled = false;
-        mostrarToast(data.error || "Não consegui excluir esse aviso agora.", "erro");
-      } catch (err) {
-        console.error("Falha ao excluir aviso:", err);
-        btn.disabled = false;
-        mostrarToast("Falha de conexão. Não consegui excluir esse aviso agora.", "erro");
+      // Devolver o botão ao normal em QUALQUER desfecho é essencial aqui:
+      // antes, uma queda de internet deixava ele desabilitado pra sempre
+      // (só F5 resolvia), sem nenhuma mensagem explicando. Hoje o
+      // chamarBackend nunca estoura erro — devolve `semRede` — então o
+      // caminho de falha passa pelo mesmo `if` de baixo.
+      const data = await chamarBackend({ acao: "excluirAviso", id });
+      if (data.ok) {
+        avisosCache = avisosCache.filter(a => a.id !== id);
+        renderAvisos();
+        return;
       }
+      btn.disabled = false;
+      mostrarToast(
+        caiuARede(data)
+          ? "Falha de conexão. Não consegui excluir esse aviso agora."
+          : (data.error || "Não consegui excluir esse aviso agora."),
+        "erro"
+      );
     });
   });
 }
@@ -460,11 +488,7 @@ document.getElementById("avisosNovoBtn").addEventListener("click", async () => {
   // desabilitado pra sempre (só F5 resolvia), e o texto do aviso ficava
   // refém dele. O texto digitado só é apagado quando o envio dá certo.
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "criarAviso", autor: DESIGNER_LOGADO, texto }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "criarAviso", autor: DESIGNER_LOGADO, texto });
     if (data.ok) {
       textarea.value = "";
       avisosCache = await buscarAvisosDoBackend();
@@ -551,11 +575,7 @@ let _erroReuniaoJaAvisado = false;
 async function verificarReunioesProximas() {
   if (!COLMEIA_API_URL || !DESIGNER_LOGADO) return;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarReunioesHoje", designer: DESIGNER_LOGADO }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "buscarReunioesHoje", designer: DESIGNER_LOGADO });
     if (!data.ok) {
       // Antes isso falhava em silêncio (sem badge, sem notificação, sem
       // pista nenhuma do motivo). Mostra o erro real UMA vez por sessão
@@ -643,11 +663,7 @@ function mostrarConviteDeReuniao(r) {
 
 async function responderConviteReuniao(eventId, resposta) {
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "responderReuniao", designer: DESIGNER_LOGADO, eventId, resposta }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "responderReuniao", designer: DESIGNER_LOGADO, eventId, resposta });
     if (!data.ok) mostrarToast(data.error || "Não consegui responder o convite agora.", "erro");
   } catch (err) {
     console.error("Falha ao responder convite de reunião:", err);
@@ -718,11 +734,7 @@ async function carregarAcessoRapido() {
   if (!body || !COLMEIA_API_URL || !DESIGNER_LOGADO) return;
   body.innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarAcessoRapido", designer: DESIGNER_LOGADO }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "listarAcessoRapido", designer: DESIGNER_LOGADO });
     acessoRapidoCache = data.ok ? data.acessos : [];
   } catch (err) {
     console.error("Falha ao buscar acesso rápido:", err);
@@ -756,11 +768,7 @@ function renderAcessoRapido() {
       e.stopPropagation();
       const id = btn.dataset.id;
       btn.disabled = true;
-      const res = await fetch(COLMEIA_API_URL, {
-        method: "POST",
-        body: JSON.stringify({ acao: "excluirAcessoRapido", id, designer: DESIGNER_LOGADO }),
-      });
-      const data = await res.json();
+      const data = await chamarBackend({ acao: "excluirAcessoRapido", id, designer: DESIGNER_LOGADO });
       if (data.ok) {
         acessoRapidoCache = acessoRapidoCache.filter(a => a.id !== id);
         renderAcessoRapido();
@@ -835,11 +843,7 @@ document.getElementById("acessoRapidoSalvar").addEventListener("click", async ()
     fixo: souClaudio() && document.getElementById("acessoRapidoFixo").checked,
   };
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "salvarAcessoRapido", designer: DESIGNER_LOGADO, dados }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "salvarAcessoRapido", designer: DESIGNER_LOGADO, dados });
     if (data.ok) {
       acessoRapidoOverlay.hidden = true;
       await carregarAcessoRapido();

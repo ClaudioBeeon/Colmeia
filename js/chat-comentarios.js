@@ -10,6 +10,23 @@ let chatThreadAtivo = "aqui"; // "aqui" (a tarefa aberta) ou "mae" (o card mãe 
 let chatAlvoTaskId = null;    // id de quem recebe o próximo comentário enviado
 const chatMaeCache = new Map(); // taskId (da subtarefa) -> {id, title, comments}
 
+// Teto pros caches que vivem em Map na memória (esse e o cardMaeCache em
+// js/detalhe-cardmae.js). Sem teto eles nunca eram limpos: numa aba aberta
+// a semana inteira, toda subtarefa aberta entrava e ficava pra sempre.
+// Map do JavaScript preserva a ordem de inserção, então as primeiras chaves
+// são as mais antigas — são elas que saem.
+const MAX_ITENS_CACHE_CARDMAE = 60;
+
+function podarCacheMap(mapa, maximo) {
+  if (mapa.size <= maximo) return;
+  const excedente = mapa.size - maximo;
+  let i = 0;
+  for (const chave of mapa.keys()) {
+    if (i++ >= excedente) break;
+    mapa.delete(chave);
+  }
+}
+
 function chaveVistoChat(taskId) {
   return "colmeia_chat_visto_" + taskId;
 }
@@ -101,8 +118,18 @@ async function abrirThreadDoCardMae(task) {
       return;
     }
     const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
+    if (comentarios === null) {
+      // Não deu pra perguntar. Avisa e sai SEM guardar em cache — senão a
+      // lista vazia ficaria grudada como se fosse a verdade até trocar de
+      // tarefa (ver buscarComentariosDoBackend).
+      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id && thread) {
+        thread.innerHTML = `<p class="comments-empty">Não consegui carregar os comentários do card mãe agora.</p>`;
+      }
+      return;
+    }
     cache = { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios };
     chatMaeCache.set(task.id, cache);
+    podarCacheMap(chatMaeCache, MAX_ITENS_CACHE_CARDMAE);
   }
   if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de aba/tarefa enquanto carregava
   chatAlvoTaskId = cache.id;
@@ -157,6 +184,11 @@ async function abrirThreadLinhaDoTempo(task) {
   // Trocou de aba ou de tarefa enquanto carregava? Compara por id.
   if (chatThreadAtivo !== "tudo" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
 
+  // Alguma das três pontas não respondeu? (`null`, ver
+  // buscarComentariosDoBackend.) Aí a linha do tempo está incompleta e não
+  // pode afirmar "não tem nada" — seria mentira.
+  const algumaFalhou = comentariosAqui === null || comentariosOriginal === null || comentariosMae === null;
+
   const juntos = []
     .concat((comentariosAqui || []).map(c => Object.assign({}, c, { _origem: "Nesta alteração" })))
     .concat((comentariosOriginal || []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })))
@@ -166,9 +198,9 @@ async function abrirThreadLinhaDoTempo(task) {
   const titulo = document.getElementById("chatPanelTitle");
   if (titulo) titulo.textContent = "Linha do tempo · " + task.title;
   if (thread) {
-    thread.innerHTML = juntos.length
-      ? renderComentariosHTML({ id: taskId, comments: juntos })
-      : `<p class="comments-empty">Nenhum comentário em nenhuma das três pontas ainda.</p>`;
+    if (juntos.length) thread.innerHTML = renderComentariosHTML({ id: taskId, comments: juntos });
+    else if (algumaFalhou) thread.innerHTML = `<p class="comments-empty">Não consegui carregar a linha do tempo agora.</p>`;
+    else thread.innerHTML = `<p class="comments-empty">Nenhum comentário em nenhuma das três pontas ainda.</p>`;
     wireExcluirComentario();
     thread.scrollTop = thread.scrollHeight;
   }
@@ -183,8 +215,10 @@ async function recarregarThreadAtiva() {
   const task = tasks[detailIdx];
   if (chatThreadAtivo === "tudo") {
     // Rebusca os comentários da própria alteração (é onde a pessoa acabou
-    // de escrever) e remonta a linha do tempo inteira.
-    task.comments = await buscarComentariosDoBackend(task.id);
+    // de escrever) e remonta a linha do tempo inteira. Se a rebusca não
+    // chegar (`null`), mantém o que já tinha — ver buscarComentariosDoBackend.
+    const rebuscados = await buscarComentariosDoBackend(task.id);
+    if (rebuscados !== null) task.comments = rebuscados;
     await abrirThreadLinhaDoTempo(task);
     return;
   }
@@ -194,7 +228,9 @@ async function recarregarThreadAtiva() {
   }
   const cache = chatMaeCache.get(task.id);
   if (!cache) return;
-  cache.comments = await buscarComentariosDoBackend(cache.id);
+  const comentariosMae = await buscarComentariosDoBackend(cache.id);
+  if (comentariosMae === null) return; // não chegou: preserva o que está na tela
+  cache.comments = comentariosMae;
   chatMaeCache.set(task.id, cache);
   if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return;
   const thread = document.getElementById("commentsThread");
@@ -395,14 +431,24 @@ async function carregarDescricao(task) {
   // primeira abertura e a descrição só aparecer ao reabrir o card.
   if (tasks[detailIdx] && tasks[detailIdx].id === taskId) {
     const el = document.getElementById("descTextReal");
-    if (el) el.innerHTML = texto ? formatarDescricaoRunrun(texto) : "Sem descrição cadastrada nessa tarefa.";
+    if (!el) return;
+    // `null` = não deu pra perguntar (ver buscarDescricaoDoBackend). Diz
+    // isso em vez de AFIRMAR que a tarefa não tem descrição — só quando o
+    // backend responde de verdade "" é que a tarefa está mesmo sem texto.
+    if (texto === null) el.innerHTML = "Não consegui carregar a descrição agora.";
+    else el.innerHTML = texto ? formatarDescricaoRunrun(texto) : "Sem descrição cadastrada nessa tarefa.";
   }
 }
 
 async function carregarComentarios(task) {
   if (!task.id) return;
   const taskId = task.id;
-  task.comments = await buscarComentariosDoBackend(taskId);
+  const comentarios = await buscarComentariosDoBackend(taskId);
+  // `null` = não deu pra perguntar (ver buscarComentariosDoBackend). NUNCA
+  // sobrescreve o que já está carregado nesse caso: era isso que fazia a
+  // conversa inteira sumir da tela numa piscada de internet.
+  if (comentarios === null) return;
+  task.comments = comentarios;
   // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa
   // (compara por ID, não por referência — ver comentário em carregarDescricao).
   if (tasks[detailIdx] && tasks[detailIdx].id === taskId) {
@@ -453,16 +499,7 @@ async function carregarTudoDaTarefa(task) {
   // fazendo um pedido próprio em paralelo à toa.
   task._abrindoTudo = true;
 
-  let data = null;
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "abrirTarefa", taskId }),
-    });
-    data = await res.json();
-  } catch (err) {
-    console.error("Falha ao abrir a tarefa:", err);
-  }
+  const data = await chamarBackend({ acao: "abrirTarefa", taskId });
   task._abrindoTudo = false;
 
   if (!data || !data.ok) {
@@ -550,17 +587,8 @@ async function carregarTudoDaTarefa(task) {
 }
 
 async function buscarAnexosDeUmaTarefa(taskId) {
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarAnexos", taskId }),
-    });
-    const data = await res.json();
-    return data.ok ? (data.anexos || []) : [];
-  } catch (err) {
-    console.error("Falha ao buscar anexos:", err);
-    return [];
-  }
+  const data = await chamarBackend({ acao: "buscarAnexos", taskId });
+  return data.ok ? (data.anexos || []) : [];
 }
 
 async function carregarAnexos(task) {
@@ -763,11 +791,7 @@ async function baixarAnexo(documentId, nome, btnEl, taskId) {
   btnEl.disabled = true;
   btnEl.innerHTML = `<span>Baixando...</span>`;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "baixarAnexo", documentId }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "baixarAnexo", documentId });
     if (!data.ok) {
       // Rede de segurança: normalmente o desvio pro Runrun.it já
       // aconteceu no clique (o tamanho vem junto com a lista de anexos).
@@ -905,11 +929,7 @@ async function confirmarECriarPastaDoCard(task) {
   trocarTextoBotaoPasta("Criando pasta...");
 
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "criarPastaDoCard", cliente: task.client, tituloCard: task.title, taskId: task.id, projeto: task.projeto }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "criarPastaDoCard", cliente: task.client, tituloCard: task.title, taskId: task.id, projeto: task.projeto });
     btn.disabled = false;
 
     if (!data.ok) {
@@ -988,15 +1008,9 @@ async function verificarPastaJaSalva(task, btn) {
               .filter(id => String(id) !== String(task.id));
           }
         }
-        const res = await fetch(COLMEIA_API_URL, {
-          method: "POST",
-          body: JSON.stringify(
-            idsRelacionados.length
+        const data = await chamarBackend(idsRelacionados.length
               ? { acao: "buscarOuHerdarPastaCard", taskId: task.id, idsRelacionados }
-              : { acao: "buscarPastaCard", taskId: task.id }
-          ),
-        });
-        const data = await res.json();
+              : { acao: "buscarPastaCard", taskId: task.id });
         task.pastaUrlSalva = (data.ok && data.url) ? data.url : null;
       } catch (err) {
         console.error("Falha ao checar se a pasta do card já existe:", err);
@@ -1088,17 +1102,8 @@ async function abrirLinkarPastaManual(task, criarPastaBtn) {
 }
 
 async function linkarPastaManualNoBackend(taskId, url) {
-  if (!COLMEIA_API_URL || !taskId || !url) return { ok: false, error: "Faltou o link da pasta." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "linkarPastaManual", taskId, url }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Falha ao vincular pasta manualmente:", err);
-    return { ok: false, error: "Falha de conexão." };
-  }
+  if (!taskId || !url) return { ok: false, error: "Faltou o link da pasta." };
+  return await chamarBackend({ acao: "linkarPastaManual", taskId, url });
 }
 
 /**
@@ -1120,32 +1125,28 @@ function wireEdicaoEntregaDesejada(task) {
         if (!novaData || novaData === task.dueISO) return;
         const row = document.getElementById("dueDateRow");
         if (row) row.innerHTML = `<span class="side-date-saving">Salvando...</span>`;
-        try {
-          const res = await fetch(COLMEIA_API_URL, {
-            method: "POST",
-            body: JSON.stringify({ acao: "alterarEntrega", taskId: task.id, novaData }),
-          });
-          const data = await res.json();
-          if (!data.ok) {
-            const rowAgora = document.getElementById("dueDateRow");
-            if (rowAgora) rowAgora.innerHTML = `<span class="side-date-saving">${data.error ? data.error.slice(0, 40) : "Não consegui salvar"}</span>`;
-            setTimeout(() => renderDetail(), 1800);
-            return;
-          }
-          // Mantém sempre o mesmo padrão visual de antes (ex: "27 jul"),
-          // nunca a data crua (AAAA-MM-DD) — isso é que ficava feio.
-          const [ano, mes, dia] = novaData.split("-").map(Number);
-          task.dueISO = novaData;
-          task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
-          renderDetail();
-          render(); // atualiza a data no card do quadro também
-          agendarAtualizacaoKanban();
-        } catch (err) {
-          console.error("Falha ao trocar a Entrega desejada:", err);
+        // Passa pela fila de ações: "a entrega é nesse dia" continua certo
+        // mesmo se chegar atrasado, então sem internet fica guardado e vai
+        // sozinho quando voltar (ver js/fila-offline.js). Antes essa era a
+        // única troca de data que NÃO usava a fila, por engano.
+        const data = await enviarEscritaNoBackend(
+          { acao: "alterarEntrega", taskId: task.id, novaData },
+          "mudar a entrega desejada"
+        );
+        if (!data.ok) {
           const rowAgora = document.getElementById("dueDateRow");
-          if (rowAgora) rowAgora.innerHTML = `<span class="side-date-saving">Falha de conexão</span>`;
+          if (rowAgora) rowAgora.innerHTML = `<span class="side-date-saving">${data.error ? String(data.error).slice(0, 40) : "Não consegui salvar"}</span>`;
           setTimeout(() => renderDetail(), 1800);
+          return;
         }
+        // Mantém sempre o mesmo padrão visual de antes (ex: "27 jul"),
+        // nunca a data crua (AAAA-MM-DD) — isso é que ficava feio.
+        const [ano, mes, dia] = novaData.split("-").map(Number);
+        task.dueISO = novaData;
+        task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+        renderDetail();
+        render(); // atualiza a data no card do quadro também
+        agendarAtualizacaoKanban();
       },
     });
   });

@@ -254,11 +254,7 @@ let pastasDriveCache = null;
 async function carregarPastasDriveSeNecessario() {
   if (pastasDriveCache !== null || !COLMEIA_API_URL) return;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "listarPastasClientesDrive" }),
-    });
-    const data = await res.json();
+    const data = await chamarBackend({ acao: "listarPastasClientesDrive" });
     pastasDriveCache = data.ok ? (data.clientes || []) : [];
   } catch (err) {
     console.error("Falha ao carregar pastas do Drive:", err);

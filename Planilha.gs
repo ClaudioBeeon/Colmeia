@@ -181,8 +181,8 @@ function listarAcessoRapido(designer) {
       designer: dono,
       nome: dados[i][2],
       link: dados[i][3],
-      corFundo: dados[i][4] || '#16181D',
-      corTexto: dados[i][5] || '#FFFFFF',
+      corFundo: corHexValida(dados[i][4], '#16181D'),
+      corTexto: corHexValida(dados[i][5], '#FFFFFF'),
       fixo: fixo,
       criadoEm: dados[i][7]
     });
@@ -194,6 +194,15 @@ function listarAcessoRapido(designer) {
     return (a.criadoEm || 0) - (b.criadoEm || 0);
   });
   return { ok: true, acessos: acessos };
+}
+
+// A cor entra no HTML da página (atributo `style` do cartãozinho), então
+// só pode ser exatamente uma cor hexadecimal — qualquer outra coisa é
+// descartada e vira o padrão. Sem isso, um valor estranho gravado na
+// planilha escaparia do atributo e injetaria HTML na tela de todo mundo.
+function corHexValida(valor, padrao) {
+  var texto = (valor || '').toString().trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(texto) ? texto : padrao;
 }
 
 function salvarAcessoRapido(designer, dados) {
@@ -217,8 +226,8 @@ function salvarAcessoRapido(designer, dados) {
       fixo ? '' : designer,
       nome,
       link,
-      dados.corFundo || '#16181D',
-      dados.corTexto || '#FFFFFF',
+      corHexValida(dados.corFundo, '#16181D'),
+      corHexValida(dados.corTexto, '#FFFFFF'),
       fixo,
       new Date().getTime()
     ]);
@@ -639,14 +648,35 @@ function getExtrasSheet() {
   return sheet;
 }
 
+// As prioridades ficam guardadas por alguns minutos: essa aba é lida
+// INTEIRA a cada varredura do quadro e ganha uma linha por tarefa que
+// alguém já priorizou — ou seja, ela só cresce e vai deixando o quadro
+// mais lento com o tempo. `definirPrioridade` limpa esse cache na hora
+// que alguém muda alguma coisa, então a troca continua aparecendo na
+// mesma hora pra quem mexeu.
+var CACHE_PRIORIDADES_CHAVE = 'prioridadesSalvasColmeia';
+var CACHE_PRIORIDADES_SEGUNDOS = 300; // 5 min
+
 function getPrioridadesSalvas() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get(CACHE_PRIORIDADES_CHAVE);
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* relê da planilha abaixo */ }
+  }
   var sheet = getExtrasSheet();
   var linhas = sheet.getDataRange().getValues();
   var mapa = {};
   for (var i = 1; i < linhas.length; i++) {
     if (linhas[i][0]) mapa[linhas[i][0]] = linhas[i][1];
   }
+  try {
+    cache.put(CACHE_PRIORIDADES_CHAVE, JSON.stringify(mapa), CACHE_PRIORIDADES_SEGUNDOS);
+  } catch (e) { /* mapa grande demais pro cache — segue lendo da planilha */ }
   return mapa;
+}
+
+function invalidarCacheDePrioridades() {
+  try { CacheService.getScriptCache().remove(CACHE_PRIORIDADES_CHAVE); } catch (e) { /* segue */ }
 }
 
 function definirPrioridade(taskId, prioridade) {
@@ -663,10 +693,12 @@ function definirPrioridade(taskId, prioridade) {
       if (String(linhas[i][0]) === String(taskId)) {
         sheet.getRange(i + 1, 2).setValue(prioridade);
         sheet.getRange(i + 1, 3).setValue(new Date().getTime());
+        invalidarCacheDePrioridades();
         return { ok: true };
       }
     }
     sheet.appendRow([taskId, prioridade, new Date().getTime()]);
+    invalidarCacheDePrioridades();
     return { ok: true };
   } finally {
     lock.releaseLock();
