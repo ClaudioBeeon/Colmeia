@@ -78,6 +78,10 @@ function abrirPainelDiagnostico() {
         </div>
       </div>
       <p class="diagnostico-dica">Isso fica só no seu navegador. Copie e me mande junto com o que você estava fazendo na hora.</p>
+      ${(typeof tamanhoDaFilaOffline === "function" && tamanhoDaFilaOffline() > 0) ? `
+        <p class="diagnostico-dica"><strong>${tamanhoDaFilaOffline()} ação(ões) esperando internet pra serem enviadas.</strong>
+        Elas vão sozinhas quando a conexão voltar — não precisa refazer.</p>
+      ` : ""}
       <div class="diagnostico-corpo">
         ${linhas.length
           ? linhas.map(l => `

@@ -17,10 +17,9 @@ setInterval(() => {
 async function salvarPrioridadeNoBackend(taskId, prioridade) {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1 || !taskId) return;
   try {
-    await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "definirPrioridade", taskId, prioridade }),
-    });
+    // Passa pela fila: se a internet estiver fora, a prioridade fica
+    // guardada e vai sozinha quando voltar (ver js/fila-offline.js).
+    await enviarEscritaNoBackend({ acao: "definirPrioridade", taskId, prioridade }, "mudar a prioridade");
   } catch (err) {
     console.error("Não consegui salvar a prioridade no backend:", err);
   }

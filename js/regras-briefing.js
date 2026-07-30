@@ -369,11 +369,9 @@ async function reabrirTarefaNoBackend(taskId) {
 async function alterarEntregaNoBackend(taskId, novaData) {
   if (!COLMEIA_API_URL || !taskId || !novaData) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "alterarEntrega", taskId, novaData }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "alterarEntrega", taskId, novaData }, "mudar a Entrega Desejada");
     if (!data.ok) console.error("Runrun.it recusou alterar a Entrega Desejada:", data.error);
     return data.ok;
   } catch (err) {
@@ -385,11 +383,9 @@ async function alterarEntregaNoBackend(taskId, novaData) {
 async function alterarPublicacaoNoBackend(taskId, novaData) {
   if (!COLMEIA_API_URL || !taskId || !novaData) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "alterarPublicacao", taskId, novaData }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "alterarPublicacao", taskId, novaData }, "mudar a Data de Publicação");
     if (!data.ok) console.error("Runrun.it recusou alterar a Data de Publicação:", data.error);
     return data.ok;
   } catch (err) {
@@ -401,11 +397,9 @@ async function alterarPublicacaoNoBackend(taskId, novaData) {
 async function moverEtapaNoBackend(taskId, chaveColuna) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "moverEtapa", taskId, chaveColuna }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "moverEtapa", taskId, chaveColuna }, "mover de coluna");
     if (!data.ok) console.error("Runrun.it recusou mover a etapa:", data.error);
     return data.ok;
   } catch (err) {
@@ -420,11 +414,9 @@ async function moverEtapaNoBackend(taskId, chaveColuna) {
 async function moverEtapaArbitrariaNoBackend(taskId, taskStateId) {
   if (!COLMEIA_API_URL || !taskId || !taskStateId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "moverEtapaArbitraria", taskId, taskStateId }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "moverEtapaArbitraria", taskId, taskStateId }, "mover de etapa");
     if (!data.ok) console.error("Runrun.it recusou mover a etapa:", data.error);
     return data.ok;
   } catch (err) {
@@ -436,11 +428,9 @@ async function moverEtapaArbitrariaNoBackend(taskId, taskStateId) {
 async function ajustarEstimativaNoBackend(taskId, minutos) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "ajustarEstimativa", taskId, minutos }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "ajustarEstimativa", taskId, minutos }, "ajustar a estimativa");
     if (!data.ok) console.error("Runrun.it recusou ajustar a estimativa:", data.error);
     return data.ok;
   } catch (err) {
@@ -855,11 +845,9 @@ async function buscarDescricaoDoBackend(taskId) {
 async function salvarDescricaoNoBackend(taskId, texto) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "salvarDescricao", taskId, texto }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "salvarDescricao", taskId, texto }, "salvar a descrição");
     if (!data.ok) console.error("Runrun.it recusou salvar a descrição:", data.error);
     return data.ok;
   } catch (err) {
@@ -890,11 +878,9 @@ async function buscarComentariosDoBackend(taskId) {
 async function enviarComentarioNoBackend(taskId, texto) {
   if (!COLMEIA_API_URL || !taskId || !texto) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "adicionarComentario", taskId, texto }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "adicionarComentario", taskId, texto }, "enviar o comentário");
     if (!data.ok) console.error("Runrun.it recusou o comentário:", data.error);
     return data.ok;
   } catch (err) {
