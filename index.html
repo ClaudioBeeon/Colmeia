@@ -210,10 +210,67 @@
           <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
-      <div class="quick-access-body">
-        <p class="quick-access-empty">Nenhum link cadastrado ainda.</p>
+      <div class="quick-access-body" id="acessoRapidoBody">
+        <p class="quick-access-empty">Carregando...</p>
+      </div>
+      <div class="quick-access-footer">
+        <button type="button" class="acesso-rapido-novo-btn" id="acessoRapidoNovoBtn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          Novo acesso rápido
+        </button>
       </div>
     </aside>
+
+    <div class="rule-modal-overlay" id="acessoRapidoModalOverlay" hidden>
+      <div class="rule-modal acesso-rapido-modal">
+        <div class="rule-modal-header">
+          <h3>Novo acesso rápido</h3>
+          <button type="button" id="acessoRapidoModalClose" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="rule-modal-body">
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Nome</span>
+            <input type="text" id="acessoRapidoNome" placeholder="Ex: Planilha de horas" maxlength="40">
+          </label>
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Link</span>
+            <input type="text" id="acessoRapidoLink" placeholder="https://...">
+          </label>
+          <div class="acesso-rapido-campo">
+            <span class="side-label">Cor</span>
+            <div class="acesso-rapido-presets" id="acessoRapidoPresets">
+              <button type="button" class="acesso-rapido-preset active" data-bg="#16181D" data-fg="#FFC700" style="background:#16181D;color:#FFC700" title="Preto e amarelo">Aa</button>
+              <button type="button" class="acesso-rapido-preset" data-bg="#4A3AFF" data-fg="#FFFFFF" style="background:#4A3AFF;color:#fff" title="Azul">Aa</button>
+              <button type="button" class="acesso-rapido-preset" data-bg="#1F7A4C" data-fg="#FFFFFF" style="background:#1F7A4C;color:#fff" title="Verde">Aa</button>
+              <span class="acesso-rapido-preset-custom" title="Cor personalizada">
+                <input type="color" id="acessoRapidoCorFundo" value="#16181D">
+                <span class="acesso-rapido-custom-label">Fundo</span>
+              </span>
+              <span class="acesso-rapido-preset-custom" title="Cor da letra">
+                <input type="color" id="acessoRapidoCorTexto" value="#FFC700">
+                <span class="acesso-rapido-custom-label">Letra</span>
+              </span>
+            </div>
+          </div>
+          <div class="acesso-rapido-campo">
+            <span class="side-label">Pré-visualização</span>
+            <div class="acesso-rapido-tile" id="acessoRapidoPreview" style="background:#16181D;color:#FFC700">
+              <span class="acesso-rapido-tile-nome">Nome do acesso</span>
+            </div>
+          </div>
+          <label class="acesso-rapido-fixo-row" id="acessoRapidoFixoWrap" hidden>
+            <input type="checkbox" id="acessoRapidoFixo">
+            Deixar fixo pra todo mundo (só você, coordenador, pode apagar depois)
+          </label>
+        </div>
+        <div class="rule-modal-transfer-row">
+          <button type="button" class="rule-modal-nav-btn" id="acessoRapidoCancelar">Cancelar</button>
+          <button type="button" class="rule-modal-nav-btn" id="acessoRapidoSalvar">Salvar</button>
+        </div>
+      </div>
+    </div>
 
     <div class="rule-modal-overlay" id="peopleModalOverlay" hidden>
       <div class="rule-modal people-modal">

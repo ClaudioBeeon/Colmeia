@@ -287,8 +287,73 @@
   width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
 }
 .quick-access-header button svg { width: 16px; height: 16px; }
-.quick-access-body { padding: 20px; overflow-y: auto; flex: 1; }
+.quick-access-body { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .quick-access-empty { font-size: 13px; opacity: 0.6; }
+.quick-access-footer { padding: 14px 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+/* Cada tile é um link colorido (cor definida por quem criou) — os fixos
+   (do coordenador) vêm sempre primeiro e não têm botão de apagar pra
+   ninguém além dele (ver renderAcessoRapido, js/notificacoes-avisos.js). */
+.acesso-rapido-tile {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  border-radius: 14px; padding: 14px 16px; text-decoration: none;
+  font-family: var(--font-body); font-weight: 700; font-size: 13.5px;
+  transition: transform 0.15s var(--ease-apple), box-shadow 0.15s var(--ease-apple);
+  min-height: 20px;
+}
+.acesso-rapido-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(10,10,20,0.16); }
+.acesso-rapido-tile-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acesso-rapido-tile-fixo {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  opacity: 0.7; flex-shrink: 0;
+}
+.acesso-rapido-tile-remover {
+  position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
+  border: none; background: #fff; color: #16181D; box-shadow: 0 2px 6px rgba(10,10,20,0.25);
+  display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; line-height: 1;
+}
+.acesso-rapido-tile:hover .acesso-rapido-tile-remover { display: flex; }
+
+.acesso-rapido-novo-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--text-primary);
+  background: var(--page-bg); border: 1px dashed var(--border); border-radius: 12px;
+  padding: 11px; cursor: pointer; transition: background 0.15s var(--ease-apple), border-color 0.15s var(--ease-apple);
+}
+.acesso-rapido-novo-btn:hover { background: var(--kanban-yellow); border-color: var(--kanban-yellow); border-style: solid; color: #16181D; }
+.acesso-rapido-novo-btn svg { width: 15px; height: 15px; }
+
+.acesso-rapido-campo { display: flex; flex-direction: column; gap: 6px; }
+.acesso-rapido-campo input[type="text"] {
+  font-family: var(--font-body); font-size: 13.5px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--page-bg); color: var(--text-primary);
+}
+.acesso-rapido-campo input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+.acesso-rapido-presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acesso-rapido-preset {
+  width: 36px; height: 36px; border-radius: 50%; border: 2px solid transparent;
+  font-family: var(--font-display); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s var(--ease-apple), transform 0.15s var(--ease-apple);
+}
+.acesso-rapido-preset:hover { transform: scale(1.08); }
+.acesso-rapido-preset.active { border-color: var(--text-primary); }
+.acesso-rapido-preset-custom {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 10px; color: var(--text-muted); font-weight: 600;
+}
+.acesso-rapido-preset-custom input[type="color"] {
+  width: 32px; height: 32px; border: none; border-radius: 50%; cursor: pointer;
+  padding: 0; background: none;
+}
+.acesso-rapido-preset-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+.acesso-rapido-preset-custom input[type="color"]::-webkit-color-swatch { border: 2px solid var(--border); border-radius: 50%; }
+
+.acesso-rapido-fixo-row {
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary);
+  cursor: pointer;
+}
 
 /* ===== Sequência de responsáveis (workflow real do Runrun.it) ===== */
 .workflow-seq-empty {

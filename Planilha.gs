@@ -141,6 +141,113 @@ function excluirAviso(id) {
   return { ok: false, error: 'Aviso não encontrado (talvez já tenha sido apagado).' };
 }
 
+/**
+ * Painel "Acesso rápido": cada designer tem seus próprios links (Drive,
+ * planilhas, ferramentas do dia a dia), mas o Cláudio (coordenador) pode
+ * fixar alguns que aparecem pra TODO MUNDO e ninguém além dele consegue
+ * apagar. Guardado numa aba própria, uma linha por acesso — coluna
+ * "Designer" fica vazia pros fixos (não pertencem a uma pessoa só).
+ */
+function getAcessoRapidoSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('AcessoRapido');
+  if (!sheet) {
+    sheet = ss.insertSheet('AcessoRapido');
+    sheet.appendRow(['ID', 'Designer', 'Nome', 'Link', 'CorFundo', 'CorTexto', 'Fixo', 'CriadoEm']);
+  }
+  return sheet;
+}
+
+// Só o coordenador pode criar/apagar um acesso FIXO — mesmo padrão
+// "confia no nome que o front manda" já usado no resto do backend
+// (o Colmeia é uma ferramenta interna, não tem usuário mal-intencionado
+// pra se preocupar em travar de verdade contra isso).
+function ehCoordenador(designer) {
+  return !!designer && designer.toString().toLowerCase().trim() === 'cláudio';
+}
+
+function listarAcessoRapido(designer) {
+  var sheet = getAcessoRapidoSheet();
+  var dados = sheet.getDataRange().getValues();
+  var alvo = (designer || '').toLowerCase().trim();
+  var acessos = [];
+  for (var i = 1; i < dados.length; i++) {
+    if (!dados[i][0]) continue;
+    var fixo = dados[i][6] === true || dados[i][6] === 'TRUE';
+    var dono = (dados[i][1] || '').toString();
+    if (!fixo && dono.toLowerCase().trim() !== alvo) continue; // acesso pessoal de outra pessoa — não mostra
+    acessos.push({
+      id: dados[i][0],
+      designer: dono,
+      nome: dados[i][2],
+      link: dados[i][3],
+      corFundo: dados[i][4] || '#16181D',
+      corTexto: dados[i][5] || '#FFFFFF',
+      fixo: fixo,
+      criadoEm: dados[i][7]
+    });
+  }
+  // Fixos primeiro (são os do coordenador, servem de referência pra
+  // todo mundo), depois os pessoais na ordem em que foram criados.
+  acessos.sort(function (a, b) {
+    if (a.fixo !== b.fixo) return a.fixo ? -1 : 1;
+    return (a.criadoEm || 0) - (b.criadoEm || 0);
+  });
+  return { ok: true, acessos: acessos };
+}
+
+function salvarAcessoRapido(designer, dados) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  dados = dados || {};
+  var nome = (dados.nome || '').toString().trim();
+  var link = (dados.link || '').toString().trim();
+  if (!nome || !link) return { ok: false, error: 'Preenche o nome e o link.' };
+  if (!/^https?:\/\//i.test(link)) link = 'https://' + link;
+  var fixo = !!dados.fixo;
+  if (fixo && !ehCoordenador(designer)) {
+    return { ok: false, error: 'Só o coordenador pode criar um acesso fixo.' };
+  }
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getAcessoRapidoSheet();
+    var id = 'acesso-' + new Date().getTime();
+    sheet.appendRow([
+      id,
+      fixo ? '' : designer,
+      nome,
+      link,
+      dados.corFundo || '#16181D',
+      dados.corTexto || '#FFFFFF',
+      fixo,
+      new Date().getTime()
+    ]);
+    return { ok: true, id: id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function excluirAcessoRapido(id, designer) {
+  if (!id) return { ok: false, error: 'id não informado.' };
+  var sheet = getAcessoRapidoSheet();
+  var dados = sheet.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (dados[i][0] !== id) continue;
+    var fixo = dados[i][6] === true || dados[i][6] === 'TRUE';
+    var dono = (dados[i][1] || '').toString().toLowerCase().trim();
+    if (fixo && !ehCoordenador(designer)) {
+      return { ok: false, error: 'Esse acesso é fixo — só o coordenador pode remover.' };
+    }
+    if (!fixo && dono !== (designer || '').toLowerCase().trim()) {
+      return { ok: false, error: 'Esse acesso não é seu.' };
+    }
+    sheet.deleteRow(i + 1);
+    return { ok: true };
+  }
+  return { ok: false, error: 'Acesso não encontrado (talvez já tenha sido apagado).' };
+}
+
 function buscarPastaSalvaDoCard(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
   var sheet = getPastasCardsSheet();

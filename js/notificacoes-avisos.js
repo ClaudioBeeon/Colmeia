@@ -697,13 +697,162 @@ function atualizarSeloReuniao() {
 }
 setInterval(atualizarSeloReuniao, 20 * 1000); // recalcula o texto a cada 20s (sem precisar de rede)
 
-// Acesso rápido — painel lateral recolhível
+// ===== Acesso rápido (painel lateral recolhível) =====
+// Cada designer tem os próprios links; o coordenador (Cláudio) pode
+// fixar alguns pra aparecerem pra todo mundo — só ele consegue apagar
+// um fixo. Guardado na planilha (ver listarAcessoRapido/
+// salvarAcessoRapido/excluirAcessoRapido, Planilha.gs).
 const quickAccessPanel = document.getElementById("quickAccessPanel");
+let acessoRapidoCache = [];
+
 document.getElementById("quickAccessBtn").addEventListener("click", () => {
   quickAccessPanel.classList.toggle("open");
+  if (quickAccessPanel.classList.contains("open")) carregarAcessoRapido();
 });
 document.getElementById("quickAccessClose").addEventListener("click", () => {
   quickAccessPanel.classList.remove("open");
+});
+
+async function carregarAcessoRapido() {
+  const body = document.getElementById("acessoRapidoBody");
+  if (!body || !COLMEIA_API_URL || !DESIGNER_LOGADO) return;
+  body.innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "listarAcessoRapido", designer: DESIGNER_LOGADO }),
+    });
+    const data = await res.json();
+    acessoRapidoCache = data.ok ? data.acessos : [];
+  } catch (err) {
+    console.error("Falha ao buscar acesso rápido:", err);
+    acessoRapidoCache = [];
+  }
+  renderAcessoRapido();
+}
+
+function renderAcessoRapido() {
+  const body = document.getElementById("acessoRapidoBody");
+  if (!body) return;
+  if (acessoRapidoCache.length === 0) {
+    body.innerHTML = `<p class="quick-access-empty">Nenhum link cadastrado ainda.</p>`;
+    return;
+  }
+  body.innerHTML = acessoRapidoCache.map(a => {
+    // Só quem pode apagar vê o botão: o fixo só o coordenador apaga, o
+    // pessoal só quem criou.
+    const podeApagar = a.fixo ? souClaudio() : true;
+    return `
+      <a href="${escaparHTML(a.link)}" target="_blank" rel="noopener" class="acesso-rapido-tile" style="background:${a.corFundo};color:${a.corTexto}">
+        <span class="acesso-rapido-tile-nome">${escaparHTML(a.nome)}</span>
+        ${a.fixo ? `<span class="acesso-rapido-tile-fixo">Fixo</span>` : ""}
+        ${podeApagar ? `<button type="button" class="acesso-rapido-tile-remover" data-id="${a.id}" title="Remover" aria-label="Remover">×</button>` : ""}
+      </a>
+    `;
+  }).join("");
+  body.querySelectorAll(".acesso-rapido-tile-remover").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      btn.disabled = true;
+      const res = await fetch(COLMEIA_API_URL, {
+        method: "POST",
+        body: JSON.stringify({ acao: "excluirAcessoRapido", id, designer: DESIGNER_LOGADO }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        acessoRapidoCache = acessoRapidoCache.filter(a => a.id !== id);
+        renderAcessoRapido();
+      } else {
+        btn.disabled = false;
+        mostrarToast(data.error || "Não consegui remover esse acesso agora.", "erro");
+      }
+    });
+  });
+}
+
+// ----- Pop-up "Novo acesso rápido" -----
+const acessoRapidoOverlay = document.getElementById("acessoRapidoModalOverlay");
+const acessoRapidoPreview = document.getElementById("acessoRapidoPreview");
+const acessoRapidoCorFundo = document.getElementById("acessoRapidoCorFundo");
+const acessoRapidoCorTexto = document.getElementById("acessoRapidoCorTexto");
+
+function atualizarPreviewAcessoRapido() {
+  const nome = document.getElementById("acessoRapidoNome").value.trim() || "Nome do acesso";
+  acessoRapidoPreview.querySelector(".acesso-rapido-tile-nome").textContent = nome;
+  acessoRapidoPreview.style.background = acessoRapidoCorFundo.value;
+  acessoRapidoPreview.style.color = acessoRapidoCorTexto.value;
+}
+
+document.getElementById("acessoRapidoNovoBtn").addEventListener("click", () => {
+  document.getElementById("acessoRapidoNome").value = "";
+  document.getElementById("acessoRapidoLink").value = "";
+  acessoRapidoCorFundo.value = "#16181D";
+  acessoRapidoCorTexto.value = "#FFC700";
+  document.querySelectorAll(".acesso-rapido-preset").forEach((p, i) => p.classList.toggle("active", i === 0));
+  const fixoWrap = document.getElementById("acessoRapidoFixoWrap");
+  fixoWrap.hidden = !souClaudio(); // só o coordenador vê a opção de fixar
+  document.getElementById("acessoRapidoFixo").checked = false;
+  atualizarPreviewAcessoRapido();
+  acessoRapidoOverlay.hidden = false;
+});
+document.getElementById("acessoRapidoModalClose").addEventListener("click", () => { acessoRapidoOverlay.hidden = true; });
+document.getElementById("acessoRapidoCancelar").addEventListener("click", () => { acessoRapidoOverlay.hidden = true; });
+acessoRapidoOverlay.addEventListener("click", e => { if (e.target === acessoRapidoOverlay) acessoRapidoOverlay.hidden = true; });
+
+document.getElementById("acessoRapidoNome").addEventListener("input", atualizarPreviewAcessoRapido);
+acessoRapidoCorFundo.addEventListener("input", () => {
+  document.querySelectorAll(".acesso-rapido-preset").forEach(p => p.classList.remove("active"));
+  atualizarPreviewAcessoRapido();
+});
+acessoRapidoCorTexto.addEventListener("input", atualizarPreviewAcessoRapido);
+
+// 3 combinações prontas de cor (fundo + letra) — clicar já preenche os
+// dois seletores de cor personalizada, sem precisar escolher na mão.
+document.querySelectorAll(".acesso-rapido-preset").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".acesso-rapido-preset").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    acessoRapidoCorFundo.value = btn.dataset.bg;
+    acessoRapidoCorTexto.value = btn.dataset.fg;
+    atualizarPreviewAcessoRapido();
+  });
+});
+
+document.getElementById("acessoRapidoSalvar").addEventListener("click", async () => {
+  const nome = document.getElementById("acessoRapidoNome").value.trim();
+  const link = document.getElementById("acessoRapidoLink").value.trim();
+  if (!nome || !link) { mostrarToast("Preenche o nome e o link.", "erro"); return; }
+  const btn = document.getElementById("acessoRapidoSalvar");
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+  const dados = {
+    nome,
+    link,
+    corFundo: acessoRapidoCorFundo.value,
+    corTexto: acessoRapidoCorTexto.value,
+    fixo: souClaudio() && document.getElementById("acessoRapidoFixo").checked,
+  };
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "salvarAcessoRapido", designer: DESIGNER_LOGADO, dados }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      acessoRapidoOverlay.hidden = true;
+      await carregarAcessoRapido();
+    } else {
+      mostrarToast(data.error || "Não consegui salvar esse acesso agora.", "erro");
+    }
+  } catch (err) {
+    console.error("Falha ao salvar acesso rápido:", err);
+    mostrarToast("Falha de conexão. Tenta de novo em alguns segundos.", "erro");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Salvar";
+  }
 });
 
 // Modal "Ver regra"

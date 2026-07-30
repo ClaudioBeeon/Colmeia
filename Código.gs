@@ -216,6 +216,12 @@ function handleRequest(e, method) {
         output = ocultarClienteDesigner(body.designer, body.cliente);
       } else if (body.acao === 'restaurarCliente') {
         output = restaurarClienteDesigner(body.designer, body.cliente);
+      } else if (body.acao === 'listarAcessoRapido') {
+        output = listarAcessoRapido(body.designer);
+      } else if (body.acao === 'salvarAcessoRapido') {
+        output = salvarAcessoRapido(body.designer, body.dados);
+      } else if (body.acao === 'excluirAcessoRapido') {
+        output = excluirAcessoRapido(body.id, body.designer);
       } else if (body.acao === 'buscarReunioesHoje') {
         output = buscarReunioesDeHoje(body.designer);
       } else if (body.acao === 'responderReuniao') {
