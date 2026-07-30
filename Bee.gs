@@ -170,8 +170,9 @@ function beeResumo(taskId, idOriginal) {
  * Igual ao chamarGemini, mas devolve TEXTO livre em vez de JSON — numa
  * conversa a resposta é um texto pra pessoa ler, não uma estrutura.
  */
-function chamarGeminiTexto(prompt) {
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent';
+function chamarGeminiTexto(prompt, modelo) {
+  modelo = modelo || GEMINI_MODEL;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent';
   var res = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
@@ -185,6 +186,14 @@ function chamarGeminiTexto(prompt) {
     parsed = JSON.parse(res.getContentText());
   } catch (e) {
     return { ok: false, error: 'Resposta inesperada do Gemini (status ' + codigo + ').' };
+  }
+  // Nome de modelo que não existe (o Google devolve 404, às vezes 400):
+  // em vez de deixar a Bee muda, cai no modelo rápido, que sempre existe.
+  // Isso protege o dia em que o nome do modelo forte mudar do lado do
+  // Google — a conversa fica mais rasa, mas continua funcionando.
+  if ((codigo === 404 || codigo === 400) && modelo !== GEMINI_MODEL) {
+    Logger.log('Modelo "' + modelo + '" indisponível, usando ' + GEMINI_MODEL + '. Resposta: ' + res.getContentText().substring(0, 200));
+    return chamarGeminiTexto(prompt, GEMINI_MODEL);
   }
   if (codigo < 200 || codigo >= 300) {
     return { ok: false, error: (parsed.error && parsed.error.message) || ('Gemini recusou (status ' + codigo + ').') };
@@ -229,7 +238,19 @@ var BEE_INSTRUCOES_CONVERSA =
 
 var BEE_MAX_MENSAGENS_CONTEXTO = 12;
 
-function beeConversar(taskId, pergunta, idOriginal) {
+/**
+ * Monta o pedaço do prompt que diz COM QUEM ela está falando. O nome vem
+ * do login do Colmeia (DESIGNER_LOGADO no front), não de adivinhação.
+ */
+function beeQuemEstaFalando(designer) {
+  if (!designer) return '';
+  var primeiroNome = String(designer).trim().split(' ')[0];
+  return '\nQUEM ESTÁ FALANDO COM VOCÊ: ' + designer + ' (chame de "' + primeiroNome + '").\n' +
+    'Cumprimente pelo primeiro nome na primeira resposta da conversa, de um jeito natural e curto ' +
+    '("Oi, ' + primeiroNome + '." e já vai ao assunto). Nas seguintes, não repita o cumprimento.\n';
+}
+
+function beeConversar(taskId, pergunta, idOriginal, designer) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
   if (!pergunta || !String(pergunta).trim()) return { ok: false, error: 'Escreve a pergunta.' };
 
@@ -241,23 +262,90 @@ function beeConversar(taskId, pergunta, idOriginal) {
   // lenta e cara sem melhorar nada.
   var recentes = conversa.slice(-BEE_MAX_MENSAGENS_CONTEXTO);
   var historico = recentes.map(function (m) {
-    return (m.autor === 'bee' ? 'BEE: ' : 'DESIGNER: ') + m.texto;
+    return (m.autor === 'bee' ? 'BEE: ' : (m.quem || 'DESIGNER') + ': ') + m.texto;
   }).join('\n');
 
   var prompt = BEE_INSTRUCOES_CONVERSA +
+    beeQuemEstaFalando(designer) +
     '\nTAREFA: ' + material.titulo + '\n' +
     (material.cliente ? 'CLIENTE: ' + material.cliente + '\n' : '') +
     '\nTUDO QUE ESTÁ ESCRITO SOBRE ELA:\n' + (beeTextoDoMaterial(material) || '(nada escrito ainda)') + '\n' +
     (historico ? '\nCONVERSA ATÉ AQUI:\n' + historico + '\n' : '') +
-    '\nDESIGNER: ' + String(pergunta).trim() + '\n\nBEE:';
+    '\n' + (designer || 'DESIGNER') + ': ' + String(pergunta).trim() + '\n\nBEE:';
 
-  var resultado = chamarGeminiTexto(prompt);
+  var resultado = chamarGeminiTexto(prompt, GEMINI_MODEL_CONVERSA);
   if (!resultado.ok) return resultado;
 
   var agora = new Date().getTime();
-  conversa.push({ autor: 'designer', texto: String(pergunta).trim(), quando: agora });
+  conversa.push({ autor: 'designer', quem: designer || '', texto: String(pergunta).trim(), quando: agora });
   conversa.push({ autor: 'bee', texto: resultado.texto.trim(), quando: agora + 1 });
   salvarConversaBee(taskId, conversa);
+
+  return { ok: true, resposta: resultado.texto.trim(), conversa: conversa };
+}
+
+// ============ 3) A BEE SOLTA (sem tarefa nenhuma) ============
+//
+// A bolinha no canto da tela: aqui ela não lê tarefa, não resume nada e
+// não tem contexto de Runrun.it. É só uma especialista em design com quem
+// dá pra pensar em voz alta — a mesma Bee, sem crachá.
+//
+// A conversa é guardada por PESSOA (uma linha na mesma aba BeeChat, com a
+// chave "livre-<nome>"), e a limpeza dos 45 dias sem uso vale igual.
+
+var BEE_INSTRUCOES_LIVRE =
+  'Você é a Bee, a assistente da Colmeia — a ferramenta de trabalho dos designers da Beeon, ' +
+  'uma agência de marketing.\n\n' +
+  'Aqui você NÃO está dentro de nenhuma tarefa: não tem briefing, não tem cliente, não tem ' +
+  'comentário pra ler. É uma conversa livre com o designer, e você é uma especialista em design ' +
+  'gráfico, direção de arte e criação publicitária.\n\n' +
+  'O QUE VOCÊ FAZ AQUI:\n' +
+  '- Ajuda a pensar: composição, tipografia, cor, hierarquia, grid, ritmo, contraste.\n' +
+  '- Sugere caminhos criativos e referências (descrevendo o estilo, não citando artista vivo).\n' +
+  '- Resolve dúvidas técnicas de ferramenta (Photoshop, Illustrator, After Effects, Figma), ' +
+  'formato, resolução, cor pra impressão x tela, exportação.\n' +
+  '- Ajuda a escrever texto curto de peça (título, chamada, legenda).\n' +
+  '- Monta prompts de imagem ou vídeo pro Adobe Firefly (regras abaixo).\n\n' +
+  'REGRAS:\n' +
+  '- Não invente informação sobre tarefa, cliente ou prazo — aqui você não tem acesso a nada disso. ' +
+  'Se perguntarem sobre uma tarefa específica, diga que pra isso é só abrir o card e falar com você ' +
+  'por lá, onde você lê tudo.\n' +
+  '- Opinião é bem-vinda aqui: se pedirem sua preferência entre dois caminhos, escolha um e diga por quê.\n\n' +
+  'TOM:\n' +
+  '- Português do Brasil, direto, curto. Colega de trabalho experiente, não assistente animada. ' +
+  'Sem "claro!", sem "ótima pergunta", sem emoji, sem se desculpar.\n' +
+  '- Respostas curtas por padrão. Só se alongue se pedirem.\n\n' +
+  'PROMPTS PARA O FIREFLY:\n' +
+  '- Escreva em inglês, no máximo 40 palavras.\n' +
+  '- Descreva nesta ordem: o que é a imagem, estilo, iluminação, enquadramento, proporção.\n' +
+  '- Nunca use nome de marca, nome de artista vivo, nem pessoa real.\n' +
+  '- Entregue o prompt sozinho, numa linha que começa com "FIREFLY:" e nada mais nessa linha.\n';
+
+function beeChaveLivre(designer) {
+  return 'livre-' + String(designer || 'sem-nome').trim().toLowerCase();
+}
+
+function beeConversarLivre(pergunta, designer) {
+  if (!pergunta || !String(pergunta).trim()) return { ok: false, error: 'Escreve a pergunta.' };
+  var chave = beeChaveLivre(designer);
+  var conversa = lerConversaBee(chave);
+  var recentes = conversa.slice(-BEE_MAX_MENSAGENS_CONTEXTO);
+  var historico = recentes.map(function (m) {
+    return (m.autor === 'bee' ? 'BEE: ' : (m.quem || 'DESIGNER') + ': ') + m.texto;
+  }).join('\n');
+
+  var prompt = BEE_INSTRUCOES_LIVRE +
+    beeQuemEstaFalando(designer) +
+    (historico ? '\nCONVERSA ATÉ AQUI:\n' + historico + '\n' : '') +
+    '\n' + (designer || 'DESIGNER') + ': ' + String(pergunta).trim() + '\n\nBEE:';
+
+  var resultado = chamarGeminiTexto(prompt, GEMINI_MODEL_CONVERSA);
+  if (!resultado.ok) return resultado;
+
+  var agora = new Date().getTime();
+  conversa.push({ autor: 'designer', quem: designer || '', texto: String(pergunta).trim(), quando: agora });
+  conversa.push({ autor: 'bee', texto: resultado.texto.trim(), quando: agora + 1 });
+  salvarConversaBee(chave, conversa);
 
   return { ok: true, resposta: resultado.texto.trim(), conversa: conversa };
 }

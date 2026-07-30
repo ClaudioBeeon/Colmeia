@@ -222,6 +222,9 @@ const ACOES_DEMORADAS = [
   "gerarBriefing",        // IA escrevendo o briefing
   "gerarFraseDoDia",      // IA
   "resumoAlteracao",      // IA
+  "beeResumo",            // a Bee lendo a tarefa inteira
+  "beeConversar",         // a Bee usa o modelo FORTE do Gemini aqui, que é mais lento de propósito
+  "beeConversarLivre",
   "buscarExtrasRunrunCompleto", // pagina 15 dias de entregues dos 3 designers
   "listarPastasClientesDrive",  // varre pastas do Drive
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive

@@ -42,7 +42,18 @@ var RUNRUN_APP_KEY = PropertiesService.getScriptProperties().getProperty('RUNRUN
 var GROQ_API_KEY = PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY');
 var GROQ_MODEL = 'llama-3.3-70b-versatile';
 var GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+// Modelo RÁPIDO: usado em tudo que é leitura/resumo (briefing, frase do
+// dia, a primeira fala da Bee). Essas coisas acontecem enquanto a pessoa
+// espera na tela, então velocidade importa mais que profundidade.
 var GEMINI_MODEL = 'gemini-3.1-flash-lite';
+// Modelo FORTE: só pra CONVERSAR com a Bee, onde ela precisa raciocinar
+// (opinar sobre criação, montar prompt de imagem, entender um pedido
+// vago). Demora mais, e tudo bem — ali a pessoa fez uma pergunta e está
+// esperando uma resposta boa, não uma resposta instantânea.
+// Dá pra trocar sem mexer no código: basta criar a propriedade de script
+// GEMINI_MODEL_CONVERSA com o nome do modelo. Se o nome não existir, a
+// Bee cai sozinha no modelo rápido em vez de dar erro (ver chamarGeminiTexto).
+var GEMINI_MODEL_CONVERSA = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_CONVERSA') || 'gemini-3.1-pro';
 var RUNRUN_USER_TOKEN = PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN');
 var RUNRUN_BASE_URL = 'https://secure.runrun.it/api/v1.0';
 
@@ -165,7 +176,11 @@ function handleRequest(e, method) {
       } else if (body.acao === 'beeResumo') {
         output = beeResumo(body.taskId, body.idOriginal);
       } else if (body.acao === 'beeConversar') {
-        output = beeConversar(body.taskId, body.pergunta, body.idOriginal);
+        output = beeConversar(body.taskId, body.pergunta, body.idOriginal, body.designer);
+      } else if (body.acao === 'beeConversarLivre') {
+        output = beeConversarLivre(body.pergunta, body.designer);
+      } else if (body.acao === 'beeHistoricoLivre') {
+        output = { ok: true, conversa: lerConversaBee(beeChaveLivre(body.designer)) };
       } else if (body.acao === 'beeHistorico') {
         output = { ok: true, conversa: lerConversaBee(body.taskId) };
       } else if (body.acao === 'reabrirTarefa') {

@@ -34,6 +34,8 @@ function iniciarAppPosLogin() {
   // ciclo (até 5 min pros avisos, até 3 min pra agenda).
   atualizarBadgeAvisos();
   verificarReunioesProximas();
+  // A bolinha da Bee no canto (a conversa livre, sem tarefa nenhuma).
+  ligarJanelaDaBee();
   // Lista de pessoas do Runrun.it (usada pra reatribuir e pra "Adicionar
   // próxima pessoa" no modal "Ver regra") — pré-carregada aqui, em segundo
   // plano, já no login. Antes só era buscada na hora que alguém abria um

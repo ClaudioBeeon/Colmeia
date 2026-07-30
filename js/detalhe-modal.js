@@ -17,6 +17,11 @@ function openDetail(idx, entradaAnimacao) {
   if (cardEl) cardEl.classList.add("selected");
   panel.classList.add("visible");
   requestAnimationFrame(() => panel.classList.add("open"));
+  // Esconde a bolinha da Bee solta enquanto o card está aberto: ela fica
+  // no mesmo canto do botão de comentários da tarefa, e as duas juntas
+  // viravam um monte de bolinha empilhada. Dentro do card, a Bee que
+  // importa é a que lê a tarefa (o ícone dela no painel de comentários).
+  document.body.classList.add("card-aberto");
   if (entradaAnimacao) {
     const inner = panel.querySelector(".detail-inner");
     if (inner) {
@@ -1404,6 +1409,7 @@ function closeDetail() {
   migrarIlhaAmbienteParaPill();
   const panel = document.getElementById("taskDetail");
   panel.classList.remove("open");
+  document.body.classList.remove("card-aberto");
   document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
   setTimeout(() => panel.classList.remove("visible"), 250);
   // Sem isso, uma tarefa concluída (que o Colmeia mantém viva em

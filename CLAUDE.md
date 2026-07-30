@@ -60,6 +60,11 @@ requisição, e todos compartilham o mesmo espaço de nomes — qualquer funçã
   conversa fica na aba `BeeChat` da planilha, **uma linha por tarefa** (a conversa inteira dentro
   de uma célula), e é apagada 15 dias depois da entrega — o carimbo de entrega é posto pelo próprio
   `handleRequest` quando a entrega passa pelo Colmeia, e a limpeza roda junto do backup diário.
+  Tem também a **Bee solta** (`beeConversarLivre`), a bolinha no canto da tela: ali ela NÃO lê tarefa
+  nenhuma, é só uma especialista em design. A conversa livre é guardada na mesma aba, com a chave
+  `livre-<nome>`. **Dois modelos de propósito:** `GEMINI_MODEL` (rápido) pra tudo que é leitura/resumo
+  e `GEMINI_MODEL_CONVERSA` (forte, mais lento) só pra conversar — se o nome do modelo forte não
+  existir, `chamarGeminiTexto` cai sozinho no rápido em vez de deixar a Bee muda.
 
 **Ao criar um arquivo `.gs` novo:** é obrigatório liberá-lo no `.claspignore` (que ignora tudo por
 padrão), senão o clasp não o envia e o deploy passa "com sucesso" mas as funções dele não existem em

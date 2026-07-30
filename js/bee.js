@@ -382,6 +382,144 @@ function inserirLinhaDaBeeNaThread(task) {
   if (btn) btn.addEventListener("click", () => abrirThreadBee(tasks[detailIdx] || task));
 }
 
+// ===== A BEE SOLTA: a bolinha no canto da tela =====
+//
+// Aqui ela não lê tarefa, não sabe de cliente, não tem contexto nenhum do
+// Runrun.it — é só uma especialista em design com quem dá pra pensar em
+// voz alta. A Bee que CONHECE a tarefa é a de dentro do card; essa
+// diferença está escrita no topo da janela pra não confundir.
+
+let beeLivreConversa = null;   // null = ainda não buscou o histórico
+let beeLivrePensando = false;
+
+function alternarJanelaDaBee() {
+  const janela = document.getElementById("beeJanela");
+  if (!janela) return;
+  if (janela.hidden) abrirJanelaDaBee();
+  else janela.hidden = true;
+}
+
+async function abrirJanelaDaBee() {
+  const janela = document.getElementById("beeJanela");
+  if (!janela) return;
+  janela.hidden = false;
+  const campo = document.getElementById("beeJanelaInput");
+  if (campo) campo.focus();
+
+  if (beeLivreConversa === null) {
+    desenharJanelaDaBee("<p class=\"comments-empty\">Abrindo...</p>");
+    const data = await chamarBackend({ acao: "beeHistoricoLivre", designer: DESIGNER_LOGADO });
+    beeLivreConversa = (data && data.ok && data.conversa) ? data.conversa : [];
+  }
+  desenharJanelaDaBee();
+}
+
+function desenharJanelaDaBee(htmlProvisorio) {
+  const thread = document.getElementById("beeJanelaThread");
+  if (!thread) return;
+  if (htmlProvisorio) { thread.innerHTML = htmlProvisorio; return; }
+
+  const conversa = beeLivreConversa || [];
+  if (!conversa.length) {
+    const primeiroNome = (DESIGNER_LOGADO || "").split(" ")[0];
+    thread.innerHTML = `
+      <div class="comment-bubble bee-bubble">
+        <span class="bee-avatar">${beeIcon}</span>
+        <div class="comment-body">
+          <div class="comment-meta"><span class="comment-author">Bee</span></div>
+          <div class="comment-text">
+            <p>Oi${primeiroNome ? ", " + escaparHTML(primeiroNome) : ""}. Aqui eu não vejo suas tarefas — pra isso é só abrir o card e falar comigo por lá.</p>
+            <p style="margin-top:6px">Nesta janela dá pra pensar em design: composição, cor, tipografia, referência, dúvida de ferramenta, texto de peça, ou montar um prompt de imagem pro Firefly.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    thread.innerHTML = conversa.map(m => m.autor === "bee"
+      ? `<div class="comment-bubble bee-bubble">
+           <span class="bee-avatar">${beeIcon}</span>
+           <div class="comment-body">
+             <div class="comment-meta"><span class="comment-author">Bee</span></div>
+             <div class="comment-text">${formatarFalaDaBee(m.texto)}</div>
+           </div>
+         </div>`
+      : `<div class="comment-bubble mine">
+           <div class="comment-body">
+             <div class="comment-meta"><span class="comment-author">Você</span></div>
+             <div class="comment-text">${linkifyTexto(escaparHTML(m.texto))}</div>
+           </div>
+         </div>`
+    ).join("");
+  }
+  if (beeLivrePensando) {
+    thread.insertAdjacentHTML("beforeend", `<p class="comments-empty">A Bee está pensando...</p>`);
+  }
+  // Os botões de copiar do bloco do Firefly precisam ser religados a cada
+  // redesenho (o innerHTML acima recria todos os elementos).
+  thread.querySelectorAll("[data-copiar]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(btn.dataset.copiar)
+        .then(() => mostrarToast("Prompt copiado."))
+        .catch(() => mostrarToast("Não consegui copiar. Selecione o texto e copie na mão.", "erro"));
+    });
+  });
+  thread.scrollTop = thread.scrollHeight;
+}
+
+async function enviarParaBeeLivre() {
+  const campo = document.getElementById("beeJanelaInput");
+  if (!campo) return;
+  const texto = campo.value.trim();
+  if (!texto || beeLivrePensando) return;
+  campo.value = "";
+
+  beeLivreConversa = (beeLivreConversa || []).concat([{ autor: "designer", texto, quando: Date.now() }]);
+  beeLivrePensando = true;
+  desenharJanelaDaBee();
+
+  const data = await chamarBackend({ acao: "beeConversarLivre", pergunta: texto, designer: DESIGNER_LOGADO });
+  beeLivrePensando = false;
+
+  if (!data || !data.ok) {
+    // Tira a pergunta da lista: ela não virou conversa de verdade, e
+    // deixar ali daria a impressão de que a Bee ignorou.
+    beeLivreConversa = beeLivreConversa.filter((m, i) => !(i === beeLivreConversa.length - 1 && m.autor === "designer"));
+    desenharJanelaDaBee();
+    // Devolve o texto pro campo em vez de perder o que foi escrito.
+    if (campo && !campo.value.trim()) campo.value = texto;
+    mostrarToast((data && data.error) || "A Bee não conseguiu responder agora.", "erro");
+    return;
+  }
+  beeLivreConversa = data.conversa || beeLivreConversa;
+  desenharJanelaDaBee();
+}
+
+function ligarJanelaDaBee() {
+  const fab = document.getElementById("beeFabBtn");
+  if (fab) {
+    fab.innerHTML = beeIcon;
+    fab.addEventListener("click", alternarJanelaDaBee);
+  }
+  const icone = document.getElementById("beeJanelaIcone");
+  if (icone) icone.innerHTML = beeIcon;
+
+  const fechar = document.getElementById("beeJanelaFechar");
+  if (fechar) fechar.addEventListener("click", () => {
+    const janela = document.getElementById("beeJanela");
+    if (janela) janela.hidden = true;
+  });
+
+  const enviar = document.getElementById("beeJanelaEnviar");
+  if (enviar) enviar.addEventListener("click", enviarParaBeeLivre);
+
+  const campo = document.getElementById("beeJanelaInput");
+  if (campo) {
+    campo.addEventListener("keydown", e => {
+      if (e.key === "Enter") enviarParaBeeLivre();
+    });
+  }
+}
+
 // ===== Perguntar pra Bee =====
 
 async function perguntarParaBee(task, texto) {
@@ -407,6 +545,8 @@ async function perguntarParaBee(task, texto) {
     taskId,
     pergunta: texto,
     idOriginal: original ? original.id : null,
+    // Quem está falando: é isso que faz ela chamar cada um pelo nome.
+    designer: DESIGNER_LOGADO,
   });
 
   // Trocou de tarefa ou de chat enquanto ela pensava? A resposta fica
