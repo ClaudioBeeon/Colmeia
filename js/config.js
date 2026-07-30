@@ -191,6 +191,29 @@ const PAINEL_BEEON_API_URL = "https://script.google.com/macros/s/AKfycbzzWtG4jkV
 
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const MESES_COMPLETOS = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+
+/**
+ * Lê o "mês do projeto" que fica entre colchetes no título da tarefa
+ * (ex: "... | Dunito X Calcário [MAI26]" → maio/2026) — pedido do
+ * Cláudio pra mostrar isso junto do nome do cliente e, mais importante,
+ * pra usar como fonte de verdade na hora de criar a pasta automática no
+ * Drive (ver confirmarECriarPastaDoCard, js/chat-comentarios.js): uma
+ * tarefa atrasada de maio não pode cair na pasta do mês atual só porque
+ * foi CRIADA a pasta hoje — tem que ir pra pasta de maio, que é de
+ * quando o projeto É, não de quando alguém clicou no botão.
+ * Mesma lógica espelhada no backend em extrairMesAnoDoTitulo (Drive.gs)
+ * — se mudar o formato aqui, mudar lá também.
+ */
+function extrairMesAnoDoTitulo(titulo) {
+  if (!titulo) return null;
+  const m = String(titulo).match(/\[\s*([A-Za-zÇç]{3})\D{0,2}(\d{2,4})\s*\]/);
+  if (!m) return null;
+  const mesIndex = MESES_ABREV.indexOf(m[1].toLowerCase());
+  if (mesIndex === -1) return null;
+  const anoStr = m[2];
+  const ano = anoStr.length === 2 ? 2000 + Number(anoStr) : Number(anoStr);
+  return { mesIndex, ano, label: MESES_ABREV[mesIndex].toUpperCase() + " " + ano };
+}
 const DIAS_SEMANA_ABREV = ["D", "S", "T", "Q", "Q", "S", "S"];
 (function atualizarPillDeData() {
   const el = document.getElementById("topbarDateText");

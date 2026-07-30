@@ -685,7 +685,13 @@ function renderDetail() {
           </div>
           <div class="side-block">
             <span class="side-label">Cliente</span>
-            <span class="badge badge-cliente">${escaparHTML(task.client)}</span>
+            <div class="side-badges-row">
+              <span class="badge badge-cliente">${escaparHTML(task.client)}</span>
+              ${(() => {
+                const projeto = extrairMesAnoDoTitulo(task.title);
+                return projeto ? `<span class="badge badge-projeto" title="Mês do projeto (lido do título da tarefa)">${projeto.label}</span>` : "";
+              })()}
+            </div>
           </div>
           <div class="side-block">
             <span class="side-label">Hub do cliente</span>

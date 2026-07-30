@@ -44,6 +44,27 @@ function listarPastasDeClientesNoDrive() {
 }
 
 var MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+var MESES_ABREV_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/**
+ * Lê o "mês do projeto" que fica entre colchetes no título da tarefa
+ * (ex: "... [MAI26]" → maio/2026) — usado em criarPastaDoCardNoDrive
+ * pra criar a pasta no mês de quando o projeto É, não no mês de quando
+ * alguém clicou em "Criar pasta do card" (uma tarefa atrasada de maio,
+ * criada em julho, tem que cair na pasta de maio). Espelha
+ * extrairMesAnoDoTitulo em js/config.js — mudou o formato aqui, muda lá
+ * também.
+ */
+function extrairMesAnoDoTitulo(titulo) {
+  if (!titulo) return null;
+  var m = String(titulo).match(/\[\s*([A-Za-zÇç]{3})\D{0,2}(\d{2,4})\s*\]/);
+  if (!m) return null;
+  var mesIndex = MESES_ABREV_PT.indexOf(m[1].toLowerCase());
+  if (mesIndex === -1) return null;
+  var anoStr = m[2];
+  var ano = anoStr.length === 2 ? 2000 + parseInt(anoStr, 10) : parseInt(anoStr, 10);
+  return { mesIndex: mesIndex, ano: ano };
+}
 
 function getOuCriarPastaMes(pastaAno, mesIndex) {
   var mesNome = MESES_PT[mesIndex];
@@ -114,10 +135,15 @@ function criarPastaDoCardNoDrive(cliente, tituloCard, taskId) {
     if (!pastaPublicacoes) {
       return { ok: false, error: 'Não encontrei a pasta "Publicações" (nem com grafia parecida) dentro do cliente "' + cliente + '". Pra eu não criar uma pasta duplicada, me mostre o caminho certo dela no Drive.' };
     }
+    // Se o título tem o "mês do projeto" entre colchetes (ex: [MAI26]),
+    // usa ELE pra decidir a pasta — não a data de hoje. Uma tarefa
+    // atrasada de maio, criada em julho, tem que cair na pasta de maio.
     var agora = new Date();
-    var ano = String(agora.getFullYear());
+    var projetoNoTitulo = extrairMesAnoDoTitulo(tituloCard);
+    var ano = String(projetoNoTitulo ? projetoNoTitulo.ano : agora.getFullYear());
+    var mesIndex = projetoNoTitulo ? projetoNoTitulo.mesIndex : agora.getMonth();
     var pastaAno = getOuCriarSubpasta(pastaPublicacoes, ano);
-    var pastaMes = getOuCriarPastaMes(pastaAno, agora.getMonth());
+    var pastaMes = getOuCriarPastaMes(pastaAno, mesIndex);
 
     var jaExistia = !!getSubfolderParecida(pastaMes, tituloCard);
     var pastaCard = getOuCriarSubpasta(pastaMes, tituloCard);

@@ -887,9 +887,14 @@ async function confirmarECriarPastaDoCard(task) {
     return;
   }
 
+  // Se o título tem o "mês do projeto" entre colchetes (ex: [MAI26]),
+  // o backend usa ELE pra decidir a pasta (ver criarPastaDoCardNoDrive,
+  // Drive.gs) — esse preview mostra o MESMO mês, senão a confirmação
+  // mentiria sobre onde a pasta vai ser criada de verdade.
+  const projeto = extrairMesAnoDoTitulo(task.title);
   const agora = new Date();
-  const ano = agora.getFullYear();
-  const mes = MESES_PT_JS[agora.getMonth()];
+  const ano = projeto ? projeto.ano : agora.getFullYear();
+  const mes = MESES_PT_JS[projeto ? projeto.mesIndex : agora.getMonth()];
   const caminho = `${task.client} &gt; Publicações &gt; ${ano} &gt; ${mes} &gt; ${task.title}`;
 
   const confirmado = await confirmarCriacaoDePasta(`Deseja criar a pasta <strong>"${task.title}"</strong> em<br>${caminho}?`);
