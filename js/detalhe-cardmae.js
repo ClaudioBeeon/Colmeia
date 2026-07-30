@@ -280,10 +280,7 @@ function renderFacePillRegraCardMae(cardMaeTask) {
   return `
     <span class="pill-cardmae-conteudo pill-cardmae-regra">
       <div class="status-wrap">
-        <button type="button" class="status-badge" id="pillCardMaeStatusBadge">${columnsDef.find(c => c.key === cardMaeTask.status)?.label || cardMaeTask.runrunStage || "Sem etapa"}</button>
-        <div class="status-menu" id="pillCardMaeStatusMenu">
-          ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === cardMaeTask.status ? "active" : ""}">${c.label}</button>`).join("")}
-        </div>
+        <button type="button" class="status-badge" id="pillCardMaeStatusBadge">${escaparHTML(rotuloDaEtapa(cardMaeTask))}</button>
       </div>
       <span class="pill-cardmae-regra-centro">
         <span class="pill-cardmae-nome">${escaparHTML(cardMaeTask.title)}</span>
@@ -340,26 +337,19 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
   if (fecharBtn) fecharBtn.addEventListener("click", esconderFluxoCardMaeNoPill);
 
   const statusBadge = face.querySelector("#pillCardMaeStatusBadge");
-  const statusMenu = face.querySelector("#pillCardMaeStatusMenu");
-  if (statusBadge && statusMenu) {
+  if (statusBadge) {
     statusBadge.addEventListener("click", e => {
       e.stopPropagation();
-      statusMenu.classList.toggle("open");
-    });
-    statusMenu.querySelectorAll("button").forEach(opt => {
-      opt.addEventListener("click", async e => {
-        e.stopPropagation();
-        const statusAntigo = cardMaeTask.status;
-        cardMaeTask.status = opt.dataset.status;
-        rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId); // otimista, não mexe na sequência
-        const ok = await moverEtapaNoBackend(cardMaeTask.id, opt.dataset.status);
-        if (!ok) {
-          cardMaeTask.status = statusAntigo;
-          rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
-          mostrarToast("Não consegui mover o card mãe de etapa agora.", "erro");
-        } else {
-          agendarAtualizacaoKanban();
-        }
+      // Usa o menu FLUTUANTE (abrirMenuEtapa, que gruda no <body>), não um
+      // menu dentro do pill. O pill em modo carrossel tem altura fixa com
+      // corte E usa transformação pra deslizar as faces — e, com um
+      // ancestral transformado, nem position:fixed escapa do corte. Era
+      // isso que fazia o menu do card mãe abrir "dentro" do pill, cortado,
+      // sem dar pra escolher a etapa (ex: mandar pra Revisão).
+      // Como o card mãe fica em "Cards Mães" (fora das 5 colunas), o menu
+      // já mostra em destaque o atalho de um clique pra Revisão.
+      abrirMenuEtapa(cardMaeTask, statusBadge, () => {
+        rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
       });
     });
   }

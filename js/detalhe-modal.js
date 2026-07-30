@@ -260,6 +260,7 @@ function wireWorkflowArrows(task) {
         if (ok) {
           task.entregue = false;
           task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
+          atualizarCrachaDeEtapa(task);
           await carregarSequencia(task);
         } else {
           deliverBtn.disabled = false;
@@ -328,6 +329,11 @@ function wireWorkflowArrows(task) {
           // referência — mesmo bug documentado no restante do app).
           const tarefaViva = tasks.find(x => String(x.id) === String(task.id));
           if (tarefaViva) tarefaViva.running = false;
+          if (tarefaViva) { tarefaViva.entregue = true; tarefaViva._entregueEm = Date.now(); }
+          // O crachá de etapa tem que virar "Entregue ✓" na hora: entregar no
+          // Runrun.it FECHA a tarefa mas não muda a etapa dela, então sem
+          // isso o pop-up continuava afirmando "Fazendo" depois da entrega.
+          atualizarCrachaDeEtapa(task);
           render();
           updateNowPlaying();
           // Acabou de concluir uma SUBtarefa? Confere se o card mãe dela
@@ -348,6 +354,7 @@ function wireWorkflowArrows(task) {
           // (ícone de concluir e o clique certo de novo inclusos).
           task.entregue = entregueOtimista;
           task._entregueEm = null; // não foi entregue de verdade — desliga a proteção
+          atualizarCrachaDeEtapa(task);
           task.sequencia = sequenciaOtimista;
           esconderFluxoCardMaeNoPill();
           if (seqEl) {
@@ -369,12 +376,73 @@ function wireWorkflowArrows(task) {
  * (position: absolute) e ficava fisicamente cortado por ela, mesmo
  * mandando abrir pra baixo — escapar pro <body> resolve isso de vez.
  */
-function abrirMenuEtapa(task, statusBadge) {
+/**
+ * Texto do crachá de etapa de uma tarefa.
+ *
+ * Tarefa ENTREGUE ganha "Entregue ✓", não a coluna onde ela estava. Antes o
+ * crachá continuava dizendo "Fazendo" depois de entregar: no Runrun.it,
+ * entregar FECHA a tarefa mas não muda a etapa dela, então o Colmeia estava
+ * mostrando um dado verdadeiro que dava a informação errada — a pessoa
+ * entregava e o pop-up continuava afirmando que estava em Fazendo.
+ */
+function rotuloDaEtapa(task) {
+  if (!task) return "Sem etapa";
+  if (task.entregue) return "Entregue ✓";
+  const coluna = columnsDef.find(c => c.key === task.status);
+  return (coluna && coluna.label) || task.runrunStage || "Sem etapa";
+}
+
+/**
+ * Atualiza SÓ o crachá de etapa do pop-up, sem redesenhar o resto.
+ *
+ * É chamado depois de entregar/reabrir. Não usa renderDetail de propósito:
+ * na hora da entrega o pill está no meio da animação do "Entregue ✓"
+ * (carrossel do card mãe), e reconstruir o pop-up inteiro cortaria essa
+ * animação no meio.
+ */
+function atualizarCrachaDeEtapa(task) {
+  const badge = document.getElementById("statusBadge");
+  if (!badge || !task) return;
+  badge.textContent = rotuloDaEtapa(task);
+  badge.classList.toggle("entregue", !!task.entregue);
+}
+
+// Pra onde vai uma tarefa que está numa etapa FORA das 5 colunas do quadro
+// (o caso mais comum: um card mãe, que fica em "Cards Mães"). Quando é esse
+// o caso, o menu de etapa mostra esse caminho em destaque, como um atalho de
+// um clique — em vez de obrigar a caçar a coluna certa numa lista.
+const ETAPA_SUGERIDA_SAINDO_DE_FORA = "revisao";
+
+/**
+ * @param {Object} task          tarefa que vai mudar de etapa
+ * @param {HTMLElement} statusBadge  botão onde o menu vai encostar
+ * @param {function} [aoMudar]   chamado depois de mexer em task.status, pra
+ *                               quem chama redesenhar o que for dele. Sem
+ *                               isso, redesenha o pop-up e o quadro (que é o
+ *                               certo quando a tarefa é a que está aberta).
+ */
+function abrirMenuEtapa(task, statusBadge, aoMudar) {
   document.querySelectorAll(".status-menu").forEach(el => el.remove());
+
+  const redesenhar = aoMudar || (() => { renderDetail(); render(); });
+
+  // Tarefa numa etapa fora do quadro (card mãe em "Cards Mães", etapa de
+  // atendimento etc): oferece o próximo passo direto, em destaque.
+  const etapaAtualForaDoQuadro = !task.status;
+  const destino = columnsDef.find(c => c.key === ETAPA_SUGERIDA_SAINDO_DE_FORA);
+  const atalhoHTML = (etapaAtualForaDoQuadro && destino) ? `
+    <button type="button" class="status-menu-atalho" data-status="${destino.key}">
+      <span class="status-menu-atalho-de">${escaparHTML(task.runrunStage || "Etapa atual")}</span>
+      <span class="status-menu-atalho-seta">→</span>
+      <span class="status-menu-atalho-para">${destino.label}</span>
+    </button>
+    <div class="status-menu-sep"></div>
+  ` : "";
 
   const menu = document.createElement("div");
   menu.className = "status-menu";
-  menu.innerHTML = columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("");
+  menu.innerHTML = atalhoHTML
+    + columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("");
   document.body.appendChild(menu);
   posicionarPopupFixo(menu, statusBadge);
   requestAnimationFrame(() => menu.classList.add("open"));
@@ -394,14 +462,20 @@ function abrirMenuEtapa(task, statusBadge) {
       e.stopPropagation();
       fechar();
       const statusAntigo = task.status;
+      const runrunStageAntigo = task.runrunStage;
       task.status = opt.dataset.status;
-      renderDetail();
-      render();
+      // Atualiza também o nome da etapa: sem isso, um card que estava numa
+      // etapa fora do quadro ("Cards Mães") continuava mostrando esse nome
+      // antigo no crachá, porque é ele que aparece quando não bate com
+      // nenhuma das 5 colunas.
+      const colunaEscolhida = columnsDef.find(c => c.key === opt.dataset.status);
+      if (colunaEscolhida) task.runrunStage = colunaEscolhida.label;
+      redesenhar();
       const ok = await moverEtapaNoBackend(task.id, opt.dataset.status);
       if (!ok) {
         task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
-        renderDetail();
-        render();
+        task.runrunStage = runrunStageAntigo;
+        redesenhar();
         mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
       } else {
         agendarAtualizacaoKanban();
@@ -456,7 +530,7 @@ function renderDetail() {
               ${renderSequenciaHTML(task)}
             </div>
             <div class="status-wrap">
-              <button type="button" class="status-badge" id="statusBadge">${columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa"}</button>
+              <button type="button" class="status-badge ${task.entregue ? "entregue" : ""}" id="statusBadge">${escaparHTML(rotuloDaEtapa(task))}</button>
             </div>
           </div>
           </div>
@@ -785,6 +859,7 @@ function renderDetail() {
       if (ok) {
         task.entregue = false;
         task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
+        atualizarCrachaDeEtapa(task);
         await carregarSequencia(task);
       } else {
         mostrarToast("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");

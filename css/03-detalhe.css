@@ -751,3 +751,26 @@
   .detail-side { display: none; }
 }
 
+
+/* Crachá de etapa quando a tarefa JÁ FOI ENTREGUE — antes ele continuava
+   dizendo "Fazendo" (no Runrun.it, entregar fecha a tarefa mas não muda a
+   etapa dela). Ver rotuloDaEtapa em js/detalhe-modal.js. */
+.status-badge.entregue { background: #E8F8F5; color: #1A6B55; }
+[data-theme="dark"] .status-badge.entregue { background: rgba(26,107,85,0.30); color: #8FE0D0; }
+
+/* Atalho em destaque no menu de etapa, pra tarefa que está numa etapa fora
+   das 5 colunas do quadro (o caso do card mãe, em "Cards Mães"): mostra o
+   caminho pronto — "Cards Mães → Revisão" — pra resolver num clique, em vez
+   de obrigar a achar a coluna certa na lista. Ver abrirMenuEtapa. */
+.status-menu-atalho {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  border: none; cursor: pointer; text-align: left;
+  background: var(--kanban-yellow); color: #16181D;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
+  padding: 9px 10px; border-radius: 8px;
+}
+.status-menu-atalho:hover { filter: brightness(0.96); }
+.status-menu-atalho-de { opacity: 0.72; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
+.status-menu-atalho-seta { opacity: 0.72; }
+.status-menu-atalho-para { white-space: nowrap; }
+.status-menu-sep { height: 1px; background: var(--border); margin: 5px 2px; }

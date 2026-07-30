@@ -581,7 +581,7 @@ async function carregarHistoricoPlays(janela) {
 function historicoCardHTML(t) {
   const type = typeLabels[t.type] || { label: t.type || "Tarefa", class: "" };
   const hora = new Date(Number(t.ultimoPlay)).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const etapa = columnsDef.find(c => c.key === t.status)?.label || t.runrunStage || "Sem etapa";
+  const etapa = rotuloDaEtapa(t); // "Entregue ✓" quando já foi entregue
   return `
     <div class="task-card historico-card" data-id="${t.id}">
       <div class="card-top">
