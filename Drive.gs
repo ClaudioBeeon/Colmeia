@@ -540,6 +540,14 @@ function fazerBackupDaPlanilha() {
   // sempre. Roda depois do backup de propósito: a cópia do dia guarda o
   // histórico completo antes da poda.
   limparLogDePlaysAntigo();
+  // Mesma ideia pras conversas com a Bee: elas somem 15 dias depois da
+  // entrega da tarefa (ver limparConversasBeeAntigas em Bee.gs). Também
+  // depois do backup, pra cópia do dia ainda ter tudo.
+  try {
+    limparConversasBeeAntigas();
+  } catch (err) {
+    Logger.log('Erro ao limpar conversas antigas da Bee: ' + err.message);
+  }
 }
 
 function limparBackupsAntigos(pastaBackups) {

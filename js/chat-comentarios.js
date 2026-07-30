@@ -61,6 +61,12 @@ function abrirChatPanel(task) {
   painel.classList.add("chat-open");
   chatPanel.hidden = false;
   abrirThreadAqui(task);
+  // A Bee lê a tarefa em segundo plano assim que o chat abre — assim a
+  // linha "Bee resumiu o que foi pedido" aparece sozinha embaixo dos
+  // comentários, e o chat dela já abre pronto. É aqui e não na abertura
+  // do card de propósito: abrir o chat é o momento em que a pessoa está
+  // indo ler a conversa, então o custo se justifica.
+  precarregarBee(task);
 }
 
 function fecharChatPanel() {
@@ -73,6 +79,8 @@ function fecharChatPanel() {
 function abrirThreadAqui(task) {
   chatThreadAtivo = "aqui";
   chatAlvoTaskId = task.id;
+  marcarAbaBeeAtiva(false);
+  atualizarCampoParaBee(false);
   const tabAqui = document.getElementById("chatTabAqui");
   const tabMae = document.getElementById("chatTabMae");
   if (tabAqui) tabAqui.classList.add("active");
@@ -85,6 +93,7 @@ function abrirThreadAqui(task) {
   if (thread) {
     thread.innerHTML = renderComentariosHTML(task);
     wireExcluirComentario();
+    inserirLinhaDaBeeNaThread(task);
     thread.scrollTop = thread.scrollHeight;
   }
   marcarChatVisto(task);
@@ -99,6 +108,8 @@ function abrirThreadAqui(task) {
 async function abrirThreadDoCardMae(task) {
   chatThreadAtivo = "mae";
   chatAlvoTaskId = null;
+  marcarAbaBeeAtiva(false);
+  atualizarCampoParaBee(false);
   const tabAqui = document.getElementById("chatTabAqui");
   const tabMae = document.getElementById("chatTabMae");
   if (tabMae) tabMae.classList.add("active");
@@ -158,6 +169,8 @@ async function abrirThreadDoCardMae(task) {
 async function abrirThreadLinhaDoTempo(task) {
   chatThreadAtivo = "tudo";
   chatAlvoTaskId = task.id;
+  marcarAbaBeeAtiva(false);
+  atualizarCampoParaBee(false);
   ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle("active", id === "chatTabTudo");
@@ -195,6 +208,21 @@ async function abrirThreadLinhaDoTempo(task) {
     .concat((comentariosMae || []).map(c => Object.assign({}, c, { _origem: "Card mãe" })))
     .sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0));
 
+  // A descrição entra como a PRIMEIRA mensagem da linha do tempo, só pra
+  // leitura — muitas vezes o pedido inteiro está lá, e sem isso a linha
+  // do tempo conta a história pela metade. Ela continua sendo editada
+  // onde sempre foi (a aba Descrição); aqui é só uma cópia pra ler.
+  if (task.descricaoTexto) {
+    juntos.unshift({
+      id: "descricao",
+      autor: "Descrição da tarefa",
+      texto: task.descricaoTexto,
+      data: task.createdAt || null,
+      _origem: "Descrição",
+      _somenteLeitura: true,
+    });
+  }
+
   const titulo = document.getElementById("chatPanelTitle");
   if (titulo) titulo.textContent = "Linha do tempo · " + task.title;
   if (thread) {
@@ -202,6 +230,7 @@ async function abrirThreadLinhaDoTempo(task) {
     else if (algumaFalhou) thread.innerHTML = `<p class="comments-empty">Não consegui carregar a linha do tempo agora.</p>`;
     else thread.innerHTML = `<p class="comments-empty">Nenhum comentário em nenhuma das três pontas ainda.</p>`;
     wireExcluirComentario();
+    inserirLinhaDaBeeNaThread(task);
     thread.scrollTop = thread.scrollHeight;
   }
 }
@@ -549,6 +578,11 @@ async function carregarTudoDaTarefa(task) {
   if (descEl) descEl.innerHTML = data.descricao
     ? formatarDescricaoRunrun(data.descricao)
     : "Sem descrição cadastrada nessa tarefa.";
+  // Guarda a descrição na própria tarefa: a Linha do tempo mostra ela
+  // como a primeira mensagem (ver abrirThreadLinhaDoTempo), e é isso que
+  // faz o "ver original" da Bee ter pra onde apontar quando o pedido veio
+  // da descrição, e não de um comentário.
+  task.descricaoTexto = data.descricao || "";
 
   const seqEl = document.getElementById("workflowSeqGroup");
   if (seqEl) {

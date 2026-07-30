@@ -1,0 +1,429 @@
+// A BEE no chat da tarefa.
+//
+// O painel de comentários agora tem dois chats, escolhidos pelos ícones
+// do topo: "Comentários" (o de sempre, que vai pro Runrun.it) e "Bee"
+// (que fica só no Colmeia). A separação é proposital — o maior risco de
+// juntar os dois num campo só é alguém mandar pro cliente uma pergunta
+// que era pra ela, ou perguntar pra ela algo que o atendimento precisava ver.
+//
+// A primeira fala dela é sempre o RESUMO do que a tarefa pede, montado
+// só com o que está escrito, e cada item aponta pra mensagem exata de
+// onde saiu (clicável). Palpite dela só existe depois, e só se o
+// designer perguntar — ver Bee.gs, que tem os dois prompts separados
+// justamente por isso.
+//
+// Nada daqui vai pro Runrun.it sozinho: mandar pra lá é sempre um clique
+// no ícone que existe em cada mensagem (ver mandarMensagemProRunrun).
+//
+// Carregado depois de detalhe-alteracao.js — ver a ordem das tags
+// <script> no index.html, que é obrigatória (regra de ouro do CLAUDE.md).
+
+// taskId -> [{autor: "bee"|"designer", texto, quando}]
+const beeConversas = new Map();
+// taskId -> {itens:[...], observacao} | {semMaterial:true} | {erro:"..."}
+const beeResumos = new Map();
+const beeCarregando = new Set();
+
+const beeIcon = `<svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="14" rx="5" ry="6" fill="currentColor" opacity="0.9"/><path d="M7 12h10M7 15h10M8 18h8" stroke="var(--card-bg, #fff)" stroke-width="1.4" stroke-linecap="round"/><path d="M9 8c-2-2-5-2.5-6-1s1 3.5 3.5 3.5M15 8c2-2 5-2.5 6-1s-1 3.5-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="4.5" r="1" fill="currentColor"/><circle cx="14" cy="4.5" r="1" fill="currentColor"/></svg>`;
+
+const BEE_FIREFLY_BASE = "https://firefly.adobe.com/generate/images";
+
+// ===== Abrir o chat da Bee =====
+
+/**
+ * Troca o painel pro chat da Bee. O resumo e o histórico são buscados
+ * uma vez por tarefa e ficam guardados aqui — voltar e ir de novo não
+ * gera outro pedido à IA (o backend também guarda o resumo em cache,
+ * então nem uma segunda abertura do card custa uma nova geração).
+ */
+async function abrirThreadBee(task) {
+  chatThreadAtivo = "bee";
+  chatAlvoTaskId = null; // nada daqui vai pro Runrun.it por engano
+  marcarAbaBeeAtiva(true);
+
+  const titulo = document.getElementById("chatPanelTitle");
+  if (titulo) titulo.textContent = "Bee · " + task.title;
+  atualizarCampoParaBee(true);
+
+  const taskId = task.id;
+  if (!beeResumos.has(taskId) && !beeCarregando.has(taskId)) {
+    desenharThreadBee(task); // já mostra "lendo a tarefa..."
+    await carregarBeeDaTarefa(task);
+    if (chatThreadAtivo !== "bee" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
+  }
+  desenharThreadBee(task);
+}
+
+function marcarAbaBeeAtiva(ativa) {
+  ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("active");
+  });
+  const grupoComentarios = document.getElementById("chatGrupoComentarios");
+  if (grupoComentarios) grupoComentarios.classList.toggle("escondido", ativa);
+  const botaoBee = document.getElementById("chatIconeBee");
+  if (botaoBee) botaoBee.classList.toggle("active", ativa);
+  const botaoComentarios = document.getElementById("chatIconeComentarios");
+  if (botaoComentarios) botaoComentarios.classList.toggle("active", !ativa);
+}
+
+/**
+ * Volta pro chat de comentários (o que vai pro Runrun.it). Numa
+ * alteração abre direto na Linha do tempo: é a única aba que mostra a
+ * história completa — o pedido quase sempre está no card mãe ou na peça
+ * original, não em "Comentários aqui".
+ */
+function abrirThreadComentarios(task) {
+  marcarAbaBeeAtiva(false);
+  atualizarCampoParaBee(false);
+  if (ehTarefaDeAlteracao(task)) abrirThreadLinhaDoTempo(task);
+  else abrirThreadAqui(task);
+}
+
+// Muda a cara do campo de escrever conforme o chat ativo, pra ninguém
+// escrever no lugar errado sem perceber.
+function atualizarCampoParaBee(ehBee) {
+  const campo = document.getElementById("commentInput");
+  if (campo) campo.placeholder = ehBee ? "Perguntar pra Bee (fica só no Colmeia)..." : "Escreva sua mensagem...";
+  const caixa = document.querySelector(".comment-input");
+  if (caixa) caixa.classList.toggle("modo-bee", !!ehBee);
+}
+
+async function carregarBeeDaTarefa(task) {
+  const taskId = task.id;
+  if (!taskId) return;
+  beeCarregando.add(taskId);
+  try {
+    const original = typeof acharTarefaOriginalDaAlteracao === "function"
+      ? acharTarefaOriginalDaAlteracao(task)
+      : null;
+    const [resumo, historico] = await Promise.all([
+      chamarBackend({ acao: "beeResumo", taskId, idOriginal: original ? original.id : null }),
+      chamarBackend({ acao: "beeHistorico", taskId }),
+    ]);
+
+    if (!resumo || !resumo.ok) {
+      beeResumos.set(taskId, { erro: (resumo && resumo.error) || "Não consegui ler essa tarefa agora." });
+    } else if (resumo.semMaterial) {
+      beeResumos.set(taskId, { semMaterial: true });
+    } else {
+      beeResumos.set(taskId, resumo.resumo || { itens: [] });
+    }
+    if (historico && historico.ok) beeConversas.set(taskId, historico.conversa || []);
+    else if (!beeConversas.has(taskId)) beeConversas.set(taskId, []);
+
+    // A peça original (o arquivo que vai ser alterado) entra como
+    // pastilha na mensagem dela — o designer vê do que se trata sem sair
+    // da conversa. Em segundo plano: se não vier, a mensagem fica igual.
+    if (original && typeof buscarAnexosDeUmaTarefa === "function") {
+      buscarAnexosDeUmaTarefa(original.id).then(anexos => {
+        if (!anexos || !anexos.length) return;
+        const guardado = beeResumos.get(taskId);
+        if (!guardado || guardado.erro) return;
+        guardado.peca = { anexo: anexos[anexos.length - 1], taskId: original.id };
+        if (chatThreadAtivo === "bee" && tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId)) {
+          desenharThreadBee(tasks[detailIdx]);
+        }
+      });
+    }
+  } finally {
+    beeCarregando.delete(taskId);
+  }
+}
+
+// ===== Desenhar =====
+
+function desenharThreadBee(task) {
+  const thread = document.getElementById("commentsThread");
+  if (!thread) return;
+  const taskId = task.id;
+
+  if (beeCarregando.has(taskId) && !beeResumos.has(taskId)) {
+    thread.innerHTML = `<p class="comments-empty">A Bee está lendo a tarefa...</p>`;
+    return;
+  }
+
+  const resumo = beeResumos.get(taskId);
+  const conversa = beeConversas.get(taskId) || [];
+  thread.innerHTML = renderPrimeiraFalaDaBee(task, resumo)
+    + conversa.map((m, i) => renderMensagemDaConversa(m, i)).join("");
+  wireThreadBee(task);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function renderPrimeiraFalaDaBee(task, resumo) {
+  if (!resumo) return "";
+  if (resumo.erro) {
+    return bolhaDaBee(`<p class="bee-aviso">${escaparHTML(resumo.erro)}</p>`, -1);
+  }
+  if (resumo.semMaterial) {
+    return bolhaDaBee(`
+      <p>Li a descrição e todos os comentários e não achei nada escrito sobre o que fazer nessa tarefa.</p>
+      <button type="button" class="bee-acao" id="beePerguntarAtendimento">Perguntar pro atendimento</button>
+    `, -1);
+  }
+
+  const itens = resumo.itens || [];
+  const corpo = `
+    <p class="bee-titulo">${ehTarefaDeAlteracao(task) ? "O que foi pedido pra mudar" : "O que essa tarefa pede"}</p>
+    ${itens.length
+      ? `<ul class="bee-lista">${itens.map((it, i) => `
+          <li>
+            <span class="bee-item-texto">${escaparHTML(it.texto)}</span>
+            <button type="button" class="bee-origem" data-item="${i}" title="Ver a mensagem original">${escaparHTML(rotuloDaOrigem(it))}</button>
+          </li>
+        `).join("")}</ul>`
+      : `<p>Não consegui apontar nenhum pedido com origem clara. Vale conferir na Linha do tempo.</p>`}
+    ${resumo.observacao ? `<p class="bee-obs">${escaparHTML(resumo.observacao)}</p>` : ""}
+    ${resumo.peca ? `
+      <button type="button" class="bee-peca" id="beePecaBtn" data-doc-id="${resumo.peca.anexo.id}" data-nome="${escaparHTML(resumo.peca.anexo.nome)}" data-task-id="${resumo.peca.taskId}">
+        a peça: ${escaparHTML(resumo.peca.anexo.nome)}
+      </button>
+    ` : ""}
+  `;
+  return bolhaDaBee(corpo, -1);
+}
+
+function rotuloDaOrigem(item) {
+  if (item.onde === "descricao") return "descrição";
+  const quem = (item.autor || "").split(" ")[0] || "alguém";
+  return item.quando ? `${quem}, ${item.quando}` : quem;
+}
+
+function bolhaDaBee(corpoHTML, indice) {
+  return `
+    <div class="comment-bubble bee-bubble" data-bee-indice="${indice}">
+      <span class="bee-avatar" aria-hidden="true">${beeIcon}</span>
+      <div class="comment-body">
+        <div class="comment-meta">
+          <span class="comment-author">Bee</span>
+          <span class="bee-selo" title="Nada daqui vai pro Runrun.it sozinho">só no Colmeia</span>
+          ${indice >= 0 ? `<button type="button" class="bee-mandar" data-indice="${indice}" title="Mandar isso pro Runrun.it">${iconeMandarProRunrun}</button>` : ""}
+        </div>
+        <div class="comment-text">${corpoHTML}</div>
+      </div>
+    </div>
+  `;
+}
+
+const iconeMandarProRunrun = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function renderMensagemDaConversa(m, indice) {
+  if (m.autor === "bee") return bolhaDaBee(formatarFalaDaBee(m.texto), indice);
+  return `
+    <div class="comment-bubble mine" data-bee-indice="${indice}">
+      <div class="comment-body">
+        <div class="comment-meta">
+          <span class="comment-author">Você</span>
+          <button type="button" class="bee-mandar" data-indice="${indice}" title="Mandar isso pro Runrun.it">${iconeMandarProRunrun}</button>
+        </div>
+        <div class="comment-text">${linkifyTexto(escaparHTML(m.texto))}</div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * A linha que começa com "FIREFLY:" vira um bloco com o prompt pronto
+ * pra copiar e um botão que abre o Adobe Firefly. O botão "copiar"
+ * existe de propósito mesmo quando o link funciona: se o Firefly um dia
+ * parar de aceitar o texto pelo endereço, o caminho manual continua ali.
+ */
+function formatarFalaDaBee(texto) {
+  return escaparHTML(texto)
+    .split("\n")
+    .map(linha => {
+      const match = linha.match(/^\s*FIREFLY:\s*(.+)$/i);
+      if (!match) return linha;
+      const prompt = match[1].trim();
+      return `
+        <div class="bee-firefly">
+          <code class="bee-firefly-prompt">${prompt}</code>
+          <div class="bee-firefly-acoes">
+            <button type="button" class="bee-acao" data-copiar="${prompt.replace(/"/g, "&quot;")}">Copiar</button>
+            <a class="bee-acao principal" href="${BEE_FIREFLY_BASE}?prompt=${encodeURIComponent(prompt)}" target="_blank" rel="noopener">Abrir no Firefly</a>
+          </div>
+        </div>
+      `;
+    })
+    .join("<br>")
+    .replace(/<br>(\s*<div class="bee-firefly")/g, "$1");
+}
+
+// ===== Cliques =====
+
+function wireThreadBee(task) {
+  const thread = document.getElementById("commentsThread");
+  if (!thread) return;
+  const resumo = beeResumos.get(task.id) || {};
+
+  thread.querySelectorAll(".bee-origem").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const item = (resumo.itens || [])[Number(btn.dataset.item)];
+      if (item) irParaOrigemDoItem(task, item);
+    });
+  });
+
+  const conversa = beeConversas.get(task.id) || [];
+  thread.querySelectorAll(".bee-mandar").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const m = conversa[Number(btn.dataset.indice)];
+      if (m) mandarMensagemProRunrun(task, m.texto);
+    });
+  });
+
+  thread.querySelectorAll("[data-copiar]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(btn.dataset.copiar)
+        .then(() => mostrarToast("Prompt copiado."))
+        .catch(() => mostrarToast("Não consegui copiar. Selecione o texto e copie na mão.", "erro"));
+    });
+  });
+
+  const pecaBtn = thread.querySelector("#beePecaBtn");
+  if (pecaBtn) {
+    pecaBtn.addEventListener("click", () => {
+      baixarAnexo(pecaBtn.dataset.docId, pecaBtn.dataset.nome, pecaBtn, pecaBtn.dataset.taskId);
+    });
+  }
+
+  const perguntarBtn = thread.querySelector("#beePerguntarAtendimento");
+  if (perguntarBtn) perguntarBtn.addEventListener("click", () => prepararPerguntaProAtendimento(task));
+}
+
+/**
+ * Leva pro comentário exato que gerou aquele item. Numa alteração abre a
+ * Linha do tempo (que junta as três pontas); numa tarefa comum, o chat
+ * dela mesma. A descrição também aparece lá, como a primeira mensagem —
+ * por isso um item que veio dela também tem pra onde apontar.
+ */
+async function irParaOrigemDoItem(task, item) {
+  marcarAbaBeeAtiva(false);
+  atualizarCampoParaBee(false);
+  if (ehTarefaDeAlteracao(task)) await abrirThreadLinhaDoTempo(task);
+  else await abrirThreadAqui(task);
+
+  const alvo = item.onde === "descricao" ? "descricao" : item.comentarioId;
+  const el = document.querySelector(`.comment-bubble[data-comment-id="${alvo}"]`);
+  if (!el) {
+    mostrarToast("Não achei essa mensagem na conversa — ela pode ter sido apagada.", "erro");
+    return;
+  }
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.classList.add("comment-destacado");
+  setTimeout(() => el.classList.remove("comment-destacado"), 2200);
+}
+
+/**
+ * Manda uma mensagem da conversa com a Bee pro Runrun.it, como
+ * comentário da tarefa. É o único caminho de saída — e passa pelo campo
+ * de escrever de propósito, pra dar a chance de revisar antes.
+ */
+function mandarMensagemProRunrun(task, texto) {
+  abrirThreadComentarios(task);
+  const campo = document.getElementById("commentInput");
+  if (!campo) return;
+  campo.value = texto;
+  campo.focus();
+  mostrarToast("Revisa e aperta enviar — aí sim vai pro Runrun.it.");
+}
+
+/**
+ * Quando a Bee não achou nada escrito: já deixa o comentário pronto,
+ * marcando o atendimento responsável daquele cliente (o mesmo nome que
+ * o card já mostra no bloco "Atendimento responsável").
+ */
+function prepararPerguntaProAtendimento(task) {
+  const nome = (typeof getAtendimentoDoCliente === "function" && getAtendimentoDoCliente(task.client)) || "";
+  abrirThreadComentarios(task);
+  const campo = document.getElementById("commentInput");
+  if (!campo) return;
+  campo.value = (nome ? `@${nome} ` : "") + "não achei o que precisa ser feito nessa tarefa — consegue detalhar aqui o que o cliente pediu?";
+  campo.focus();
+}
+
+/**
+ * Manda a Bee ler a tarefa em segundo plano, sem trocar de chat. O
+ * resultado fica guardado aqui e no cache do backend (por conteúdo:
+ * enquanto ninguém escrever nada novo, não gera outro pedido à IA).
+ */
+async function precarregarBee(task) {
+  if (!task || !task.id) return;
+  if (beeResumos.has(task.id) || beeCarregando.has(task.id)) return;
+  await carregarBeeDaTarefa(task);
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return;
+  if (chatThreadAtivo === "bee") desenharThreadBee(task);
+  else inserirLinhaDaBeeNaThread(task);
+}
+
+/**
+ * A linha fininha que aparece no FIM da conversa de comentários,
+ * apontando pro chat da Bee. Ela existe pra não perder o "está tudo
+ * ali": o resumo mora no chat dela, mas quem está lendo os comentários
+ * vê que ele existe e chega lá num clique — sem repetir o texto em dois
+ * lugares. Só aparece quando ela realmente tem algo resumido.
+ */
+function inserirLinhaDaBeeNaThread(task) {
+  const thread = document.getElementById("commentsThread");
+  if (!thread || !task || !task.id) return;
+  const resumo = beeResumos.get(task.id);
+  const itens = resumo && resumo.itens;
+  if (!itens || !itens.length) return;
+  if (thread.querySelector(".bee-linha")) return;
+
+  thread.insertAdjacentHTML("beforeend", `
+    <button type="button" class="bee-linha" id="beeLinhaAtalho">
+      <span class="bee-linha-icone">${beeIcon}</span>
+      <span>Bee resumiu o que foi pedido — ${itens.length} ${itens.length === 1 ? "item" : "itens"}</span>
+      <span class="bee-linha-abrir">abrir</span>
+    </button>
+  `);
+  const btn = document.getElementById("beeLinhaAtalho");
+  if (btn) btn.addEventListener("click", () => abrirThreadBee(tasks[detailIdx] || task));
+}
+
+// ===== Perguntar pra Bee =====
+
+async function perguntarParaBee(task, texto) {
+  const taskId = task.id;
+  if (!taskId || !texto) return;
+
+  const conversa = beeConversas.get(taskId) || [];
+  conversa.push({ autor: "designer", texto, quando: Date.now() });
+  beeConversas.set(taskId, conversa);
+  desenharThreadBee(task);
+
+  const thread = document.getElementById("commentsThread");
+  if (thread) {
+    thread.insertAdjacentHTML("beforeend", `<p class="comments-empty" id="beePensando">A Bee está pensando...</p>`);
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  const original = typeof acharTarefaOriginalDaAlteracao === "function"
+    ? acharTarefaOriginalDaAlteracao(task)
+    : null;
+  const data = await chamarBackend({
+    acao: "beeConversar",
+    taskId,
+    pergunta: texto,
+    idOriginal: original ? original.id : null,
+  });
+
+  // Trocou de tarefa ou de chat enquanto ela pensava? A resposta fica
+  // guardada mesmo assim (o backend já salvou) — só não redesenha aqui.
+  const aindaAqui = chatThreadAtivo === "bee" && tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId);
+
+  if (!data || !data.ok) {
+    // Tira a pergunta da lista: ela não chegou a virar conversa de
+    // verdade, e deixar ali daria a impressão de que a Bee ignorou.
+    const lista = beeConversas.get(taskId) || [];
+    if (lista.length && lista[lista.length - 1].autor === "designer") lista.pop();
+    beeConversas.set(taskId, lista);
+    if (aindaAqui) desenharThreadBee(task);
+    mostrarToast((data && data.error) || "A Bee não conseguiu responder agora.", "erro");
+    return;
+  }
+
+  beeConversas.set(taskId, data.conversa || conversa);
+  if (aindaAqui) desenharThreadBee(task);
+}

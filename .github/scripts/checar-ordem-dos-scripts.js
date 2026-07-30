@@ -36,6 +36,7 @@ const ORDEM_ESPERADA = [
   "js/detalhe-modal.js",
   "js/detalhe-cardmae.js",
   "js/detalhe-alteracao.js",
+  "js/bee.js",
   "js/paginas-designers.js",
   "js/pagina-tipos-runrun.js",
   "js/pagina-repasse.js",

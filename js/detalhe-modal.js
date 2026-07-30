@@ -808,11 +808,21 @@ function renderDetail() {
         </button>
       </div>
       <div class="chat-panel-tabs">
-        <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
-        <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
-        ${ehTarefaDeAlteracao(task) ? `
-          <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
-        ` : ""}
+        <!-- Dois chats separados de propósito: o de comentários vai pro
+             Runrun.it, o da Bee fica só no Colmeia. Juntar os dois num
+             campo só é o caminho mais curto pra alguém mandar pro cliente
+             uma pergunta que era pra ela (ver js/bee.js). -->
+        <div class="chat-troca">
+          <button type="button" class="chat-troca-btn active" id="chatIconeComentarios" title="Comentários da tarefa (vão pro Runrun.it)">${chatIcon}</button>
+          ${task.id ? `<button type="button" class="chat-troca-btn" id="chatIconeBee" title="Falar com a Bee (fica só no Colmeia)">${beeIcon}</button>` : ""}
+        </div>
+        <div class="chat-grupo-comentarios" id="chatGrupoComentarios">
+          <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
+          <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
+          ${ehTarefaDeAlteracao(task) ? `
+            <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
+          ` : ""}
+        </div>
         ${task.id ? `<button type="button" class="upload-check-btn" id="uploadCheckBtn" title="Verificar se subiu algum arquivo novo na pasta do card">↻ Verificar upload</button>` : ""}
       </div>
       <div class="upload-notifs" id="uploadNotifs"></div>
@@ -1090,6 +1100,14 @@ function renderDetail() {
   async function enviarComentarioAtual() {
     const texto = commentInput.value.trim();
     if (!texto && !arquivoParaAnexar) return;
+    // No chat da Bee o mesmo campo fala com ela, e NADA vai pro
+    // Runrun.it por aqui (ver js/bee.js).
+    if (chatThreadAtivo === "bee") {
+      if (!texto) return;
+      commentInput.value = "";
+      await perguntarParaBee(tasks[detailIdx] || task, texto);
+      return;
+    }
     if (!chatAlvoTaskId) {
       console.warn("Essa tarefa não está conectada ao Runrun.it, não dá pra comentar de verdade.");
       return;
@@ -1264,6 +1282,12 @@ function renderDetail() {
 
   const chatTabTudo = document.getElementById("chatTabTudo");
   if (chatTabTudo) chatTabTudo.addEventListener("click", () => abrirThreadLinhaDoTempo(tasks[detailIdx] || task));
+
+  const chatIconeBee = document.getElementById("chatIconeBee");
+  if (chatIconeBee) chatIconeBee.addEventListener("click", () => abrirThreadBee(tasks[detailIdx] || task));
+
+  const chatIconeComentarios = document.getElementById("chatIconeComentarios");
+  if (chatIconeComentarios) chatIconeComentarios.addEventListener("click", () => abrirThreadComentarios(tasks[detailIdx] || task));
 
   const uploadCheckBtn = document.getElementById("uploadCheckBtn");
   if (uploadCheckBtn) {

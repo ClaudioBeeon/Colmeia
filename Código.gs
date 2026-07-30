@@ -158,6 +158,16 @@ function handleRequest(e, method) {
         output = abrirTarefaParaColmeia(body.taskId);
       } else if (body.acao === 'entregarTarefa') {
         output = entregarTarefa(body.taskId);
+        // Carimba a data de entrega na conversa da Bee, que é o que
+        // dispara a contagem dos 15 dias até ela ser apagada (ver
+        // marcarEntregaParaBee/limparConversasBeeAntigas em Bee.gs).
+        if (output && output.ok) marcarEntregaParaBee(body.taskId);
+      } else if (body.acao === 'beeResumo') {
+        output = beeResumo(body.taskId, body.idOriginal);
+      } else if (body.acao === 'beeConversar') {
+        output = beeConversar(body.taskId, body.pergunta, body.idOriginal);
+      } else if (body.acao === 'beeHistorico') {
+        output = { ok: true, conversa: lerConversaBee(body.taskId) };
       } else if (body.acao === 'reabrirTarefa') {
         output = reabrirTarefa(body.taskId);
       } else if (body.acao === 'criarRegra') {

@@ -531,3 +531,125 @@
 }
 .diagnostico-tipo.quebrou { background: #FBEAF0; color: #993556; }
 .diagnostico-texto { font-size: 12.5px; color: var(--text-primary); flex: 1 1 100%; word-break: break-word; }
+
+/* -------------------------------------------------------------------
+   A BEE — a assistente dentro do card da tarefa (ver js/bee.js).
+
+   O painel de comentários virou dois chats: o de comentários (que vai
+   pro Runrun.it) e o dela (que fica só no Colmeia). Tudo aqui embaixo
+   existe pra deixar essa diferença ÓBVIA na tela — o pior erro possível
+   seria alguém mandar pro cliente uma pergunta que era pra ela.
+   ------------------------------------------------------------------- */
+
+/* Os dois ícones que trocam de chat, no topo do painel. */
+.chat-troca { display: flex; gap: 4px; flex-shrink: 0; margin-right: 6px; }
+.chat-troca-btn {
+  width: 28px; height: 28px; border-radius: 8px; border: 1px solid transparent;
+  background: transparent; color: var(--text-muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s var(--ease-apple), color .15s var(--ease-apple), border-color .15s var(--ease-apple);
+}
+.chat-troca-btn svg { width: 16px; height: 16px; }
+.chat-troca-btn:hover { background: var(--page-bg); color: var(--text-primary); }
+.chat-troca-btn.active { background: var(--kanban-yellow); color: #16181D; border-color: transparent; }
+
+.chat-grupo-comentarios { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
+.chat-grupo-comentarios.escondido { display: none; }
+
+/* O campo de escrever muda de cara no chat da Bee — é o aviso mais
+   importante da tela: o que for digitado aqui NÃO vai pro Runrun.it. */
+.comment-input.modo-bee { background: rgba(255,193,7,0.07); }
+[data-theme="dark"] .comment-input.modo-bee { background: rgba(255,193,7,0.10); }
+.comment-input.modo-bee input { font-style: italic; }
+
+/* A bolha dela: mesma forma das outras (pra ler igual), cor diferente
+   (pra nunca confundir com mensagem de gente). */
+.bee-bubble { align-self: flex-start; max-width: 92%; }
+.bee-bubble .comment-body { background: #FFF9E6; border-color: #F2DFA4; }
+[data-theme="dark"] .bee-bubble .comment-body { background: #241F0E; border-color: #4A3F17; }
+.bee-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--kanban-yellow); color: #16181D;
+}
+.bee-avatar svg { width: 16px; height: 16px; }
+.bee-selo {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 5px;
+}
+.bee-titulo { font-weight: 700; margin-bottom: 6px; }
+.bee-lista { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
+.bee-lista li { line-height: 1.45; }
+.bee-item-texto { margin-right: 4px; }
+.bee-obs { margin-top: 8px; color: var(--text-muted); font-size: 12px; }
+.bee-aviso { color: var(--text-muted); font-style: italic; }
+
+/* A etiqueta de origem: é ela que transforma "confio ou não confio" em
+   "confiro num clique". Sem isso o resumo é só um palpite bonito. */
+.bee-origem {
+  font-size: 10px; font-weight: 700; white-space: nowrap;
+  border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+  border-radius: 999px; padding: 1px 6px; cursor: pointer;
+  transition: background .15s var(--ease-apple), color .15s var(--ease-apple);
+}
+.bee-origem:hover { background: var(--kanban-yellow); color: #16181D; border-color: transparent; }
+
+/* A mensagem que a etiqueta abriu fica acesa por um instante, senão a
+   pessoa cai no meio da conversa sem saber qual linha era. */
+.comment-destacado .comment-body {
+  box-shadow: 0 0 0 2px var(--kanban-yellow);
+  transition: box-shadow .3s var(--ease-apple);
+}
+
+.bee-acao {
+  font-family: var(--font-body); font-size: 11.5px; font-weight: 700;
+  border: 1px solid var(--border); background: var(--card-bg); color: var(--text-primary);
+  border-radius: 999px; padding: 5px 11px; cursor: pointer; margin-top: 8px;
+  text-decoration: none; display: inline-block;
+}
+.bee-acao:hover { background: var(--page-bg); }
+.bee-acao.principal { background: var(--kanban-yellow); color: #16181D; border-color: transparent; }
+
+.bee-peca {
+  display: block; width: 100%; text-align: left; margin-top: 8px;
+  font-family: var(--font-body); font-size: 11.5px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--card-bg); color: var(--text-primary);
+  border-radius: 8px; padding: 6px 9px; cursor: pointer;
+}
+.bee-peca:hover { border-color: var(--text-muted); }
+
+/* O ícone de mandar pro Runrun.it: é a ÚNICA saída daqui pra lá, e
+   mesmo ele não envia sozinho — joga o texto no campo pra revisar. */
+.bee-mandar {
+  border: none; background: transparent; color: var(--text-muted); cursor: pointer;
+  width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .15s var(--ease-apple), color .15s var(--ease-apple);
+}
+.bee-mandar svg { width: 13px; height: 13px; }
+.comment-bubble:hover .bee-mandar { opacity: 1; }
+.bee-mandar:hover { color: var(--text-primary); }
+
+/* Prompt de imagem pronto pro Firefly. */
+.bee-firefly {
+  margin: 8px 0; padding: 8px; border-radius: 8px;
+  background: var(--page-bg); border: 1px solid var(--border);
+}
+.bee-firefly-prompt {
+  display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11.5px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap;
+}
+.bee-firefly-acoes { display: flex; gap: 6px; }
+
+/* A linha fininha no fim dos comentários que leva pro chat dela. */
+.bee-linha {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  margin-top: 4px; padding: 7px 10px; cursor: pointer;
+  font-family: var(--font-body); font-size: 11.5px; font-weight: 600;
+  color: var(--text-muted); background: transparent;
+  border: 1px dashed var(--border); border-radius: 10px;
+  transition: border-color .15s var(--ease-apple), color .15s var(--ease-apple);
+}
+.bee-linha:hover { border-color: var(--kanban-yellow); color: var(--text-primary); }
+.bee-linha-icone { display: flex; color: var(--kanban-yellow); }
+.bee-linha-icone svg { width: 15px; height: 15px; }
+.bee-linha-abrir { margin-left: auto; font-weight: 700; }

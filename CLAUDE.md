@@ -33,7 +33,7 @@ Se uma sessão futura receber acesso a essa pasta vazia, pedir acesso à pasta c
 
 ## Estrutura do backend (.gs) — dividido em 2026-07-30
 
-O `Código.gs` era um arquivo único de ~3.000 linhas e foi dividido por assunto em 7 arquivos, **sem
+O `Código.gs` era um arquivo único de ~3.000 linhas e foi dividido por assunto em 7 arquivos (hoje 8, com o `Bee.gs`), **sem
 alterar nenhuma linha de código** (só movendo blocos). Diferente do frontend, aqui **a ordem dos
 arquivos NÃO importa**: o Apps Script avalia todos os `.gs` do projeto antes de atender qualquer
 requisição, e todos compartilham o mesmo espaço de nomes — qualquer função chama qualquer outra sem
@@ -53,6 +53,13 @@ requisição, e todos compartilham o mesmo espaço de nomes — qualquer funçã
   `pegarTravaDaPlanilha`.
 - `IA.gs` (~335 linhas) — Groq/Gemini, frase do dia, briefing da tarefa, resumo da alteração.
 - `Agenda.gs` (~100 linhas) — reuniões de hoje e resposta de convite.
+- `Bee.gs` (~330 linhas) — a **Bee**, assistente dentro do card. Tem DOIS prompts separados de
+  propósito: `beeResumo` (a primeira fala dela — só o que está escrito, cada item apontando pra
+  mensagem exata de onde saiu) e `beeConversar` (a partir daí ela pode opinar, sugerir caminho
+  criativo e montar prompt de imagem pro Firefly — palpite só existe se o designer pedir). A
+  conversa fica na aba `BeeChat` da planilha, **uma linha por tarefa** (a conversa inteira dentro
+  de uma célula), e é apagada 15 dias depois da entrega — o carimbo de entrega é posto pelo próprio
+  `handleRequest` quando a entrega passa pelo Colmeia, e a limpeza roda junto do backup diário.
 
 **Ao criar um arquivo `.gs` novo:** é obrigatório liberá-lo no `.claspignore` (que ignora tudo por
 padrão), senão o clasp não o envia e o deploy passa "com sucesso" mas as funções dele não existem em
@@ -67,10 +74,11 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 ## Estrutura do frontend (js/)
 
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
-(em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida entrou a fila offline, 18)
+(em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
+entrou a fila offline, 18; depois a Bee, 19)
 menores dentro da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não
 tem bundler, TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os
-18 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
+19 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
 
@@ -105,12 +113,18 @@ Arquivos, na ordem em que são carregados (`js/`):
 13. `detalhe-alteracao.js` — subtarefas de ALTERAÇÃO: `ehTarefaDeAlteracao`,
     `acharTarefaOriginalDaAlteracao`, `nomeDaPecaOriginalRapido` (usado no card do quadro),
     `carregarResumoDaAlteracao` (resumo por IA do que mudou) e a aba "Tarefa original".
-14. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
+14. `bee.js` — a **Bee** no chat da tarefa. O painel de comentários tem dois chats, escolhidos
+    pelos ícones do topo: "Comentários" (vai pro Runrun.it) e "Bee" (fica só no Colmeia) — a
+    separação é proposital, o pior erro possível seria mandar pro cliente uma pergunta que era pra
+    ela. A primeira fala dela é o resumo do que a tarefa pede, com etiqueta de origem clicável em
+    cada item (`irParaOrigemDoItem` pula pra mensagem exata e acende ela). **Nada daqui vai pro
+    Runrun.it sozinho**: `mandarMensagemProRunrun` só joga o texto no campo pra revisar.
+15. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
     e "Clientes por atendimento".
-15. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
-16. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
-17. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
-18. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+16. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
+17. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
+18. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
+19. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
