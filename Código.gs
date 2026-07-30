@@ -79,6 +79,17 @@ var COLUNA_STAGE_IDS = {
 
 // ============ ENTRADA (doGet / doPost) ============
 
+// Ações que mexem em algo que aparece no quadro — depois de qualquer uma
+// delas, a varredura guardada do quadro é descartada (ver
+// invalidarCacheDoQuadro, no fim deste arquivo).
+var ACOES_QUE_MUDAM_O_QUADRO = [
+  'tocarTarefa', 'pausarTarefa', 'definirPrioridade',
+  'avancarWorkflow', 'desfazerWorkflow', 'entregarTarefa', 'reabrirTarefa',
+  'reatribuir', 'moverEtapa', 'moverEtapaArbitraria',
+  'alterarEntrega', 'alterarPublicacao', 'ajustarEstimativa',
+  'criarRegra', 'adicionarNaRegra', 'removerDaRegra'
+];
+
 function doGet(e) {
   return handleRequest(e, 'GET');
 }
@@ -121,6 +132,8 @@ function handleRequest(e, method) {
         output = baixarDocumentoAnexo(body.documentId);
       } else if (body.acao === 'gerarBriefing') {
         output = gerarBriefingDaTarefa(body.taskId);
+      } else if (body.acao === 'resumirAlteracao') {
+        output = resumirAlteracao(body.taskId, body.idOriginal);
       } else if (body.acao === 'adicionarComentario') {
         output = adicionarComentario(body.taskId, body.texto);
       } else if (body.acao === 'excluirComentario') {
@@ -213,6 +226,15 @@ function handleRequest(e, method) {
         output = excluirAviso(body.id);
       } else {
         output = { ok: false, error: 'Ação POST desconhecida: ' + body.acao };
+      }
+
+      // Toda ação que muda algo que APARECE no quadro joga fora a
+      // varredura guardada (ver invalidarCacheDoQuadro). Sem isso, quem
+      // acabou de mover/entregar/repassar uma tarefa podia ver a tela
+      // "voltar" ao estado de antes por até 45 segundos, porque a próxima
+      // leitura vinha do que foi guardado ANTES da ação.
+      if (output && output.ok && ACOES_QUE_MUDAM_O_QUADRO.indexOf(body.acao) !== -1) {
+        invalidarCacheDoQuadro();
       }
     } else {
       output = { ok: false, error: 'Use ?tipo=tarefas pra buscar o quadro.' };
@@ -499,15 +521,38 @@ function buscarTempoMedioDoPainel() {
   return mapa;
 }
 
-function transformarTarefaParaColmeia(t, nomeDesignerFallback) {
+/**
+ * Junta, UMA VEZ SÓ, os dois mapas do painel-designers-beeon que toda
+ * tarefa precisa (vínculos de nome de cliente + tempo médio por cliente).
+ *
+ * Por que isso existe: transformarTarefaParaColmeia era chamada pra cada
+ * tarefa e chamava buscarVinculosDoPainel()/buscarTempoMedioDoPainel()
+ * lá dentro. Mesmo com o cache de 10 minutos, cada chamada dessas é uma
+ * leitura no CacheService (ida à rede interna do Google) + um JSON.parse
+ * do mapa inteiro. Com ~100 tarefas davam ~200 leituras repetidas em CADA
+ * getTarefasColmeia — que roda a cada 60s pra todo mundo do time. Agora
+ * quem processa uma LISTA de tarefas monta esse contexto uma vez e passa
+ * adiante; quem processa uma tarefa só continua funcionando sem passar
+ * nada (aí ele monta na hora, que é o comportamento antigo).
+ */
+function contextoDosPaineis() {
+  return {
+    vinculos: buscarVinculosDoPainel(),
+    tempoMedio: buscarTempoMedioDoPainel()
+  };
+}
+
+function transformarTarefaParaColmeia(t, nomeDesignerFallback, contexto) {
+  var mapaVinculos = (contexto && contexto.vinculos) || buscarVinculosDoPainel();
+  var mapaTempoMedio = (contexto && contexto.tempoMedio) || buscarTempoMedioDoPainel();
   var nomeEtapa = t.board_stage_name || t.task_state_name || '';
   var chaveColuna = nomeColunaParaChave(nomeEtapa);
   // Resolve o nome do cliente pro nome canônico vinculado no painel (ex:
   // "ALDEN 348 LTDA" no Runrun.it -> "Alden", que é como o coordenador
   // conhece o cliente e como as pastas do Drive estão organizadas).
   var nomeClienteBruto = t.client_name || 'Sem cliente';
-  var nomeClienteResolvido = resolverNomeCanonico(nomeClienteBruto, buscarVinculosDoPainel());
-  var tempoMedioMinutos = buscarTempoMedioDoPainel()[normalizarNomeParaComparar(nomeClienteResolvido)] || 0;
+  var nomeClienteResolvido = resolverNomeCanonico(nomeClienteBruto, mapaVinculos);
+  var tempoMedioMinutos = mapaTempoMedio[normalizarNomeParaComparar(nomeClienteResolvido)] || 0;
   return {
     id: t.id,
     title: t.title,
@@ -557,9 +602,26 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback) {
   };
 }
 
-function buscarTarefasRunrun() {
-  var tarefas = [];
+// Chave do cache onde a busca principal deixa os cards mãe que ela já
+// encontrou (e descarta) — pra página "Runrun completo" reaproveitar em
+// vez de repaginar TODAS as tarefas abertas do time de novo só pra achar
+// eles. Ver buscarExtrasRunrunCompleto.
+var CACHE_CARD_MAE_ABERTOS = 'cardMaeAbertos';
+
+/**
+ * Varre as tarefas ABERTAS do time uma única vez e devolve as duas
+ * categorias separadas: as normais (que vão pro quadro) e os cards mãe
+ * (que o quadro nunca mostra). Antes essa varredura acontecia duas vezes
+ * — uma aqui, jogando os cards mãe no lixo, e outra em
+ * buscarExtrasRunrunCompleto só pra recuperá-los.
+ */
+function buscarTarefasAbertasSeparadas() {
+  var normais = [];
+  var cardMae = [];
   var idsPorEmail = buscarIdsResponsaveisRunrun();
+  // Monta os mapas do painel UMA vez pra todas as tarefas (ver
+  // contextoDosPaineis) em vez de uma vez por tarefa.
+  var contexto = contextoDosPaineis();
 
   Object.keys(RUNRUN_USUARIOS).forEach(function (email) {
     var nomeDesigner = RUNRUN_USUARIOS[email];
@@ -573,8 +635,8 @@ function buscarTarefasRunrun() {
       if (!Array.isArray(lote) || lote.length === 0) break;
 
       lote.forEach(function (t) {
-        if (tarefaEhCardMae(t)) return;
-        tarefas.push(transformarTarefaParaColmeia(t, nomeDesigner));
+        if (tarefaEhCardMae(t)) cardMae.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
+        else normais.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
       });
 
       if (lote.length < 100) break;
@@ -582,7 +644,18 @@ function buscarTarefasRunrun() {
     }
   });
 
-  return tarefas;
+  // Deixa os cards mãe prontos pra página "Runrun completo" pegar sem
+  // repetir a varredura. TTL de 120s porque o quadro atualiza a cada 60s,
+  // então esse cache fica praticamente sempre quente.
+  try {
+    CacheService.getScriptCache().put(CACHE_CARD_MAE_ABERTOS, JSON.stringify(cardMae), 120);
+  } catch (e) { /* cache cheio/indisponível — a página busca do jeito antigo */ }
+
+  return { normais: normais, cardMae: cardMae };
+}
+
+function buscarTarefasRunrun() {
+  return buscarTarefasAbertasSeparadas().normais;
 }
 
 var JANELA_ENTREGUES_RUNRUN_COMPLETO_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
@@ -598,33 +671,31 @@ var JANELA_ENTREGUES_RUNRUN_COMPLETO_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
  * aproximação de "quando fechou" já usada em lastActivityAt).
  */
 function buscarExtrasRunrunCompleto() {
-  var cardMae = [];
   var entregues = [];
   var idsPorEmail = buscarIdsResponsaveisRunrun();
   var corte = Date.now() - JANELA_ENTREGUES_RUNRUN_COMPLETO_MS;
+  var contexto = contextoDosPaineis();
+
+  // Card mãe: a busca principal do quadro (buscarTarefasAbertasSeparadas)
+  // já os encontrou e deixou prontos no cache — não repagina TODAS as
+  // tarefas abertas do time de novo só por causa deles. Só cai na
+  // varredura própria se o cache estiver vazio (ex: primeira chamada do
+  // dia, antes de qualquer atualização do quadro).
+  var cardMae = null;
+  try {
+    var cacheadoCardMae = CacheService.getScriptCache().get(CACHE_CARD_MAE_ABERTOS);
+    if (cacheadoCardMae) cardMae = JSON.parse(cacheadoCardMae);
+  } catch (e) { cardMae = null; }
+  if (!cardMae) cardMae = buscarTarefasAbertasSeparadas().cardMae;
 
   Object.keys(RUNRUN_USUARIOS).forEach(function (email) {
     var nomeDesigner = RUNRUN_USUARIOS[email];
     var runrunId = idsPorEmail[email];
     if (!runrunId) return;
 
-    // Card mãe: reaproveita a mesma busca de tarefas abertas, só que
-    // guardando (em vez de descartar) as que são card mãe.
-    var pagina = 1;
-    while (pagina <= 5) {
-      var loteAbertas = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
-        '&is_closed=false&sort=desired_date&sortDir=asc&limit=100&page=' + pagina);
-      if (!Array.isArray(loteAbertas) || loteAbertas.length === 0) break;
-      loteAbertas.forEach(function (t) {
-        if (tarefaEhCardMae(t)) cardMae.push(transformarTarefaParaColmeia(t, nomeDesigner));
-      });
-      if (loteAbertas.length < 100) break;
-      pagina++;
-    }
-
     // Entregues: tarefas fechadas, mais recentes primeiro, parando assim
     // que sair da janela de 15 dias.
-    pagina = 1;
+    var pagina = 1;
     while (pagina <= 5) {
       var loteFechadas = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
         '&is_closed=true&sort=updated_at&sortDir=desc&limit=100&page=' + pagina);
@@ -636,7 +707,7 @@ function buscarExtrasRunrunCompleto() {
         var atualizadoEm = t.updated_at ? new Date(t.updated_at).getTime() : 0;
         if (atualizadoEm < corte) { saiuDaJanela = true; break; }
         if (tarefaEhCardMae(t)) continue;
-        entregues.push(transformarTarefaParaColmeia(t, nomeDesigner));
+        entregues.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
       }
       if (saiuDaJanela || loteFechadas.length < 100) break;
       pagina++;
@@ -658,7 +729,23 @@ function extrairNomeProjeto(t) {
   return (t.project_name || (t.project && t.project.name) || t.board_name || '').toString();
 }
 
+/**
+ * ATENÇÃO: é a chamada mais pesada do backend — varre TODAS as tarefas do
+ * time, abertas E fechadas (até 10 páginas de 100 por designer). Por isso
+ * o resultado fica 10 minutos em cache (mesmo padrão de
+ * buscarVinculosDoPainel/buscarTempoMedioDoPainel): é um número de
+ * acompanhamento mensal, não muda de minuto em minuto, e antes disso ela
+ * rodava inteira a cada vez que alguém abria o Colmeia.
+ */
+var CACHE_PROGRESSO_CLIENTES = 'progressoMensalClientes';
+
 function buscarProgressoMensalClientes() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get(CACHE_PROGRESSO_CLIENTES);
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* recalcula abaixo */ }
+  }
+
   var idsPorEmail = buscarIdsResponsaveisRunrun();
   var tagMes = tagDoMesAtual();
   var progresso = {};
@@ -700,7 +787,9 @@ function buscarProgressoMensalClientes() {
     });
   });
 
-  return { ok: true, progresso: Object.keys(progresso).map(function (k) { return progresso[k]; }) };
+  var resultado = { ok: true, progresso: Object.keys(progresso).map(function (k) { return progresso[k]; }) };
+  try { cache.put(CACHE_PROGRESSO_CLIENTES, JSON.stringify(resultado), 600); } catch (e) { /* cache indisponível, segue sem ele */ }
+  return resultado;
 }
 
 // ============ PESSOAS ============
@@ -874,6 +963,23 @@ function linkarPastaManualNoDrive(taskId, url) {
 // quando a pessoa reabre a tarefa; (2) achar rapidinho a pasta certa
 // pra checar uploads recentes, sem precisar procurar por nome de novo.
 
+/**
+ * Pega a "trava" de escrita da planilha — ou avisa alto e claro que não
+ * conseguiu.
+ *
+ * Antes, todos os pontos de gravação chamavam lock.tryLock(5000) e
+ * IGNORAVAM a resposta: se a trava não viesse em 5 segundos, o código
+ * escrevia na planilha do mesmo jeito, e duas gravações simultâneas podiam
+ * se atropelar (uma sobrescrevendo a linha da outra). Agora, se não
+ * conseguir, o erro sobe até handleRequest e o Colmeia mostra "não
+ * consegui salvar" — bem melhor do que salvar torto em silêncio.
+ */
+function pegarTravaDaPlanilha(lock) {
+  if (!lock.tryLock(15000)) {
+    throw new Error('A planilha está ocupada com outra gravação agora. Tenta de novo em alguns segundos.');
+  }
+}
+
 function getPastasCardsSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('PastasCards');
@@ -886,7 +992,7 @@ function getPastasCardsSheet() {
 
 function salvarPastaDoCard(taskId, url) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getPastasCardsSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1415,7 +1521,7 @@ function listarLinksClientes() {
 function salvarLinksCliente(cliente, dados) {
   if (!cliente) return { ok: false, error: 'Cliente não informado.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getLinksClientesSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1454,7 +1560,7 @@ function salvarLinksCliente(cliente, dados) {
 function excluirClientesPorNomes(nomes) {
   if (!nomes || !nomes.length) return { ok: false, error: 'Nenhum nome informado.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getLinksClientesSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1495,7 +1601,7 @@ function listarClientesOcultos() {
 function ocultarClienteDesigner(designer, cliente) {
   if (!designer || !cliente) return { ok: false, error: 'Designer ou cliente ausente.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getClientesOcultosSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1514,7 +1620,7 @@ function ocultarClienteDesigner(designer, cliente) {
 function restaurarClienteDesigner(designer, cliente) {
   if (!designer || !cliente) return { ok: false, error: 'Designer ou cliente ausente.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getClientesOcultosSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1571,15 +1677,56 @@ function salvarLoginDaPessoa(nome, senha, papel) {
   var sheet = getLoginSheet();
   var linhas = sheet.getDataRange().getValues();
   var hash = gerarHashSenha(senha);
+
+  // IMPORTANTE: verificarLogin identifica a pessoa SÓ pela senha (devolve a
+  // primeira linha cuja senha bate) — a tela de login nem pede o nome. Se
+  // duas pessoas escolhessem a mesma senha, a segunda entraria logada COMO
+  // A PRIMEIRA, com as tarefas e as permissões dela. Por isso recusa aqui,
+  // antes de deixar essa situação existir.
+  for (var j = 1; j < linhas.length; j++) {
+    if (String(linhas[j][1]) === hash && normalizarNomeLogin(linhas[j][0]) !== normalizarNomeLogin(nome)) {
+      Logger.log('RECUSADO: essa senha já é de "' + linhas[j][0] + '". Escolha outra — o login reconhece a pessoa pela senha, então ela precisa ser única.');
+      return { ok: false, error: 'Essa senha já está em uso por outra pessoa. Escolha outra.' };
+    }
+  }
+
   for (var i = 1; i < linhas.length; i++) {
     if (normalizarNomeLogin(linhas[i][0]) === normalizarNomeLogin(nome)) {
       sheet.getRange(i + 1, 2, 1, 2).setValues([[hash, papel]]);
       Logger.log('Login de "' + nome + '" atualizado.');
-      return;
+      return { ok: true };
     }
   }
   sheet.appendRow([nome, hash, papel]);
   Logger.log('Login de "' + nome + '" criado.');
+  return { ok: true };
+}
+
+/**
+ * RODE UMA VEZ pelo editor do Apps Script pra conferir se alguma senha já
+ * cadastrada está repetida entre duas pessoas (o que faria uma entrar como
+ * a outra). Só mostra os NOMES envolvidos no Log — nunca a senha, que não
+ * fica guardada em texto puro em lugar nenhum, só o "resumo" dela (hash).
+ * Se aparecer alguma dupla, troque a senha de uma delas com
+ * salvarLoginDaPessoa(nome, senhaNova, papel).
+ */
+function diagnosticoSenhasRepetidas() {
+  var linhas = getLoginSheet().getDataRange().getValues();
+  var porHash = {};
+  for (var i = 1; i < linhas.length; i++) {
+    if (!linhas[i][0]) continue;
+    var h = String(linhas[i][1]);
+    if (!porHash[h]) porHash[h] = [];
+    porHash[h].push(linhas[i][0]);
+  }
+  var achou = false;
+  Object.keys(porHash).forEach(function (h) {
+    if (porHash[h].length > 1) {
+      achou = true;
+      Logger.log('SENHA REPETIDA entre: ' + porHash[h].join(', ') + ' — quem entrar com ela vai logar como "' + porHash[h][0] + '".');
+    }
+  });
+  if (!achou) Logger.log('Tudo certo: nenhuma senha repetida entre as pessoas cadastradas.');
 }
 
 function getPessoasSheet() {
@@ -1611,7 +1758,7 @@ function listarPessoasSalvas() {
 function salvarPessoa(nome, foto, aliases, discord) {
   if (!nome) return { ok: false, error: 'Nome não informado.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getPessoasSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1637,7 +1784,7 @@ function salvarPessoa(nome, foto, aliases, discord) {
 function excluirPessoasPorNomes(nomes) {
   if (!nomes || !nomes.length) return { ok: false, error: 'Nenhum nome informado.' };
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getPessoasSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1681,7 +1828,7 @@ function definirPrioridade(taskId, prioridade) {
   }
 
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getExtrasSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1740,7 +1887,7 @@ function getLogPlaysSheet() {
 function registrarPlay(taskId, taskTitle, designer) {
   if (!taskId || !designer) return;
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getLogPlaysSheet();
     var agora = new Date();
@@ -1925,7 +2072,7 @@ function buscarBriefingCacheado(taskId, hash) {
 
 function salvarBriefingCacheado(taskId, hash, briefing) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(5000);
+  pegarTravaDaPlanilha(lock);
   try {
     var sheet = getBriefingsSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -2014,6 +2161,102 @@ function gerarBriefingDaTarefa(taskId) {
   if (!resultado.ok) return resultado;
   salvarBriefingCacheado(taskId, hash, resultado.dados);
   return { ok: true, briefing: resultado.dados };
+}
+
+/**
+ * Resume, em tópicos, O QUE O CLIENTE PEDIU PRA MUDAR numa subtarefa de
+ * alteração — a versão de verdade do que a antiga aba "Alteração 01" (de
+ * protótipo) fingia ser.
+ *
+ * Junta as três pontas que contam a história da mudança: a descrição da
+ * própria alteração, os comentários dela, e os comentários do card mãe e
+ * da tarefa original que chegaram DEPOIS da última atividade da tarefa
+ * original (é aí que mora o pedido do cliente — antes disso é a conversa
+ * da produção da peça, que não é "alteração").
+ *
+ * Cacheado na mesma aba "Briefings" já usada pelo briefing normal, com a
+ * chave prefixada por "alt-" pra não misturar os dois. O hash é do
+ * conteúdo, então o resumo só é gerado de novo quando chega comentário ou
+ * descrição nova de verdade.
+ */
+function resumirAlteracao(taskId, idOriginal) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  var alteracao = runrunFetch('/tasks/' + taskId);
+  if (!alteracao || alteracao.erroFetch) {
+    return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
+  }
+
+  var descricao = buscarDescricao(taskId).descricao || '';
+  var comentariosAlteracao = listarComentarios(taskId);
+  var textosAlteracao = comentariosAlteracao.ok
+    ? comentariosAlteracao.comentarios.map(function (c) { return c.autor + ': ' + c.texto; })
+    : [];
+
+  // Corte de tempo: só interessa o que foi dito a partir de quando a peça
+  // original teve a última movimentação. Sem esse corte, o resumo puxava a
+  // conversa inteira da produção original e dizia "o cliente pediu" pra
+  // coisas que nem eram alteração.
+  var corte = 0;
+  if (idOriginal) {
+    var original = runrunFetch('/tasks/' + idOriginal);
+    if (original && !original.erroFetch && original.updated_at) {
+      corte = new Date(original.updated_at).getTime();
+    }
+  }
+  // Rede de segurança: se não deu pra saber, usa a criação da alteração —
+  // a alteração nasceu depois do pedido, então é uma referência razoável.
+  if (!corte && alteracao.created_at) {
+    corte = new Date(alteracao.created_at).getTime() - 3 * 24 * 60 * 60 * 1000;
+  }
+
+  function comentariosRecentesDe(idTarefa, rotulo) {
+    if (!idTarefa) return [];
+    var r = listarComentarios(idTarefa);
+    if (!r.ok) return [];
+    return r.comentarios
+      .filter(function (c) { return !corte || (c.data && new Date(c.data).getTime() >= corte); })
+      .map(function (c) { return '[' + rotulo + '] ' + c.autor + ': ' + c.texto; });
+  }
+
+  var textosContexto = []
+    .concat(comentariosRecentesDe(alteracao.parent_task_id, 'card mãe'))
+    .concat(comentariosRecentesDe(idOriginal, 'tarefa original'));
+
+  var material = 'TÍTULO DA ALTERAÇÃO: ' + (alteracao.title || '') + '\n\n' +
+    'DESCRIÇÃO DA ALTERAÇÃO:\n' + (descricao || '(vazia)') + '\n\n' +
+    'COMENTÁRIOS NA ALTERAÇÃO:\n' + (textosAlteracao.join('\n') || '(nenhum)') + '\n\n' +
+    'COMENTÁRIOS RECENTES NO CARD MÃE E NA TAREFA ORIGINAL:\n' + (textosContexto.join('\n') || '(nenhum)');
+
+  var temConteudo = descricao || textosAlteracao.length || textosContexto.length;
+  if (!temConteudo) return { ok: true, semMaterial: true };
+
+  var VERSAO_PROMPT = 'v1';
+  var hash = hashTexto(material + '|' + VERSAO_PROMPT);
+  var chaveCache = 'alt-' + taskId;
+  var cacheado = buscarBriefingCacheado(chaveCache, hash);
+  if (cacheado) return { ok: true, resumo: cacheado, doCache: true };
+
+  var prompt = 'Você organiza pedidos de alteração pra uma equipe de design de uma agência de marketing.\n' +
+    'Vou te dar o material de uma subtarefa de ALTERAÇÃO (uma peça já feita que o cliente pediu pra mudar).\n' +
+    'Sua tarefa: dizer, em tópicos curtos e diretos, O QUE PRECISA SER MUDADO na peça.\n\n' +
+    'REGRAS:\n' +
+    '- Cada tópico é UMA mudança concreta, na voz de quem vai executar (ex: "Trocar o fundo pra tons mais claros", ' +
+    '"Ajustar o texto do CTA pra: Compre agora").\n' +
+    '- Copie valores exatos (textos, cores, nomes, medidas, datas) do original — nunca reescreva copy que vai pra peça.\n' +
+    '- NÃO invente nada. Se o material não diz claramente o que mudar, devolve a lista vazia e explique no campo ' +
+    '"observacao" o que está faltando (ex: "o pedido não está escrito em nenhum lugar, só o título da subtarefa").\n' +
+    '- Ignore conversa que não é pedido de mudança (bom dia, combinados de prazo, "obrigado").\n' +
+    '- No máximo 8 tópicos. Se tiver mais, junte os parecidos.\n' +
+    '- "quemPediu" é o nome de quem pediu a mudança, se der pra saber pelos comentários; senão, null.\n\n' +
+    'Responda SOMENTE em JSON, neste formato:\n' +
+    '{"mudancas": ["..."], "quemPediu": "..." ou null, "observacao": "..." ou null}\n\n' +
+    'MATERIAL:\n' + material;
+
+  var resultado = chamarGemini(prompt);
+  if (!resultado.ok) return resultado;
+  salvarBriefingCacheado(chaveCache, hash, resultado.dados);
+  return { ok: true, resumo: resultado.dados };
 }
 
 function buscarDescricao(taskId) {
@@ -2210,7 +2453,18 @@ function buscarTarefaCompleta(taskId) {
   if (!t || t.erroFetch) {
     return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
   }
-  return { ok: true, tarefa: transformarTarefaParaColmeia(t) };
+  // Devolve junto se a tarefa tem subtarefas (ou seja, se ela é um card
+  // mãe). Assim o front-end descobre isso NA MESMA chamada que já usa pra
+  // pegar o tempo trabalhado — antes ele fazia duas chamadas seguidas que
+  // liam a MESMA tarefa no Runrun.it (uma pro cronômetro, outra só pra
+  // perguntar "isso é card mãe?"). A lista de subtarefas em si continua
+  // vindo à parte (buscarSubtarefasDoCardMae), porque ela custa uma
+  // leitura por subtarefa e só vale a pena quando realmente é card mãe.
+  return {
+    ok: true,
+    tarefa: transformarTarefaParaColmeia(t),
+    temSubtarefas: !!(t.subtask_ids && t.subtask_ids.length)
+  };
 }
 
 function montarResumoSubtarefas(idsSubtarefas) {
@@ -2411,7 +2665,63 @@ function listarTodosUsuariosRunrun() {
 
 // ============ JUNTA TUDO PRO FRONT-END ============
 
+// ===== Varredura do quadro compartilhada entre quem está logado =====
+// Antes, cada navegador aberto pedia a sua própria varredura completa do
+// Runrun.it a cada 60s. Com 3 pessoas logadas, o backend varria TUDO três
+// vezes por minuto buscando exatamente a mesma coisa — trabalho triplicado
+// que competia com as ações de verdade e sobrecarregava o Apps Script.
+// Agora o resultado pronto fica guardado por alguns segundos e as outras
+// pessoas aproveitam a mesma varredura.
+//
+// O CacheService tem limite de tamanho por chave, e o quadro do time
+// inteiro passa disso — por isso o texto é fatiado em pedaços numeradas e
+// remontado na leitura (ver guardarNoCacheEmFatias/lerDoCacheEmFatias).
+var CACHE_QUADRO_CHAVE = 'quadroColmeia';
+var CACHE_QUADRO_SEGUNDOS = 45;
+var CACHE_FATIA_TAMANHO = 90000; // ~90 KB por pedaço, com folga pro limite
+
+function guardarNoCacheEmFatias(cache, chaveBase, texto, segundos) {
+  try {
+    var fatias = [];
+    for (var i = 0; i < texto.length; i += CACHE_FATIA_TAMANHO) {
+      fatias.push(texto.substring(i, i + CACHE_FATIA_TAMANHO));
+    }
+    var mapa = {};
+    for (var j = 0; j < fatias.length; j++) mapa[chaveBase + '_' + j] = fatias[j];
+    mapa[chaveBase + '_n'] = String(fatias.length);
+    cache.putAll(mapa, segundos);
+  } catch (e) {
+    // Cache indisponível ou pedaço grande demais: não é problema, só
+    // significa que essa varredura não vai ser aproveitada por ninguém.
+  }
+}
+
+function lerDoCacheEmFatias(cache, chaveBase) {
+  try {
+    var total = Number(cache.get(chaveBase + '_n'));
+    if (!total) return null;
+    var chaves = [];
+    for (var i = 0; i < total; i++) chaves.push(chaveBase + '_' + i);
+    var pedacos = cache.getAll(chaves);
+    var texto = '';
+    for (var j = 0; j < total; j++) {
+      // Um pedaço vencido/ausente invalida o conjunto — melhor varrer de
+      // novo do que devolver um quadro pela metade.
+      if (!pedacos[chaveBase + '_' + j]) return null;
+      texto += pedacos[chaveBase + '_' + j];
+    }
+    return texto;
+  } catch (e) {
+    return null;
+  }
+}
+
 function getTarefasColmeia() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = lerDoCacheEmFatias(cache, CACHE_QUADRO_CHAVE);
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* varre de novo abaixo */ }
+  }
   try {
     var tarefas = buscarTarefasRunrun();
     var prioridadesSalvas = getPrioridadesSalvas();
@@ -2426,10 +2736,32 @@ function getTarefasColmeia() {
       }
     });
 
-    return { ok: true, tarefas: tarefas, colunas: Object.keys(COLUNAS_PRINCIPAIS) };
+    var resultado = { ok: true, tarefas: tarefas, colunas: Object.keys(COLUNAS_PRINCIPAIS) };
+    // Guarda pra quem pedir nos próximos segundos aproveitar a mesma
+    // varredura (nunca guarda resposta de erro — senão o erro ficaria
+    // "grudado" por 45s pra todo mundo).
+    guardarNoCacheEmFatias(cache, CACHE_QUADRO_CHAVE, JSON.stringify(resultado), CACHE_QUADRO_SEGUNDOS);
+    return resultado;
   } catch (err) {
     return { ok: false, error: 'Erro ao buscar tarefas do Runrun.it: ' + err.message };
   }
+}
+
+/**
+ * Joga fora a varredura guardada, pra próxima leitura do quadro vir
+ * fresquinha do Runrun.it. Chamado depois de qualquer ação que muda o
+ * quadro (mover etapa, avançar sequência, entregar, reatribuir...) — sem
+ * isso, a pessoa que acabou de agir podia ver a tela "voltar" ao estado
+ * anterior por até 45 segundos, guardado do momento antes da ação.
+ */
+function invalidarCacheDoQuadro() {
+  try {
+    var cache = CacheService.getScriptCache();
+    var total = Number(cache.get(CACHE_QUADRO_CHAVE + '_n')) || 0;
+    var chaves = [CACHE_QUADRO_CHAVE + '_n', CACHE_CARD_MAE_ABERTOS];
+    for (var i = 0; i < total; i++) chaves.push(CACHE_QUADRO_CHAVE + '_' + i);
+    cache.removeAll(chaves);
+  } catch (e) { /* sem cache pra limpar, segue */ }
 }
 
 /**
@@ -2584,6 +2916,41 @@ function fazerBackupDaPlanilha() {
     Logger.log('Backup criado: ' + copia.getUrl());
   } catch (err) {
     Logger.log('Erro ao fazer backup da planilha: ' + err.message);
+  }
+  // Aproveita a mesma passada diária pra podar o "Log de Plays" — ele só
+  // crescia, e buscarPlaysDeHoje lê a aba INTEIRA a cada abertura da
+  // página Histórico. Sem isso, a página vai ficando mais lenta pra
+  // sempre. Roda depois do backup de propósito: a cópia do dia guarda o
+  // histórico completo antes da poda.
+  limparLogDePlaysAntigo();
+}
+
+// Quanto tempo de histórico de plays vale manter na planilha. A tela mais
+// longa da página Histórico é "última semana", então 60 dias é folga de
+// sobra — o resto já está guardado nos backups diários.
+var LOG_PLAYS_RETENCAO_DIAS = 60;
+
+function limparLogDePlaysAntigo() {
+  try {
+    var sheet = getLogPlaysSheet();
+    var linhas = sheet.getDataRange().getValues();
+    if (linhas.length <= 1) return;
+    var corte = new Date().getTime() - LOG_PLAYS_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+
+    // Apaga de baixo pra cima: deletar uma linha embaralha os índices das
+    // que estão DEPOIS dela, então percorrer ao contrário é o que mantém
+    // as posições válidas durante o laço.
+    var apagadas = 0;
+    for (var i = linhas.length - 1; i >= 1; i--) {
+      var quando = Number(linhas[i][3]);
+      if (quando && quando < corte) {
+        sheet.deleteRow(i + 1);
+        apagadas++;
+      }
+    }
+    if (apagadas) Logger.log('Log de Plays: ' + apagadas + ' linha(s) com mais de ' + LOG_PLAYS_RETENCAO_DIAS + ' dias apagada(s).');
+  } catch (err) {
+    Logger.log('Erro ao limpar o Log de Plays antigo: ' + err.message);
   }
 }
 
