@@ -133,6 +133,12 @@ async function carregarSequencia(task) {
   if (!task.id) return;
   const taskId = task.id;
   const resultado = await buscarSequenciaDoBackend(taskId);
+  // Falhou a busca? NÃO grava lista vazia — isso faria a tarefa parecer
+  // "sem sequência" e o botão de concluir/entregar aparecer no lugar das
+  // setas (risco de entregar por engano). Mantém o que já tínhamos: se
+  // nunca carregou, segue mostrando "Carregando sequência..."; se já
+  // tinha carregado antes, segue com a última versão boa.
+  if (resultado.erro) return;
   task.sequencia = resultado.sequencia;
   task.workflowId = resultado.workflowId;
   if (!tasks[detailIdx] || tasks[detailIdx].id !== taskId) return; // usuário já trocou de tarefa
@@ -238,6 +244,7 @@ function wireWorkflowArrows(task) {
         const ok = await reabrirTarefaNoBackend(task.id);
         if (ok) {
           task.entregue = false;
+          task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
           await carregarSequencia(task);
         } else {
           deliverBtn.disabled = false;
@@ -253,6 +260,11 @@ function wireWorkflowArrows(task) {
         const entregueOtimista = task.entregue;
         const sequenciaOtimista = task.sequencia;
         task.entregue = true;
+        // Marca QUANDO foi entregue: a atualização automática só preserva
+        // esse estado local por alguns segundos (ver atualizarKanbanEmBackground
+        // em js/pessoas-fotos.js). Depois disso vale o que o Runrun.it diz —
+        // é o que faz o Colmeia perceber uma tarefa reaberta por lá.
+        task._entregueEm = Date.now();
 
         mostrarEntregueNoPill();
 
@@ -288,6 +300,7 @@ function wireWorkflowArrows(task) {
         }
         if (ok) {
           task.entregue = true;
+          task._entregueEm = Date.now();
           // Segurança extra: garante que o Runrun.it recebeu o pause.
           pausarTarefaNoBackend(task.id);
           // O cronômetro já foi parado no objeto capturado no início
@@ -319,6 +332,7 @@ function wireWorkflowArrows(task) {
           // Runrun.it recusou — volta tudo sozinho pro estado original
           // (ícone de concluir e o clique certo de novo inclusos).
           task.entregue = entregueOtimista;
+          task._entregueEm = null; // não foi entregue de verdade — desliga a proteção
           task.sequencia = sequenciaOtimista;
           esconderFluxoCardMaeNoPill();
           if (seqEl) {
@@ -755,6 +769,7 @@ function renderDetail() {
       reabrirMenuBtn.disabled = false;
       if (ok) {
         task.entregue = false;
+        task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
         await carregarSequencia(task);
       } else {
         alert("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.");

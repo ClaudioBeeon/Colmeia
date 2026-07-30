@@ -287,6 +287,9 @@ function setupDragAndDrop() {
           if (!ok) {
             task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
             render();
+            // Sem esse aviso, o card só "voltava" sozinho pra coluna antiga
+            // e ninguém entendia por quê (parecia bug do Colmeia).
+            mostrarToast("Não consegui mover essa tarefa de coluna agora.", "erro");
           } else {
             agendarAtualizacaoKanban();
           }
@@ -334,6 +337,7 @@ function attachCardDragHandlers() {
             if (!ok) {
               task.status = statusAntigo;
               render();
+              mostrarToast("Marquei a prioridade, mas não consegui mover a tarefa pra coluna Prioridades agora.", "erro");
             } else {
               agendarAtualizacaoKanban();
             }
@@ -360,7 +364,11 @@ function attachCardDragHandlers() {
           if (!novaData || novaData === task.dueISO) return;
           wrap.innerHTML = `<span class="card-due-saving">Salvando...</span>`;
           const ok = await alterarEntregaNoBackend(task.id, novaData);
-          if (!ok) { render(); return; }
+          if (!ok) {
+            render(); // volta a data antiga
+            mostrarToast("Não consegui alterar a Entrega Desejada agora.", "erro");
+            return;
+          }
           const [ano, mes, dia] = novaData.split("-").map(Number);
           task.dueISO = novaData;
           task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;

@@ -345,12 +345,21 @@ async function atualizarKanbanEmBackground() {
         nova._temSequencia = antiga._temSequencia;
         if (antiga._repasseEntregue) nova._repasseEntregue = antiga._repasseEntregue;
       }
-      // O backend não devolve "entregue" (é um estado só de sessão, marcado
-      // na hora que a pessoa clica em concluir — ver detalhe-modal.js). Sem
-      // preservar aqui, toda atualização automática do quadro recriava a
-      // tarefa do zero sem esse flag, e o botão de reabrir sumia sozinho
-      // (voltava a mostrar "concluir" como se nunca tivesse sido entregue).
-      if (antiga && antiga.entregue) nova.entregue = true;
+      // "Entregue" é marcado na hora do clique, antes do Runrun.it
+      // confirmar (ver detalhe-modal.js). Preservamos esse estado local por
+      // uns segundos pra a atualização automática não desfazer o clique na
+      // tela enquanto o Runrun.it ainda não processou — mesma ideia da
+      // proteção do play/pausa logo abaixo.
+      // IMPORTANTE: é só uma JANELA de tempo, não pra sempre. Antes isso
+      // ficava grudado na tarefa eternamente, então se alguém reabrisse ela
+      // pelo Runrun.it o Colmeia continuava mostrando o ícone de "reabrir"
+      // (achando que estava entregue) até a pessoa dar F5.
+      const RECEM_ENTREGUE_MS = 15000;
+      if (antiga && antiga.entregue && antiga._entregueEm
+        && (Date.now() - antiga._entregueEm) < RECEM_ENTREGUE_MS) {
+        nova.entregue = true;
+        nova._entregueEm = antiga._entregueEm;
+      }
       if (antiga && DESIGNER_LOGADO
         && !nomesCorrespondem(antiga.assignee, DESIGNER_LOGADO)
         && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)) {

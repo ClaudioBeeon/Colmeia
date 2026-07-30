@@ -61,6 +61,10 @@ async function garantirClassificacaoSequencia(t) {
   if (t._temSequencia !== undefined) return t._temSequencia;
   if (!t.id) { t._temSequencia = false; t.sequencia = []; t.workflowId = null; return false; }
   const resultado = await buscarSequenciaDoBackend(t.id);
+  // Erro de rede não vira "sem sequência": não grava nada no cache (assim
+  // a próxima tentativa busca de novo, em vez de a tarefa ficar presa na
+  // aba errada até dar F5) e não zera a sequência que já estava boa.
+  if (resultado.erro) return t._temSequencia;
   t.sequencia = resultado.sequencia;
   t.workflowId = resultado.workflowId;
   t._temSequencia = !!(resultado.sequencia && resultado.sequencia.length > 0);
@@ -73,6 +77,10 @@ async function garantirClassificacaoSequencia(t) {
 async function recarregarSequenciaCard(t) {
   t = tarefaRepasseViva(t);
   const resultado = await buscarSequenciaDoBackend(t.id);
+  // Igual em garantirClassificacaoSequencia: falha de rede não pode virar
+  // "sem sequência" (senão o card passa a mostrar o botão de entregar em
+  // vez da seta de repassar). Mantém o que já estava desenhado.
+  if (resultado.erro) return;
   t.sequencia = resultado.sequencia;
   t.workflowId = resultado.workflowId;
   t._temSequencia = !!(resultado.sequencia && resultado.sequencia.length > 0);
@@ -301,7 +309,18 @@ function montarSequenciaCard(t) {
   const row = document.querySelector(`.repasse-seq-row[data-id="${CSS.escape(String(t.id))}"]`);
   if (!row) return; // card não está mais na tela (trocou de aba/filtro enquanto buscava)
   if (t.sequencia === undefined) {
-    garantirClassificacaoSequencia(t).then(() => montarSequenciaCard(t));
+    garantirClassificacaoSequencia(t).then(() => {
+      // Se a busca falhou, `sequencia` continua indefinida — NÃO pode
+      // chamar montarSequenciaCard de novo na hora, senão vira um laço
+      // infinito de tentativas de rede (buscar, falhar, buscar...). Avisa
+      // na própria linha e deixa a próxima atualização automática tentar.
+      if (t.sequencia === undefined) {
+        const rowAgora = document.querySelector(`.repasse-seq-row[data-id="${CSS.escape(String(t.id))}"]`);
+        if (rowAgora) rowAgora.innerHTML = `<span class="repasse-seq-loading">Não consegui carregar a sequência agora</span>`;
+        return;
+      }
+      montarSequenciaCard(t);
+    });
     return;
   }
   row.innerHTML = renderRepasseSeqHTML(t);
@@ -942,7 +961,11 @@ document.getElementById("verTodasBtn").addEventListener("click", () => {
 });
 
 document.getElementById("nowPlaying").addEventListener("click", () => {
-  const idx = tasks.findIndex(t => t.running);
+  // Filtra por quem está logado, igual updateNowPlaying já faz pro TEXTO da
+  // pílula — sem isso, no login do coordenador vendo "Todos juntos", o
+  // clique podia abrir a tarefa rodando de OUTRA pessoa (a primeira do
+  // array com running=true), não a que a pílula estava mostrando.
+  const idx = tasks.findIndex(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
   if (idx !== -1) openDetail(idx);
 });
 

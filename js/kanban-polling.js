@@ -171,8 +171,16 @@ async function reatribuirTarefaNoBackend(taskId, responsavelId) {
  * no Runrun.it). Devolve uma lista (vazia se não tiver sequência
  * configurada) — nunca null, pra não quebrar o render.
  */
+// IMPORTANTE: devolve `erro: true` quando a busca FALHOU, pra quem chama
+// poder diferenciar isso de "essa tarefa realmente não tem sequência".
+// Antes os dois casos devolviam lista vazia igual, e isso era perigoso:
+// numa oscilação de internet, uma subtarefa aparecia como "sem sequência"
+// e o botão de CONCLUIR/ENTREGAR tomava o lugar das setas de avançar (dava
+// pra entregar uma tarefa por engano achando que estava só repassando).
+// Na Fila de repasse o erro também ficava gravado em cache, jogando a
+// tarefa pra aba errada até dar F5.
 async function buscarSequenciaDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { sequencia: [], workflowId: null };
+  if (!COLMEIA_API_URL || !taskId) return { sequencia: [], workflowId: null, erro: true };
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
@@ -181,12 +189,12 @@ async function buscarSequenciaDoBackend(taskId) {
     const data = await res.json();
     if (!data.ok) {
       console.error("Erro ao buscar sequência de responsáveis:", data.error);
-      return { sequencia: [], workflowId: null };
+      return { sequencia: [], workflowId: null, erro: true };
     }
-    return { sequencia: data.sequencia || [], workflowId: data.workflowId || null };
+    return { sequencia: data.sequencia || [], workflowId: data.workflowId || null, erro: false };
   } catch (err) {
     console.error("Falha ao buscar sequência no Runrun.it:", err);
-    return { sequencia: [], workflowId: null };
+    return { sequencia: [], workflowId: null, erro: true };
   }
 }
 
