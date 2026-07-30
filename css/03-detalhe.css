@@ -317,6 +317,14 @@
 .detail-taskname-copy:hover { color: #9a9ca5; background: rgba(255,255,255,0.06); }
 .detail-taskname-copy.copied { color: #2F9E44; }
 
+/* Pill com o total de horas trabalhadas — some o play/pause quando a
+   tarefa já está entregue (ver renderDetail, js/detalhe-modal.js). */
+.pill-horas-trabalhadas {
+  flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--kanban-yellow);
+  background: rgba(255,255,255,0.08); border-radius: 999px; padding: 5px 11px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
 .detail-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
 .nav-dot { width: 26px; height: 26px; border-radius: 50%; border: none; background: var(--page-bg); cursor: pointer; overflow: hidden; padding: 0; display: flex; align-items: center; justify-content: center; }

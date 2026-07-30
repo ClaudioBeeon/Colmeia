@@ -542,37 +542,42 @@ function renderDetail() {
       <div class="detail-header">
         <div class="detail-header-pill" id="detailHeaderPill">
           <div class="pill-face pill-face-normal">
-          ${task.entregue ? "" : `<button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>`}
-          <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
-          <span class="detail-sep">|</span>
-          ${task.isMotherCard ? `
-            <div class="children-btn-wrap">
-              <button type="button" class="mother-card-btn" id="childrenBtn" title="Ver subtarefas">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <div class="children-float" id="childrenPanel">
-                <div class="children-float-head">Subtarefas</div>
-                <div class="children-list">
-                  ${(task.subtarefasResumo || []).map(s => `
-                    <button type="button" class="child-item ${s.fechada ? "done" : ""}" data-child-id="${s.id}">
-                      ${avatarHTML(s.responsavel, "avatar-sm child-avatar", s.foto)}
-                      <span class="child-title">${escaparHTML(s.title)}</span>
-                      ${s.fechada ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
-                    </button>
-                  `).join("")}
+          ${task.entregue ? `
+            <span class="detail-taskname">${escaparHTML(task.title)}</span>
+            <span class="pill-horas-trabalhadas" title="Tempo total trabalhado nessa tarefa">${formatTime(task.timerSeconds)}</span>
+          ` : `
+            <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
+            <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
+            <span class="detail-sep">|</span>
+            ${task.isMotherCard ? `
+              <div class="children-btn-wrap">
+                <button type="button" class="mother-card-btn" id="childrenBtn" title="Ver subtarefas">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="children-float" id="childrenPanel">
+                  <div class="children-float-head">Subtarefas</div>
+                  <div class="children-list">
+                    ${(task.subtarefasResumo || []).map(s => `
+                      <button type="button" class="child-item ${s.fechada ? "done" : ""}" data-child-id="${s.id}">
+                        ${avatarHTML(s.responsavel, "avatar-sm child-avatar", s.foto)}
+                        <span class="child-title">${escaparHTML(s.title)}</span>
+                        ${s.fechada ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
+                      </button>
+                    `).join("")}
+                  </div>
                 </div>
               </div>
-            </div>
-          ` : task.parentTaskId ? `
-            <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          ` : ""}
-          <span class="detail-taskname">${escaparHTML(task.title)}</span>
+            ` : task.parentTaskId ? `
+              <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            ` : ""}
+            <span class="detail-taskname">${escaparHTML(task.title)}</span>
+          `}
           <button type="button" class="detail-taskname-copy" id="detailTaskNameCopy" title="Copiar nome da tarefa" aria-label="Copiar nome da tarefa">
             <svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
-          <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority]}</span>
+          <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority] || ""}</span>
           <div class="detail-header-pill-right">
             <div class="nav-dots-group" id="workflowSeqGroup">
               ${renderSequenciaHTML(task)}
