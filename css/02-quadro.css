@@ -1,0 +1,200 @@
+/* -------------------------------------------------------------------
+   O quadro (Kanban): colunas, cards de tarefa, barra de progresso e
+   o destaque do card selecionado.
+
+   Faz parte do style.css, que passou de 3.000 linhas e foi dividido por
+   área. As tags <link> no index.html seguem EXATAMENTE esta ordem, e isso
+   é obrigatório: em CSS, quando duas regras têm o mesmo peso, vence a que
+   foi escrita depois. Trocar a ordem dos arquivos muda a aparência do app.
+   ------------------------------------------------------------------- */
+
+/* ===== BOARD ===== */
+.board {
+  display: flex; gap: 26px; overflow-x: auto; align-items: stretch; flex: 1; min-height: 0;
+}
+
+.column {
+  min-width: 254px;
+  flex: 1;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px 16px;
+  flex-shrink: 0;
+}
+
+.column-header h2 { font-family: var(--font-display); font-size: 24px; font-weight: 400; }
+
+.column-hex { display: none; }
+
+/* Abas da página "Runrun completo" podem ser arrastadas pra reordenar. */
+#runrunBoard .column-header { cursor: grab; }
+#runrunBoard .column-header:active { cursor: grabbing; }
+#runrunBoard .column.column-drag-over { outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: 12px; }
+
+.column-sort-ic {
+  display: flex;
+  gap: 2px;
+}
+
+.column-sort-ic button {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.column-sort-ic button svg { width: 13px; height: 13px; }
+
+.column-sort-ic button.on {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.column-count {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 999px; padding: 1px 8px; margin-left: auto;
+}
+
+.column-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 2px 6px;
+}
+
+.column-cards::-webkit-scrollbar { width: 6px; }
+.column-cards::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+.column-cards.drag-over { background: rgba(79,95,247,0.06); border-radius: 10px; }
+
+/* ===== TASK CARD ===== */
+.task-card {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 20px 20px 18px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid transparent;
+  cursor: grab;
+  transition: box-shadow 0.15s var(--ease-apple), transform 0.15s var(--ease-apple), opacity 0.15s var(--ease-apple);
+}
+
+[data-theme="dark"] .task-card { border-color: var(--border); }
+[data-theme="dark"] .sidebar { border-color: var(--border); }
+
+.task-card:active { cursor: grabbing; }
+
+.task-card.dragging { opacity: 0.4; }
+
+.task-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+
+.card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 6px; }
+
+.badge { font-size: 12px; font-weight: 600; padding: 5px 16px; border-radius: 999px; white-space: nowrap; }
+
+.badge-estatico { background: var(--accent-soft); color: var(--accent); }
+.badge-video { background: var(--purple-soft); color: var(--purple); }
+.badge-email { background: var(--warning-soft); color: var(--warning); }
+
+.card-priority-tag { font-size: 11px; font-weight: 600; white-space: nowrap; padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; }
+
+.priority-alta .card-priority-tag { color: var(--danger); border-color: var(--danger); }
+.priority-media .card-priority-tag { color: var(--warning); border-color: var(--warning); }
+.priority-baixa .card-priority-tag { color: var(--success); border-color: var(--success); }
+
+.card-title { font-family: var(--font-display); font-size: 19px; font-weight: 400; line-height: 1.25; margin-bottom: 4px; }
+.card-client { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+.card-bottom { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; }
+
+.card-progress { margin-bottom: 16px; }
+
+.progress-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+
+.progress-track { height: 9px; border-radius: 999px; background: var(--page-bg); overflow: hidden; }
+
+[data-theme="dark"] .progress-track { background: rgba(255,255,255,0.08); }
+
+.progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFDF00, #FFA200); transition: width 0.4s var(--ease-apple); }
+
+.play-btn {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: none; background: #16181D; color: #fff;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  flex-shrink: 0; padding: 0;
+}
+[data-theme="dark"] .play-btn { background: var(--kanban-yellow); color: #16181D; }
+
+.timer-text { font-size: 13px; color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.play-btn svg { width: 10px; height: 10px; margin-left: 1px; }
+
+.card-due-simple {
+  display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); font-weight: 500;
+  border: none; background: transparent; font-family: inherit; padding: 3px 5px; margin: -3px -5px;
+  border-radius: 7px; cursor: pointer;
+}
+.card-due-simple:hover { background: var(--page-bg); color: var(--text-primary); }
+.card-due-simple svg { width: 13px; height: 13px; }
+.card-due-simple.overdue { color: var(--danger); }
+.card-due-simple.overdue:hover { color: var(--danger); }
+
+.card-due-saving { font-size: 12px; color: var(--text-muted); }
+
+.priority-wrap { position: relative; }
+
+.priority-btn { background: none; cursor: pointer; font-family: var(--font-body); }
+
+.priority-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 4px; box-shadow: var(--shadow-hover);
+  display: flex; flex-direction: column; gap: 2px; min-width: 88px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.92) translateY(-4px); transform-origin: top right;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear var(--dur-fast);
+}
+
+.priority-menu.open {
+  opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear;
+}
+
+.priority-menu button {
+  border: none; background: transparent; text-align: left;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 500;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+}
+
+.priority-menu button:hover { background: var(--page-bg); }
+
+.pm-alta { color: var(--danger); }
+.pm-media { color: var(--warning); }
+.pm-baixa { color: var(--success); }
+
+/* ===== Card selecionado ===== */
+.task-card.selected {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-hover);
+}
+

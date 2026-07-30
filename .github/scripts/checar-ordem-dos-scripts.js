@@ -52,6 +52,17 @@ const noDisco = fs.readdirSync(path.join(raiz, "js"))
   .map(nome => "js/" + nome)
   .sort();
 
+// Ordem das folhas de estilo. Em CSS, quando duas regras têm o mesmo peso,
+// vence a que foi escrita depois — então trocar a ordem desses arquivos (ou
+// esquecer de carregar um) muda a aparência do app sem dar erro nenhum.
+const ORDEM_CSS_ESPERADA = [
+  "css/01-base.css",
+  "css/02-quadro.css",
+  "css/03-detalhe.css",
+  "css/04-paginas.css",
+  "css/05-componentes.css",
+];
+
 const problemas = [];
 
 // 1) Tag apontando pra arquivo que não existe mais.
@@ -82,10 +93,42 @@ if (!ordemBate) {
   );
 }
 
+// 4) Mesma checagem pras folhas de estilo.
+const cssNoDisco = fs.readdirSync(path.join(raiz, "css"))
+  .filter(nome => nome.endsWith(".css"))
+  .map(nome => "css/" + nome)
+  .sort();
+const cssCarregados = [...html.matchAll(/<link\s+rel="stylesheet"\s+href="([^"]+)"\s*>/g)]
+  .map(m => m[1])
+  .filter(src => src.startsWith("css/"));
+
+cssNoDisco.forEach(src => {
+  if (!cssCarregados.includes(src)) {
+    problemas.push(`O arquivo "${src}" existe mas NÃO está sendo carregado no index.html — os estilos dele não valem pra nada.`);
+  }
+});
+cssCarregados.forEach(src => {
+  if (!cssNoDisco.includes(src)) {
+    problemas.push(`O index.html carrega "${src}", mas esse arquivo não existe na pasta css/.`);
+  }
+});
+const cssOrdemBate = cssCarregados.length === ORDEM_CSS_ESPERADA.length
+  && cssCarregados.every((src, i) => src === ORDEM_CSS_ESPERADA[i]);
+if (!cssOrdemBate) {
+  problemas.push(
+    "A ordem das folhas de estilo no index.html está diferente da esperada.\n" +
+    "  No index.html: " + cssCarregados.join(", ") + "\n" +
+    "  Esperado:      " + ORDEM_CSS_ESPERADA.join(", ") + "\n" +
+    "  Em CSS a ordem decide quem vence quando duas regras têm o mesmo peso, então\n" +
+    "  isso muda a aparência do app. Se a mudança foi de propósito, atualize a lista\n" +
+    "  ORDEM_CSS_ESPERADA neste arquivo."
+  );
+}
+
 if (problemas.length) {
-  console.error("Problemas encontrados no carregamento dos arquivos de js/:\n");
+  console.error("Problemas encontrados no carregamento dos arquivos do frontend:\n");
   problemas.forEach(p => console.error(" - " + p + "\n"));
   process.exit(1);
 }
 
-console.log(`ok: os ${carregadosDeJs.length} arquivos de js/ estão todos carregados no index.html, na ordem certa.`);
+console.log(`ok: ${carregadosDeJs.length} arquivos de js/ e ${cssCarregados.length} de css/ estão todos carregados no index.html, na ordem certa.`);

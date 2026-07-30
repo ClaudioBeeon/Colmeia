@@ -14,9 +14,12 @@ Se uma sessão futura receber acesso a essa pasta vazia, pedir acesso à pasta c
 
 ## Arquitetura
 
-- `index.html`, `js/*.js` (frontend, separado por assunto em vários arquivos — ver seção
-  "Estrutura do frontend (js/)" abaixo), `style.css` = frontend. Publicado automaticamente
-  no GitHub Pages a cada push.
+- `index.html`, `js/*.js` (separado por assunto — ver "Estrutura do frontend (js/)" abaixo) e
+  `css/*.css` = frontend. Publicado automaticamente no GitHub Pages a cada push.
+  O CSS era um `style.css` único de ~3.200 linhas; em 2026-07-30 virou 5 arquivos por área
+  (`01-base`, `02-quadro`, `03-detalhe`, `04-paginas`, `05-componentes`), carregados por tags
+  `<link>` **nessa ordem exata** — em CSS, quando duas regras têm o mesmo peso, vence a escrita
+  depois, então trocar a ordem muda a aparência. A checagem automática confere isso a cada push.
 - Os arquivos `.gs` na raiz = backend, roda no Google Apps Script. Ver "Estrutura do backend (.gs)"
   abaixo. `Código.gs` tem que se chamar exatamente assim (com acento) — é o nome real do arquivo
   dentro do projeto do Apps Script (confirmado via `clasp clone`); um arquivo local chamado diferente
