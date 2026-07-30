@@ -425,7 +425,7 @@ function renderDetail() {
                   ${(task.subtarefasResumo || []).map(s => `
                     <button type="button" class="child-item ${s.fechada ? "done" : ""}" data-child-id="${s.id}">
                       ${avatarHTML(s.responsavel, "avatar-sm child-avatar", s.foto)}
-                      <span class="child-title">${s.title}</span>
+                      <span class="child-title">${escaparHTML(s.title)}</span>
                       ${s.fechada ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
                     </button>
                   `).join("")}
@@ -437,7 +437,7 @@ function renderDetail() {
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           ` : ""}
-          <span class="detail-taskname">${task.title}</span>
+          <span class="detail-taskname">${escaparHTML(task.title)}</span>
           <button type="button" class="detail-taskname-copy" id="detailTaskNameCopy" title="Copiar nome da tarefa" aria-label="Copiar nome da tarefa">
             <svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
@@ -558,7 +558,7 @@ function renderDetail() {
           </div>
           <div class="side-block">
             <span class="side-label">Cliente</span>
-            <span class="badge badge-cliente">${task.client}</span>
+            <span class="badge badge-cliente">${escaparHTML(task.client)}</span>
           </div>
           <div class="side-block">
             <span class="side-label">Hub do cliente</span>
@@ -630,7 +630,7 @@ function renderDetail() {
 
     <div class="chat-panel" id="chatPanel" hidden>
       <div class="chat-panel-header">
-        <div class="chat-panel-title" id="chatPanelTitle">${task.title}</div>
+        <div class="chat-panel-title" id="chatPanelTitle">${escaparHTML(task.title)}</div>
         <button type="button" class="chat-panel-close" id="chatPanelClose" aria-label="Fechar chat">
           <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
@@ -1444,7 +1444,7 @@ function renderFacePillRegraCardMae(cardMaeTask) {
         </div>
       </div>
       <span class="pill-cardmae-regra-centro">
-        <span class="pill-cardmae-nome">${cardMaeTask.title}</span>
+        <span class="pill-cardmae-nome">${escaparHTML(cardMaeTask.title)}</span>
         <div class="nav-dots-group" id="pillCardMaeSeq">
           ${renderSequenciaHTML(cardMaeTask)}
         </div>

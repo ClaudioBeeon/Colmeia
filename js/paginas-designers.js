@@ -382,7 +382,7 @@ function abrirHubDoCliente(cliente, designer) {
       const atrasada = t.dueISO && t.dueISO < hoje;
       return `
         <div class="ch-tarefa-item" data-idx="${idx}">
-          <span class="ch-tarefa-titulo">${t.title}</span>
+          <span class="ch-tarefa-titulo">${escaparHTML(t.title)}</span>
           <span class="ch-tarefa-due ${atrasada ? "overdue" : ""}">${t.dueISO ? t.due : "Sem data"}</span>
         </div>
       `;
@@ -561,7 +561,7 @@ function historicoCardHTML(t) {
         <span class="badge ${type.class}">${type.label}</span>
         <span class="historico-card-hora">${hora}</span>
       </div>
-      <div class="card-title">${t.title}</div>
+      <div class="card-title">${escaparHTML(t.title)}</div>
       <div class="card-client">${t.client || "Sem cliente"}</div>
       <div class="card-bottom">
         <div class="assignee-wrap">${avatarClienteHTML(t.client, "avatar-sm")}</div>

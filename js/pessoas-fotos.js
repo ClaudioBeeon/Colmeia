@@ -106,9 +106,9 @@ function avatarAtendimentoHTML(nome, sizeClass) {
   const foto = resolverFotoManual(nome) || fotoDoAtendimento(nome) || fotoDoDesigner(nome);
   registrarNomeVisto(nome, foto);
   if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nome}" alt="${nome}" title="${nome}" onerror="handleAvatarImgError(this)">`;
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${escaparHTML(nome)}" alt="${escaparHTML(nome)}" title="${escaparHTML(nome)}" onerror="handleAvatarImgError(this)">`;
   }
-  return `<div class="avatar ${sizeClass || ""}" title="${nome}">${initials(nome)}</div>`;
+  return `<div class="avatar ${sizeClass || ""}" title="${escaparHTML(nome)}">${initials(nome)}</div>`;
 }
 
 /**
@@ -166,9 +166,9 @@ function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
   const foto = resolverFotoManual(nomeDesigner) || fotoDoDesigner(nomeDesigner) || avatarUrlDireto;
   registrarNomeVisto(nomeDesigner, foto);
   if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nomeDesigner}" alt="${nomeDesigner}" title="${nomeDesigner}" onerror="handleAvatarImgError(this)">`;
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${escaparHTML(nomeDesigner)}" alt="${escaparHTML(nomeDesigner)}" title="${escaparHTML(nomeDesigner)}" onerror="handleAvatarImgError(this)">`;
   }
-  return `<div class="avatar ${sizeClass || ""}" title="${nomeDesigner}">${initials(nomeDesigner)}</div>`;
+  return `<div class="avatar ${sizeClass || ""}" title="${escaparHTML(nomeDesigner)}">${initials(nomeDesigner)}</div>`;
 }
 
 // Frases divertidas do tema colmeia, mostradas em rodízio na tela de

@@ -30,7 +30,7 @@ function corDoCliente(nomeCliente) {
 function avatarClienteHTML(nomeCliente, sizeClass) {
   const nome = (nomeCliente || "?").trim();
   const inicial = (nome.charAt(0) || "?").toUpperCase();
-  return `<div class="avatar avatar-cliente ${sizeClass || ""}" style="background:${corDoCliente(nome)}" title="${nome}">${inicial}</div>`;
+  return `<div class="avatar avatar-cliente ${sizeClass || ""}" style="background:${corDoCliente(nome)}" title="${escaparHTML(nome)}">${inicial}</div>`;
 }
 
 // Liga as setas de um carrossel horizontal (troca o "arrastar scroll pro

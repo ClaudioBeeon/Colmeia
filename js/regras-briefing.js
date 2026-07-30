@@ -768,15 +768,15 @@ async function gerarBriefingComIA(task) {
     resultEl.innerHTML = `
       ${(plataformas.length || formatos.length) ? `
         <div class="ai-briefing-tags">
-          ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${p}</span>`).join("")}
-          ${formatos.map((f, i) => `<div class="format-box format-box-sm ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${f}</div>`).join("")}
+          ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${escaparHTML(p)}</span>`).join("")}
+          ${formatos.map((f, i) => `<div class="format-box format-box-sm ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${escaparHTML(f)}</div>`).join("")}
         </div>
       ` : ""}
-      ${resumo ? `<p class="ai-briefing-resumo">${resumo}</p>` : ""}
+      ${resumo ? `<p class="ai-briefing-resumo">${escaparHTML(resumo)}</p>` : ""}
       ${campoDestaque ? `
         <div class="ai-briefing-destaque">
           <div class="ai-briefing-destaque-corpo">
-            <p class="ai-briefing-destaque-label">${campoDestaque.pergunta}</p>
+            <p class="ai-briefing-destaque-label">${escaparHTML(campoDestaque.pergunta)}</p>
             <p class="ai-briefing-destaque-valor">${escaparHTML(campoDestaque.resposta)}</p>
             ${blocoVersaoOriginalHTML(campoDestaque.resposta, campoDestaque.respostaOriginal)}
           </div>
@@ -795,7 +795,7 @@ async function gerarBriefingComIA(task) {
                 <div class="ai-briefing-cat ${categoriaCampoBriefing(c.pergunta)}">
                   <div class="ai-briefing-cat-head">
                     <span class="ai-briefing-cat-icon">${c.pergunta.trim().charAt(0).toUpperCase()}</span>
-                    <span class="ai-briefing-cat-label">${c.pergunta}</span>
+                    <span class="ai-briefing-cat-label">${escaparHTML(c.pergunta)}</span>
                   </div>
                   <div class="ai-briefing-cat-corpo">
                     <div class="ai-briefing-cat-valor">${renderValorCampo(c.resposta)}</div>
@@ -808,7 +808,7 @@ async function gerarBriefingComIA(task) {
           ${vazios.length ? `
             <div class="ai-briefing-vazios">
               <span class="ai-briefing-vazios-label">Vazios</span>
-              ${vazios.map(c => `<span class="ai-briefing-vazio-bolha" title="${c.pergunta}">${c.pergunta.trim().charAt(0).toUpperCase()}</span>`).join("")}
+              ${vazios.map(c => `<span class="ai-briefing-vazio-bolha" title="${escaparHTML(c.pergunta)}">${c.pergunta.trim().charAt(0).toUpperCase()}</span>`).join("")}
             </div>
           ` : ""}
         `;

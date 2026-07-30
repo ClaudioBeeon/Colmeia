@@ -310,8 +310,8 @@ function runrunCompletoCardHTML(t) {
       <div class="card-top">
         <span class="badge ${type.class}">${type.label}</span>
       </div>
-      <div class="card-title">${t.title}</div>
-      <div class="card-client">${t.client}</div>
+      <div class="card-title">${escaparHTML(t.title)}</div>
+      <div class="card-client">${escaparHTML(t.client)}</div>
       <div class="card-bottom">
         ${avatarHTML(t.assignee, "avatar-sm", t.assigneeAvatarUrl)}
         ${t.due ? `<span class="card-due-simple ${atrasada ? "overdue" : ""}">${dueIcon}${t.due}</span>` : ""}

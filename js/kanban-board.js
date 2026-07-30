@@ -81,8 +81,8 @@ function cardHTML(task, idx) {
           </div>
         </div>
       </div>
-      <div class="card-title">${task.title}</div>
-      <div class="card-client">${task.client}</div>
+      <div class="card-title">${escaparHTML(task.title)}</div>
+      <div class="card-client">${escaparHTML(task.client)}</div>
       <div class="card-progress">
         <div class="progress-head">
           <button type="button" class="play-btn" data-idx="${idx}" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
@@ -204,7 +204,7 @@ function renderCoordenacaoPill() {
   const t = encontrarTarefaDeCoordenacao();
   if (!t) { wrap.innerHTML = ""; return; }
   wrap.innerHTML = `
-    <button type="button" class="coordenacao-pill" id="coordenacaoPillBtn" data-id="${t.id}" title="${t.title}">
+    <button type="button" class="coordenacao-pill" id="coordenacaoPillBtn" data-id="${t.id}" title="${escaparHTML(t.title)}">
       <span class="coordenacao-pill-play">${t.running ? pauseIcon : playIcon}</span>
       <span class="coordenacao-pill-label">Coordenação</span>
       <span class="coordenacao-pill-timer">${formatTime(t.timerSeconds)}</span>

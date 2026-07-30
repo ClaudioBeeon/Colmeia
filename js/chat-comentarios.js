@@ -181,8 +181,65 @@ function prepararTextoComentario(textoBruto) {
   if (!textoBruto) return "";
   const jaTemLinkPronto = /<a\s/i.test(textoBruto);
   const comMencoes = formatarMencoes(textoBruto);
-  if (jaTemLinkPronto) return aplicarMarcadoresDeMencao(comMencoes);
+  // Texto que já vem com link pronto NÃO é mais inserido cru na tela: em
+  // vez de "confiar na fonte", passa por uma peneira que deixa só as
+  // marcações inofensivas de formatação (ver peneirarHTMLDeComentario).
+  // Assim o link continua clicável, mas nada além disso entra.
+  if (jaTemLinkPronto) return aplicarMarcadoresDeMencao(peneirarHTMLDeComentario(comMencoes));
   return aplicarMarcadoresDeMencao(linkifyTexto(escaparHTML(comMencoes)));
+}
+
+/**
+ * Peneira o HTML de um comentário vindo do Runrun.it: reconstrói o texto
+ * deixando passar SÓ um punhado de marcações de formatação conhecidas
+ * (link, negrito, itálico, quebra de linha, parágrafo, lista) e jogando
+ * fora qualquer outra coisa — script, imagem, evento de clique, estilo.
+ *
+ * Antes, um comentário que já vinha com <a> pronto era inserido na tela
+ * exatamente como veio, "confiando" no que o Runrun.it mandou. Como só
+ * gente do time escreve lá o risco era baixo, mas era uma porta aberta
+ * pra HTML estranho quebrar (ou fazer coisa indevida com) a tela do chat.
+ * Nos links, além de exigir http/https, força abrir em outra aba.
+ */
+const TAGS_PERMITIDAS_COMENTARIO = ["A", "B", "STRONG", "I", "EM", "U", "BR", "P", "UL", "OL", "LI", "SPAN", "DIV"];
+
+function peneirarHTMLDeComentario(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  function limpar(no) {
+    Array.from(no.childNodes).forEach(filho => {
+      if (filho.nodeType === Node.TEXT_NODE) return; // texto puro sempre pode
+      if (filho.nodeType !== Node.ELEMENT_NODE) { filho.remove(); return; }
+
+      if (TAGS_PERMITIDAS_COMENTARIO.indexOf(filho.tagName) === -1) {
+        // Tag não permitida: some com ela, mas preserva o texto de dentro
+        // (assim nenhuma palavra do comentário é perdida).
+        const textoDentro = doc.createTextNode(filho.textContent || "");
+        filho.replaceWith(textoDentro);
+        return;
+      }
+
+      // Tira TODOS os atributos (é aí que moram os onclick, style, etc)...
+      const href = filho.tagName === "A" ? filho.getAttribute("href") : null;
+      Array.from(filho.attributes).forEach(attr => filho.removeAttribute(attr.name));
+      // ...e devolve só o href, se for um link http/https de verdade.
+      if (filho.tagName === "A") {
+        if (href && /^https?:\/\//i.test(href)) {
+          filho.setAttribute("href", href);
+          filho.setAttribute("target", "_blank");
+          filho.setAttribute("rel", "noopener");
+        } else {
+          const textoDentro = doc.createTextNode(filho.textContent || "");
+          filho.replaceWith(textoDentro);
+          return;
+        }
+      }
+      limpar(filho);
+    });
+  }
+
+  limpar(doc.body);
+  return doc.body.innerHTML;
 }
 
 function renderComentariosHTML(task) {

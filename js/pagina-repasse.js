@@ -212,9 +212,9 @@ function repasseCardHTML(t, mostrarClientePill) {
     <div class="repasse-card" data-id="${t.id}">
       <div class="repasse-card-top">
         <span class="badge ${type.class}">${type.label}</span>
-        ${mostrarClientePill ? `<span class="repasse-client-pill">${t.client}</span>` : ""}
+        ${mostrarClientePill ? `<span class="repasse-client-pill">${escaparHTML(t.client)}</span>` : ""}
       </div>
-      <div class="repasse-card-title">${t.title}</div>
+      <div class="repasse-card-title">${escaparHTML(t.title)}</div>
       <div class="repasse-datas-stack">
         <div class="repasse-data-pill" data-campo="publicacao" data-id="${t.id}">
           <span class="repasse-data-label">Publicação</span>

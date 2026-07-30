@@ -1638,15 +1638,56 @@ function salvarLoginDaPessoa(nome, senha, papel) {
   var sheet = getLoginSheet();
   var linhas = sheet.getDataRange().getValues();
   var hash = gerarHashSenha(senha);
+
+  // IMPORTANTE: verificarLogin identifica a pessoa SÓ pela senha (devolve a
+  // primeira linha cuja senha bate) — a tela de login nem pede o nome. Se
+  // duas pessoas escolhessem a mesma senha, a segunda entraria logada COMO
+  // A PRIMEIRA, com as tarefas e as permissões dela. Por isso recusa aqui,
+  // antes de deixar essa situação existir.
+  for (var j = 1; j < linhas.length; j++) {
+    if (String(linhas[j][1]) === hash && normalizarNomeLogin(linhas[j][0]) !== normalizarNomeLogin(nome)) {
+      Logger.log('RECUSADO: essa senha já é de "' + linhas[j][0] + '". Escolha outra — o login reconhece a pessoa pela senha, então ela precisa ser única.');
+      return { ok: false, error: 'Essa senha já está em uso por outra pessoa. Escolha outra.' };
+    }
+  }
+
   for (var i = 1; i < linhas.length; i++) {
     if (normalizarNomeLogin(linhas[i][0]) === normalizarNomeLogin(nome)) {
       sheet.getRange(i + 1, 2, 1, 2).setValues([[hash, papel]]);
       Logger.log('Login de "' + nome + '" atualizado.');
-      return;
+      return { ok: true };
     }
   }
   sheet.appendRow([nome, hash, papel]);
   Logger.log('Login de "' + nome + '" criado.');
+  return { ok: true };
+}
+
+/**
+ * RODE UMA VEZ pelo editor do Apps Script pra conferir se alguma senha já
+ * cadastrada está repetida entre duas pessoas (o que faria uma entrar como
+ * a outra). Só mostra os NOMES envolvidos no Log — nunca a senha, que não
+ * fica guardada em texto puro em lugar nenhum, só o "resumo" dela (hash).
+ * Se aparecer alguma dupla, troque a senha de uma delas com
+ * salvarLoginDaPessoa(nome, senhaNova, papel).
+ */
+function diagnosticoSenhasRepetidas() {
+  var linhas = getLoginSheet().getDataRange().getValues();
+  var porHash = {};
+  for (var i = 1; i < linhas.length; i++) {
+    if (!linhas[i][0]) continue;
+    var h = String(linhas[i][1]);
+    if (!porHash[h]) porHash[h] = [];
+    porHash[h].push(linhas[i][0]);
+  }
+  var achou = false;
+  Object.keys(porHash).forEach(function (h) {
+    if (porHash[h].length > 1) {
+      achou = true;
+      Logger.log('SENHA REPETIDA entre: ' + porHash[h].join(', ') + ' — quem entrar com ela vai logar como "' + porHash[h][0] + '".');
+    }
+  });
+  if (!achou) Logger.log('Tudo certo: nenhuma senha repetida entre as pessoas cadastradas.');
 }
 
 function getPessoasSheet() {
