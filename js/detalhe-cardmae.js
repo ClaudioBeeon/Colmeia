@@ -276,12 +276,62 @@ function mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId) {
   rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
 }
 
-function renderFacePillRegraCardMae(cardMaeTask) {
-  return `
-    <span class="pill-cardmae-conteudo pill-cardmae-regra">
+// Pra onde o card mãe costuma ir quando sai de "Cards Mães". Fica
+// guardado no navegador (preferência por designer, mesmo padrão do resto
+// do app) — quem sempre manda pra outra etapa não precisa escolher de
+// novo toda vez. O padrão continua sendo a Revisão.
+const DESTINO_CARDMAE_CHAVE = "colmeia_destino_cardmae_v1";
+
+function destinoDoCardMae() {
+  let salvo = null;
+  try { salvo = localStorage.getItem(DESTINO_CARDMAE_CHAVE); } catch (err) { /* navegador sem localStorage */ }
+  return columnsDef.find(c => c.key === salvo)
+    || columnsDef.find(c => c.key === ETAPA_SUGERIDA_SAINDO_DE_FORA)
+    || columnsDef[0];
+}
+
+function guardarDestinoDoCardMae(chave) {
+  try { localStorage.setItem(DESTINO_CARDMAE_CHAVE, chave); } catch (err) { /* segue sem guardar */ }
+}
+
+/**
+ * A etapa dentro do pill do card mãe. Enquanto ele está numa etapa FORA
+ * das 5 colunas do quadro (o caso normal: "Cards Mães"), mostra o
+ * caminho inteiro montado e fixo — "Cards Mães → Revisão" — em vez de
+ * esconder isso dentro de um menu. As três partes fazem coisas
+ * diferentes: a etapa da esquerda troca a etapa de agora, a setinha do
+ * meio TRANSFERE e a etapa da direita escolhe pra onde vai.
+ *
+ * Depois de transferido, o card mãe passa a estar dentro do quadro e não
+ * tem mais pra onde transferir — aí vira o crachá de etapa normal.
+ */
+function renderEtapaDoCardMaeHTML(cardMaeTask) {
+  if (cardMaeTask.status) {
+    return `
       <div class="status-wrap">
         <button type="button" class="status-badge" id="pillCardMaeStatusBadge">${escaparHTML(rotuloDaEtapa(cardMaeTask))}</button>
       </div>
+    `;
+  }
+  const destino = destinoDoCardMae();
+  return `
+    <div class="etapa-transfer" id="pillCardMaeTransfer">
+      <button type="button" class="etapa-chip de" id="pillCardMaeEtapaDe" title="Trocar a etapa de agora">${escaparHTML(cardMaeTask.runrunStage || "Sem etapa")}</button>
+      <button type="button" class="etapa-transfer-seta" id="pillCardMaeTransferir" title="Transferir para ${escaparHTML(destino.label)}" aria-label="Transferir para ${escaparHTML(destino.label)}">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h13m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="etapa-chip para" id="pillCardMaeEtapaPara" title="Escolher pra onde o card mãe vai">
+        <span>${escaparHTML(destino.label)}</span>
+        <svg class="etapa-chip-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  `;
+}
+
+function renderFacePillRegraCardMae(cardMaeTask) {
+  return `
+    <span class="pill-cardmae-conteudo pill-cardmae-regra">
+      ${renderEtapaDoCardMaeHTML(cardMaeTask)}
       <span class="pill-cardmae-regra-centro">
         <span class="pill-cardmae-nome">${escaparHTML(cardMaeTask.title)}</span>
         <div class="nav-dots-group" id="pillCardMaeSeq">
@@ -318,6 +368,87 @@ async function recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId) {
   rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
 }
 
+/**
+ * Menu de "pra onde vai" — só escolhe o destino guardado no navegador,
+ * sem mexer em nada no Runrun.it. É de propósito parecido com o menu de
+ * etapa (mesma classe .status-menu), pra não inventar um visual novo.
+ */
+function abrirMenuEscolherDestino(ancora, chaveAtual, aoEscolher) {
+  document.querySelectorAll(".status-menu").forEach(el => el.remove());
+  const menu = document.createElement("div");
+  menu.className = "status-menu";
+  menu.innerHTML = columnsDef
+    .map(c => `<button type="button" data-status="${c.key}" class="${c.key === chaveAtual ? "active" : ""}">${c.label}</button>`)
+    .join("");
+  document.body.appendChild(menu);
+  posicionarPopupFixo(menu, ancora);
+  requestAnimationFrame(() => menu.classList.add("open"));
+
+  function fechar() {
+    menu.classList.remove("open");
+    setTimeout(() => menu.remove(), 160);
+    document.removeEventListener("click", clickFora);
+  }
+  function clickFora(ev) {
+    if (!menu.contains(ev.target) && ev.target !== ancora) fechar();
+  }
+  setTimeout(() => document.addEventListener("click", clickFora), 0);
+
+  menu.querySelectorAll("button").forEach(opt => {
+    opt.addEventListener("click", ev => {
+      ev.stopPropagation();
+      fechar();
+      aoEscolher(opt.dataset.status);
+    });
+  });
+}
+
+/**
+ * A setinha do meio: transfere o card mãe pra etapa de destino.
+ *
+ * A animação conta a história em três tempos: (1) a setinha dispara pra
+ * direita e some, (2) a etapa de agora encolhe até desaparecer e — como
+ * as três partes estão lado a lado — a etapa de destino desliza sozinha
+ * pro lugar dela, (3) ela dá um pulinho e fica verde com um ✓. O CSS
+ * cuida do movimento; aqui só entram as classes na hora certa.
+ *
+ * Otimista, como o resto do app: a tela reage na hora e o Runrun.it
+ * confirma em segundo plano. Se ele recusar, desfaz e avisa.
+ */
+async function transferirCardMaeParaDestino(cardMaeTask, taskAtualId) {
+  const wrap = document.getElementById("pillCardMaeTransfer");
+  if (!wrap || wrap.classList.contains("disparando")) return; // já está transferindo
+  const destino = destinoDoCardMae();
+  const statusAntigo = cardMaeTask.status;
+  const etapaAntiga = cardMaeTask.runrunStage;
+  const comecouEm = Date.now();
+
+  wrap.classList.add("disparando");
+  setTimeout(() => wrap.classList.add("transferindo"), 170);
+  setTimeout(() => wrap.classList.add("chegou"), 520);
+
+  cardMaeTask.status = destino.key;
+  cardMaeTask.runrunStage = destino.label;
+
+  const ok = await moverEtapaNoBackend(cardMaeTask.id, destino.key);
+  if (!ok) {
+    cardMaeTask.status = statusAntigo;
+    cardMaeTask.runrunStage = etapaAntiga;
+    rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId); // desfaz a animação junto
+    mostrarToast("Não consegui transferir o card mãe agora.", "erro");
+    return;
+  }
+  agendarAtualizacaoKanban();
+
+  // Deixa a animação terminar antes de redesenhar (o pill volta a mostrar
+  // o crachá normal, já que o card mãe entrou no quadro). Se o Runrun.it
+  // demorou mais que a animação, redesenha na hora.
+  const faltando = Math.max(0, 1000 - (Date.now() - comecouEm));
+  setTimeout(() => {
+    if (document.getElementById("pillCardMaeTransfer")) rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+  }, faltando);
+}
+
 // IMPORTANTE: toda busca aqui dentro tem que ser RELATIVA a #pillCardMaeFace
 // (nunca document.getElementById solto). A regra do card mãe reaproveita
 // os MESMOS ids de navegação (navPrevArrow/navNextArrow/navAddPersonBtn/
@@ -335,6 +466,38 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
   if (!face) return;
   const fecharBtn = face.querySelector("#pillCardMaeFechar");
   if (fecharBtn) fecharBtn.addEventListener("click", esconderFluxoCardMaeNoPill);
+
+  // --- "Cards Mães → Revisão": as três partes do transferidor ---
+  const chipDe = face.querySelector("#pillCardMaeEtapaDe");
+  if (chipDe) {
+    chipDe.addEventListener("click", e => {
+      e.stopPropagation();
+      // Mesmo menu de sempre, só que ancorado na etapa da esquerda: serve
+      // pra corrigir a etapa de AGORA (não pra transferir).
+      abrirMenuEtapa(cardMaeTask, chipDe, () => rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId));
+    });
+  }
+
+  const chipPara = face.querySelector("#pillCardMaeEtapaPara");
+  if (chipPara) {
+    chipPara.addEventListener("click", e => {
+      e.stopPropagation();
+      // Só ESCOLHE o destino — não mexe em nada no Runrun.it. Quem
+      // transfere de verdade é a setinha do meio.
+      abrirMenuEscolherDestino(chipPara, destinoDoCardMae().key, chave => {
+        guardarDestinoDoCardMae(chave);
+        rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+      });
+    });
+  }
+
+  const setaTransferir = face.querySelector("#pillCardMaeTransferir");
+  if (setaTransferir) {
+    setaTransferir.addEventListener("click", e => {
+      e.stopPropagation();
+      transferirCardMaeParaDestino(cardMaeTask, taskAtualId);
+    });
+  }
 
   const statusBadge = face.querySelector("#pillCardMaeStatusBadge");
   if (statusBadge) {
