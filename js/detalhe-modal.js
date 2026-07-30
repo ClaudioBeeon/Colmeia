@@ -261,8 +261,17 @@ function wireWorkflowArrows(task) {
         if (ok) {
           task.entregue = false;
           task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
-          atualizarCrachaDeEtapa(task);
           await carregarSequencia(task);
+          // Antes só atualizava o crachá de etapa e a fileira de
+          // sequência — o cabeçalho inteiro (play/pause, cronômetro,
+          // seta pro card mãe) continuava com a cara de "entregue"
+          // porque esse pedaço só é montado uma vez, dentro do HTML de
+          // renderDetail(). Reabrir precisa refazer tudo, não só um
+          // pedacinho, senão o play/pause nunca volta.
+          if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
+            renderDetail();
+            render();
+          }
         } else {
           deliverBtn.disabled = false;
           mostrarToast("Não consegui reabrir essa tarefa agora.", "erro");
@@ -542,6 +551,29 @@ function renderDetail() {
       <div class="detail-header">
         <div class="detail-header-pill" id="detailHeaderPill">
           <div class="pill-face pill-face-normal">
+          ${task.isMotherCard ? `
+            <div class="children-btn-wrap">
+              <button type="button" class="mother-card-btn" id="childrenBtn" title="Ver subtarefas">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="children-float" id="childrenPanel">
+                <div class="children-float-head">Subtarefas</div>
+                <div class="children-list">
+                  ${(task.subtarefasResumo || []).map(s => `
+                    <button type="button" class="child-item ${s.fechada ? "done" : ""}" data-child-id="${s.id}">
+                      ${avatarHTML(s.responsavel, "avatar-sm child-avatar", s.foto)}
+                      <span class="child-title">${escaparHTML(s.title)}</span>
+                      ${s.fechada ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
+                    </button>
+                  `).join("")}
+                </div>
+              </div>
+            </div>
+          ` : task.parentTaskId ? `
+            <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          ` : ""}
           ${task.entregue ? `
             <span class="detail-taskname">${escaparHTML(task.title)}</span>
             <span class="pill-horas-trabalhadas" title="Tempo total trabalhado nessa tarefa">${formatTime(task.timerSeconds)}</span>
@@ -549,29 +581,6 @@ function renderDetail() {
             <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
             <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
             <span class="detail-sep">|</span>
-            ${task.isMotherCard ? `
-              <div class="children-btn-wrap">
-                <button type="button" class="mother-card-btn" id="childrenBtn" title="Ver subtarefas">
-                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-                <div class="children-float" id="childrenPanel">
-                  <div class="children-float-head">Subtarefas</div>
-                  <div class="children-list">
-                    ${(task.subtarefasResumo || []).map(s => `
-                      <button type="button" class="child-item ${s.fechada ? "done" : ""}" data-child-id="${s.id}">
-                        ${avatarHTML(s.responsavel, "avatar-sm child-avatar", s.foto)}
-                        <span class="child-title">${escaparHTML(s.title)}</span>
-                        ${s.fechada ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
-                      </button>
-                    `).join("")}
-                  </div>
-                </div>
-              </div>
-            ` : task.parentTaskId ? `
-              <button type="button" class="mother-card-btn" id="motherCardBtn" title="Ir para o card mãe">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-            ` : ""}
             <span class="detail-taskname">${escaparHTML(task.title)}</span>
           `}
           <button type="button" class="detail-taskname-copy" id="detailTaskNameCopy" title="Copiar nome da tarefa" aria-label="Copiar nome da tarefa">
@@ -920,8 +929,13 @@ function renderDetail() {
       if (ok) {
         task.entregue = false;
         task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
-        atualizarCrachaDeEtapa(task);
         await carregarSequencia(task);
+        // Mesmo motivo do outro botão de reabrir (ver comentário lá) —
+        // precisa refazer o cabeçalho inteiro, não só um pedacinho.
+        if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
+          renderDetail();
+          render();
+        }
       } else {
         mostrarToast("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");
       }
