@@ -46,8 +46,15 @@ async function tocarTarefaNoBackend(taskId, taskTitle) {
  * mesmo tempo no Runrun.it). Chama isso sempre antes de iniciar um play.
  */
 function pararOutrasTarefasRodando(exceto) {
+  // Compara por ID, nunca por referência de objeto (`t !== exceto`): quem
+  // chama pode estar segurando uma referência velha da tarefa, recriada
+  // por atualizarKanbanEmBackground. Comparando por referência, a tarefa
+  // que a pessoa acabou de tocar não "batia" com nenhuma das vivas e era
+  // pausada junto — bug recorrente documentado no CLAUDE.md.
+  const idExceto = exceto && exceto.id ? String(exceto.id) : null;
   tasks.forEach(t => {
-    if (t.running && t !== exceto) {
+    const ehAMesma = idExceto ? String(t.id) === idExceto : t === exceto;
+    if (t.running && !ehAMesma) {
       t.running = false;
       t._runningToggleEm = Date.now();
       pausarTarefaNoBackend(t.id);

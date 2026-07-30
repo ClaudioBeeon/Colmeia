@@ -913,7 +913,18 @@ function renderDetail() {
       if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, texto);
     } else {
       if (bolhaTemporaria) bolhaTemporaria.remove(); // não foi enviado — some a bolha
-      mostrarToast("Não consegui enviar esse comentário agora.", "erro");
+      // Devolve o texto pro campo em vez de perder o que a pessoa escreveu:
+      // o campo é limpo ANTES da resposta chegar (pra bolha aparecer na
+      // hora), então numa falha o texto simplesmente evaporava e tinha que
+      // ser digitado de novo. Só devolve se a pessoa ainda não começou a
+      // escrever outra coisa nesse meio-tempo — nunca sobrescreve o que
+      // ela está digitando agora.
+      const campoAgora = document.getElementById("commentInput");
+      if (campoAgora && !campoAgora.value.trim() && texto) {
+        campoAgora.value = texto;
+        campoAgora.focus();
+      }
+      mostrarToast("Não consegui enviar esse comentário agora. Seu texto voltou pro campo.", "erro");
     }
   }
 

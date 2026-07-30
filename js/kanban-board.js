@@ -211,11 +211,24 @@ function renderCoordenacaoPill() {
     </button>
   `;
   document.getElementById("coordenacaoPillBtn").addEventListener("click", () => {
-    const vaiComecar = !t.running;
-    if (vaiComecar) pararOutrasTarefasRodando(t);
-    t.running = vaiComecar;
-    if (t.running) tocarTarefaNoBackend(t.id, t.title);
-    else pausarTarefaNoBackend(t.id);
+    // Busca a tarefa VIVA pelo id no momento do clique — nunca usa o `t`
+    // capturado quando a pílula foi desenhada. Se atualizarKanbanEmBackground
+    // rodou nesse meio-tempo, `t` é um objeto fantasma: mexer no .running
+    // dele não aparece em lugar nenhum, e pararOutrasTarefasRodando(t)
+    // comparava por referência contra objetos vivos que nunca batiam — o
+    // que fazia essa função PAUSAR a própria tarefa de coordenação que
+    // acabou de receber o play. Mesmo bug documentado no CLAUDE.md.
+    const tarefaViva = (t.id && tasks.find(x => String(x.id) === String(t.id))) || t;
+    const vaiComecar = !tarefaViva.running;
+    if (vaiComecar) pararOutrasTarefasRodando(tarefaViva);
+    tarefaViva.running = vaiComecar;
+    // Sem marcar isso, a proteção de 8s (ver atualizarKanbanEmBackground)
+    // não valia pra essa pílula: uma atualização automática caindo logo
+    // depois do clique trazia running=false do Runrun.it e desfazia o play
+    // na tela, mesmo a tarefa já estando rodando de verdade lá.
+    tarefaViva._runningToggleEm = Date.now();
+    if (tarefaViva.running) tocarTarefaNoBackend(tarefaViva.id, tarefaViva.title);
+    else pausarTarefaNoBackend(tarefaViva.id);
     render();
     updateNowPlaying();
   });

@@ -532,7 +532,12 @@ async function confirmarECriarPastaDoCard(task) {
     btn.disabled = false;
 
     if (!data.ok) {
-      trocarTextoBotaoPasta(data.error ? data.error.slice(0, 40) : "Não consegui criar a pasta");
+      // O erro vai pro avisinho (que cabe a mensagem inteira, sem cortar em
+      // 40 letras) e o botão VOLTA ao texto normal — antes ele ficava preso
+      // exibindo o erro picado e a pessoa não descobria que podia tentar de
+      // novo sem fechar e reabrir a tarefa.
+      mostrarToast(data.error || "Não consegui criar a pasta do card agora.", "erro");
+      trocarTextoBotaoPasta("Criar pasta do card");
       return;
     }
     btn.dataset.pastaUrl = data.url;
@@ -543,7 +548,8 @@ async function confirmarECriarPastaDoCard(task) {
   } catch (err) {
     console.error("Falha ao criar pasta do card no Drive:", err);
     btn.disabled = false;
-    trocarTextoBotaoPasta("Falha de conexão");
+    mostrarToast("Falha de conexão. Não consegui criar a pasta agora — tenta de novo em alguns segundos.", "erro");
+    trocarTextoBotaoPasta("Criar pasta do card");
   }
 }
 

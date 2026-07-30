@@ -360,14 +360,24 @@ function renderAvisos() {
       e.stopPropagation();
       const id = btn.dataset.id;
       btn.disabled = true;
-      const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify({ acao: "excluirAviso", id }) });
-      const data = await res.json();
-      if (data.ok) {
-        avisosCache = avisosCache.filter(a => a.id !== id);
-        renderAvisos();
-      } else {
+      // O try/catch aqui não é enfeite: sem ele, uma queda de internet no
+      // meio do caminho estourava um erro e o botão ficava desabilitado
+      // PARA SEMPRE (só F5 resolvia), sem nenhuma mensagem explicando.
+      // Mesmo cuidado do resto do app — sempre devolver o botão ao normal.
+      try {
+        const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify({ acao: "excluirAviso", id }) });
+        const data = await res.json();
+        if (data.ok) {
+          avisosCache = avisosCache.filter(a => a.id !== id);
+          renderAvisos();
+          return;
+        }
         btn.disabled = false;
-        alert(data.error || "Não consegui excluir esse aviso agora.");
+        mostrarToast(data.error || "Não consegui excluir esse aviso agora.", "erro");
+      } catch (err) {
+        console.error("Falha ao excluir aviso:", err);
+        btn.disabled = false;
+        mostrarToast("Falha de conexão. Não consegui excluir esse aviso agora.", "erro");
       }
     });
   });
@@ -399,20 +409,30 @@ document.getElementById("avisosNovoBtn").addEventListener("click", async () => {
   const btn = document.getElementById("avisosNovoBtn");
   btn.disabled = true;
   btn.textContent = "Lançando...";
-  const res = await fetch(COLMEIA_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ acao: "criarAviso", autor: DESIGNER_LOGADO, texto }),
-  });
-  const data = await res.json();
-  btn.disabled = false;
-  btn.textContent = "Lançar aviso";
-  if (data.ok) {
-    textarea.value = "";
-    avisosCache = await buscarAvisosDoBackend();
-    renderAvisos();
-    marcarAvisosVistos(avisosCache);
-  } else {
-    alert(data.error || "Não consegui lançar o aviso agora.");
+  // O `finally` garante que o botão SEMPRE volta ao normal — antes, uma
+  // falha de conexão no meio do envio deixava ele preso em "Lançando..."
+  // desabilitado pra sempre (só F5 resolvia), e o texto do aviso ficava
+  // refém dele. O texto digitado só é apagado quando o envio dá certo.
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "criarAviso", autor: DESIGNER_LOGADO, texto }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      textarea.value = "";
+      avisosCache = await buscarAvisosDoBackend();
+      renderAvisos();
+      marcarAvisosVistos(avisosCache);
+    } else {
+      mostrarToast(data.error || "Não consegui lançar o aviso agora.", "erro");
+    }
+  } catch (err) {
+    console.error("Falha ao lançar aviso:", err);
+    mostrarToast("Falha de conexão. O aviso não foi lançado — o texto continua aí, tenta de novo.", "erro");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Lançar aviso";
   }
 });
 
