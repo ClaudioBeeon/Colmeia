@@ -453,6 +453,11 @@ async function atualizarKanbanEmBackground() {
         // objeto novo sem comentários, e quem estivesse com o card
         // aberto via eles "sumirem" até recarregar de novo.
         if (antiga.comments !== undefined) nova.comments = antiga.comments;
+        // Mesma ideia pro briefing já organizado pela IA: sem preservar, a
+        // atualização automática apagava ele a cada 60s e o Colmeia pedia
+        // tudo de novo pro servidor na próxima abertura do card, mesmo já
+        // tendo o resultado pronto.
+        if (antiga.briefingHTML !== undefined) nova.briefingHTML = antiga.briefingHTML;
         // Mesmo problema do timerSeconds acima, mas pro "está rodando":
         // o Runrun.it às vezes demora alguns segundos pra confirmar o
         // play/pause (mesmo já tendo aceitado a chamada) — sem essa

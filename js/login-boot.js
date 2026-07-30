@@ -20,6 +20,13 @@ function iniciarAppPosLogin() {
   carregarLinksClientes();
   carregarProgressoClientes();
   carregarClientesOcultos();
+  // Avisos e agenda agora só são buscados com alguém logado (antes ficavam
+  // rodando até na tela de senha, à toa). As duas checagens periódicas
+  // continuam ligadas nos arquivos delas — aqui é só pra fazer a PRIMEIRA
+  // acontecer na hora que a pessoa entra, em vez de esperar o próximo
+  // ciclo (até 5 min pros avisos, até 3 min pra agenda).
+  atualizarBadgeAvisos();
+  verificarReunioesProximas();
 }
 
 // Algumas coisas (Fila de Repasse, lançar Avisos) são só do Cláudio,

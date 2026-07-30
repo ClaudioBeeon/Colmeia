@@ -23,12 +23,18 @@ function openDetail(idx, entradaAnimacao) {
   carregarDescricao(tasks[detailIdx]);
   carregarSequencia(tasks[detailIdx]);
   carregarAnexos(tasks[detailIdx]);
+  // carregarCronometroReal já resolve o "isso é card mãe?" com a MESMA
+  // resposta que usa pro cronômetro (ver js/chat-comentarios.js) — por
+  // isso carregarFilhosSeForCardMae não é mais chamada aqui direto: era
+  // uma segunda leitura da mesma tarefa no Runrun.it a cada abertura.
   carregarCronometroReal(tasks[detailIdx]);
-  carregarFilhosSeForCardMae(tasks[detailIdx]);
   if (tasks[detailIdx].parentTaskId) precarregarCardMaeEmBackground(tasks[detailIdx].id);
   renderNotificacoesUpload(tasks[detailIdx]);
   iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);
-  if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
+  // Só pede o briefing pra IA quando ainda não temos ele — antes pedia
+  // sempre, mesmo com o resultado pronto e já na tela, gastando uma ida ao
+  // servidor (+ leitura da descrição no Runrun.it) a cada abertura do card.
+  if (tasks[detailIdx].id && tasks[detailIdx].briefingHTML === undefined) gerarBriefingComIA(tasks[detailIdx]);
   // Se já tinha sido gerado antes (task.briefingHTML cacheado), o
   // template já usa o cache direto — só precisa religar os botões de
   // copiar e os toggles de "ver versão original", já que o innerHTML

@@ -6,7 +6,13 @@ function agendarAtualizacaoKanban() {
 
 // Além de atualizar depois de cada ação, também atualiza sozinho de
 // tempos em tempos (pega mudanças feitas por outras pessoas do time).
-setInterval(atualizarKanbanEmBackground, 60000);
+// A checagem de DESIGNER_LOGADO evita ficar buscando o quadro inteiro a
+// cada minuto com a tela de login aberta, sem ninguém logado — um
+// navegador esquecido nessa tela consumia servidor pra sempre à toa.
+setInterval(() => {
+  if (!DESIGNER_LOGADO) return;
+  atualizarKanbanEmBackground();
+}, 60000);
 
 async function salvarPrioridadeNoBackend(taskId, prioridade) {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1 || !taskId) return;

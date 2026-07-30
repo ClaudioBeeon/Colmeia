@@ -56,13 +56,47 @@ function salvarNotificacoesLog(lista) {
 // rede por tarefa toda vez que o sino é aberto de novo em seguida
 // (ex: abrir/fechar sem querer, ou dar uma segunda olhada logo depois).
 const CACHE_COMENTARIOS_TTL_MS = 30 * 1000;
-const cacheComentariosPorTarefa = new Map(); // taskId -> { comentarios, quando }
+const cacheComentariosPorTarefa = new Map(); // taskId -> { comentarios, quando, lastActivityAt }
 
-async function buscarComentariosComCache(taskId) {
+/**
+ * Busca os comentários de uma tarefa, mas SÓ vai à rede se algo tiver
+ * mudado nela de verdade.
+ *
+ * Por que isso importa: verificarNotificacoes roda depois de QUALQUER
+ * atualização do quadro (a cada 60s e ~1s depois de cada ação) e chamava
+ * isso pra cada tarefa sua. Com 15 tarefas eram ~15 idas ao Apps Script
+ * por minuto, por pessoa — a maior fonte de tráfego do app, competindo
+ * com as ações de verdade e deixando tudo mais lento.
+ *
+ * O Runrun.it já devolve `lastActivityAt` (updated_at) de cada tarefa na
+ * busca do quadro, que a gente pega "de graça". Se ele não mudou desde a
+ * última vez que buscamos os comentários, não tem comentário novo — então
+ * reaproveita o que já está guardado, sem gastar nenhuma chamada. Na
+ * maioria dos ciclos isso cai pra ZERO chamadas.
+ */
+// Teto de segurança: mesmo que a data de atividade da tarefa não mude,
+// rebusca de tempos em tempos. É uma rede de proteção caso o Runrun.it
+// não atualize `updated_at` ao receber um comentário — sem isso, a
+// notificação daquela tarefa poderia nunca mais ser checada. Continua
+// cortando a grande maioria das chamadas, e o pior caso vira "o sino
+// demora até 10 min", nunca "o sino não avisa".
+const TETO_REBUSCA_COMENTARIOS_MS = 10 * 60 * 1000;
+
+async function buscarComentariosComCache(taskId, lastActivityAt) {
   const cache = cacheComentariosPorTarefa.get(taskId);
-  if (cache && (Date.now() - cache.quando) < CACHE_COMENTARIOS_TTL_MS) return cache.comentarios;
+  if (cache) {
+    const idade = Date.now() - cache.quando;
+    const aindaFresco = idade < CACHE_COMENTARIOS_TTL_MS;
+    // "Nada mudou na tarefa desde a última busca" só vale quando as duas
+    // pontas realmente têm essa data — sem ela, cai na regra de tempo de
+    // sempre, pra nunca deixar de perceber um comentário novo.
+    const nadaMudouNaTarefa = !!lastActivityAt && !!cache.lastActivityAt
+      && String(lastActivityAt) === String(cache.lastActivityAt)
+      && idade < TETO_REBUSCA_COMENTARIOS_MS;
+    if (aindaFresco || nadaMudouNaTarefa) return cache.comentarios;
+  }
   const comentarios = await buscarComentariosDoBackend(taskId);
-  cacheComentariosPorTarefa.set(taskId, { comentarios, quando: Date.now() });
+  cacheComentariosPorTarefa.set(taskId, { comentarios, quando: Date.now(), lastActivityAt: lastActivityAt || null });
   return comentarios;
 }
 
@@ -101,7 +135,9 @@ async function _verificarNotificacoesImpl() {
   const novos = [];
 
   await Promise.all(minhasTarefas.map(async t => {
-    const comentarios = await buscarComentariosComCache(t.id);
+    // Passa a data de última atividade da tarefa: se ela não mudou, o
+    // cache responde sem gastar chamada nenhuma (ver buscarComentariosComCache).
+    const comentarios = await buscarComentariosComCache(t.id, t.lastActivityAt);
     t.comments = comentarios; // aproveita e já deixa cacheado pro chat também
     comentarios
       .filter(c => !nomesCorrespondem(c.autor, DESIGNER_LOGADO))
@@ -446,6 +482,9 @@ let _primeiraChecagemAvisos = true;
 async function atualizarBadgeAvisos() {
   const badge = document.getElementById("avisosBadge");
   if (!badge || !COLMEIA_API_URL) return;
+  // Não fica buscando avisos com a tela de login aberta (ninguém logado) —
+  // mesmo motivo da checagem no polling do quadro.
+  if (!DESIGNER_LOGADO) return;
   avisosCache = await buscarAvisosDoBackend();
   const vistos = idsAvisosVistos();
   const novosAvisos = avisosCache.filter(a => !vistos.has(a.id));

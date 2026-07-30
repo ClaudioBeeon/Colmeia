@@ -499,15 +499,38 @@ function buscarTempoMedioDoPainel() {
   return mapa;
 }
 
-function transformarTarefaParaColmeia(t, nomeDesignerFallback) {
+/**
+ * Junta, UMA VEZ SÓ, os dois mapas do painel-designers-beeon que toda
+ * tarefa precisa (vínculos de nome de cliente + tempo médio por cliente).
+ *
+ * Por que isso existe: transformarTarefaParaColmeia era chamada pra cada
+ * tarefa e chamava buscarVinculosDoPainel()/buscarTempoMedioDoPainel()
+ * lá dentro. Mesmo com o cache de 10 minutos, cada chamada dessas é uma
+ * leitura no CacheService (ida à rede interna do Google) + um JSON.parse
+ * do mapa inteiro. Com ~100 tarefas davam ~200 leituras repetidas em CADA
+ * getTarefasColmeia — que roda a cada 60s pra todo mundo do time. Agora
+ * quem processa uma LISTA de tarefas monta esse contexto uma vez e passa
+ * adiante; quem processa uma tarefa só continua funcionando sem passar
+ * nada (aí ele monta na hora, que é o comportamento antigo).
+ */
+function contextoDosPaineis() {
+  return {
+    vinculos: buscarVinculosDoPainel(),
+    tempoMedio: buscarTempoMedioDoPainel()
+  };
+}
+
+function transformarTarefaParaColmeia(t, nomeDesignerFallback, contexto) {
+  var mapaVinculos = (contexto && contexto.vinculos) || buscarVinculosDoPainel();
+  var mapaTempoMedio = (contexto && contexto.tempoMedio) || buscarTempoMedioDoPainel();
   var nomeEtapa = t.board_stage_name || t.task_state_name || '';
   var chaveColuna = nomeColunaParaChave(nomeEtapa);
   // Resolve o nome do cliente pro nome canônico vinculado no painel (ex:
   // "ALDEN 348 LTDA" no Runrun.it -> "Alden", que é como o coordenador
   // conhece o cliente e como as pastas do Drive estão organizadas).
   var nomeClienteBruto = t.client_name || 'Sem cliente';
-  var nomeClienteResolvido = resolverNomeCanonico(nomeClienteBruto, buscarVinculosDoPainel());
-  var tempoMedioMinutos = buscarTempoMedioDoPainel()[normalizarNomeParaComparar(nomeClienteResolvido)] || 0;
+  var nomeClienteResolvido = resolverNomeCanonico(nomeClienteBruto, mapaVinculos);
+  var tempoMedioMinutos = mapaTempoMedio[normalizarNomeParaComparar(nomeClienteResolvido)] || 0;
   return {
     id: t.id,
     title: t.title,
@@ -557,9 +580,26 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback) {
   };
 }
 
-function buscarTarefasRunrun() {
-  var tarefas = [];
+// Chave do cache onde a busca principal deixa os cards mãe que ela já
+// encontrou (e descarta) — pra página "Runrun completo" reaproveitar em
+// vez de repaginar TODAS as tarefas abertas do time de novo só pra achar
+// eles. Ver buscarExtrasRunrunCompleto.
+var CACHE_CARD_MAE_ABERTOS = 'cardMaeAbertos';
+
+/**
+ * Varre as tarefas ABERTAS do time uma única vez e devolve as duas
+ * categorias separadas: as normais (que vão pro quadro) e os cards mãe
+ * (que o quadro nunca mostra). Antes essa varredura acontecia duas vezes
+ * — uma aqui, jogando os cards mãe no lixo, e outra em
+ * buscarExtrasRunrunCompleto só pra recuperá-los.
+ */
+function buscarTarefasAbertasSeparadas() {
+  var normais = [];
+  var cardMae = [];
   var idsPorEmail = buscarIdsResponsaveisRunrun();
+  // Monta os mapas do painel UMA vez pra todas as tarefas (ver
+  // contextoDosPaineis) em vez de uma vez por tarefa.
+  var contexto = contextoDosPaineis();
 
   Object.keys(RUNRUN_USUARIOS).forEach(function (email) {
     var nomeDesigner = RUNRUN_USUARIOS[email];
@@ -573,8 +613,8 @@ function buscarTarefasRunrun() {
       if (!Array.isArray(lote) || lote.length === 0) break;
 
       lote.forEach(function (t) {
-        if (tarefaEhCardMae(t)) return;
-        tarefas.push(transformarTarefaParaColmeia(t, nomeDesigner));
+        if (tarefaEhCardMae(t)) cardMae.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
+        else normais.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
       });
 
       if (lote.length < 100) break;
@@ -582,7 +622,18 @@ function buscarTarefasRunrun() {
     }
   });
 
-  return tarefas;
+  // Deixa os cards mãe prontos pra página "Runrun completo" pegar sem
+  // repetir a varredura. TTL de 120s porque o quadro atualiza a cada 60s,
+  // então esse cache fica praticamente sempre quente.
+  try {
+    CacheService.getScriptCache().put(CACHE_CARD_MAE_ABERTOS, JSON.stringify(cardMae), 120);
+  } catch (e) { /* cache cheio/indisponível — a página busca do jeito antigo */ }
+
+  return { normais: normais, cardMae: cardMae };
+}
+
+function buscarTarefasRunrun() {
+  return buscarTarefasAbertasSeparadas().normais;
 }
 
 var JANELA_ENTREGUES_RUNRUN_COMPLETO_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
@@ -598,33 +649,31 @@ var JANELA_ENTREGUES_RUNRUN_COMPLETO_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
  * aproximação de "quando fechou" já usada em lastActivityAt).
  */
 function buscarExtrasRunrunCompleto() {
-  var cardMae = [];
   var entregues = [];
   var idsPorEmail = buscarIdsResponsaveisRunrun();
   var corte = Date.now() - JANELA_ENTREGUES_RUNRUN_COMPLETO_MS;
+  var contexto = contextoDosPaineis();
+
+  // Card mãe: a busca principal do quadro (buscarTarefasAbertasSeparadas)
+  // já os encontrou e deixou prontos no cache — não repagina TODAS as
+  // tarefas abertas do time de novo só por causa deles. Só cai na
+  // varredura própria se o cache estiver vazio (ex: primeira chamada do
+  // dia, antes de qualquer atualização do quadro).
+  var cardMae = null;
+  try {
+    var cacheadoCardMae = CacheService.getScriptCache().get(CACHE_CARD_MAE_ABERTOS);
+    if (cacheadoCardMae) cardMae = JSON.parse(cacheadoCardMae);
+  } catch (e) { cardMae = null; }
+  if (!cardMae) cardMae = buscarTarefasAbertasSeparadas().cardMae;
 
   Object.keys(RUNRUN_USUARIOS).forEach(function (email) {
     var nomeDesigner = RUNRUN_USUARIOS[email];
     var runrunId = idsPorEmail[email];
     if (!runrunId) return;
 
-    // Card mãe: reaproveita a mesma busca de tarefas abertas, só que
-    // guardando (em vez de descartar) as que são card mãe.
-    var pagina = 1;
-    while (pagina <= 5) {
-      var loteAbertas = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
-        '&is_closed=false&sort=desired_date&sortDir=asc&limit=100&page=' + pagina);
-      if (!Array.isArray(loteAbertas) || loteAbertas.length === 0) break;
-      loteAbertas.forEach(function (t) {
-        if (tarefaEhCardMae(t)) cardMae.push(transformarTarefaParaColmeia(t, nomeDesigner));
-      });
-      if (loteAbertas.length < 100) break;
-      pagina++;
-    }
-
     // Entregues: tarefas fechadas, mais recentes primeiro, parando assim
     // que sair da janela de 15 dias.
-    pagina = 1;
+    var pagina = 1;
     while (pagina <= 5) {
       var loteFechadas = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
         '&is_closed=true&sort=updated_at&sortDir=desc&limit=100&page=' + pagina);
@@ -636,7 +685,7 @@ function buscarExtrasRunrunCompleto() {
         var atualizadoEm = t.updated_at ? new Date(t.updated_at).getTime() : 0;
         if (atualizadoEm < corte) { saiuDaJanela = true; break; }
         if (tarefaEhCardMae(t)) continue;
-        entregues.push(transformarTarefaParaColmeia(t, nomeDesigner));
+        entregues.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
       }
       if (saiuDaJanela || loteFechadas.length < 100) break;
       pagina++;
@@ -658,7 +707,23 @@ function extrairNomeProjeto(t) {
   return (t.project_name || (t.project && t.project.name) || t.board_name || '').toString();
 }
 
+/**
+ * ATENÇÃO: é a chamada mais pesada do backend — varre TODAS as tarefas do
+ * time, abertas E fechadas (até 10 páginas de 100 por designer). Por isso
+ * o resultado fica 10 minutos em cache (mesmo padrão de
+ * buscarVinculosDoPainel/buscarTempoMedioDoPainel): é um número de
+ * acompanhamento mensal, não muda de minuto em minuto, e antes disso ela
+ * rodava inteira a cada vez que alguém abria o Colmeia.
+ */
+var CACHE_PROGRESSO_CLIENTES = 'progressoMensalClientes';
+
 function buscarProgressoMensalClientes() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get(CACHE_PROGRESSO_CLIENTES);
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* recalcula abaixo */ }
+  }
+
   var idsPorEmail = buscarIdsResponsaveisRunrun();
   var tagMes = tagDoMesAtual();
   var progresso = {};
@@ -700,7 +765,9 @@ function buscarProgressoMensalClientes() {
     });
   });
 
-  return { ok: true, progresso: Object.keys(progresso).map(function (k) { return progresso[k]; }) };
+  var resultado = { ok: true, progresso: Object.keys(progresso).map(function (k) { return progresso[k]; }) };
+  try { cache.put(CACHE_PROGRESSO_CLIENTES, JSON.stringify(resultado), 600); } catch (e) { /* cache indisponível, segue sem ele */ }
+  return resultado;
 }
 
 // ============ PESSOAS ============
@@ -2210,7 +2277,18 @@ function buscarTarefaCompleta(taskId) {
   if (!t || t.erroFetch) {
     return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
   }
-  return { ok: true, tarefa: transformarTarefaParaColmeia(t) };
+  // Devolve junto se a tarefa tem subtarefas (ou seja, se ela é um card
+  // mãe). Assim o front-end descobre isso NA MESMA chamada que já usa pra
+  // pegar o tempo trabalhado — antes ele fazia duas chamadas seguidas que
+  // liam a MESMA tarefa no Runrun.it (uma pro cronômetro, outra só pra
+  // perguntar "isso é card mãe?"). A lista de subtarefas em si continua
+  // vindo à parte (buscarSubtarefasDoCardMae), porque ela custa uma
+  // leitura por subtarefa e só vale a pena quando realmente é card mãe.
+  return {
+    ok: true,
+    tarefa: transformarTarefaParaColmeia(t),
+    temSubtarefas: !!(t.subtask_ids && t.subtask_ids.length)
+  };
 }
 
 function montarResumoSubtarefas(idsSubtarefas) {
@@ -2584,6 +2662,41 @@ function fazerBackupDaPlanilha() {
     Logger.log('Backup criado: ' + copia.getUrl());
   } catch (err) {
     Logger.log('Erro ao fazer backup da planilha: ' + err.message);
+  }
+  // Aproveita a mesma passada diária pra podar o "Log de Plays" — ele só
+  // crescia, e buscarPlaysDeHoje lê a aba INTEIRA a cada abertura da
+  // página Histórico. Sem isso, a página vai ficando mais lenta pra
+  // sempre. Roda depois do backup de propósito: a cópia do dia guarda o
+  // histórico completo antes da poda.
+  limparLogDePlaysAntigo();
+}
+
+// Quanto tempo de histórico de plays vale manter na planilha. A tela mais
+// longa da página Histórico é "última semana", então 60 dias é folga de
+// sobra — o resto já está guardado nos backups diários.
+var LOG_PLAYS_RETENCAO_DIAS = 60;
+
+function limparLogDePlaysAntigo() {
+  try {
+    var sheet = getLogPlaysSheet();
+    var linhas = sheet.getDataRange().getValues();
+    if (linhas.length <= 1) return;
+    var corte = new Date().getTime() - LOG_PLAYS_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+
+    // Apaga de baixo pra cima: deletar uma linha embaralha os índices das
+    // que estão DEPOIS dela, então percorrer ao contrário é o que mantém
+    // as posições válidas durante o laço.
+    var apagadas = 0;
+    for (var i = linhas.length - 1; i >= 1; i--) {
+      var quando = Number(linhas[i][3]);
+      if (quando && quando < corte) {
+        sheet.deleteRow(i + 1);
+        apagadas++;
+      }
+    }
+    if (apagadas) Logger.log('Log de Plays: ' + apagadas + ' linha(s) com mais de ' + LOG_PLAYS_RETENCAO_DIAS + ' dias apagada(s).');
+  } catch (err) {
+    Logger.log('Erro ao limpar o Log de Plays antigo: ' + err.message);
   }
 }
 

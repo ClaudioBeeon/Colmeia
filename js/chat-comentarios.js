@@ -378,6 +378,12 @@ async function carregarCronometroReal(task) {
     const timerEl = document.getElementById("detailTimer");
     if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
   }
+  // Essa mesma resposta já diz se a tarefa tem subtarefas — aproveita e
+  // resolve aqui o "isso é um card mãe?", que antes custava uma SEGUNDA
+  // chamada lendo exatamente a mesma tarefa no Runrun.it a cada abertura
+  // de card. A lista de subtarefas (que custa uma leitura por subtarefa)
+  // só é buscada quando realmente é card mãe.
+  if (resultado.temSubtarefas) carregarFilhosSeForCardMae(task);
 }
 
 /**
