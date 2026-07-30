@@ -252,6 +252,17 @@ function mostrarPromptRepetirComentario(task, texto) {
   el.querySelector(".repetir-sim").addEventListener("click", async () => {
     el.innerHTML = `<span>Enviando pro card mãe...</span>`;
     const ok = await enviarComentarioNoBackend(task.parentTaskId, texto);
+    if (ok) {
+      // O comentário já foi pro Runrun.it certinho, mas a aba "Card mãe" do
+      // chat (js/chat-comentarios.js) guarda os comentários em cache
+      // (chatMaeCache) pra não rebuscar toda vez que troca de aba — sem
+      // invalidar aqui, o comentário novo só apareceria depois de recarregar
+      // a página inteira.
+      chatMaeCache.delete(task.id);
+      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id) {
+        recarregarThreadAtiva();
+      }
+    }
     el.innerHTML = ok ? `<span>✓ Repetido no card mãe.</span>` : `<span>Não consegui enviar pro card mãe.</span>`;
     setTimeout(() => { el.hidden = true; }, 2000);
   });
