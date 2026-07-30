@@ -2,6 +2,7 @@ function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
   descMaeAberta = false;
+  originalAberta = false; // sempre abre na aba Descrição, não na aba de outra tarefa
   fecharChatPanel();
   renderDetail();
   const panel = document.getElementById("taskDetail");
@@ -482,10 +483,8 @@ function renderDetail() {
             ${task.parentTaskId ? `
               <button type="button" class="detail-tab" id="tabDescMae">Descrição card mãe</button>
             ` : ""}
-            ${task.hasChange ? `
-              <button type="button" class="detail-tab change-tab" id="tabChange" title="Alteração 01">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
-              </button>
+            ${ehTarefaDeAlteracao(task) ? `
+              <button type="button" class="detail-tab" id="tabOriginal" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
             ` : ""}
           </div>
           <div class="desc-stack">
@@ -511,13 +510,11 @@ function renderDetail() {
                 <div class="desc-text-real" id="descMaeTextReal">Carregando...</div>
               </div>
             ` : ""}
-            ${task.hasChange ? `
-              <div class="change-panel" id="changePanel">
-                <div class="change-panel-head">
-                  <span class="change-dot"></span>
-                  <span>Alteração 01</span>
-                </div>
-                <p class="change-summary">✨ Resumo por IA: cliente pediu pra trocar a cor de fundo pra tons mais claros e ajustar o texto do CTA — pedido feito nos comentários e reforçado na descrição.</p>
+            ${ehTarefaDeAlteracao(task) ? `
+              <div class="original-content" id="originalContent" hidden>
+                <div class="descmae-titulo" id="originalTitulo">Procurando a tarefa original...</div>
+                <div class="original-meta" id="originalMeta"></div>
+                <div class="desc-text-real" id="originalTextReal"></div>
               </div>
             ` : ""}
           </div>
@@ -638,6 +635,9 @@ function renderDetail() {
       <div class="chat-panel-tabs">
         <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
         <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
+        ${ehTarefaDeAlteracao(task) ? `
+          <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
+        ` : ""}
         ${task.id ? `<button type="button" class="upload-check-btn" id="uploadCheckBtn" title="Verificar se subiu algum arquivo novo na pasta do card">↻ Verificar upload</button>` : ""}
       </div>
       <div class="upload-notifs" id="uploadNotifs"></div>
@@ -861,26 +861,29 @@ function renderDetail() {
     });
   }
 
-  // ===== Abas Descrição / Descrição card mãe / Alteração (sem
+  // ===== Abas Descrição / Descrição card mãe / Tarefa original (sem
   // re-renderizar, com transição) =====
   document.getElementById("tabDesc").addEventListener("click", () => {
-    changeOpen = false;
     descMaeAberta = false;
+    originalAberta = false;
     applyCommentsState();
   });
-  const tabChange = document.getElementById("tabChange");
-  if (tabChange) {
-    tabChange.addEventListener("click", () => {
-      changeOpen = !changeOpen;
-      applyCommentsState();
-    });
-  }
   const tabDescMae = document.getElementById("tabDescMae");
   if (tabDescMae) {
     tabDescMae.addEventListener("click", () => {
       descMaeAberta = true;
+      originalAberta = false;
       applyCommentsState();
       carregarDescricaoCardMae(tasks[detailIdx] || task);
+    });
+  }
+  const tabOriginal = document.getElementById("tabOriginal");
+  if (tabOriginal) {
+    tabOriginal.addEventListener("click", () => {
+      originalAberta = true;
+      descMaeAberta = false;
+      applyCommentsState();
+      carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
     });
   }
 
@@ -1062,6 +1065,9 @@ function renderDetail() {
   const chatTabMae = document.getElementById("chatTabMae");
   if (chatTabMae) chatTabMae.addEventListener("click", () => abrirThreadDoCardMae(tasks[detailIdx] || task));
 
+  const chatTabTudo = document.getElementById("chatTabTudo");
+  if (chatTabTudo) chatTabTudo.addEventListener("click", () => abrirThreadLinhaDoTempo(tasks[detailIdx] || task));
+
   const uploadCheckBtn = document.getElementById("uploadCheckBtn");
   if (uploadCheckBtn) {
     uploadCheckBtn.addEventListener("click", async () => {
@@ -1080,19 +1086,82 @@ function renderDetail() {
 
 function applyCommentsState() {
   const tabDesc = document.getElementById("tabDesc");
-  const tabChange = document.getElementById("tabChange");
-  const changePanel = document.getElementById("changePanel");
   const childrenPanel = document.getElementById("childrenPanel");
   const tabDescMae = document.getElementById("tabDescMae");
+  const tabOriginal = document.getElementById("tabOriginal");
   const descContent = document.getElementById("descContent");
   const descMaeContent = document.getElementById("descMaeContent");
-  if (tabChange) tabChange.classList.toggle("active", changeOpen);
-  if (changePanel) changePanel.classList.toggle("open", changeOpen);
+  const originalContent = document.getElementById("originalContent");
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
-  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta);
+  // Três abas mutuamente exclusivas: Descrição (a padrão), Descrição card
+  // mãe e Tarefa original (essa última só existe em subtarefa de alteração).
+  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta);
   if (tabDescMae) tabDescMae.classList.toggle("active", descMaeAberta);
-  if (descContent) descContent.hidden = descMaeAberta;
+  if (tabOriginal) tabOriginal.classList.toggle("active", originalAberta);
+  if (descContent) descContent.hidden = descMaeAberta || originalAberta;
   if (descMaeContent) descMaeContent.hidden = !descMaeAberta;
+  if (originalContent) originalContent.hidden = !originalAberta;
+}
+
+/**
+ * Preenche a aba "Tarefa original" de uma subtarefa de alteração: mostra
+ * QUAL peça essa alteração está pedindo pra mudar (nome, quem fez, em que
+ * etapa está, se já foi entregue) e a descrição/briefing original dela,
+ * pra dar o contexto que o título "Alteração 01" não dá.
+ *
+ * Os dados do card mãe e das irmãs já vêm pré-carregados em segundo plano
+ * quando a subtarefa abre (precarregarCardMaeEmBackground); aqui só falta
+ * buscar a descrição da tarefa original, que é um endpoint separado.
+ */
+async function carregarTarefaOriginalDaAlteracao(task) {
+  const tituloEl = document.getElementById("originalTitulo");
+  const metaEl = document.getElementById("originalMeta");
+  const textoEl = document.getElementById("originalTextReal");
+  if (!tituloEl || !textoEl) return;
+  const taskId = task.id;
+
+  // O pré-carregamento pode ainda não ter terminado — nesse caso espera
+  // ele antes de dizer que não achou nada.
+  if (!cardMaeCache.has(taskId)) {
+    tituloEl.textContent = "Procurando a tarefa original...";
+    if (metaEl) metaEl.innerHTML = "";
+    textoEl.innerHTML = "";
+    await precarregarCardMaeEmBackground(taskId);
+    // Trocou de tarefa (ou de aba) enquanto isso? Compara por id, nunca
+    // por referência — mesmo cuidado do resto do app.
+    if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId) || !originalAberta) return;
+  }
+
+  const original = acharTarefaOriginalDaAlteracao(task);
+  if (!original) {
+    tituloEl.textContent = "Não achei a tarefa original";
+    if (metaEl) metaEl.innerHTML = "";
+    textoEl.innerHTML = "Essa alteração é a única subtarefa do card mãe, ou as outras também são alterações. Dá uma olhada em \"Descrição card mãe\" pra ter o contexto.";
+    return;
+  }
+
+  tituloEl.textContent = original.title;
+  if (metaEl) {
+    metaEl.innerHTML = `
+      <span class="original-meta-item">${avatarHTML(original.responsavel, "avatar-xs")} ${escaparHTML(original.responsavel || "Sem responsável")}</span>
+      ${original.etapa ? `<span class="original-meta-item">${escaparHTML(original.etapa)}</span>` : ""}
+      ${original.fechada ? `<span class="original-meta-item entregue">Entregue ✓</span>` : ""}
+      <button type="button" class="ai-briefing-toggle" id="abrirOriginalBtn">Abrir essa tarefa</button>
+    `;
+    const abrirBtn = document.getElementById("abrirOriginalBtn");
+    if (abrirBtn) abrirBtn.addEventListener("click", () => abrirTarefaPorId(Number(original.id)));
+  }
+
+  // Guarda a descrição no próprio item pra não rebuscar a cada vez que a
+  // pessoa vai e volta nessa aba.
+  if (original.descricao === undefined) {
+    textoEl.innerHTML = "Carregando o briefing da tarefa original...";
+    original.descricao = await buscarDescricaoDoBackend(original.id);
+    if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId) || !originalAberta) return;
+  }
+  textoEl.innerHTML = original.descricao
+    ? formatarDescricaoRunrun(original.descricao)
+    : "Essa tarefa não tem descrição cadastrada.";
 }
 
 /**
@@ -1219,6 +1288,44 @@ function mostrarCardEmBranco(mensagem) {
 // objeto da tarefa) pra sobreviver mesmo se atualizarKanbanEmBackground
 // trocar os objetos de tasks[] por outros novos enquanto isso.
 const cardMaeCache = new Map();
+
+/**
+ * ===== Subtarefas de "Alteração" =====
+ *
+ * Como funciona o fluxo na Beeon: cada card mãe tem subtarefas, uma pra
+ * cada responsável (redação, design...). Quando o cliente pede mudança,
+ * chega uma subtarefa NOVA no mesmo card mãe, chamada "Alteração 01" (ou
+ * só "Alteração"). O problema era que ela chegava sem contexto nenhum:
+ * pelo título não dá pra saber de qual peça ela fala nem o que foi pedido.
+ *
+ * O Colmeia já tem tudo o que precisa pra resolver isso — quando uma
+ * subtarefa abre, precarregarCardMaeEmBackground já traz o card mãe E a
+ * lista de subtarefas irmãs. É daí que sai a "tarefa original".
+ */
+function ehTarefaDeAlteracao(task) {
+  if (!task || !task.parentTaskId) return false;
+  return normalizarParaComparar(task.title).includes("alteracao");
+}
+
+/**
+ * Acha, entre as subtarefas irmãs (mesmo card mãe), qual é a tarefa
+ * "original" — a peça que foi trabalhada e que essa alteração está
+ * pedindo pra mudar. Descarta a própria alteração aberta e as outras
+ * alterações; entre as que sobram, a primeira é a mais antiga (a ordem
+ * vem do próprio Runrun.it, por criação).
+ *
+ * Devolve null quando não dá pra saber (card mãe ainda não carregado, ou
+ * a alteração é a única subtarefa) — nesse caso a aba avisa isso em vez
+ * de mostrar a tarefa errada.
+ */
+function acharTarefaOriginalDaAlteracao(task) {
+  const info = cardMaeCache.get(task.id);
+  if (!info || !info.ok || !info.temPai) return null;
+  const irmas = (info.subtarefas || []).filter(s =>
+    String(s.id) !== String(task.id) && !normalizarParaComparar(s.title).includes("alteracao")
+  );
+  return irmas.length ? irmas[0] : null;
+}
 
 /**
  * Busca o card mãe (e já deixa os comentários dele cacheados também,

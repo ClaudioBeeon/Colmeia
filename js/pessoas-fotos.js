@@ -248,7 +248,6 @@ function mapearTarefaDoBackend(t) {
     // dá pra calcular meta nenhuma).
     tempoMedioMinutos: t.tempoMedioMinutos || 0,
     estimatePct: calcularEstimatePct(t.workedSeconds || 0, t.tempoMedioMinutos || 0),
-    hasChange: false,
   };
 }
 

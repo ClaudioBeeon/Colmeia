@@ -1,7 +1,9 @@
 let detailIdx = null;
-let changeOpen = false;
 let childrenOpen = false;
 let descMaeAberta = false;
+// Aba "Tarefa original" aberta? (só existe em subtarefa de alteração — ver
+// ehTarefaDeAlteracao em js/detalhe-modal.js)
+let originalAberta = false;
 
 // ===== Chat flutuante (comentários em pop-up separado, fora do card) =====
 let chatThreadAtivo = "aqui"; // "aqui" (a tarefa aberta) ou "mae" (o card mãe dela)
@@ -58,6 +60,8 @@ function abrirThreadAqui(task) {
   const tabMae = document.getElementById("chatTabMae");
   if (tabAqui) tabAqui.classList.add("active");
   if (tabMae) tabMae.classList.remove("active");
+  const tabTudoAqui = document.getElementById("chatTabTudo");
+  if (tabTudoAqui) tabTudoAqui.classList.remove("active");
   const titulo = document.getElementById("chatPanelTitle");
   if (titulo) titulo.textContent = task.title;
   const thread = document.getElementById("commentsThread");
@@ -82,6 +86,8 @@ async function abrirThreadDoCardMae(task) {
   const tabMae = document.getElementById("chatTabMae");
   if (tabMae) tabMae.classList.add("active");
   if (tabAqui) tabAqui.classList.remove("active");
+  const tabTudoMae = document.getElementById("chatTabTudo");
+  if (tabTudoMae) tabTudoMae.classList.remove("active");
   const thread = document.getElementById("commentsThread");
   if (thread) thread.innerHTML = `<p class="comments-empty">Carregando comentários do card mãe...</p>`;
 
@@ -110,12 +116,78 @@ async function abrirThreadDoCardMae(task) {
 }
 
 /**
+ * Linha do tempo única de uma subtarefa de ALTERAÇÃO: junta, em ordem de
+ * hora, os comentários das três pontas que contam a história daquela peça
+ * — a própria alteração, a tarefa original (a peça que foi feita) e o card
+ * mãe (onde o atendimento normalmente escreve o pedido do cliente).
+ *
+ * É isso que responde "o que exatamente pediram nessa alteração": antes
+ * essas conversas viviam em lugares separados (e a da tarefa original nem
+ * era acessível pelo Colmeia), então o designer abria uma subtarefa
+ * chamada só "Alteração 01" sem nenhum contexto do que mudar.
+ *
+ * Comentar por aqui vai pra própria alteração (é a tarefa aberta).
+ */
+async function abrirThreadLinhaDoTempo(task) {
+  chatThreadAtivo = "tudo";
+  chatAlvoTaskId = task.id;
+  ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("active", id === "chatTabTudo");
+  });
+  const thread = document.getElementById("commentsThread");
+  if (thread) thread.innerHTML = `<p class="comments-empty">Montando a linha do tempo...</p>`;
+
+  const taskId = task.id;
+  const original = acharTarefaOriginalDaAlteracao(task);
+  const infoMae = cardMaeCache.get(taskId);
+
+  // As três buscas em paralelo (a da alteração e a do card mãe costumam
+  // já estar em cache do pré-carregamento).
+  const [comentariosAqui, comentariosOriginal, comentariosMae] = await Promise.all([
+    task.comments !== undefined ? Promise.resolve(task.comments) : buscarComentariosDoBackend(taskId),
+    original ? buscarComentariosDoBackend(original.id) : Promise.resolve([]),
+    (infoMae && infoMae.ok && infoMae.temPai)
+      ? (chatMaeCache.has(taskId)
+          ? Promise.resolve(chatMaeCache.get(taskId).comments)
+          : buscarComentariosDoBackend(infoMae.cardMae.id))
+      : Promise.resolve([]),
+  ]);
+
+  // Trocou de aba ou de tarefa enquanto carregava? Compara por id.
+  if (chatThreadAtivo !== "tudo" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
+
+  const juntos = []
+    .concat((comentariosAqui || []).map(c => Object.assign({}, c, { _origem: "Nesta alteração" })))
+    .concat((comentariosOriginal || []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })))
+    .concat((comentariosMae || []).map(c => Object.assign({}, c, { _origem: "Card mãe" })))
+    .sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0));
+
+  const titulo = document.getElementById("chatPanelTitle");
+  if (titulo) titulo.textContent = "Linha do tempo · " + task.title;
+  if (thread) {
+    thread.innerHTML = juntos.length
+      ? renderComentariosHTML({ id: taskId, comments: juntos })
+      : `<p class="comments-empty">Nenhum comentário em nenhuma das três pontas ainda.</p>`;
+    wireExcluirComentario();
+    thread.scrollTop = thread.scrollHeight;
+  }
+}
+
+/**
  * Recarrega a thread que está sendo mostrada agora no chat (a da
- * própria tarefa ou a do card mãe) — usado depois de enviar, excluir
- * ou reagir a um comentário.
+ * própria tarefa, a do card mãe ou a linha do tempo da alteração) —
+ * usado depois de enviar, excluir ou reagir a um comentário.
  */
 async function recarregarThreadAtiva() {
   const task = tasks[detailIdx];
+  if (chatThreadAtivo === "tudo") {
+    // Rebusca os comentários da própria alteração (é onde a pessoa acabou
+    // de escrever) e remonta a linha do tempo inteira.
+    task.comments = await buscarComentariosDoBackend(task.id);
+    await abrirThreadLinhaDoTempo(task);
+    return;
+  }
   if (chatThreadAtivo === "aqui") {
     await carregarComentarios(task);
     return;
@@ -258,7 +330,7 @@ function renderComentariosHTML(task) {
     <div class="comment-bubble ${minha ? "mine" : ""}" data-comment-id="${c.id}">
       ${minha ? "" : avatarHTML(c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
-        <div class="comment-meta"><span class="comment-author">${minha ? "Você" : c.autor}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span></div>
+        <div class="comment-meta"><span class="comment-author">${minha ? "Você" : escaparHTML(c.autor)}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span>${c._origem ? `<span class="comment-origem">${escaparHTML(c._origem)}</span>` : ""}</div>
         <div class="comment-text">${prepararTextoComentario(c.texto)}</div>
         ${(c.reactions || []).length ? `
           <div class="comment-reactions">

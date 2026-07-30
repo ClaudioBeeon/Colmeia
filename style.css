@@ -3067,3 +3067,31 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 .colmeia-toast.show { opacity: 1; transform: translateY(0) scale(1); }
 .colmeia-toast.erro { background: #E03131; }
+
+/* ===== Subtarefa de "Alteração": contexto da peça original =====
+   Aba "Tarefa original" (mostra QUAL peça a alteração está pedindo pra
+   mudar) e a etiqueta de origem das bolhas na "Linha do tempo" do chat.
+   Ver ehTarefaDeAlteracao / abrirThreadLinhaDoTempo no js. */
+.original-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; }
+.original-content[hidden] { display: none; }
+
+.original-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 6px 0 14px;
+}
+.original-meta-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  background: var(--page-bg); border-radius: 999px; padding: 4px 10px;
+}
+.original-meta-item.entregue { background: #E8F8F5; color: #1A6B55; }
+[data-theme="dark"] .original-meta-item.entregue { background: rgba(26,107,85,0.28); color: #8FE0D0; }
+
+/* Etiqueta de "de onde veio" esse comentário, na linha do tempo unificada. */
+.comment-origem {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+  color: #7A5C00; background: #FFF4CC;
+  border-radius: 999px; padding: 2px 7px; margin-left: 6px;
+  white-space: nowrap;
+}
+[data-theme="dark"] .comment-origem { background: rgba(255,214,102,0.22); color: #FFD666; }
