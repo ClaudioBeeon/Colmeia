@@ -35,8 +35,9 @@ function openDetail(idx, entradaAnimacao) {
   renderNotificacoesUpload(tasks[detailIdx]);
   iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);
   if (abrirNoContextoDeAlteracao) {
-    // Preenche a aba de contexto e já deixa o chat na Linha do tempo.
-    carregarTarefaOriginalDaAlteracao(tasks[detailIdx]);
+    // A aba de contexto já foi carregada pelo renderDetail() de cima
+    // (originalAberta já estava true antes dele rodar) — só falta deixar
+    // o chat na Linha do tempo.
     abrirChatPanel(tasks[detailIdx]);
     abrirThreadLinhaDoTempo(tasks[detailIdx]);
   }
@@ -1025,6 +1026,17 @@ function renderDetail() {
       carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
     });
   }
+
+  // renderDetail() reconstrói o pop-up inteiro do zero — inclusive
+  // quando é chamado por causa de outra coisa (ex: clicar em play/pause
+  // não devia mexer na aba de descrição, mas rebuild o HTML inteiro
+  // junto). Se a aba "Descrição card mãe"/"Tarefa original" estava
+  // aberta, o conteúdo já carregado sumia e nada recarregava ele — a
+  // aba ficava selecionada mas vazia/"Carregando..." pra sempre. Busca
+  // nada aqui se não tiver nada carregado ainda; se já tiver
+  // (cardMaeCache/cache da alteração), volta na hora, sem esperar rede.
+  if (descMaeAberta) carregarDescricaoCardMae(tasks[detailIdx] || task);
+  if (originalAberta) carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
 
   const commentInput = document.getElementById("commentInput");
   let arquivoParaAnexar = null;
