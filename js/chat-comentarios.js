@@ -431,7 +431,7 @@ async function baixarAnexo(documentId, nome, btnEl, taskId) {
     // motivo real que o backend devolveu (ex: arquivo grande demais,
     // Runrun.it recusou, documento não existe mais) — agora mostra o
     // motivo de verdade quando tem um.
-    alert("Não consegui baixar esse anexo agora: " + (err.message || "erro desconhecido") + "\nTenta de novo em alguns segundos.");
+    mostrarToast("Não consegui baixar esse anexo agora: " + (err.message || "erro desconhecido"), "erro");
   } finally {
     btnEl.disabled = false;
     btnEl.innerHTML = original;

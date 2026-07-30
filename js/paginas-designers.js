@@ -151,7 +151,7 @@ function pdClientCardHTML(group) {
     return `
       <div class="pd-client-designer-row">
         <div class="pd-client-designer-head">
-          ${fotoDesigner ? `<img src="${fotoDesigner}" class="pd-client-designer-photo">` : ""}
+          ${fotoDesigner ? `<img src="${fotoDesigner}" class="pd-client-designer-photo" alt="${designer}" onerror="this.remove()">` : ""}
           <span class="pd-client-designer-badge" style="background:${colDesigner.bg};color:${colDesigner.fg};">🎨 ${designer}</span>
         </div>
         ${tags ? `<div class="pd-client-tags-row">${tags}</div>` : ""}
@@ -175,6 +175,24 @@ function clientesDoDesignerNoPainel(nomeDesigner) {
   if (!painelBeeonData || !painelBeeonData.state) return [];
   const chave = Object.keys(painelBeeonData.state).find(d => nomesCorrespondem(d, nomeDesigner));
   return chave ? (painelBeeonData.state[chave] || []) : [];
+}
+
+/**
+ * Reserva pras fotos redondas grandes ("Meus clientes" e hub do cliente):
+ * se o link da foto estiver quebrado (é o caso de quem ainda não tem foto
+ * cadastrada de verdade), troca a imagem pela bolinha cinza que o próprio
+ * design já usa quando não há foto — em vez de deixar o ícone de imagem
+ * quebrada do navegador na tela.
+ *
+ * Não usa handleAvatarImgError (o dos avatares comuns) de propósito:
+ * aquele troca por INICIAIS dentro de um .avatar, e o CSS dessas fotos
+ * aqui é outro (.mc-avatar / .ch-atend-foto), então as iniciais sairiam
+ * desalinhadas.
+ */
+function trocarFotoPorReservaCinza(img) {
+  const reserva = document.createElement("div");
+  reserva.className = "mc-avatar-fallback";
+  img.replaceWith(reserva);
 }
 
 // Paleta dos badges de serviço nos cards de "Meus clientes" — cor de
@@ -241,7 +259,9 @@ function mcClientCardHTML(cliente, designer, servicos, souCoordenador) {
       <div class="mc-progress-head"><span>${labelBarra}</span><span class="mc-pct">${pct}%</span></div>
       <div class="mc-progress-track"><div class="mc-progress-fill" style="width:${pct}%;"></div></div>
       <div class="mc-bottom">
-        ${fotoAtend ? `<img src="${fotoAtend}" class="mc-avatar" alt="${atend}">` : `<div class="mc-avatar-fallback"></div>`}
+        ${fotoAtend
+          ? `<img src="${fotoAtend}" class="mc-avatar" alt="${atend}" onerror="trocarFotoPorReservaCinza(this)">`
+          : `<div class="mc-avatar-fallback"></div>`}
         <div>
           <div class="mc-name">${formatarNomeExibicao(atend)}</div>
           <div class="mc-name-sub">Atendimento responsável</div>
@@ -303,7 +323,7 @@ function buildClientsPage() {
           buildClientsPage();
         } else {
           btn.disabled = false;
-          alert("Não consegui ocultar esse cliente agora. Tenta de novo em alguns segundos.");
+          mostrarToast("Não consegui ocultar esse cliente agora. Tenta de novo em alguns segundos.", "erro");
         }
       });
     });
@@ -333,7 +353,18 @@ function abrirHubDoCliente(cliente, designer) {
     atendRow.hidden = true;
   } else {
     atendRow.hidden = false;
-    document.getElementById("chModalAtendFoto").src = fotoAtend || "";
+    const fotoEl = document.getElementById("chModalAtendFoto");
+    // src="" faz o navegador mostrar o ícone de imagem quebrada — quando
+    // não tem foto, esconde a imagem em vez de deixar isso na tela. E se o
+    // link existir mas estiver quebrado, cai na bolinha cinza de reserva.
+    if (fotoAtend) {
+      fotoEl.hidden = false;
+      fotoEl.onerror = () => { fotoEl.hidden = true; };
+      fotoEl.src = fotoAtend;
+    } else {
+      fotoEl.hidden = true;
+      fotoEl.removeAttribute("src");
+    }
     document.getElementById("chModalAtendNome").textContent = formatarNomeExibicao(atend);
   }
 

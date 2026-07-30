@@ -778,7 +778,7 @@ function renderDetail() {
         task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
         await carregarSequencia(task);
       } else {
-        alert("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.");
+        mostrarToast("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");
       }
     });
   }
@@ -793,7 +793,7 @@ function renderDetail() {
       if (resposta === null) return;
       const horas = parseFloat(resposta.replace(",", "."));
       if (!horas || horas <= 0) {
-        alert("Digita um número de horas válido (maior que zero).");
+        mostrarToast("Digita um número de horas válido (maior que zero).", "erro");
         return;
       }
       const ok = await ajustarEstimativaNoBackend(task.id, horas * 60);
@@ -801,7 +801,7 @@ function renderDetail() {
         task.estimateMinutes = Math.round(horas * 60);
         render();
       } else {
-        alert("Não consegui ajustar a estimativa agora. Tenta de novo em alguns segundos.");
+        mostrarToast("Não consegui ajustar a estimativa agora. Tenta de novo em alguns segundos.", "erro");
       }
     });
   }
@@ -856,7 +856,7 @@ function renderDetail() {
         document.getElementById("descEditActions").hidden = true;
         editarDescricaoBtn.hidden = false;
       } else {
-        alert("Não consegui salvar a descrição agora. Tenta de novo em alguns segundos.");
+        mostrarToast("Não consegui salvar a descrição agora. Tenta de novo em alguns segundos.", "erro");
       }
     });
   }
@@ -1762,15 +1762,33 @@ setInterval(() => {
 }, 1000);
 
 // ===== Dark mode =====
+// O tema escolhido fica salvo no navegador (mesma convenção das outras
+// preferências por designer, tipo a ordem das abas do Runrun completo) —
+// antes ele voltava pro claro a cada F5, o que dava a impressão de que a
+// escolha não tinha "pegado".
+const TEMA_CHAVE = "colmeia_tema_v1";
+
+function aplicarTema(modo) {
+  if (modo === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  else document.documentElement.removeAttribute("data-theme");
+  document.querySelectorAll("#themeSwitch button").forEach(b => {
+    b.classList.toggle("on", b.dataset.mode === modo);
+  });
+}
+
 document.querySelectorAll("#themeSwitch button").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll("#themeSwitch button").forEach(b => b.classList.remove("on"));
-    btn.classList.add("on");
-    if (btn.dataset.mode === "dark") {
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      document.documentElement.removeAttribute("data-theme");
-    }
+    const modo = btn.dataset.mode === "dark" ? "dark" : "light";
+    aplicarTema(modo);
+    try { localStorage.setItem(TEMA_CHAVE, modo); } catch (err) { /* sem problema, só não lembra */ }
   });
 });
+
+// Restaura o tema salvo assim que a página carrega (inclusive na tela de
+// login, antes de qualquer login).
+(function restaurarTemaSalvo() {
+  let salvo = null;
+  try { salvo = localStorage.getItem(TEMA_CHAVE); } catch (err) { /* sem problema */ }
+  if (salvo === "dark" || salvo === "light") aplicarTema(salvo);
+})();
 

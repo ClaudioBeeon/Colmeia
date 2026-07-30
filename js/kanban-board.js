@@ -442,7 +442,7 @@ function attachCardDragHandlers() {
             render();
             agendarAtualizacaoKanban();
           } else {
-            alert("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.");
+            mostrarToast("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");
           }
         });
       });
