@@ -115,6 +115,22 @@ Arquivos, na ordem em que são carregados (`js/`):
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
 
+## "Essa tarefa é minha?" — usar `ehMinhaTarefa`, não comparar nomes (2026-07-30)
+
+`nomesCorrespondem(a, b)` compara nomes por "um é começo do outro" (acerta "Gio" = "Giovanna", mas
+confundiria "Manu" com "Manuel" E com "Manuela"). Isso é aceitável pra achar FOTO de alguém, mas era
+arriscado pra decidir de quem é uma tarefa — decisão que define o que aparece no seu quadro, o que
+entra na Fila de repasse e de que tarefas você é notificado.
+
+Agora o backend devolve `assigneeId` (id real do Runrun.it) em toda tarefa, e o login devolve
+`runrunId` de quem entrou (guardado em `DESIGNER_ID_LOGADO` e na sessão salva). **Use sempre
+`ehMinhaTarefa(t)`** (js/paginas-designers.js) — ela compara por id quando os dois lados têm, e cai
+na comparação por nome quando falta algum (backend antigo, sessão salva de antes), então nada quebra.
+
+Comparação por NOME continua certa (e inevitável) só onde o nome é a única informação que existe:
+autor de comentário, menções (`<mention>`), dono de arquivo no Drive, o seletor de designer do
+coordenador, os dados do painel-designers-beeon (que é indexado por nome) e `souClaudio()`.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

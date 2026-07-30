@@ -200,7 +200,7 @@ let searchQuery = "";
  * única função, fácil de ajustar.
  */
 function ehTarefaDeCoordenacao(t) {
-  return !!(t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO) && normalizarParaComparar(t.title).includes("coordenacao"));
+  return !!(t.id && ehMinhaTarefa(t) && normalizarParaComparar(t.title).includes("coordenacao"));
 }
 
 function encontrarTarefaDeCoordenacao() {
@@ -248,7 +248,7 @@ function render() {
   columnsDef.forEach(({ key }) => {
     let list = tasks.filter(t => t.status === key && !ehTarefaDeCoordenacao(t));
     if (PAPEL_LOGADO === "designer") {
-      list = list.filter(t => nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+      list = list.filter(ehMinhaTarefa);
     } else if (PAPEL_LOGADO === "coordenador" && filtroDesignerCoordenador !== "todos") {
       const alvoNome = filtroDesignerCoordenador === "eu" ? DESIGNER_LOGADO : filtroDesignerCoordenador;
       list = list.filter(t => nomesCorrespondem(t.assignee, alvoNome));

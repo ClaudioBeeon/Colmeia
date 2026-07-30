@@ -129,7 +129,7 @@ async function verificarNotificacoes() {
 async function _verificarNotificacoesImpl() {
   const primeiraVez = _primeiraChecagemNotificacoes;
   _primeiraChecagemNotificacoes = false;
-  const minhasTarefas = tasks.filter(t => t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  const minhasTarefas = tasks.filter(t => t.id && ehMinhaTarefa(t));
   let log = carregarNotificacoesLog();
   const chavesExistentes = new Set(log.map(n => n.taskId + "::" + n.comentarioId));
   const novos = [];

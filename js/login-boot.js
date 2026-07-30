@@ -60,9 +60,12 @@ function lerSessaoSalva() {
   }
 }
 
-function salvarSessao(nome, papel) {
+function salvarSessao(nome, papel, runrunId) {
   try {
-    localStorage.setItem(SESSAO_CHAVE, JSON.stringify({ nome, papel }));
+    // Guarda também o ID no Runrun.it, pra "essa tarefa é minha?" continuar
+    // sendo decidido por ID (e não por nome parecido) quando a pessoa
+    // reabrir o Colmeia sem digitar a senha de novo. Ver ehMinhaTarefa.
+    localStorage.setItem(SESSAO_CHAVE, JSON.stringify({ nome, papel, runrunId: runrunId || null }));
   } catch (err) {
     console.error("Não consegui salvar a sessão:", err);
   }
@@ -123,7 +126,8 @@ document.getElementById("loginForm").addEventListener("submit", async e => {
 
     DESIGNER_LOGADO = data.nome;
     PAPEL_LOGADO = data.papel;
-    salvarSessao(data.nome, data.papel);
+    DESIGNER_ID_LOGADO = data.runrunId || null;
+    salvarSessao(data.nome, data.papel, data.runrunId);
     iniciarAppPosLogin();
   } catch (err) {
     console.error("Falha ao tentar logar:", err);
@@ -139,6 +143,9 @@ const sessaoSalva = lerSessaoSalva();
 if (sessaoSalva && sessaoSalva.nome && sessaoSalva.papel) {
   DESIGNER_LOGADO = sessaoSalva.nome;
   PAPEL_LOGADO = sessaoSalva.papel;
+  // Sessão salva antes dessa mudança não tem o id — aí ehMinhaTarefa volta
+  // a comparar por nome, como antes, até a pessoa logar de novo.
+  DESIGNER_ID_LOGADO = sessaoSalva.runrunId || null;
   iniciarAppPosLogin();
 } else {
   buscarFraseDoDia();

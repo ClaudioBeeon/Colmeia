@@ -378,6 +378,12 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback, contexto) {
     // no painel-designers-beeon.
     dataPublicacao: extrairDataPublicacaoTarefa(t),
     assignee: nomeDesignerFallback || t.responsible_name || 'Sem responsável',
+    // ID de verdade de quem está com a tarefa no Runrun.it. Antes o Colmeia
+    // só tinha o NOME, e decidia "essa tarefa é minha?" comparando nomes por
+    // "um é começo do outro" — o que acerta "Gio" = "Giovanna", mas "Manu"
+    // bateria tanto com "Manuel" quanto com "Manuela". Com o id, essa
+    // decisão passa a ser exata (ver ehMinhaTarefa no front-end).
+    assigneeId: t.responsible_id || null,
     assigneeAvatarUrl: extrairFotoResponsavel(t),
     estimateMinutes: Math.round((t.current_estimate_seconds || 0) / 60),
     // Meta da barra de progresso do card: tempo médio de criação DESSE

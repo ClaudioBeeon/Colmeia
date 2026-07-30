@@ -18,7 +18,7 @@ function tarefaEstaComAtendimento(t) {
   if (!t.id || !t.assignee) return false;
   if (ehTarefaDeCoordenacao(t)) return false; // a sua tarefa fixa de coordenação não é "repasse"
   if (idsRepasseIgnorados().has(t.id)) return false; // você já decidiu ficar com essa
-  return nomesCorrespondem(t.assignee, DESIGNER_LOGADO);
+  return ehMinhaTarefa(t);
 }
 
 function tarefasParaRepasse() {
@@ -903,15 +903,21 @@ function wireRepasseCards(lista) {
       if (!t) return;
       btn.disabled = true;
       btn.textContent = "Assumindo...";
-      const usuarios = await buscarUsuariosRunrun();
-      const eu = usuarios.find(u => nomesCorrespondem(u.nome, DESIGNER_LOGADO));
-      if (!eu) {
+      // Se o login já trouxe o ID, usa ele direto e nem precisa procurar
+      // na lista comparando nome (que confundiria nomes parecidos).
+      let meuId = DESIGNER_ID_LOGADO;
+      if (!meuId) {
+        const usuarios = await buscarUsuariosRunrun();
+        const eu = usuarios.find(u => nomesCorrespondem(u.nome, DESIGNER_LOGADO));
+        meuId = eu ? eu.id : null;
+      }
+      if (!meuId) {
         btn.disabled = false;
         btn.textContent = "Ficar comigo";
         mostrarToast("Não consegui te encontrar na lista de usuários do Runrun.it.", "erro");
         return;
       }
-      const ok = await reatribuirTarefaNoBackend(t.id, eu.id);
+      const ok = await reatribuirTarefaNoBackend(t.id, meuId);
       if (ok) {
         ignorarNaRepasse(t.id);
         removerCardDeRepasseDaTela(btn);
@@ -1005,7 +1011,7 @@ document.getElementById("nowPlaying").addEventListener("click", () => {
   // pílula — sem isso, no login do coordenador vendo "Todos juntos", o
   // clique podia abrir a tarefa rodando de OUTRA pessoa (a primeira do
   // array com running=true), não a que a pílula estava mostrando.
-  const idx = tasks.findIndex(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  const idx = tasks.findIndex(t => t.running && ehMinhaTarefa(t));
   if (idx !== -1) openDetail(idx);
 });
 

@@ -14,6 +14,9 @@ const pageTitles = {
 // Antes disso fica null — nenhuma tela usa isso até o login acontecer.
 let DESIGNER_LOGADO = null;
 let PAPEL_LOGADO = null; // 'coordenador' ou 'designer'
+// ID de quem está logado no Runrun.it (vem do login). Pode ser null — nesse
+// caso tudo continua funcionando pelo nome, como antes. Ver ehMinhaTarefa.
+let DESIGNER_ID_LOGADO = null;
 
 // Mesma equipe configurada no backend (RUNRUN_USUARIOS) — usado só pra
 // montar as opções do seletor "ver o Kanban de quem" do coordenador.
@@ -45,6 +48,30 @@ function nomesCorrespondem(a, b) {
   if (na === nb) return true;
   if (na.length < 3 || nb.length < 3) return false;
   return na.startsWith(nb) || nb.startsWith(na);
+}
+
+/**
+ * "Essa tarefa é minha?" — a pergunta mais consequente do Colmeia: ela
+ * decide o que aparece no seu quadro, o que entra na Fila de repasse, de
+ * que tarefas você recebe notificação e qual tarefa a pílula amarela mostra.
+ *
+ * Sempre que der, responde comparando o ID de verdade do Runrun.it (exato).
+ * Antes isso era decidido comparando NOMES por "um é começo do outro" —
+ * regra que acerta "Gio" = "Giovanna" mas que confundiria "Manu" com
+ * "Manuel" E com "Manuela", podendo mostrar a tarefa de uma pessoa pra
+ * outra.
+ *
+ * Continua caindo na comparação por nome quando falta o id de um dos lados
+ * (backend antigo, tarefa avulsa buscada de outro jeito, sessão salva de
+ * antes dessa mudança) — então nada quebra durante a troca, só volta a
+ * precisão de antes naqueles casos.
+ */
+function ehMinhaTarefa(t) {
+  if (!t) return false;
+  if (DESIGNER_ID_LOGADO && t.assigneeId) {
+    return String(t.assigneeId) === String(DESIGNER_ID_LOGADO);
+  }
+  return nomesCorrespondem(t.assignee, DESIGNER_LOGADO);
 }
 
 /**

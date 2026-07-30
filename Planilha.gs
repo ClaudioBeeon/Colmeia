@@ -350,6 +350,31 @@ function gerarHashSenha(senha) {
   }).join('');
 }
 
+/**
+ * Descobre o ID do usuário no Runrun.it a partir do nome de login.
+ *
+ * Faz isso pela lista RUNRUN_USUARIOS (nome -> e-mail), que é uma lista
+ * nossa, curada, com 3 pessoas — e a comparação aqui é EXATA (só ignora
+ * acento e maiúscula), nunca "um nome é começo do outro". É bem diferente
+ * de adivinhar nome parecido: se não achar, devolve null e o Colmeia
+ * continua funcionando pelo nome, como antes.
+ */
+function runrunIdDoDesigner(nome) {
+  if (!nome) return null;
+  var alvo = normalizarNomeLogin(nome);
+  var email = null;
+  for (var e in RUNRUN_USUARIOS) {
+    if (normalizarNomeLogin(RUNRUN_USUARIOS[e]) === alvo) { email = e; break; }
+  }
+  if (!email) return null;
+  try {
+    var ids = buscarIdsResponsaveisRunrun();
+    return ids[email] || null;
+  } catch (err) {
+    return null;
+  }
+}
+
 function verificarLogin(senha) {
   if (!senha) return { ok: false, error: 'Digite a senha.' };
   var sheet = getLoginSheet();
@@ -357,7 +382,12 @@ function verificarLogin(senha) {
   var hashDigitado = gerarHashSenha(senha);
   for (var i = 1; i < linhas.length; i++) {
     if (String(linhas[i][1]) === hashDigitado) {
-      return { ok: true, nome: linhas[i][0], papel: linhas[i][2] || 'designer' };
+      var nome = linhas[i][0];
+      // Devolve também o ID dessa pessoa no Runrun.it, pra o Colmeia poder
+      // decidir "essa tarefa é minha?" comparando IDs em vez de nomes
+      // parecidos. Se não der pra descobrir, vem null e o front-end volta a
+      // comparar por nome (ver ehMinhaTarefa).
+      return { ok: true, nome: nome, papel: linhas[i][2] || 'designer', runrunId: runrunIdDoDesigner(nome) };
     }
   }
   return { ok: false, error: 'Senha incorreta.' };

@@ -1216,7 +1216,7 @@ function updateNowPlaying() {
   // Só considera tarefas rodando do PRÓPRIO designer logado — o array
   // `tasks` pode ter tarefas de outras pessoas (visão do coordenador),
   // e a barra "tocando agora" é sempre sobre o que EU estou fazendo.
-  const running = tasks.find(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  const running = tasks.find(t => t.running && ehMinhaTarefa(t));
   if (running) {
     el.hidden = false;
     if (idle) idle.hidden = true;
@@ -1235,7 +1235,7 @@ function updateNowPlaying() {
 // alguma), então aqui é sempre "pausar", nunca "tocar".
 document.getElementById("nowPlayingPause").addEventListener("click", (ev) => {
   ev.stopPropagation(); // não deixa o clique também abrir a tarefa (listener do próprio #nowPlaying)
-  const running = tasks.find(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  const running = tasks.find(t => t.running && ehMinhaTarefa(t));
   if (!running) return;
   running.running = false;
   running._runningToggleEm = Date.now();

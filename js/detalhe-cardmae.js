@@ -148,8 +148,10 @@ async function abrirCardMae(task) {
  */
 async function verificarTransferirCardMae(task) {
   const resultado = cardMaeCache.get(task.id) || await buscarCardMaeDoBackend(task.id);
+  // Por ID quando dá (o card mãe vem do backend com assigneeId), não por
+  // nome parecido — ver ehMinhaTarefa em js/paginas-designers.js.
   const devePerguntar = resultado.ok && resultado.temPai && resultado.cardMae
-    && nomesCorrespondem(resultado.cardMae.assignee, DESIGNER_LOGADO);
+    && ehMinhaTarefa(resultado.cardMae);
   // Dá um tempinho pro "Entregue ✓" (já mostrado antes de chamar essa
   // função) ser lido antes de trocar de figura — some direto se não tem
   // nada a perguntar, ou passa pra pergunta de transferir se tem.

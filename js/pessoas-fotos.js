@@ -237,6 +237,9 @@ function mapearTarefaDoBackend(t) {
     lastActivityAt: t.lastActivityAt || null,
     createdAt: t.createdAt || null,
     assignee: t.assignee,
+    // ID de verdade de quem está com a tarefa — usado por ehMinhaTarefa pra
+    // decidir "essa tarefa é minha?" sem depender de nome parecido.
+    assigneeId: t.assigneeId || null,
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
     timerSeconds: t.workedSeconds || 0,
     running: !!t.isRunning,
@@ -431,12 +434,12 @@ async function atualizarKanbanEmBackground() {
         nova._entregueEm = antiga._entregueEm;
       }
       if (antiga && DESIGNER_LOGADO
-        && !nomesCorrespondem(antiga.assignee, DESIGNER_LOGADO)
-        && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)) {
+        && !ehMinhaTarefa(antiga)
+        && ehMinhaTarefa(nova)) {
         recebidasAgora.push(nova);
       }
       if (DESIGNER_LOGADO && nova.status === "ajustes"
-        && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)
+        && ehMinhaTarefa(nova)
         && (!antiga || antiga.status !== "ajustes")) {
         emAjustesAgora.push(nova);
       }
