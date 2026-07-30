@@ -68,8 +68,18 @@
   display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;
   background: #14151A; border-radius: 999px; padding: 8px 8px 8px 8px;
   position: relative;
+  transition: background 0.3s var(--ease-apple);
 }
 .detail-header-pill > * { position: relative; z-index: 2; }
+
+/* Pílula inteira fica verde quando a tarefa está entregue — não só o
+   crachá de etapa. Marcada tanto no HTML de renderDetail() (tarefa que
+   já abre entregue) quanto na hora da animação de "Entregue ✓" subindo
+   (mostrarEntregueNoPill, js/detalhe-cardmae.js), pra já nascer verde
+   junto com o resto da informação, não só depois de pronta. */
+.detail-header-pill.entregue-modo { background: #1E7A4C; }
+.detail-header-pill.entregue-modo .pill-horas-trabalhadas { background: rgba(255,255,255,0.16); color: #fff; }
+.detail-header-pill.entregue-modo .status-badge.entregue { background: rgba(255,255,255,0.9); }
 
 /* Conteúdo normal do pill (play, tempo, nome, sequência do card
    aberto, status...) — em uso quase o tempo todo, então SEM altura

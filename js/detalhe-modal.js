@@ -549,7 +549,7 @@ function renderDetail() {
   panel.innerHTML = `
     <div class="detail-inner">
       <div class="detail-header">
-        <div class="detail-header-pill" id="detailHeaderPill">
+        <div class="detail-header-pill ${task.entregue ? "entregue-modo" : ""}" id="detailHeaderPill">
           <div class="pill-face pill-face-normal">
           ${task.isMotherCard ? `
             <div class="children-btn-wrap">

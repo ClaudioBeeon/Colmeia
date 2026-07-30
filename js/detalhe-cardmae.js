@@ -208,7 +208,12 @@ function mostrarEntregueNoPill() {
       <span class="pill-cardmae-texto">Entregue ✓</span>
     </span>
   `;
-  pill.classList.add("card-mae-modo", "card-mae-ativo");
+  // Fica verde já nessa animação de subida (não só depois, quando o
+  // pop-up reconstrói do zero) — pedido do Cláudio pra virar verde
+  // "junto" com o resto da informação subindo, não só depois de pronto.
+  // Não sai mais sozinho (ver esconderFluxoCardMaeNoPill), então o pill
+  // continua verde mesmo depois do carrossel voltar pro modo normal.
+  pill.classList.add("card-mae-modo", "card-mae-ativo", "entregue-modo");
   ajustarAlturaCardMaeNoPill();
 }
 
