@@ -68,10 +68,18 @@ function formatTime(sec) {
 function cardHTML(task, idx) {
   const type = typeLabels[task.type];
   const atrasada = task.dueISO && task.dueISO < hojeISO();
+  // Card de alteração ganha etiqueta própria e o nome da peça que ele está
+  // pedindo pra mudar — antes ele era visualmente igual a qualquer outro e
+  // só dizia "Alteração 01", então não dava pra saber de que peça se trata
+  // sem abrir. O nome sai de graça das tarefas já carregadas (ver
+  // nomeDaPecaOriginalRapido, js/detalhe-modal.js).
+  const ehAlteracao = ehTarefaDeAlteracao(task);
+  const pecaOriginal = ehAlteracao ? nomeDaPecaOriginalRapido(task) : null;
   return `
-    <div class="task-card priority-${task.priority} ${atrasada ? "task-overdue" : ""}" draggable="true" data-idx="${idx}">
+    <div class="task-card priority-${task.priority} ${atrasada ? "task-overdue" : ""} ${ehAlteracao ? "task-alteracao" : ""}" draggable="true" data-idx="${idx}">
       <div class="card-top">
         <span class="badge ${type.class}">${type.label}</span>
+        ${ehAlteracao ? `<span class="badge badge-alteracao">Alteração</span>` : ""}
         <div class="priority-wrap" data-idx="${idx}">
           <button type="button" class="card-priority-tag priority-btn">${priorityLabels[task.priority]}</button>
           <div class="priority-menu">
@@ -82,6 +90,7 @@ function cardHTML(task, idx) {
         </div>
       </div>
       <div class="card-title">${escaparHTML(task.title)}</div>
+      ${pecaOriginal ? `<div class="card-alteracao-de" title="Essa alteração é da peça: ${escaparHTML(pecaOriginal)}">↳ ${escaparHTML(pecaOriginal)}</div>` : ""}
       <div class="card-client">${escaparHTML(task.client)}</div>
       <div class="card-progress">
         <div class="progress-head">

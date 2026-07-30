@@ -132,6 +132,8 @@ function handleRequest(e, method) {
         output = baixarDocumentoAnexo(body.documentId);
       } else if (body.acao === 'gerarBriefing') {
         output = gerarBriefingDaTarefa(body.taskId);
+      } else if (body.acao === 'resumirAlteracao') {
+        output = resumirAlteracao(body.taskId, body.idOriginal);
       } else if (body.acao === 'adicionarComentario') {
         output = adicionarComentario(body.taskId, body.texto);
       } else if (body.acao === 'excluirComentario') {
@@ -2159,6 +2161,102 @@ function gerarBriefingDaTarefa(taskId) {
   if (!resultado.ok) return resultado;
   salvarBriefingCacheado(taskId, hash, resultado.dados);
   return { ok: true, briefing: resultado.dados };
+}
+
+/**
+ * Resume, em tópicos, O QUE O CLIENTE PEDIU PRA MUDAR numa subtarefa de
+ * alteração — a versão de verdade do que a antiga aba "Alteração 01" (de
+ * protótipo) fingia ser.
+ *
+ * Junta as três pontas que contam a história da mudança: a descrição da
+ * própria alteração, os comentários dela, e os comentários do card mãe e
+ * da tarefa original que chegaram DEPOIS da última atividade da tarefa
+ * original (é aí que mora o pedido do cliente — antes disso é a conversa
+ * da produção da peça, que não é "alteração").
+ *
+ * Cacheado na mesma aba "Briefings" já usada pelo briefing normal, com a
+ * chave prefixada por "alt-" pra não misturar os dois. O hash é do
+ * conteúdo, então o resumo só é gerado de novo quando chega comentário ou
+ * descrição nova de verdade.
+ */
+function resumirAlteracao(taskId, idOriginal) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  var alteracao = runrunFetch('/tasks/' + taskId);
+  if (!alteracao || alteracao.erroFetch) {
+    return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
+  }
+
+  var descricao = buscarDescricao(taskId).descricao || '';
+  var comentariosAlteracao = listarComentarios(taskId);
+  var textosAlteracao = comentariosAlteracao.ok
+    ? comentariosAlteracao.comentarios.map(function (c) { return c.autor + ': ' + c.texto; })
+    : [];
+
+  // Corte de tempo: só interessa o que foi dito a partir de quando a peça
+  // original teve a última movimentação. Sem esse corte, o resumo puxava a
+  // conversa inteira da produção original e dizia "o cliente pediu" pra
+  // coisas que nem eram alteração.
+  var corte = 0;
+  if (idOriginal) {
+    var original = runrunFetch('/tasks/' + idOriginal);
+    if (original && !original.erroFetch && original.updated_at) {
+      corte = new Date(original.updated_at).getTime();
+    }
+  }
+  // Rede de segurança: se não deu pra saber, usa a criação da alteração —
+  // a alteração nasceu depois do pedido, então é uma referência razoável.
+  if (!corte && alteracao.created_at) {
+    corte = new Date(alteracao.created_at).getTime() - 3 * 24 * 60 * 60 * 1000;
+  }
+
+  function comentariosRecentesDe(idTarefa, rotulo) {
+    if (!idTarefa) return [];
+    var r = listarComentarios(idTarefa);
+    if (!r.ok) return [];
+    return r.comentarios
+      .filter(function (c) { return !corte || (c.data && new Date(c.data).getTime() >= corte); })
+      .map(function (c) { return '[' + rotulo + '] ' + c.autor + ': ' + c.texto; });
+  }
+
+  var textosContexto = []
+    .concat(comentariosRecentesDe(alteracao.parent_task_id, 'card mãe'))
+    .concat(comentariosRecentesDe(idOriginal, 'tarefa original'));
+
+  var material = 'TÍTULO DA ALTERAÇÃO: ' + (alteracao.title || '') + '\n\n' +
+    'DESCRIÇÃO DA ALTERAÇÃO:\n' + (descricao || '(vazia)') + '\n\n' +
+    'COMENTÁRIOS NA ALTERAÇÃO:\n' + (textosAlteracao.join('\n') || '(nenhum)') + '\n\n' +
+    'COMENTÁRIOS RECENTES NO CARD MÃE E NA TAREFA ORIGINAL:\n' + (textosContexto.join('\n') || '(nenhum)');
+
+  var temConteudo = descricao || textosAlteracao.length || textosContexto.length;
+  if (!temConteudo) return { ok: true, semMaterial: true };
+
+  var VERSAO_PROMPT = 'v1';
+  var hash = hashTexto(material + '|' + VERSAO_PROMPT);
+  var chaveCache = 'alt-' + taskId;
+  var cacheado = buscarBriefingCacheado(chaveCache, hash);
+  if (cacheado) return { ok: true, resumo: cacheado, doCache: true };
+
+  var prompt = 'Você organiza pedidos de alteração pra uma equipe de design de uma agência de marketing.\n' +
+    'Vou te dar o material de uma subtarefa de ALTERAÇÃO (uma peça já feita que o cliente pediu pra mudar).\n' +
+    'Sua tarefa: dizer, em tópicos curtos e diretos, O QUE PRECISA SER MUDADO na peça.\n\n' +
+    'REGRAS:\n' +
+    '- Cada tópico é UMA mudança concreta, na voz de quem vai executar (ex: "Trocar o fundo pra tons mais claros", ' +
+    '"Ajustar o texto do CTA pra: Compre agora").\n' +
+    '- Copie valores exatos (textos, cores, nomes, medidas, datas) do original — nunca reescreva copy que vai pra peça.\n' +
+    '- NÃO invente nada. Se o material não diz claramente o que mudar, devolve a lista vazia e explique no campo ' +
+    '"observacao" o que está faltando (ex: "o pedido não está escrito em nenhum lugar, só o título da subtarefa").\n' +
+    '- Ignore conversa que não é pedido de mudança (bom dia, combinados de prazo, "obrigado").\n' +
+    '- No máximo 8 tópicos. Se tiver mais, junte os parecidos.\n' +
+    '- "quemPediu" é o nome de quem pediu a mudança, se der pra saber pelos comentários; senão, null.\n\n' +
+    'Responda SOMENTE em JSON, neste formato:\n' +
+    '{"mudancas": ["..."], "quemPediu": "..." ou null, "observacao": "..." ou null}\n\n' +
+    'MATERIAL:\n' + material;
+
+  var resultado = chamarGemini(prompt);
+  if (!resultado.ok) return resultado;
+  salvarBriefingCacheado(chaveCache, hash, resultado.dados);
+  return { ok: true, resumo: resultado.dados };
 }
 
 function buscarDescricao(taskId) {

@@ -3095,3 +3095,37 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   white-space: nowrap;
 }
 [data-theme="dark"] .comment-origem { background: rgba(255,214,102,0.22); color: #FFD666; }
+
+/* Card de "Alteração" no quadro: etiqueta própria + o nome da peça que a
+   alteração está pedindo pra mudar (ver cardHTML / nomeDaPecaOriginalRapido). */
+.badge-alteracao { background: #FDECD2; color: #8A4B00; }
+[data-theme="dark"] .badge-alteracao { background: rgba(253,236,210,0.20); color: #F0A860; }
+.task-card.task-alteracao { border-left: 3px solid #E8930C; }
+.card-alteracao-de {
+  font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+  margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Anexo que veio da tarefa original, dentro de uma alteração. */
+.attach-origem {
+  font-size: 10px; font-weight: 700; color: #8A4B00; background: #FDECD2;
+  border-radius: 999px; padding: 1px 6px; margin-left: 4px; white-space: nowrap;
+}
+[data-theme="dark"] .attach-origem { background: rgba(253,236,210,0.20); color: #F0A860; }
+
+/* Resumo por IA do que o cliente pediu pra mudar, no topo da aba
+   "Tarefa original" de uma subtarefa de alteração (ver resumirAlteracao). */
+.alteracao-resumo { margin-bottom: 16px; }
+.alteracao-resumo-box {
+  background: #FFF8E7; border: 1px solid #F5DFA8; border-radius: 12px;
+  padding: 14px 16px;
+}
+[data-theme="dark"] .alteracao-resumo-box { background: rgba(245,223,168,0.10); border-color: rgba(245,223,168,0.28); }
+.alteracao-resumo-box.vazio { font-size: 13px; color: var(--text-secondary); font-style: italic; }
+.alteracao-resumo-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.alteracao-resumo-titulo { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #8A4B00; }
+[data-theme="dark"] .alteracao-resumo-titulo { color: #F0A860; }
+.alteracao-resumo-quem { font-size: 11.5px; color: var(--text-muted); }
+.alteracao-resumo-lista { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.alteracao-resumo-lista li { font-size: 13.5px; line-height: 1.45; color: var(--text-primary); }
+.alteracao-resumo-obs { font-size: 12.5px; color: var(--text-secondary); margin: 8px 0 0; font-style: italic; }
+.alteracao-resumo-rodape { font-size: 11px; color: var(--text-muted); margin: 10px 0 0; }

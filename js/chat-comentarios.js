@@ -433,18 +433,42 @@ function formatarTamanhoArquivo(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function carregarAnexos(task) {
-  if (!task.id || !task.attachmentsCount) return;
-  let anexos = [];
+async function buscarAnexosDeUmaTarefa(taskId) {
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "buscarAnexos", taskId: task.id }),
+      body: JSON.stringify({ acao: "buscarAnexos", taskId }),
     });
     const data = await res.json();
-    if (data.ok) anexos = data.anexos || [];
+    return data.ok ? (data.anexos || []) : [];
   } catch (err) {
     console.error("Falha ao buscar anexos:", err);
+    return [];
+  }
+}
+
+async function carregarAnexos(task) {
+  if (!task.id) return;
+  // Numa subtarefa de ALTERAÇÃO, os arquivos que o designer precisa (a peça
+  // que vai ser alterada) estão na tarefa ORIGINAL, não nela — então aqui
+  // busca nas duas e junta, marcando de onde cada arquivo veio. Por isso a
+  // checagem de attachmentsCount não pode mais barrar a busca de saída:
+  // a alteração costuma ter zero anexos próprios e é justamente aí que
+  // precisamos ir ver os da original.
+  const ehAlteracao = ehTarefaDeAlteracao(task);
+  if (!task.attachmentsCount && !ehAlteracao) return;
+
+  let anexos = task.attachmentsCount ? await buscarAnexosDeUmaTarefa(task.id) : [];
+
+  if (ehAlteracao) {
+    // O card mãe (e a lista de irmãs) já vem pré-carregado quando a
+    // subtarefa abre; se ainda não chegou, espera.
+    if (!cardMaeCache.has(task.id)) await precarregarCardMaeEmBackground(task.id);
+    const original = acharTarefaOriginalDaAlteracao(task);
+    if (original) {
+      const anexosOriginal = await buscarAnexosDeUmaTarefa(original.id);
+      anexos = anexos.concat(anexosOriginal.map(a => Object.assign({}, a, { _daOriginal: true })));
+    }
   }
   if (!tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de tarefa enquanto carregava
   const listaEl = document.getElementById("attachList");
@@ -456,8 +480,8 @@ async function carregarAnexos(task) {
     return;
   }
   listaEl.innerHTML = anexos.map(a => `
-    <button type="button" class="attach-item" data-doc-id="${a.id}" data-nome="${a.nome}">
-      <span>${a.nome}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}</span>
+    <button type="button" class="attach-item" data-doc-id="${a.id}" data-nome="${escaparHTML(a.nome)}">
+      <span>${escaparHTML(a.nome)}${a._daOriginal ? ` <span class="attach-origem">da tarefa original</span>` : ""}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}</span>
       <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   `).join("");

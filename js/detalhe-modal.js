@@ -2,7 +2,13 @@ function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
   descMaeAberta = false;
-  originalAberta = false; // sempre abre na aba Descrição, não na aba de outra tarefa
+  // Subtarefa de ALTERAÇÃO abre direto no contexto, não na Descrição (que
+  // nessas subtarefas costuma ser genérica ou vazia): a aba "Tarefa
+  // original" já vem aberta do lado da descrição, e o chat já abre na
+  // "Linha do tempo" (são painéis diferentes, então dá pra fazer as duas
+  // coisas ao mesmo tempo). Qualquer outra tarefa segue abrindo como antes.
+  const abrirNoContextoDeAlteracao = ehTarefaDeAlteracao(tasks[Number(idx)]);
+  originalAberta = abrirNoContextoDeAlteracao;
   fecharChatPanel();
   renderDetail();
   const panel = document.getElementById("taskDetail");
@@ -32,6 +38,12 @@ function openDetail(idx, entradaAnimacao) {
   if (tasks[detailIdx].parentTaskId) precarregarCardMaeEmBackground(tasks[detailIdx].id);
   renderNotificacoesUpload(tasks[detailIdx]);
   iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);
+  if (abrirNoContextoDeAlteracao) {
+    // Preenche a aba de contexto e já deixa o chat na Linha do tempo.
+    carregarTarefaOriginalDaAlteracao(tasks[detailIdx]);
+    abrirChatPanel(tasks[detailIdx]);
+    abrirThreadLinhaDoTempo(tasks[detailIdx]);
+  }
   // Só pede o briefing pra IA quando ainda não temos ele — antes pedia
   // sempre, mesmo com o resultado pronto e já na tela, gastando uma ida ao
   // servidor (+ leitura da descrição no Runrun.it) a cada abertura do card.
@@ -512,6 +524,7 @@ function renderDetail() {
             ` : ""}
             ${ehTarefaDeAlteracao(task) ? `
               <div class="original-content" id="originalContent" hidden>
+                <div class="alteracao-resumo" id="alteracaoResumo"></div>
                 <div class="descmae-titulo" id="originalTitulo">Procurando a tarefa original...</div>
                 <div class="original-meta" id="originalMeta"></div>
                 <div class="desc-text-real" id="originalTextReal"></div>
@@ -1104,6 +1117,74 @@ function applyCommentsState() {
 }
 
 /**
+ * Mostra, no topo da aba "Tarefa original", a listinha do que o cliente
+ * pediu pra mudar — montada pela IA a partir da descrição da alteração e
+ * dos comentários recentes do card mãe e da tarefa original (ver
+ * resumirAlteracao no Código.gs).
+ *
+ * É a versão de verdade do que a antiga aba "Alteração 01" fingia ser: o
+ * texto de lá era fixo e inventado. Aqui, quando o pedido não está escrito
+ * em lugar nenhum, o Colmeia DIZ isso em vez de inventar uma mudança.
+ *
+ * O resultado fica guardado no objeto da tarefa (e em cache na planilha,
+ * no backend), então voltar pra aba não gera outro pedido à IA.
+ */
+async function carregarResumoDaAlteracao(task, idOriginal) {
+  const el = document.getElementById("alteracaoResumo");
+  if (!el || !task.id) return;
+  const taskId = task.id;
+
+  if (task._resumoAlteracaoHTML !== undefined) {
+    el.innerHTML = task._resumoAlteracaoHTML;
+    return;
+  }
+
+  el.innerHTML = `<p class="workflow-seq-empty">Vendo o que foi pedido...</p>`;
+  let data;
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "resumirAlteracao", taskId, idOriginal }),
+    });
+    data = await res.json();
+  } catch (err) {
+    console.error("Falha ao resumir a alteração:", err);
+    data = { ok: false, error: "Falha de conexão." };
+  }
+  // Trocou de tarefa/aba enquanto carregava? Compara por id, nunca por
+  // referência — e busca o elemento de novo, já que o pop-up pode ter sido
+  // redesenhado nesse meio-tempo.
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
+  const elAgora = document.getElementById("alteracaoResumo");
+  if (!elAgora) return;
+
+  let html = "";
+  if (!data.ok) {
+    html = `<p class="workflow-seq-empty">${escaparHTML(data.error || "Não consegui resumir o que mudou.")}</p>`;
+  } else if (data.semMaterial) {
+    html = `<div class="alteracao-resumo-box vazio">Não achei nada escrito sobre o que mudar — nem na descrição dessa alteração, nem nos comentários. Vale perguntar pro atendimento.</div>`;
+  } else {
+    const r = data.resumo || {};
+    const mudancas = r.mudancas || [];
+    html = `
+      <div class="alteracao-resumo-box">
+        <div class="alteracao-resumo-head">
+          <span class="alteracao-resumo-titulo">O que foi pedido pra mudar</span>
+          ${r.quemPediu ? `<span class="alteracao-resumo-quem">pedido de ${escaparHTML(r.quemPediu)}</span>` : ""}
+        </div>
+        ${mudancas.length
+          ? `<ul class="alteracao-resumo-lista">${mudancas.map(m => `<li>${escaparHTML(m)}</li>`).join("")}</ul>`
+          : ""}
+        ${r.observacao ? `<p class="alteracao-resumo-obs">${escaparHTML(r.observacao)}</p>` : ""}
+        <p class="alteracao-resumo-rodape">Resumo automático — confira na Linha do tempo se ficou faltando algo.</p>
+      </div>
+    `;
+  }
+  task._resumoAlteracaoHTML = html;
+  elAgora.innerHTML = html;
+}
+
+/**
  * Preenche a aba "Tarefa original" de uma subtarefa de alteração: mostra
  * QUAL peça essa alteração está pedindo pra mudar (nome, quem fez, em que
  * etapa está, se já foi entregue) e a descrição/briefing original dela,
@@ -1133,6 +1214,9 @@ async function carregarTarefaOriginalDaAlteracao(task) {
   }
 
   const original = acharTarefaOriginalDaAlteracao(task);
+  // O resumo do que mudou não depende de achar a tarefa original (o pedido
+  // pode estar só nos comentários do card mãe), então dispara sempre.
+  carregarResumoDaAlteracao(task, original ? original.id : null);
   if (!original) {
     tituloEl.textContent = "Não achei a tarefa original";
     if (metaEl) metaEl.innerHTML = "";
@@ -1325,6 +1409,32 @@ function acharTarefaOriginalDaAlteracao(task) {
     String(s.id) !== String(task.id) && !normalizarParaComparar(s.title).includes("alteracao")
   );
   return irmas.length ? irmas[0] : null;
+}
+
+/**
+ * Versão INSTANTÂNEA e sem custo do acima, pra usar no card do quadro:
+ * procura a peça original entre as tarefas que o Colmeia já carregou.
+ * Duas subtarefas do mesmo card mãe têm o mesmo parentTaskId — então dá
+ * pra achar a irmã sem nenhuma ida ao Runrun.it.
+ *
+ * Devolve só o NOME (string) ou null. Null acontece quando a peça original
+ * já foi entregue (tarefa fechada não vem na lista do quadro) — nesse caso
+ * o card não mostra nada, e a aba "Tarefa original" dentro do pop-up
+ * continua achando ela normalmente, porque lá o card mãe é buscado.
+ */
+function nomeDaPecaOriginalRapido(task) {
+  if (!task.parentTaskId) return null;
+  // 1) De graça: entre as tarefas já carregadas (irmãs ainda em aberto).
+  const irma = tasksTodas.find(t =>
+    String(t.id) !== String(task.id)
+    && t.parentTaskId && String(t.parentTaskId) === String(task.parentTaskId)
+    && !normalizarParaComparar(t.title).includes("alteracao")
+  );
+  if (irma) return irma.title;
+  // 2) Se essa tarefa já foi aberta alguma vez, o card mãe dela está em
+  // cache e traz as irmãs (inclusive as já entregues).
+  const original = acharTarefaOriginalDaAlteracao(task);
+  return original ? original.title : null;
 }
 
 /**
