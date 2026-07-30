@@ -2,6 +2,13 @@ function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
   descMaeAberta = false;
+  // Subtarefa de ALTERAÇÃO abre direto no contexto, não na Descrição (que
+  // nessas subtarefas costuma ser genérica ou vazia): a aba "Tarefa
+  // original" já vem aberta do lado da descrição, e o chat já abre na
+  // "Linha do tempo" (são painéis diferentes, então dá pra fazer as duas
+  // coisas ao mesmo tempo). Qualquer outra tarefa segue abrindo como antes.
+  const abrirNoContextoDeAlteracao = ehTarefaDeAlteracao(tasks[Number(idx)]);
+  originalAberta = abrirNoContextoDeAlteracao;
   fecharChatPanel();
   renderDetail();
   const panel = document.getElementById("taskDetail");
@@ -19,16 +26,24 @@ function openDetail(idx, entradaAnimacao) {
       });
     }
   }
-  carregarComentarios(tasks[detailIdx]);
-  carregarDescricao(tasks[detailIdx]);
-  carregarSequencia(tasks[detailIdx]);
-  carregarAnexos(tasks[detailIdx]);
-  carregarCronometroReal(tasks[detailIdx]);
-  carregarFilhosSeForCardMae(tasks[detailIdx]);
+  // UM pedido só traz comentários, descrição, sequência, anexos,
+  // cronômetro, "é card mãe?" e a pasta do Drive (ver carregarTudoDaTarefa
+  // em js/chat-comentarios.js). Antes eram de 8 a 12 pedidos separados, e
+  // era por isso que o card aparecia em pedaços.
+  carregarTudoDaTarefa(tasks[detailIdx]);
   if (tasks[detailIdx].parentTaskId) precarregarCardMaeEmBackground(tasks[detailIdx].id);
   renderNotificacoesUpload(tasks[detailIdx]);
   iniciarChecagemUploadEmSegundoPlano(tasks[detailIdx]);
-  if (tasks[detailIdx].id) gerarBriefingComIA(tasks[detailIdx]);
+  if (abrirNoContextoDeAlteracao) {
+    // Preenche a aba de contexto e já deixa o chat na Linha do tempo.
+    carregarTarefaOriginalDaAlteracao(tasks[detailIdx]);
+    abrirChatPanel(tasks[detailIdx]);
+    abrirThreadLinhaDoTempo(tasks[detailIdx]);
+  }
+  // Só pede o briefing pra IA quando ainda não temos ele — antes pedia
+  // sempre, mesmo com o resultado pronto e já na tela, gastando uma ida ao
+  // servidor (+ leitura da descrição no Runrun.it) a cada abertura do card.
+  if (tasks[detailIdx].id && tasks[detailIdx].briefingHTML === undefined) gerarBriefingComIA(tasks[detailIdx]);
   // Se já tinha sido gerado antes (task.briefingHTML cacheado), o
   // template já usa o cache direto — só precisa religar os botões de
   // copiar e os toggles de "ver versão original", já que o innerHTML
@@ -133,6 +148,12 @@ async function carregarSequencia(task) {
   if (!task.id) return;
   const taskId = task.id;
   const resultado = await buscarSequenciaDoBackend(taskId);
+  // Falhou a busca? NÃO grava lista vazia — isso faria a tarefa parecer
+  // "sem sequência" e o botão de concluir/entregar aparecer no lugar das
+  // setas (risco de entregar por engano). Mantém o que já tínhamos: se
+  // nunca carregou, segue mostrando "Carregando sequência..."; se já
+  // tinha carregado antes, segue com a última versão boa.
+  if (resultado.erro) return;
   task.sequencia = resultado.sequencia;
   task.workflowId = resultado.workflowId;
   if (!tasks[detailIdx] || tasks[detailIdx].id !== taskId) return; // usuário já trocou de tarefa
@@ -238,6 +259,8 @@ function wireWorkflowArrows(task) {
         const ok = await reabrirTarefaNoBackend(task.id);
         if (ok) {
           task.entregue = false;
+          task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
+          atualizarCrachaDeEtapa(task);
           await carregarSequencia(task);
         } else {
           deliverBtn.disabled = false;
@@ -253,6 +276,11 @@ function wireWorkflowArrows(task) {
         const entregueOtimista = task.entregue;
         const sequenciaOtimista = task.sequencia;
         task.entregue = true;
+        // Marca QUANDO foi entregue: a atualização automática só preserva
+        // esse estado local por alguns segundos (ver atualizarKanbanEmBackground
+        // em js/pessoas-fotos.js). Depois disso vale o que o Runrun.it diz —
+        // é o que faz o Colmeia perceber uma tarefa reaberta por lá.
+        task._entregueEm = Date.now();
 
         mostrarEntregueNoPill();
 
@@ -288,6 +316,7 @@ function wireWorkflowArrows(task) {
         }
         if (ok) {
           task.entregue = true;
+          task._entregueEm = Date.now();
           // Segurança extra: garante que o Runrun.it recebeu o pause.
           pausarTarefaNoBackend(task.id);
           // O cronômetro já foi parado no objeto capturado no início
@@ -300,6 +329,11 @@ function wireWorkflowArrows(task) {
           // referência — mesmo bug documentado no restante do app).
           const tarefaViva = tasks.find(x => String(x.id) === String(task.id));
           if (tarefaViva) tarefaViva.running = false;
+          if (tarefaViva) { tarefaViva.entregue = true; tarefaViva._entregueEm = Date.now(); }
+          // O crachá de etapa tem que virar "Entregue ✓" na hora: entregar no
+          // Runrun.it FECHA a tarefa mas não muda a etapa dela, então sem
+          // isso o pop-up continuava afirmando "Fazendo" depois da entrega.
+          atualizarCrachaDeEtapa(task);
           render();
           updateNowPlaying();
           // Acabou de concluir uma SUBtarefa? Confere se o card mãe dela
@@ -319,6 +353,8 @@ function wireWorkflowArrows(task) {
           // Runrun.it recusou — volta tudo sozinho pro estado original
           // (ícone de concluir e o clique certo de novo inclusos).
           task.entregue = entregueOtimista;
+          task._entregueEm = null; // não foi entregue de verdade — desliga a proteção
+          atualizarCrachaDeEtapa(task);
           task.sequencia = sequenciaOtimista;
           esconderFluxoCardMaeNoPill();
           if (seqEl) {
@@ -340,12 +376,73 @@ function wireWorkflowArrows(task) {
  * (position: absolute) e ficava fisicamente cortado por ela, mesmo
  * mandando abrir pra baixo — escapar pro <body> resolve isso de vez.
  */
-function abrirMenuEtapa(task, statusBadge) {
+/**
+ * Texto do crachá de etapa de uma tarefa.
+ *
+ * Tarefa ENTREGUE ganha "Entregue ✓", não a coluna onde ela estava. Antes o
+ * crachá continuava dizendo "Fazendo" depois de entregar: no Runrun.it,
+ * entregar FECHA a tarefa mas não muda a etapa dela, então o Colmeia estava
+ * mostrando um dado verdadeiro que dava a informação errada — a pessoa
+ * entregava e o pop-up continuava afirmando que estava em Fazendo.
+ */
+function rotuloDaEtapa(task) {
+  if (!task) return "Sem etapa";
+  if (task.entregue) return "Entregue ✓";
+  const coluna = columnsDef.find(c => c.key === task.status);
+  return (coluna && coluna.label) || task.runrunStage || "Sem etapa";
+}
+
+/**
+ * Atualiza SÓ o crachá de etapa do pop-up, sem redesenhar o resto.
+ *
+ * É chamado depois de entregar/reabrir. Não usa renderDetail de propósito:
+ * na hora da entrega o pill está no meio da animação do "Entregue ✓"
+ * (carrossel do card mãe), e reconstruir o pop-up inteiro cortaria essa
+ * animação no meio.
+ */
+function atualizarCrachaDeEtapa(task) {
+  const badge = document.getElementById("statusBadge");
+  if (!badge || !task) return;
+  badge.textContent = rotuloDaEtapa(task);
+  badge.classList.toggle("entregue", !!task.entregue);
+}
+
+// Pra onde vai uma tarefa que está numa etapa FORA das 5 colunas do quadro
+// (o caso mais comum: um card mãe, que fica em "Cards Mães"). Quando é esse
+// o caso, o menu de etapa mostra esse caminho em destaque, como um atalho de
+// um clique — em vez de obrigar a caçar a coluna certa numa lista.
+const ETAPA_SUGERIDA_SAINDO_DE_FORA = "revisao";
+
+/**
+ * @param {Object} task          tarefa que vai mudar de etapa
+ * @param {HTMLElement} statusBadge  botão onde o menu vai encostar
+ * @param {function} [aoMudar]   chamado depois de mexer em task.status, pra
+ *                               quem chama redesenhar o que for dele. Sem
+ *                               isso, redesenha o pop-up e o quadro (que é o
+ *                               certo quando a tarefa é a que está aberta).
+ */
+function abrirMenuEtapa(task, statusBadge, aoMudar) {
   document.querySelectorAll(".status-menu").forEach(el => el.remove());
+
+  const redesenhar = aoMudar || (() => { renderDetail(); render(); });
+
+  // Tarefa numa etapa fora do quadro (card mãe em "Cards Mães", etapa de
+  // atendimento etc): oferece o próximo passo direto, em destaque.
+  const etapaAtualForaDoQuadro = !task.status;
+  const destino = columnsDef.find(c => c.key === ETAPA_SUGERIDA_SAINDO_DE_FORA);
+  const atalhoHTML = (etapaAtualForaDoQuadro && destino) ? `
+    <button type="button" class="status-menu-atalho" data-status="${destino.key}">
+      <span class="status-menu-atalho-de">${escaparHTML(task.runrunStage || "Etapa atual")}</span>
+      <span class="status-menu-atalho-seta">→</span>
+      <span class="status-menu-atalho-para">${destino.label}</span>
+    </button>
+    <div class="status-menu-sep"></div>
+  ` : "";
 
   const menu = document.createElement("div");
   menu.className = "status-menu";
-  menu.innerHTML = columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("");
+  menu.innerHTML = atalhoHTML
+    + columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === task.status ? "active" : ""}">${c.label}</button>`).join("");
   document.body.appendChild(menu);
   posicionarPopupFixo(menu, statusBadge);
   requestAnimationFrame(() => menu.classList.add("open"));
@@ -365,14 +462,20 @@ function abrirMenuEtapa(task, statusBadge) {
       e.stopPropagation();
       fechar();
       const statusAntigo = task.status;
+      const runrunStageAntigo = task.runrunStage;
       task.status = opt.dataset.status;
-      renderDetail();
-      render();
+      // Atualiza também o nome da etapa: sem isso, um card que estava numa
+      // etapa fora do quadro ("Cards Mães") continuava mostrando esse nome
+      // antigo no crachá, porque é ele que aparece quando não bate com
+      // nenhuma das 5 colunas.
+      const colunaEscolhida = columnsDef.find(c => c.key === opt.dataset.status);
+      if (colunaEscolhida) task.runrunStage = colunaEscolhida.label;
+      redesenhar();
       const ok = await moverEtapaNoBackend(task.id, opt.dataset.status);
       if (!ok) {
         task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
-        renderDetail();
-        render();
+        task.runrunStage = runrunStageAntigo;
+        redesenhar();
         mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
       } else {
         agendarAtualizacaoKanban();
@@ -405,7 +508,7 @@ function renderDetail() {
                   ${(task.subtarefasResumo || []).map(s => `
                     <button type="button" class="child-item ${s.fechada ? "done" : ""}" data-child-id="${s.id}">
                       ${avatarHTML(s.responsavel, "avatar-sm child-avatar", s.foto)}
-                      <span class="child-title">${s.title}</span>
+                      <span class="child-title">${escaparHTML(s.title)}</span>
                       ${s.fechada ? `<svg class="child-check" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
                     </button>
                   `).join("")}
@@ -417,7 +520,7 @@ function renderDetail() {
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           ` : ""}
-          <span class="detail-taskname">${task.title}</span>
+          <span class="detail-taskname">${escaparHTML(task.title)}</span>
           <button type="button" class="detail-taskname-copy" id="detailTaskNameCopy" title="Copiar nome da tarefa" aria-label="Copiar nome da tarefa">
             <svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
@@ -427,7 +530,7 @@ function renderDetail() {
               ${renderSequenciaHTML(task)}
             </div>
             <div class="status-wrap">
-              <button type="button" class="status-badge" id="statusBadge">${columnsDef.find(c => c.key === task.status)?.label || task.runrunStage || "Sem etapa"}</button>
+              <button type="button" class="status-badge ${task.entregue ? "entregue" : ""}" id="statusBadge">${escaparHTML(rotuloDaEtapa(task))}</button>
             </div>
           </div>
           </div>
@@ -462,10 +565,8 @@ function renderDetail() {
             ${task.parentTaskId ? `
               <button type="button" class="detail-tab" id="tabDescMae">Descrição card mãe</button>
             ` : ""}
-            ${task.hasChange ? `
-              <button type="button" class="detail-tab change-tab" id="tabChange" title="Alteração 01">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
-              </button>
+            ${ehTarefaDeAlteracao(task) ? `
+              <button type="button" class="detail-tab" id="tabOriginal" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
             ` : ""}
           </div>
           <div class="desc-stack">
@@ -491,13 +592,12 @@ function renderDetail() {
                 <div class="desc-text-real" id="descMaeTextReal">Carregando...</div>
               </div>
             ` : ""}
-            ${task.hasChange ? `
-              <div class="change-panel" id="changePanel">
-                <div class="change-panel-head">
-                  <span class="change-dot"></span>
-                  <span>Alteração 01</span>
-                </div>
-                <p class="change-summary">✨ Resumo por IA: cliente pediu pra trocar a cor de fundo pra tons mais claros e ajustar o texto do CTA — pedido feito nos comentários e reforçado na descrição.</p>
+            ${ehTarefaDeAlteracao(task) ? `
+              <div class="original-content" id="originalContent" hidden>
+                <div class="alteracao-resumo" id="alteracaoResumo"></div>
+                <div class="descmae-titulo" id="originalTitulo">Procurando a tarefa original...</div>
+                <div class="original-meta" id="originalMeta"></div>
+                <div class="desc-text-real" id="originalTextReal"></div>
               </div>
             ` : ""}
           </div>
@@ -538,7 +638,7 @@ function renderDetail() {
           </div>
           <div class="side-block">
             <span class="side-label">Cliente</span>
-            <span class="badge badge-cliente">${task.client}</span>
+            <span class="badge badge-cliente">${escaparHTML(task.client)}</span>
           </div>
           <div class="side-block">
             <span class="side-label">Hub do cliente</span>
@@ -610,7 +710,7 @@ function renderDetail() {
 
     <div class="chat-panel" id="chatPanel" hidden>
       <div class="chat-panel-header">
-        <div class="chat-panel-title" id="chatPanelTitle">${task.title}</div>
+        <div class="chat-panel-title" id="chatPanelTitle">${escaparHTML(task.title)}</div>
         <button type="button" class="chat-panel-close" id="chatPanelClose" aria-label="Fechar chat">
           <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
@@ -618,6 +718,9 @@ function renderDetail() {
       <div class="chat-panel-tabs">
         <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
         <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
+        ${ehTarefaDeAlteracao(task) ? `
+          <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
+        ` : ""}
         ${task.id ? `<button type="button" class="upload-check-btn" id="uploadCheckBtn" title="Verificar se subiu algum arquivo novo na pasta do card">↻ Verificar upload</button>` : ""}
       </div>
       <div class="upload-notifs" id="uploadNotifs"></div>
@@ -755,9 +858,11 @@ function renderDetail() {
       reabrirMenuBtn.disabled = false;
       if (ok) {
         task.entregue = false;
+        task._entregueEm = null; // reabriu: não tem mais "entrega recente" pra proteger
+        atualizarCrachaDeEtapa(task);
         await carregarSequencia(task);
       } else {
-        alert("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.");
+        mostrarToast("Não consegui reabrir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");
       }
     });
   }
@@ -772,7 +877,7 @@ function renderDetail() {
       if (resposta === null) return;
       const horas = parseFloat(resposta.replace(",", "."));
       if (!horas || horas <= 0) {
-        alert("Digita um número de horas válido (maior que zero).");
+        mostrarToast("Digita um número de horas válido (maior que zero).", "erro");
         return;
       }
       const ok = await ajustarEstimativaNoBackend(task.id, horas * 60);
@@ -780,7 +885,7 @@ function renderDetail() {
         task.estimateMinutes = Math.round(horas * 60);
         render();
       } else {
-        alert("Não consegui ajustar a estimativa agora. Tenta de novo em alguns segundos.");
+        mostrarToast("Não consegui ajustar a estimativa agora. Tenta de novo em alguns segundos.", "erro");
       }
     });
   }
@@ -835,31 +940,34 @@ function renderDetail() {
         document.getElementById("descEditActions").hidden = true;
         editarDescricaoBtn.hidden = false;
       } else {
-        alert("Não consegui salvar a descrição agora. Tenta de novo em alguns segundos.");
+        mostrarToast("Não consegui salvar a descrição agora. Tenta de novo em alguns segundos.", "erro");
       }
     });
   }
 
-  // ===== Abas Descrição / Descrição card mãe / Alteração (sem
+  // ===== Abas Descrição / Descrição card mãe / Tarefa original (sem
   // re-renderizar, com transição) =====
   document.getElementById("tabDesc").addEventListener("click", () => {
-    changeOpen = false;
     descMaeAberta = false;
+    originalAberta = false;
     applyCommentsState();
   });
-  const tabChange = document.getElementById("tabChange");
-  if (tabChange) {
-    tabChange.addEventListener("click", () => {
-      changeOpen = !changeOpen;
-      applyCommentsState();
-    });
-  }
   const tabDescMae = document.getElementById("tabDescMae");
   if (tabDescMae) {
     tabDescMae.addEventListener("click", () => {
       descMaeAberta = true;
+      originalAberta = false;
       applyCommentsState();
       carregarDescricaoCardMae(tasks[detailIdx] || task);
+    });
+  }
+  const tabOriginal = document.getElementById("tabOriginal");
+  if (tabOriginal) {
+    tabOriginal.addEventListener("click", () => {
+      originalAberta = true;
+      descMaeAberta = false;
+      applyCommentsState();
+      carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
     });
   }
 
@@ -913,7 +1021,18 @@ function renderDetail() {
       if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, texto);
     } else {
       if (bolhaTemporaria) bolhaTemporaria.remove(); // não foi enviado — some a bolha
-      mostrarToast("Não consegui enviar esse comentário agora.", "erro");
+      // Devolve o texto pro campo em vez de perder o que a pessoa escreveu:
+      // o campo é limpo ANTES da resposta chegar (pra bolha aparecer na
+      // hora), então numa falha o texto simplesmente evaporava e tinha que
+      // ser digitado de novo. Só devolve se a pessoa ainda não começou a
+      // escrever outra coisa nesse meio-tempo — nunca sobrescreve o que
+      // ela está digitando agora.
+      const campoAgora = document.getElementById("commentInput");
+      if (campoAgora && !campoAgora.value.trim() && texto) {
+        campoAgora.value = texto;
+        campoAgora.focus();
+      }
+      mostrarToast("Não consegui enviar esse comentário agora. Seu texto voltou pro campo.", "erro");
     }
   }
 
@@ -1030,6 +1149,9 @@ function renderDetail() {
   const chatTabMae = document.getElementById("chatTabMae");
   if (chatTabMae) chatTabMae.addEventListener("click", () => abrirThreadDoCardMae(tasks[detailIdx] || task));
 
+  const chatTabTudo = document.getElementById("chatTabTudo");
+  if (chatTabTudo) chatTabTudo.addEventListener("click", () => abrirThreadLinhaDoTempo(tasks[detailIdx] || task));
+
   const uploadCheckBtn = document.getElementById("uploadCheckBtn");
   if (uploadCheckBtn) {
     uploadCheckBtn.addEventListener("click", async () => {
@@ -1048,65 +1170,21 @@ function renderDetail() {
 
 function applyCommentsState() {
   const tabDesc = document.getElementById("tabDesc");
-  const tabChange = document.getElementById("tabChange");
-  const changePanel = document.getElementById("changePanel");
   const childrenPanel = document.getElementById("childrenPanel");
   const tabDescMae = document.getElementById("tabDescMae");
+  const tabOriginal = document.getElementById("tabOriginal");
   const descContent = document.getElementById("descContent");
   const descMaeContent = document.getElementById("descMaeContent");
-  if (tabChange) tabChange.classList.toggle("active", changeOpen);
-  if (changePanel) changePanel.classList.toggle("open", changeOpen);
+  const originalContent = document.getElementById("originalContent");
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
-  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta);
+  // Três abas mutuamente exclusivas: Descrição (a padrão), Descrição card
+  // mãe e Tarefa original (essa última só existe em subtarefa de alteração).
+  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta);
   if (tabDescMae) tabDescMae.classList.toggle("active", descMaeAberta);
-  if (descContent) descContent.hidden = descMaeAberta;
+  if (tabOriginal) tabOriginal.classList.toggle("active", originalAberta);
+  if (descContent) descContent.hidden = descMaeAberta || originalAberta;
   if (descMaeContent) descMaeContent.hidden = !descMaeAberta;
-}
-
-/**
- * Mostra a descrição do CARD MÃE dentro da própria aba de descrição da
- * subtarefa (aba "Descrição card mãe") — pedido do Cláudio: quando
- * chega uma subtarefa com nome genérico (ex: "Alteração 01"), não dá
- * pra saber do que se trata só pelo título; como o card mãe já é
- * pré-carregado em segundo plano assim que a subtarefa abre (ver
- * precarregarCardMaeEmBackground/cardMaeCache), só falta buscar a
- * descrição dele (endpoint separado no Runrun.it, não vem junto) e
- * mostrar o NOME do card mãe junto, bem em cima, pra dar contexto na
- * hora — sem precisar sair da subtarefa pra ir ver o card mãe.
- */
-async function carregarDescricaoCardMae(task) {
-  const tituloEl = document.getElementById("descMaeTitulo");
-  const textoEl = document.getElementById("descMaeTextReal");
-  if (!textoEl) return;
-  const taskId = task.id;
-
-  let resultado = cardMaeCache.get(taskId);
-  if (!resultado) {
-    if (tituloEl) tituloEl.textContent = "Carregando...";
-    textoEl.innerHTML = "Carregando...";
-    resultado = await buscarCardMaeDoBackend(taskId);
-    if (resultado.ok && resultado.temPai) cardMaeCache.set(taskId, resultado);
-  }
-  // A pessoa pode ter trocado de tarefa (ou voltado pra aba Descrição)
-  // enquanto isso carregava — compara por id, nunca por referência.
-  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId) || !descMaeAberta) return;
-
-  if (!resultado.ok || !resultado.temPai) {
-    if (tituloEl) tituloEl.textContent = "";
-    textoEl.innerHTML = "Essa tarefa não tem card mãe.";
-    return;
-  }
-
-  if (tituloEl) tituloEl.textContent = resultado.cardMae.title;
-
-  if (resultado.cardMae.descricao === undefined) {
-    const descricao = await buscarDescricaoDoBackend(resultado.cardMae.id);
-    resultado.cardMae.descricao = descricao || "";
-    if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId) || !descMaeAberta) return;
-  }
-  textoEl.innerHTML = resultado.cardMae.descricao
-    ? formatarDescricaoRunrun(resultado.cardMae.descricao)
-    : "Sem descrição cadastrada no card mãe.";
+  if (originalContent) originalContent.hidden = !originalAberta;
 }
 
 /**
@@ -1182,461 +1260,6 @@ function mostrarCardEmBranco(mensagem) {
   `;
 }
 
-// taskId da subtarefa -> resultado de buscarCardMaeDoBackend (já com
-// temPai/cardMae/subtarefas prontos). Guardado num Map à parte (não no
-// objeto da tarefa) pra sobreviver mesmo se atualizarKanbanEmBackground
-// trocar os objetos de tasks[] por outros novos enquanto isso.
-const cardMaeCache = new Map();
-
-/**
- * Busca o card mãe (e já deixa os comentários dele cacheados também,
- * ver chatMaeCache em js/chat-comentarios.js) assim que uma subtarefa
- * termina de abrir — sem esperar a pessoa clicar na seta pra cima.
- * Assim, quando ela clicar de verdade, abrirCardMae já acha tudo pronto
- * (abre na hora, sem esperar o Runrun.it responder de novo) e a aba
- * "Comentários card mãe" do chat também já nasce carregada.
- */
-async function precarregarCardMaeEmBackground(taskId) {
-  if (cardMaeCache.has(taskId)) return;
-  const resultado = await buscarCardMaeDoBackend(taskId);
-  if (!resultado.ok || !resultado.temPai) return;
-  cardMaeCache.set(taskId, resultado);
-  if (!chatMaeCache.has(taskId)) {
-    const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
-    chatMaeCache.set(taskId, { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios });
-  }
-  // Já aproveita e busca a Sequência de responsáveis do card mãe
-  // também, em segundo plano — assim, se a pessoa concluir a subtarefa
-  // e quiser transferir o card mãe na hora (ver verificarTransferirCardMae
-  // logo abaixo), tanto saber se ele "está com ela" quanto o modal
-  // "Ver regra" que abre em seguida já ficam prontos na hora, sem mais
-  // nenhuma ida ao Runrun.it esperando.
-  const seqResultado = await buscarSequenciaDoBackend(resultado.cardMae.id);
-  resultado.cardMae.sequencia = seqResultado.sequencia;
-  resultado.cardMae.workflowId = seqResultado.workflowId;
-  // Idem pra descrição do card mãe (aba "Descrição card mãe") — sem
-  // isso, ela só era buscada na hora de clicar na aba, deixando a
-  // troca lenta mesmo com o card mãe todo já pré-carregado. É a
-  // descrição ORIGINAL crua, direto do Runrun.it — essa aba nunca usa
-  // IA (isso é só o briefing da própria subtarefa).
-  resultado.cardMae.descricao = await buscarDescricaoDoBackend(resultado.cardMae.id);
-}
-
-async function abrirCardMae(task) {
-  if (!task.id) {
-    console.warn("Essa tarefa não está conectada ao Runrun.it, não tem card mãe pra abrir.");
-    return;
-  }
-
-  const panel = document.getElementById("taskDetail");
-  const inner = panel.querySelector(".detail-inner");
-  if (inner) inner.classList.add("panel-exit-up");
-  await esperar(200);
-
-  // Se já foi pré-carregado (ver precarregarCardMaeEmBackground, chamado
-  // assim que essa subtarefa abriu), usa direto — sem tela de
-  // "Buscando..." nem espera nenhuma do Runrun.it.
-  let resultado = cardMaeCache.get(task.id);
-  if (!resultado) {
-    mostrarCardEmBranco("Buscando o card mãe...");
-    resultado = await buscarCardMaeDoBackend(task.id);
-    if (resultado.ok && resultado.temPai) cardMaeCache.set(task.id, resultado);
-  }
-
-  if (!resultado.ok) {
-    mostrarCardEmBranco(resultado.error || "Não consegui buscar o card mãe.");
-    return;
-  }
-  if (!resultado.temPai) {
-    mostrarCardEmBranco("Essa tarefa não tem card mãe.");
-    return;
-  }
-
-  let idx = tasks.findIndex(t => t.id === resultado.cardMae.id);
-  if (idx === -1) {
-    const novaMae = mapearTarefaDoBackend(resultado.cardMae);
-    tasks.push(novaMae);
-    idx = tasks.length - 1;
-  }
-  tasks[idx].isMotherCard = true;
-  tasks[idx].subtarefasResumo = resultado.subtarefas || [];
-
-  openDetail(idx, "panel-enter-below");
-}
-
-/**
- * Chamada depois de concluir uma subtarefa: se o card mãe dela estiver
- * com VOCÊ agora (você é o responsável atual), pergunta — dentro do
- * próprio pill da tarefa (ver mostrarFluxoCardMaeNoPill logo abaixo) —
- * se quer transferir ele pro próximo já, sem precisar sair da
- * subtarefa pra ir procurar o card mãe. Como o card mãe (e a sequência
- * dele) já foram pré-carregados assim que a subtarefa abriu (ver
- * precarregarCardMaeEmBackground), isso normalmente já bate direto no
- * cache — sem esperar o Runrun.it responder de novo.
- */
-async function verificarTransferirCardMae(task) {
-  const resultado = cardMaeCache.get(task.id) || await buscarCardMaeDoBackend(task.id);
-  const devePerguntar = resultado.ok && resultado.temPai && resultado.cardMae
-    && nomesCorrespondem(resultado.cardMae.assignee, DESIGNER_LOGADO);
-  // Dá um tempinho pro "Entregue ✓" (já mostrado antes de chamar essa
-  // função) ser lido antes de trocar de figura — some direto se não tem
-  // nada a perguntar, ou passa pra pergunta de transferir se tem.
-  clearTimeout(_cardMaeFluxoTimeout);
-  _cardMaeFluxoTimeout = setTimeout(() => {
-    // Confere de novo aqui dentro (não só lá fora, antes do delay) — a
-    // pessoa pode ter trocado de tarefa nesses ~700ms de espera.
-    const aindaNaMesmaTarefa = tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id);
-    if (devePerguntar && aindaNaMesmaTarefa) mostrarPerguntaTransferirNoPill(resultado.cardMae, task.id);
-    else esconderFluxoCardMaeNoPill();
-  }, 700);
-}
-
-/**
- * "Carrossel" do fluxo entregar → transferir card mãe → regra, tudo
- * dentro do próprio pill preto/amarelo do cabeçalho da tarefa (não um
- * pop-up separado) — protótipo 2 aprovado pelo Cláudio em 2026-07-28
- * (ver memória "barra_amarela_dynamic_island"). As duas faces do pill
- * (.pill-face-normal e #pillCardMaeFace) ficam empilhadas uma sobre a
- * outra; a classe .card-mae-ativo desliza as duas ao mesmo tempo — a
- * normal sobe e sai, a do card mãe sobe e aparece. Tirar a classe faz
- * o caminho contrário (desce), sem precisar de nenhuma animação extra.
- */
-let _cardMaeFluxoTimeout = null;
-
-// Ajusta a altura do pill pro tamanho real do conteúdo da face do card
-// mãe — CALCULADO, não chutado (dois chutes fixos, 46px e depois 56px,
-// ainda cortavam em produção: fonte/renderização real deixa o conteúdo
-// mais alto do que no teste). O filho direto de #pillCardMaeFace
-// (.pill-cardmae-conteudo/.pill-cardmae-regra) não é esticado
-// (align-items:center no pai), então o offsetHeight dele já reflete o
-// espaço que o conteúdo precisa de verdade, mesmo com o pill ainda
-// "trancado" na altura antiga (position:absolute não impede medir o
-// filho, só limita o que fica visível). Chamar sempre que o innerHTML
-// da face mudar.
-function ajustarAlturaCardMaeNoPill() {
-  const pill = document.getElementById("detailHeaderPill");
-  const face = document.getElementById("pillCardMaeFace");
-  const conteudo = face && face.firstElementChild;
-  if (!pill || !conteudo) return;
-  const PADDING_VERTICAL_PILL = 16; // 8px em cima + 8px embaixo (.detail-header-pill)
-  const FOLGA = 4; // margininha de segurança (arredondamento de sub-pixel)
-  pill.style.height = Math.max(46, conteudo.offsetHeight + PADDING_VERTICAL_PILL + FOLGA) + "px";
-}
-
-function mostrarEntregueNoPill() {
-  const pill = document.getElementById("detailHeaderPill");
-  const face = document.getElementById("pillCardMaeFace");
-  if (!pill || !face) return;
-  face.hidden = false;
-  face.innerHTML = `
-    <span class="pill-cardmae-conteudo centralizado">
-      <span class="pill-cardmae-icone entregue"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-      <span class="pill-cardmae-texto">Entregue ✓</span>
-    </span>
-  `;
-  pill.classList.add("card-mae-modo", "card-mae-ativo");
-  ajustarAlturaCardMaeNoPill();
-}
-
-// Volta o pill pro normal (desliza pra baixo) — some sozinho depois de
-// entregar uma tarefa que não tem card mãe pra perguntar sobre.
-function esconderFluxoCardMaeNoPill() {
-  clearTimeout(_cardMaeFluxoTimeout);
-  const pill = document.getElementById("detailHeaderPill");
-  if (!pill) return;
-  pill.classList.remove("card-mae-ativo");
-  setTimeout(() => {
-    const face = document.getElementById("pillCardMaeFace");
-    // Só esconde de vez (e só tira o pill do "modo carrossel", voltando
-    // a crescer livre pro tamanho natural do conteúdo normal) se
-    // ninguém reativou o carrossel nesse meio-tempo.
-    if (face && !pill.classList.contains("card-mae-ativo")) {
-      face.hidden = true;
-      face.innerHTML = "";
-      pill.classList.remove("card-mae-modo");
-      pill.style.height = ""; // volta a crescer livre (era calculado na hora, via ajustarAlturaCardMaeNoPill)
-    }
-  }, 340);
-}
-
-function mostrarPerguntaTransferirNoPill(cardMaeRaw, taskAtualId) {
-  const pill = document.getElementById("detailHeaderPill");
-  const face = document.getElementById("pillCardMaeFace");
-  if (!pill || !face) return;
-  face.hidden = false;
-  face.innerHTML = `
-    <span class="pill-cardmae-conteudo centralizado">
-      <span class="pill-cardmae-icone">${reopenIcon}</span>
-      <span class="pill-cardmae-texto">Transferir o card mãe também?</span>
-      <span class="pill-cardmae-acoes">
-        <button type="button" id="pillCardMaeNao">Não</button>
-        <button type="button" class="principal" id="pillCardMaeSim">Sim</button>
-      </span>
-    </span>
-  `;
-  pill.classList.add("card-mae-modo", "card-mae-ativo");
-  ajustarAlturaCardMaeNoPill();
-  document.getElementById("pillCardMaeNao").addEventListener("click", esconderFluxoCardMaeNoPill);
-  document.getElementById("pillCardMaeSim").addEventListener("click", () => mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId));
-}
-
-// Etapa final: a própria regra (sequência) do card mãe, editável ali
-// dentro do pill — 3 zonas: etapa (status) na esquerda, nome + regra
-// centralizados no meio, fechar na direita. A regra reaproveita
-// renderSequenciaHTML/as mesmas flechinhas (voltar/avançar/adicionar/
-// entregar) já usadas no pill normal — mesmo padrão visual do resto do
-// app, só redesenhando #pillCardMaeSeq em vez de #workflowSeqGroup
-// depois de cada ação (é outra tarefa, o card mãe, não a que está
-// aberta). Otimista: mexe na tela na hora, confirma de verdade com o
-// Runrun.it em segundo plano.
-function mostrarRegraCardMaeNoPill(cardMaeRaw, taskAtualId) {
-  const pill = document.getElementById("detailHeaderPill");
-  const face = document.getElementById("pillCardMaeFace");
-  if (!pill || !face) return;
-  const cardMaeTask = mapearTarefaDoBackend(cardMaeRaw);
-  cardMaeTask.sequencia = cardMaeRaw.sequencia || [];
-  cardMaeTask.workflowId = cardMaeRaw.workflowId || null;
-
-  face.hidden = false;
-  pill.classList.add("card-mae-modo", "card-mae-ativo");
-  rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
-}
-
-function renderFacePillRegraCardMae(cardMaeTask) {
-  return `
-    <span class="pill-cardmae-conteudo pill-cardmae-regra">
-      <div class="status-wrap">
-        <button type="button" class="status-badge" id="pillCardMaeStatusBadge">${columnsDef.find(c => c.key === cardMaeTask.status)?.label || cardMaeTask.runrunStage || "Sem etapa"}</button>
-        <div class="status-menu" id="pillCardMaeStatusMenu">
-          ${columnsDef.map(c => `<button type="button" data-status="${c.key}" class="${c.key === cardMaeTask.status ? "active" : ""}">${c.label}</button>`).join("")}
-        </div>
-      </div>
-      <span class="pill-cardmae-regra-centro">
-        <span class="pill-cardmae-nome">${cardMaeTask.title}</span>
-        <div class="nav-dots-group" id="pillCardMaeSeq">
-          ${renderSequenciaHTML(cardMaeTask)}
-        </div>
-      </span>
-      <button type="button" class="pill-cardmae-fechar" id="pillCardMaeFechar" title="Voltar (sem alterar a regra)">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-      </button>
-    </span>
-  `;
-}
-
-// Só redesenha a partir do que já está em memória em cardMaeTask (sem
-// ida ao Runrun.it) — usado depois de uma mudança otimista (ex: trocar
-// a etapa) que não afeta a sequência.
-function rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId) {
-  const face = document.getElementById("pillCardMaeFace");
-  if (!face) return;
-  face.innerHTML = renderFacePillRegraCardMae(cardMaeTask);
-  wireFacePillRegraCardMae(cardMaeTask, taskAtualId);
-  ajustarAlturaCardMaeNoPill();
-}
-
-// Busca a sequência real do card mãe de novo e redesenha — usado depois
-// de qualquer ação que mexe nela (avançar, desfazer, adicionar, remover
-// pessoa), pra sincronizar com o estado de verdade no Runrun.it.
-async function recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId) {
-  const resultado = await buscarSequenciaDoBackend(cardMaeTask.id);
-  cardMaeTask.sequencia = resultado.sequencia || [];
-  cardMaeTask.workflowId = resultado.workflowId || cardMaeTask.workflowId;
-  // Já saiu dessa etapa (voltou, fechou a tarefa) enquanto isso rodava?
-  if (!document.getElementById("pillCardMaeSeq")) return;
-  rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
-}
-
-// IMPORTANTE: toda busca aqui dentro tem que ser RELATIVA a #pillCardMaeFace
-// (nunca document.getElementById solto). A regra do card mãe reaproveita
-// os MESMOS ids de navegação (navPrevArrow/navNextArrow/navAddPersonBtn/
-// navDeliverBtn) que a sequência normal da tarefa aberta usa — se ela
-// também tiver uma sequência de verdade (ou o botão de concluir, no caso
-// "sem sequência"), esses ids ficam DUPLICADOS no DOM ao mesmo tempo (um
-// dentro de #workflowSeqGroup, escondido atrás do carrossel, e outro
-// dentro de #pillCardMaeSeq). document.getElementById sempre pega o
-// PRIMEIRO (o da tarefa aberta, não o do card mãe) — foi isso que fazia
-// clicar numa seta/botão do card mãe às vezes entregar ou mexer na
-// tarefa aberta por engano, e o clique no X (voltar) esbarrar em outro
-// listener preso sem querer no botão errado.
-function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
-  const face = document.getElementById("pillCardMaeFace");
-  if (!face) return;
-  const fecharBtn = face.querySelector("#pillCardMaeFechar");
-  if (fecharBtn) fecharBtn.addEventListener("click", esconderFluxoCardMaeNoPill);
-
-  const statusBadge = face.querySelector("#pillCardMaeStatusBadge");
-  const statusMenu = face.querySelector("#pillCardMaeStatusMenu");
-  if (statusBadge && statusMenu) {
-    statusBadge.addEventListener("click", e => {
-      e.stopPropagation();
-      statusMenu.classList.toggle("open");
-    });
-    statusMenu.querySelectorAll("button").forEach(opt => {
-      opt.addEventListener("click", async e => {
-        e.stopPropagation();
-        const statusAntigo = cardMaeTask.status;
-        cardMaeTask.status = opt.dataset.status;
-        rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId); // otimista, não mexe na sequência
-        const ok = await moverEtapaNoBackend(cardMaeTask.id, opt.dataset.status);
-        if (!ok) {
-          cardMaeTask.status = statusAntigo;
-          rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
-          mostrarToast("Não consegui mover o card mãe de etapa agora.", "erro");
-        } else {
-          agendarAtualizacaoKanban();
-        }
-      });
-    });
-  }
-
-  const prevBtn = face.querySelector("#navPrevArrow");
-  if (prevBtn) {
-    prevBtn.addEventListener("click", async () => {
-      prevBtn.disabled = true;
-      await pararCronometroAoTransferir(cardMaeTask);
-      const novoResponsavel = await desfazerWorkflowNoBackend(cardMaeTask.id);
-      if (novoResponsavel) { cardMaeTask.assignee = novoResponsavel; agendarAtualizacaoKanban(); }
-      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
-    });
-  }
-  const nextBtn = face.querySelector("#navNextArrow");
-  if (nextBtn) {
-    nextBtn.addEventListener("click", async () => {
-      nextBtn.disabled = true;
-      await pararCronometroAoTransferir(cardMaeTask);
-      const resultadoAvanco = await avancarWorkflowNoBackend(cardMaeTask.id);
-      if (resultadoAvanco.novoResponsavel) { cardMaeTask.assignee = resultadoAvanco.novoResponsavel; agendarAtualizacaoKanban(); }
-      if (!resultadoAvanco.ok) mostrarToast("Não consegui avançar a sequência do card mãe agora.", "erro");
-      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
-    });
-  }
-  const addPersonBtn = face.querySelector("#navAddPersonBtn");
-  if (addPersonBtn) {
-    addPersonBtn.addEventListener("click", () => abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, addPersonBtn));
-  }
-  const deliverBtn = face.querySelector("#navDeliverBtn");
-  if (deliverBtn && !cardMaeTask.entregue) {
-    deliverBtn.addEventListener("click", async () => {
-      deliverBtn.disabled = true;
-      await pararCronometroAoTransferir(cardMaeTask);
-      let ok;
-      if (cardMaeTask.sequencia && cardMaeTask.sequencia.length > 0) {
-        const resultadoAvanco = await avancarWorkflowNoBackend(cardMaeTask.id);
-        ok = resultadoAvanco.ok;
-      } else {
-        ok = await entregarTarefaNoBackend(cardMaeTask.id);
-      }
-      if (ok) {
-        mostrarToast("Card mãe entregue.");
-        esconderFluxoCardMaeNoPill();
-        agendarAtualizacaoKanban();
-      } else {
-        deliverBtn.disabled = false;
-        mostrarToast("Não consegui entregar o card mãe agora.", "erro");
-      }
-    });
-  }
-}
-
-async function abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, btn) {
-  document.querySelectorAll(".pill-cardmae-quickpick").forEach(el => el.remove());
-  const menu = document.createElement("div");
-  menu.className = "pill-cardmae-quickpick";
-  menu.innerHTML = `<div class="assignee-menu-loading">Carregando pessoas...</div>`;
-  document.body.appendChild(menu);
-  posicionarPopupFixo(menu, btn);
-
-  const usuarios = ordenarUsuariosParaRegra(await buscarUsuariosRunrun());
-  if (!menu.isConnected) return; // fechou enquanto carregava
-  menu.innerHTML = usuarios.map(u => `
-    <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}" data-user-foto="${u.foto || ""}">
-      ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
-    </button>
-  `).join("");
-  posicionarPopupFixo(menu, btn); // recalcula já com a altura real da lista
-
-  menu.querySelectorAll("button").forEach(opt => {
-    opt.addEventListener("click", async () => {
-      fechar();
-      if (!cardMaeTask.workflowId) {
-        const criado = await criarRegraNoBackend(cardMaeTask.id);
-        if (!criado.ok) { mostrarToast("Não consegui criar a sequência do card mãe agora.", "erro"); return; }
-        cardMaeTask.workflowId = criado.workflowId;
-      }
-      const ok = await adicionarNaRegraNoBackend(cardMaeTask.workflowId, opt.dataset.userId);
-      if (!ok) mostrarToast("Não consegui adicionar essa pessoa na sequência agora.", "erro");
-      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
-    });
-  });
-
-  function fechar() {
-    menu.remove();
-    document.removeEventListener("click", clickFora);
-  }
-  function clickFora(ev) {
-    if (!menu.contains(ev.target) && ev.target !== btn) fechar();
-  }
-  setTimeout(() => document.addEventListener("click", clickFora), 0);
-}
-
-async function buscarCardMaeDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarCardMae", taskId }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Falha ao buscar o card mãe no Runrun.it:", err);
-    return { ok: false, error: "Falha de conexão com o Runrun.it." };
-  }
-}
-
-/**
- * Confere se a tarefa aberta é, ela mesma, um card mãe (tem subtarefas)
- * e liga a setinha pra baixo — mesmo quando ela chegou pro designer
- * direto numa etapa normal (ex: "Revisão"), sem passar pela etapa
- * "Card mãe" nem ter sido aberta a partir de uma subtarefa dela.
- */
-async function carregarFilhosSeForCardMae(task) {
-  if (!task.id || task.isMotherCard || task.parentTaskId) return;
-  const taskId = task.id;
-  const resultado = await buscarSubtarefasDoCardMaeNoBackend(taskId);
-  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return; // usuário já trocou de tarefa
-  if (!resultado.ok || !resultado.ehCardMae) return;
-  tasks[detailIdx].isMotherCard = true;
-  tasks[detailIdx].subtarefasResumo = resultado.subtarefas || [];
-  renderDetail();
-}
-
-async function buscarSubtarefasDoCardMaeNoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { ok: false, error: "Backend não configurado." };
-  try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "buscarSubtarefasDoCardMae", taskId }),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error("Falha ao checar se a tarefa é um card mãe:", err);
-    return { ok: false, error: "Falha de conexão com o Runrun.it." };
-  }
-}
-
-function stepDetail(dir) {
-  const order = tasks.map((t, i) => i).filter(i => tasks[i].status === tasks[detailIdx].status);
-  const pos = order.indexOf(detailIdx);
-  const next = order[(pos + dir + order.length) % order.length];
-  detailIdx = next;
-  fecharChatPanel();
-  renderDetail();
-  document.querySelectorAll(".task-card").forEach(c => c.classList.remove("selected"));
-  const cardEl = document.querySelector(`.task-card[data-idx="${detailIdx}"]`);
-  if (cardEl) cardEl.classList.add("selected");
-}
-
 function closeDetail() {
   pararChecagemUploadEmSegundoPlano();
   clearTimeout(_cardMaeFluxoTimeout);
@@ -1668,7 +1291,7 @@ function updateNowPlaying() {
   // Só considera tarefas rodando do PRÓPRIO designer logado — o array
   // `tasks` pode ter tarefas de outras pessoas (visão do coordenador),
   // e a barra "tocando agora" é sempre sobre o que EU estou fazendo.
-  const running = tasks.find(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  const running = tasks.find(t => t.running && ehMinhaTarefa(t));
   if (running) {
     el.hidden = false;
     if (idle) idle.hidden = true;
@@ -1687,7 +1310,7 @@ function updateNowPlaying() {
 // alguma), então aqui é sempre "pausar", nunca "tocar".
 document.getElementById("nowPlayingPause").addEventListener("click", (ev) => {
   ev.stopPropagation(); // não deixa o clique também abrir a tarefa (listener do próprio #nowPlaying)
-  const running = tasks.find(t => t.running && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  const running = tasks.find(t => t.running && ehMinhaTarefa(t));
   if (!running) return;
   running.running = false;
   running._runningToggleEm = Date.now();
@@ -1730,15 +1353,33 @@ setInterval(() => {
 }, 1000);
 
 // ===== Dark mode =====
+// O tema escolhido fica salvo no navegador (mesma convenção das outras
+// preferências por designer, tipo a ordem das abas do Runrun completo) —
+// antes ele voltava pro claro a cada F5, o que dava a impressão de que a
+// escolha não tinha "pegado".
+const TEMA_CHAVE = "colmeia_tema_v1";
+
+function aplicarTema(modo) {
+  if (modo === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  else document.documentElement.removeAttribute("data-theme");
+  document.querySelectorAll("#themeSwitch button").forEach(b => {
+    b.classList.toggle("on", b.dataset.mode === modo);
+  });
+}
+
 document.querySelectorAll("#themeSwitch button").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll("#themeSwitch button").forEach(b => b.classList.remove("on"));
-    btn.classList.add("on");
-    if (btn.dataset.mode === "dark") {
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      document.documentElement.removeAttribute("data-theme");
-    }
+    const modo = btn.dataset.mode === "dark" ? "dark" : "light";
+    aplicarTema(modo);
+    try { localStorage.setItem(TEMA_CHAVE, modo); } catch (err) { /* sem problema, só não lembra */ }
   });
 });
+
+// Restaura o tema salvo assim que a página carrega (inclusive na tela de
+// login, antes de qualquer login).
+(function restaurarTemaSalvo() {
+  let salvo = null;
+  try { salvo = localStorage.getItem(TEMA_CHAVE); } catch (err) { /* sem problema */ }
+  if (salvo === "dark" || salvo === "light") aplicarTema(salvo);
+})();
 

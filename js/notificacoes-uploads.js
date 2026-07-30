@@ -5,7 +5,58 @@ function uploadJaVisto(link) {
   try { return localStorage.getItem(chaveUploadVisto(link)) === "1"; } catch (err) { return false; }
 }
 function marcarUploadVisto(link) {
-  try { localStorage.setItem(chaveUploadVisto(link), "1"); } catch (err) { /* sem problema */ }
+  // Guarda QUANDO foi dispensado (não só "1") pra dar pra limpar depois —
+  // ver limparLixoAntigoDoNavegador. Continua sendo lido como "existe a
+  // chave = já foi visto", então valores antigos ("1") seguem valendo.
+  try { localStorage.setItem(chaveUploadVisto(link), String(Date.now())); } catch (err) { /* sem problema */ }
+}
+
+/**
+ * Apaga do navegador as marcações antigas de "upload já dispensado" e de
+ * "chat já lido". Essas duas listas nunca eram limpas: nascia uma chave
+ * por conjunto de arquivos e uma por tarefa, e elas ficavam ali pra
+ * sempre, fazendo o espaço guardado do navegador só crescer.
+ *
+ * Regras: upload dispensado só interessa por alguns dias (a notificação
+ * dele só existe por 3 horas de qualquer forma); "chat já lido" é apagado
+ * quando fica muito velho, mantendo um limite de quantidade — se um dia
+ * uma tarefa antiga for reaberta, o pior que acontece é o pontinho de
+ * "não lido" aparecer uma vez a mais.
+ */
+const LIXO_UPLOAD_VISTO_MS = 7 * 24 * 60 * 60 * 1000;  // 7 dias
+const MAX_CHAVES_CHAT_VISTO = 400;
+
+function limparLixoAntigoDoNavegador() {
+  try {
+    const agora = Date.now();
+    const chatVistos = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const chave = localStorage.key(i);
+      if (!chave) continue;
+      if (chave.startsWith("colmeia_upload_visto_")) {
+        const quando = Number(localStorage.getItem(chave));
+        // Valor antigo ("1") não tem data: conta como velho e sai fora.
+        if (!quando || (agora - quando) > LIXO_UPLOAD_VISTO_MS) chatVistos.push(chave);
+      }
+    }
+    chatVistos.forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* segue */ } });
+
+    // "Chat já lido": não tem data guardada (é o id do último comentário
+    // visto), então a poda é por quantidade — mantém as mais recentes do
+    // fim da lista e descarta o excesso.
+    const chaves = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const chave = localStorage.key(i);
+      if (chave && chave.startsWith("colmeia_chat_visto_")) chaves.push(chave);
+    }
+    if (chaves.length > MAX_CHAVES_CHAT_VISTO) {
+      chaves.slice(0, chaves.length - MAX_CHAVES_CHAT_VISTO)
+        .forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* segue */ } });
+    }
+  } catch (err) {
+    // Navegador sem acesso ao armazenamento (aba privada, por exemplo) —
+    // não tem lixo pra limpar mesmo.
+  }
 }
 
 /**

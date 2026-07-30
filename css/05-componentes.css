@@ -1,0 +1,524 @@
+/* -------------------------------------------------------------------
+   Peças soltas usadas em vários lugares: feedback de toque, calendário
+   próprio, painel de avisos, avisinho (toast), contexto de alteração e o
+   painel de diagnóstico.
+
+   Faz parte do style.css, que passou de 3.000 linhas e foi dividido por
+   área. As tags <link> no index.html seguem EXATAMENTE esta ordem, e isso
+   é obrigatório: em CSS, quando duas regras têm o mesmo peso, vence a que
+   foi escrita depois. Trocar a ordem dos arquivos muda a aparência do app.
+   ------------------------------------------------------------------- */
+
+/* ===== Feedback de toque "estilo Apple" (aplicado por último de
+   propósito, pra garantir que essa transição de transform vença
+   qualquer regra anterior da mesma classe) =====
+   Botões de ação encolhem bem sutilmente ao clicar e voltam rápido —
+   é o mesmo tipo de resposta tátil do iOS/tvOS/macOS, em vez de um
+   clique "seco" sem feedback nenhum. */
+.icon-btn-circle,
+.play-btn,
+.nav-arrow,
+.comment-send-btn,
+.ver-todas-btn,
+.sidebar-logout,
+.detail-more,
+.status-badge,
+.card-priority-tag,
+.comment-react-btn,
+.comment-delete-btn,
+.comment-tool-btn,
+.pasta-drive-btn,
+.confirm-pasta-confirmar,
+.confirm-pasta-cancelar,
+.assignee-advance-btn,
+.upload-notif-copy,
+.now-playing {
+  transition: transform var(--dur-fast) var(--ease-apple),
+              background var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple),
+              box-shadow var(--dur-fast) var(--ease-apple),
+              opacity var(--dur-fast) var(--ease-apple);
+}
+.icon-btn-circle:active,
+.play-btn:active,
+.nav-arrow:active,
+.comment-send-btn:active,
+.ver-todas-btn:active,
+.sidebar-logout:active,
+.detail-more:active,
+.status-badge:active,
+.card-priority-tag:active,
+.comment-react-btn:active,
+.comment-delete-btn:active,
+.comment-tool-btn:active,
+.pasta-drive-btn:active,
+.confirm-pasta-confirmar:active,
+.confirm-pasta-cancelar:active,
+.assignee-advance-btn:active,
+.upload-notif-copy:active,
+.now-playing:active {
+  transform: scale(0.93);
+}
+
+/* Cards do kanban: leve "levantada" no hover (translate + sombra), no
+   mesmo timing/curva do resto do site, pra parecer parte do mesmo
+   sistema em vez de um efeito à parte. */
+.task-card {
+  transition: transform var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple);
+}
+.task-card:hover { transform: translateY(-2px); }
+.task-card:active { transform: translateY(0) scale(0.985); }
+
+/* ===== Fila de Repasse ===== */
+.repasse-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 4px 2px 18px; flex-shrink: 0; flex-wrap: wrap;
+}
+.repasse-tabs { display: flex; gap: 8px; }
+.repasse-tab {
+  border: none; background: var(--page-bg); color: var(--text-secondary);
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  padding: 9px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.repasse-tab:hover { background: var(--border); }
+.repasse-tab.active { background: var(--kanban-yellow); color: #16181D; }
+
+.repasse-board { align-items: flex-start; }
+
+.repasse-column {
+  min-width: 270px; max-width: 270px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.repasse-column-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 2px;
+}
+.repasse-column-nome { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.repasse-column-count {
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+  background: var(--page-bg); color: var(--text-secondary);
+  font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.repasse-column-body { display: flex; flex-direction: column; gap: 10px; }
+
+/* Aba "Prioridades" — lista corrida em grade, sem coluna por cliente
+   (por isso o pill de cliente aparece em cada card, ver .repasse-client-pill). */
+.repasse-flat-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px; width: 100%; flex: 1 1 auto; align-content: start;
+}
+
+.repasse-client-pill {
+  font-size: 11px; font-weight: 600; color: var(--text-secondary);
+  background: var(--page-bg); border-radius: 999px; padding: 4px 10px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%;
+}
+
+.repasse-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px; cursor: pointer; position: relative; z-index: 1;
+  transition: transform var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple);
+}
+.repasse-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+/* Enquanto um pop-up (confirmar/repassar ou o de adicionar pessoa)
+   está aberto dentro do card, ele sobe acima dos cards vizinhos — sem
+   isso, o pop-up (que "vaza" pra fora do card, pra cima ou pra baixo)
+   ficava escondido atrás do próximo card da coluna, que é pintado por
+   cima por vir depois no HTML. */
+.repasse-card.repasse-card-popup-aberto { z-index: 40; }
+.repasse-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.repasse-card-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); line-height: 1.35; margin-bottom: 10px; }
+.repasse-card-tempo { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
+.repasse-card-actions { display: flex; gap: 8px; position: relative; }
+
+/* Datas (Publicação / Entrega) do card de repasse — duas pills separadas,
+   uma embaixo da outra (antes era um elemento só, lado a lado). */
+.repasse-datas-stack { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.repasse-data-pill {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--page-bg); border-radius: 999px; padding: 7px 12px;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.repasse-data-label {
+  font-size: 10px; font-weight: 700; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+}
+.repasse-data-valor {
+  border: none; background: transparent; font-family: inherit; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; color: var(--text-primary);
+  padding: 2px 5px; border-radius: 6px; font-variant-numeric: tabular-nums;
+}
+.repasse-data-valor:hover { background: var(--card-bg); }
+.repasse-data-pill.overdue { background: var(--danger-soft); }
+.repasse-data-pill.overdue .repasse-data-valor { color: var(--danger); }
+.repasse-btn {
+  flex: 1; border: none; border-radius: 10px; padding: 8px 0; cursor: pointer;
+  font-family: var(--font-body); font-size: 12px; font-weight: 700;
+  transition: transform var(--dur-fast) var(--ease-apple), opacity var(--dur-fast) var(--ease-apple);
+}
+.repasse-btn:active { transform: scale(0.95); }
+.repasse-btn:disabled { opacity: 0.6; cursor: default; }
+.repasse-btn-ficar { background: var(--page-bg); color: var(--text-primary); }
+
+/* Fileira de fotinhos (Sequência de responsáveis) dentro do card de
+   repasse — mesmo conceito visual do pop-up de detalhe da tarefa
+   (wf-dot/wf-line/wf-check, reaproveitados como estão), só que com
+   borda/cores adaptadas pro fundo claro-ou-escuro do card (o
+   .workflow-seq-dots original foi desenhado pra sentar sobre o pill
+   preto do cabeçalho, não sobre o card). Toda cor de destaque aqui é
+   amarelo (padrão do app) — nada de roxo/azul. */
+.repasse-seq-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.repasse-seq-dots {
+  display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0;
+  border: 1.5px solid var(--border); border-radius: 999px; padding: 3px 6px;
+  overflow-x: auto;
+}
+.repasse-seq-dots::-webkit-scrollbar { display: none; }
+.repasse-seq-dots .wf-dot { cursor: pointer; }
+.repasse-seq-empty-label { font-size: 11.5px; color: var(--text-muted); padding: 2px 4px; white-space: nowrap; }
+.repasse-seq-loading { font-size: 11.5px; color: var(--text-muted); }
+.repasse-seq-row-done { font-size: 12px; font-weight: 700; color: #2F9E44; padding: 4px 2px; }
+
+.repasse-seq-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--border);
+  background: transparent; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; cursor: pointer; color: var(--text-secondary);
+  transition: transform var(--dur-fast) var(--ease-apple), background var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple), border-color var(--dur-fast) var(--ease-apple);
+}
+.repasse-seq-btn svg { width: 15px; height: 15px; }
+.repasse-seq-btn:active { transform: scale(0.92); }
+.repasse-seq-btn:disabled { opacity: 0.6; cursor: default; }
+.repasse-seq-btn.advance:hover:not(:disabled) { background: var(--kanban-yellow); color: #16181D; border-color: var(--kanban-yellow); }
+.repasse-seq-btn.add { color: var(--kanban-yellow-text); border-color: var(--kanban-yellow); }
+.repasse-seq-btn.add:hover:not(:disabled) { background: var(--kanban-yellow); color: #16181D; }
+.repasse-seq-btn.deliver { color: #2F9E44; border-color: #2F9E44; }
+.repasse-seq-btn.deliver:hover:not(:disabled) { background: #2F9E44; color: #fff; }
+
+/* ===== Calendário próprio do Colmeia (abrirCalendarioColmeia, js/config.js) =====
+   Substitui o <input type="date"> nativo em todo lugar do app que edita
+   data — card do quadro, pop-up de detalhe, fila de repasse. */
+.colmeia-calendario {
+  position: fixed; z-index: 500; width: 260px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 12px; box-shadow: var(--shadow-hover); font-family: var(--font-body);
+  animation: colmeia-modal-pop var(--dur-fast) var(--ease-apple-spring);
+}
+.colmeia-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.colmeia-cal-titulo { font-size: 13px; font-weight: 700; color: var(--text-primary); text-transform: capitalize; }
+.colmeia-cal-nav {
+  width: 26px; height: 26px; border-radius: 50%; border: none; background: transparent;
+  color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.colmeia-cal-nav:hover { background: var(--page-bg); color: var(--text-primary); }
+.colmeia-cal-nav svg { width: 15px; height: 15px; }
+.colmeia-cal-semana { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 4px; }
+.colmeia-cal-semana span {
+  text-align: center; font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+}
+.colmeia-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.colmeia-cal-dia {
+  aspect-ratio: 1; border: none; background: transparent; border-radius: 8px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.colmeia-cal-dia.vazio { cursor: default; }
+.colmeia-cal-dia:not(.vazio):hover { background: var(--page-bg); }
+.colmeia-cal-dia.hoje { color: var(--kanban-yellow-text); font-weight: 800; }
+.colmeia-cal-dia.selecionado { background: var(--kanban-yellow); color: #16181D; }
+.colmeia-cal-footer {
+  display: flex; justify-content: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+}
+.colmeia-cal-hoje {
+  border: none; background: transparent; color: var(--accent); font-family: inherit;
+  font-size: 12px; font-weight: 700; cursor: pointer; padding: 4px 8px; border-radius: 6px;
+}
+.colmeia-cal-hoje:hover { background: var(--page-bg); }
+
+.repasse-picker {
+  position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 20;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 6px; box-shadow: var(--shadow-hover); max-height: 220px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  animation: colmeia-modal-pop var(--dur-fast) var(--ease-apple-spring);
+}
+/* Pop-up rápido de adicionar pessoa (abre perto do botão "+" da
+   fileira, posição calculada em JS — ver posicionarPickerPertoDoBotao)
+   — precisa de largura própria porque não fica esticado lado a lado
+   com o resto do card feito os de confirmação. */
+.repasse-quick-add { width: 220px; max-width: calc(100% - 8px); z-index: 30; }
+.repasse-picker button {
+  display: flex; align-items: center; gap: 8px; border: none; background: transparent;
+  text-align: left; font-family: var(--font-body); font-size: 13px; font-weight: 500;
+  color: var(--text-primary); padding: 8px; border-radius: 8px; cursor: pointer; width: 100%;
+}
+.repasse-picker button:hover { background: var(--page-bg); }
+
+.repasse-confirm { padding: 12px; gap: 10px; }
+.repasse-confirm-text {
+  font-family: var(--font-body); font-size: 13px; color: var(--text-primary);
+  padding: 0 2px;
+}
+.repasse-confirm-actions { display: flex; gap: 8px; }
+.repasse-confirm-actions button {
+  flex: 1; border: none; border-radius: 8px; padding: 8px; font-family: var(--font-body);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.repasse-confirm-cancel { background: var(--page-bg); color: var(--text-primary); }
+.repasse-confirm-ok { background: var(--kanban-yellow); color: #16181D; }
+.repasse-confirm-entregar .repasse-confirm-ok { background: var(--danger); color: #fff; }
+
+/* ===== Painel de Avisos ===== */
+.avisos-novo {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.avisos-novo textarea {
+  width: 100%; resize: vertical; min-height: 60px;
+  font-family: var(--font-body); font-size: 13px; color: var(--text-primary);
+  background: var(--page-bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+}
+.avisos-novo button {
+  align-self: flex-end; border: none; background: var(--accent); color: #fff;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
+  padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-apple), opacity var(--dur-fast) var(--ease-apple);
+}
+.avisos-novo button:active { transform: scale(0.95); }
+.avisos-novo button:disabled { opacity: 0.6; cursor: default; }
+
+.aviso-item {
+  position: relative; padding: 12px; border-radius: 12px; cursor: default;
+}
+.aviso-item:hover { background: var(--border); }
+.aviso-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.aviso-item-autor { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+.aviso-item-tempo { font-size: 11px; color: var(--text-muted); }
+.aviso-item-texto { font-size: 13px; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap; padding-right: 18px; }
+.aviso-item-excluir {
+  position: absolute; top: 10px; right: 10px; border: none; background: transparent;
+  color: var(--text-muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px;
+}
+.aviso-item-excluir:hover { color: var(--danger); }
+
+/* ===== Pill "Coordenação" (ao lado de "Quadro de Tarefas") ===== */
+.coordenacao-pill-wrap:empty { display: none; }
+.coordenacao-pill {
+  display: flex; align-items: center; gap: 8px;
+  border: none; background: #14151A; color: #fff; border-radius: 999px;
+  padding: 6px 14px 6px 6px; cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  transition: transform var(--dur-fast) var(--ease-apple);
+}
+.coordenacao-pill:active { transform: scale(0.96); }
+.coordenacao-pill-play {
+  width: 24px; height: 24px; border-radius: 50%; background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.coordenacao-pill-play svg { width: 11px; height: 11px; }
+.coordenacao-pill-timer { color: #B8BAC4; font-variant-numeric: tabular-nums; }
+
+.pasta-copy-link-pill {
+  display: flex; align-items: center; gap: 6px; margin-top: 8px;
+  border: 1px solid var(--border); background: var(--page-bg); color: var(--text-secondary);
+  font-family: inherit; font-size: 11.5px; font-weight: 600;
+  padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.pasta-copy-link-pill svg { width: 12px; height: 12px; flex-shrink: 0; }
+.pasta-copy-link-pill:hover { background: var(--border); color: var(--text-primary); }
+.pasta-copy-link-pill[hidden] { display: none; }
+
+/* ===== Página "Histórico" (plays de hoje + atividades do Drive) =====
+   Cards com silhueta orgânica/esculpida (ref. visual passada por
+   Cláudio em 2026-07-29 — dashboard estilo HubSpot) — NUNCA um
+   retângulo com border-radius. O recorte de verdade é feito por
+   clip-path: url(#cardOrganicoShape), um <clipPath> só (ver index.html,
+   logo depois do <body>) com clipPathUnits="objectBoundingBox" — as
+   coordenadas do path são frações (0 a 1) do próprio card, então o
+   MESMO recorte se adapta sozinho a qualquer largura/altura de
+   conteúdo, sem precisar de um path fixo em pixels por card. A forma
+   tem os 4 cantos com raios DIFERENTES entre si (não é só
+   border-radius uniforme), uma leve saliência pra fora no meio da
+   borda de baixo, e uma leve entrada pra dentro no meio da borda da
+   esquerda — dá a sensação de peça moldada, não de retângulo
+   arredondado. */
+.historico-secao { flex-shrink: 0; margin-bottom: 28px; }
+.historico-secao:last-child { margin-bottom: 8px; }
+.historico-secao-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.historico-secao-head .historico-secao-titulo { margin-bottom: 0; }
+.historico-secao-titulo {
+  font-family: var(--font-display); font-size: 18px; font-weight: 600;
+  margin-bottom: 14px; color: var(--text-primary);
+}
+
+.historico-filtro { display: flex; align-items: center; gap: 4px; background: var(--page-bg); border-radius: 999px; padding: 3px; flex-shrink: 0; }
+.historico-filtro-btn {
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+  background: transparent; border: none; border-radius: 999px; padding: 7px 14px; cursor: pointer;
+  white-space: nowrap; transition: background 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
+}
+.historico-filtro-btn:hover { color: var(--text-primary); }
+.historico-filtro-btn.active { background: #fff; color: var(--text-primary); box-shadow: 0 1px 4px rgba(20,20,30,0.10); }
+
+/* Carrossel com setas (Histórico/Atividades recentes) — em vez de
+   arrastar o scroll pro lado, os cards ficam num trilho que rola por
+   baixo dos panos (scroll-behavior:smooth, mas sem barra de scroll
+   visível) e as setas nas pontas avançam/voltam uma "página" de cards
+   por vez. Ver montarCarrosselSetas em js/config.js. */
+.historico-carrossel { display: flex; align-items: center; gap: 6px; }
+.historico-carrossel-seta {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+  background: #fff; border: 1px solid var(--border); color: var(--text-primary);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(20,20,30,0.08);
+  transition: background 0.15s var(--ease-apple), opacity 0.15s var(--ease-apple);
+}
+.historico-carrossel-seta svg { width: 16px; height: 16px; }
+.historico-carrossel-seta.prev svg { transform: rotate(180deg); }
+.historico-carrossel-seta:hover:not(:disabled) { background: var(--page-bg); }
+.historico-carrossel-seta:disabled { opacity: 0.3; cursor: default; }
+
+.hoje-list, .atividades-list {
+  display: flex; flex-direction: row; gap: 16px; flex: 1; min-width: 0;
+  overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth;
+  scrollbar-width: none; padding: 6px 2px;
+}
+.hoje-list::-webkit-scrollbar, .atividades-list::-webkit-scrollbar { display: none; }
+
+/* Cards no MESMO formato padrão usado no resto do app (.task-card, ver
+   js/kanban-board.js) — só com largura fixa (pra caber lado a lado no
+   carrossel) e sem o cursor de arrastar (não são arrastáveis aqui). */
+.historico-card, .atividade-card {
+  flex-shrink: 0; width: 258px; cursor: pointer; text-decoration: none; color: inherit; display: block;
+}
+
+.avatar-cliente { color: #fff; font-family: var(--font-display); font-weight: 700; }
+
+.historico-card-hora { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+
+.historico-loading {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 4px; color: var(--text-secondary); font-size: 13px;
+}
+
+/* ===== Aviso rápido (toast) ===== */
+.colmeia-toasts {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+  z-index: 999; display: flex; flex-direction: column; gap: 8px; align-items: center;
+  pointer-events: none;
+}
+.colmeia-toast {
+  background: #16181D; color: #fff; font-size: 13px; font-weight: 600;
+  padding: 11px 20px; border-radius: 999px; box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+  opacity: 0; transform: translateY(10px) scale(0.97);
+  transition: opacity 0.2s var(--ease-apple), transform 0.2s var(--ease-apple);
+  pointer-events: auto; max-width: 380px; text-align: center;
+}
+.colmeia-toast.show { opacity: 1; transform: translateY(0) scale(1); }
+.colmeia-toast.erro { background: #E03131; }
+
+/* ===== Subtarefa de "Alteração": contexto da peça original =====
+   Aba "Tarefa original" (mostra QUAL peça a alteração está pedindo pra
+   mudar) e a etiqueta de origem das bolhas na "Linha do tempo" do chat.
+   Ver ehTarefaDeAlteracao / abrirThreadLinhaDoTempo no js. */
+.original-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; }
+.original-content[hidden] { display: none; }
+
+.original-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 6px 0 14px;
+}
+.original-meta-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  background: var(--page-bg); border-radius: 999px; padding: 4px 10px;
+}
+.original-meta-item.entregue { background: #E8F8F5; color: #1A6B55; }
+[data-theme="dark"] .original-meta-item.entregue { background: rgba(26,107,85,0.28); color: #8FE0D0; }
+
+/* Etiqueta de "de onde veio" esse comentário, na linha do tempo unificada. */
+.comment-origem {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+  color: #7A5C00; background: #FFF4CC;
+  border-radius: 999px; padding: 2px 7px; margin-left: 6px;
+  white-space: nowrap;
+}
+[data-theme="dark"] .comment-origem { background: rgba(255,214,102,0.22); color: #FFD666; }
+
+/* Card de "Alteração" no quadro: etiqueta própria + o nome da peça que a
+   alteração está pedindo pra mudar (ver cardHTML / nomeDaPecaOriginalRapido). */
+.badge-alteracao { background: #FDECD2; color: #8A4B00; }
+[data-theme="dark"] .badge-alteracao { background: rgba(253,236,210,0.20); color: #F0A860; }
+.task-card.task-alteracao { border-left: 3px solid #E8930C; }
+.card-alteracao-de {
+  font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+  margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Anexo que veio da tarefa original, dentro de uma alteração. */
+.attach-origem {
+  font-size: 10px; font-weight: 700; color: #8A4B00; background: #FDECD2;
+  border-radius: 999px; padding: 1px 6px; margin-left: 4px; white-space: nowrap;
+}
+[data-theme="dark"] .attach-origem { background: rgba(253,236,210,0.20); color: #F0A860; }
+
+/* Resumo por IA do que o cliente pediu pra mudar, no topo da aba
+   "Tarefa original" de uma subtarefa de alteração (ver resumirAlteracao). */
+.alteracao-resumo { margin-bottom: 16px; }
+.alteracao-resumo-box {
+  background: #FFF8E7; border: 1px solid #F5DFA8; border-radius: 12px;
+  padding: 14px 16px;
+}
+[data-theme="dark"] .alteracao-resumo-box { background: rgba(245,223,168,0.10); border-color: rgba(245,223,168,0.28); }
+.alteracao-resumo-box.vazio { font-size: 13px; color: var(--text-secondary); font-style: italic; }
+.alteracao-resumo-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.alteracao-resumo-titulo { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #8A4B00; }
+[data-theme="dark"] .alteracao-resumo-titulo { color: #F0A860; }
+.alteracao-resumo-quem { font-size: 11.5px; color: var(--text-muted); }
+.alteracao-resumo-lista { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.alteracao-resumo-lista li { font-size: 13.5px; line-height: 1.45; color: var(--text-primary); }
+.alteracao-resumo-obs { font-size: 12.5px; color: var(--text-secondary); margin: 8px 0 0; font-style: italic; }
+.alteracao-resumo-rodape { font-size: 11px; color: var(--text-muted); margin: 10px 0 0; }
+
+/* ===== Painel de diagnóstico (Ctrl + Shift + D) =====
+   Lista os últimos erros registrados no navegador, pra copiar e relatar. */
+.diagnostico-overlay {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(10,10,20,0.45);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.diagnostico-caixa {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 18px; box-shadow: var(--shadow-hover);
+  width: min(760px, 100%); max-height: 80vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.diagnostico-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.diagnostico-head h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+.diagnostico-head-acoes { display: flex; align-items: center; gap: 8px; }
+.diagnostico-head-acoes button {
+  border: 1px solid var(--border); background: var(--page-bg); color: var(--text-primary);
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  padding: 6px 12px; border-radius: 999px; cursor: pointer;
+}
+.diagnostico-head-acoes button:hover { border-color: var(--text-muted); }
+.diagnostico-fechar { padding: 6px 10px !important; }
+.diagnostico-dica { font-size: 12px; color: var(--text-muted); padding: 12px 20px 0; }
+.diagnostico-corpo { padding: 12px 20px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.diagnostico-item {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  background: var(--page-bg); border-radius: 10px; padding: 9px 12px;
+}
+.diagnostico-hora { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.diagnostico-tipo {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+  border-radius: 999px; padding: 2px 7px; white-space: nowrap;
+  background: #FFF4CC; color: #7A5C00;
+}
+.diagnostico-tipo.quebrou { background: #FBEAF0; color: #993556; }
+.diagnostico-texto { font-size: 12.5px; color: var(--text-primary); flex: 1 1 100%; word-break: break-word; }

@@ -106,9 +106,9 @@ function avatarAtendimentoHTML(nome, sizeClass) {
   const foto = resolverFotoManual(nome) || fotoDoAtendimento(nome) || fotoDoDesigner(nome);
   registrarNomeVisto(nome, foto);
   if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nome}" alt="${nome}" title="${nome}" onerror="handleAvatarImgError(this)">`;
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${escaparHTML(nome)}" alt="${escaparHTML(nome)}" title="${escaparHTML(nome)}" onerror="handleAvatarImgError(this)">`;
   }
-  return `<div class="avatar ${sizeClass || ""}" title="${nome}">${initials(nome)}</div>`;
+  return `<div class="avatar ${sizeClass || ""}" title="${escaparHTML(nome)}">${initials(nome)}</div>`;
 }
 
 /**
@@ -166,9 +166,9 @@ function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
   const foto = resolverFotoManual(nomeDesigner) || fotoDoDesigner(nomeDesigner) || avatarUrlDireto;
   registrarNomeVisto(nomeDesigner, foto);
   if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${nomeDesigner}" alt="${nomeDesigner}" title="${nomeDesigner}" onerror="handleAvatarImgError(this)">`;
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${escaparHTML(nomeDesigner)}" alt="${escaparHTML(nomeDesigner)}" title="${escaparHTML(nomeDesigner)}" onerror="handleAvatarImgError(this)">`;
   }
-  return `<div class="avatar ${sizeClass || ""}" title="${nomeDesigner}">${initials(nomeDesigner)}</div>`;
+  return `<div class="avatar ${sizeClass || ""}" title="${escaparHTML(nomeDesigner)}">${initials(nomeDesigner)}</div>`;
 }
 
 // Frases divertidas do tema colmeia, mostradas em rodízio na tela de
@@ -237,6 +237,9 @@ function mapearTarefaDoBackend(t) {
     lastActivityAt: t.lastActivityAt || null,
     createdAt: t.createdAt || null,
     assignee: t.assignee,
+    // ID de verdade de quem está com a tarefa — usado por ehMinhaTarefa pra
+    // decidir "essa tarefa é minha?" sem depender de nome parecido.
+    assigneeId: t.assigneeId || null,
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
     timerSeconds: t.workedSeconds || 0,
     running: !!t.isRunning,
@@ -248,7 +251,6 @@ function mapearTarefaDoBackend(t) {
     // dá pra calcular meta nenhuma).
     tempoMedioMinutos: t.tempoMedioMinutos || 0,
     estimatePct: calcularEstimatePct(t.workedSeconds || 0, t.tempoMedioMinutos || 0),
-    hasChange: false,
   };
 }
 
@@ -260,6 +262,75 @@ function calcularEstimatePct(timerSeconds, tempoMedioMinutos) {
   if (!tempoMedioMinutos) return 0;
   const metaSegundos = tempoMedioMinutos * 60;
   return Math.max(0, Math.min(100, Math.round((timerSeconds / metaSegundos) * 100)));
+}
+
+/**
+ * "Assinatura" do que está desenhado no quadro: junta, de cada tarefa, só
+ * os campos que o desenho do card realmente usa. Se a assinatura não
+ * mudou de uma atualização automática pra outra, não tem nada novo pra
+ * mostrar — e redesenhar seria só piscar a tela à toa.
+ *
+ * Não inclui cronômetro nem barra de progresso de propósito: eles mudam a
+ * cada segundo e já são atualizados direto no lugar, sem redesenho.
+ */
+let _ultimaAssinaturaQuadro = null;
+
+function assinaturaDoQuadro(lista) {
+  return lista.map(t => [
+    t.id, t.status, t.priority, t.title, t.client, t.type,
+    t.dueISO, t.assignee, t.running ? 1 : 0,
+  ].join("~")).join("|");
+}
+
+// ===== Foto do quadro guardada no navegador (abertura instantânea) =====
+// O Apps Script demora alguns segundos pra "acordar", e nesse tempo o
+// Colmeia só mostrava a tela da abelhinha ("Preparando o melzinho..."):
+// era a maior espera do app. Agora a última resposta boa do backend fica
+// guardada aqui no navegador e é desenhada NA HORA que a pessoa entra,
+// enquanto a versão de verdade chega por trás e substitui.
+// Guarda o formato CRU que veio do backend (não o já mapeado), pra
+// restaurar passando pelo mesmo mapearTarefaDoBackend de sempre.
+const SNAPSHOT_QUADRO_KEY = "colmeia_snapshot_quadro_v1";
+const SNAPSHOT_QUADRO_VALIDADE_MS = 24 * 60 * 60 * 1000; // quadro de dias atrás não ajuda ninguém
+
+function salvarSnapshotDoQuadro(tarefasCruas) {
+  if (!DESIGNER_LOGADO || !Array.isArray(tarefasCruas) || tarefasCruas.length === 0) return;
+  try {
+    localStorage.setItem(SNAPSHOT_QUADRO_KEY, JSON.stringify({
+      designer: DESIGNER_LOGADO,
+      quando: Date.now(),
+      tarefas: tarefasCruas,
+    }));
+  } catch (err) {
+    // Espaço do navegador cheio (ou aba privada): não é problema nenhum —
+    // sem a foto guardada, o Colmeia só volta a abrir com a abelhinha.
+    // Limpa qualquer sobra pela metade pra não restaurar lixo depois.
+    try { localStorage.removeItem(SNAPSHOT_QUADRO_KEY); } catch (e) { /* sem problema */ }
+  }
+}
+
+function restaurarSnapshotDoQuadro() {
+  if (!DESIGNER_LOGADO) return false;
+  let salvo = null;
+  try { salvo = JSON.parse(localStorage.getItem(SNAPSHOT_QUADRO_KEY) || "null"); }
+  catch (err) { return false; }
+  if (!salvo || !Array.isArray(salvo.tarefas) || salvo.tarefas.length === 0) return false;
+  // Só aproveita a foto se for da MESMA pessoa (o computador pode ser
+  // compartilhado) e se ainda estiver recente.
+  if (!nomesCorrespondem(salvo.designer, DESIGNER_LOGADO)) return false;
+  if (!salvo.quando || (Date.now() - salvo.quando) > SNAPSHOT_QUADRO_VALIDADE_MS) return false;
+
+  const todasMapeadas = salvo.tarefas.map(mapearTarefaDoBackend);
+  // NUNCA restaura tarefa como "rodando": o estado do cronômetro é de
+  // agora, não de quando a foto foi tirada. Sem isso, a pílula amarela
+  // podia aparecer dizendo que algo está rodando (e o cronômetro começar a
+  // contar em cima de um número velho) durante os segundos até a resposta
+  // de verdade chegar.
+  todasMapeadas.forEach(t => { t.running = false; });
+  tasksTodas = todasMapeadas;
+  tasks = todasMapeadas.filter(t => !t.isOutraEtapa);
+  carregandoTarefas = false;
+  return true;
 }
 
 async function carregarTarefasReais() {
@@ -282,6 +353,7 @@ async function carregarTarefasReais() {
       render();
       return;
     }
+    salvarSnapshotDoQuadro(data.tarefas); // pra próxima abertura ser instantânea
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
     tasksTodas = todasMapeadas;
     tasks = todasMapeadas.filter(t => !t.isOutraEtapa);
@@ -315,6 +387,7 @@ async function atualizarKanbanEmBackground() {
     const data = await res.json();
     if (!data.ok) return;
 
+    salvarSnapshotDoQuadro(data.tarefas); // mantém a foto do quadro sempre fresca
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
 
     // Preserva o cache da "Sequência de responsáveis" (usado na aba de
@@ -345,19 +418,28 @@ async function atualizarKanbanEmBackground() {
         nova._temSequencia = antiga._temSequencia;
         if (antiga._repasseEntregue) nova._repasseEntregue = antiga._repasseEntregue;
       }
-      // O backend não devolve "entregue" (é um estado só de sessão, marcado
-      // na hora que a pessoa clica em concluir — ver detalhe-modal.js). Sem
-      // preservar aqui, toda atualização automática do quadro recriava a
-      // tarefa do zero sem esse flag, e o botão de reabrir sumia sozinho
-      // (voltava a mostrar "concluir" como se nunca tivesse sido entregue).
-      if (antiga && antiga.entregue) nova.entregue = true;
+      // "Entregue" é marcado na hora do clique, antes do Runrun.it
+      // confirmar (ver detalhe-modal.js). Preservamos esse estado local por
+      // uns segundos pra a atualização automática não desfazer o clique na
+      // tela enquanto o Runrun.it ainda não processou — mesma ideia da
+      // proteção do play/pausa logo abaixo.
+      // IMPORTANTE: é só uma JANELA de tempo, não pra sempre. Antes isso
+      // ficava grudado na tarefa eternamente, então se alguém reabrisse ela
+      // pelo Runrun.it o Colmeia continuava mostrando o ícone de "reabrir"
+      // (achando que estava entregue) até a pessoa dar F5.
+      const RECEM_ENTREGUE_MS = 15000;
+      if (antiga && antiga.entregue && antiga._entregueEm
+        && (Date.now() - antiga._entregueEm) < RECEM_ENTREGUE_MS) {
+        nova.entregue = true;
+        nova._entregueEm = antiga._entregueEm;
+      }
       if (antiga && DESIGNER_LOGADO
-        && !nomesCorrespondem(antiga.assignee, DESIGNER_LOGADO)
-        && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)) {
+        && !ehMinhaTarefa(antiga)
+        && ehMinhaTarefa(nova)) {
         recebidasAgora.push(nova);
       }
       if (DESIGNER_LOGADO && nova.status === "ajustes"
-        && nomesCorrespondem(nova.assignee, DESIGNER_LOGADO)
+        && ehMinhaTarefa(nova)
         && (!antiga || antiga.status !== "ajustes")) {
         emAjustesAgora.push(nova);
       }
@@ -444,6 +526,11 @@ async function atualizarKanbanEmBackground() {
         // objeto novo sem comentários, e quem estivesse com o card
         // aberto via eles "sumirem" até recarregar de novo.
         if (antiga.comments !== undefined) nova.comments = antiga.comments;
+        // Mesma ideia pro briefing já organizado pela IA: sem preservar, a
+        // atualização automática apagava ele a cada 60s e o Colmeia pedia
+        // tudo de novo pro servidor na próxima abertura do card, mesmo já
+        // tendo o resultado pronto.
+        if (antiga.briefingHTML !== undefined) nova.briefingHTML = antiga.briefingHTML;
         // Mesmo problema do timerSeconds acima, mas pro "está rodando":
         // o Runrun.it às vezes demora alguns segundos pra confirmar o
         // play/pause (mesmo já tendo aceitado a chamada) — sem essa
@@ -486,7 +573,19 @@ async function atualizarKanbanEmBackground() {
       }
     }
 
-    render();
+    // Só redesenha o quadro se algo que APARECE nele mudou de verdade.
+    // Antes, a cada 60 segundos o quadro inteiro era reconstruído e todos
+    // os cliques religados mesmo sem nenhuma mudança — é o que causava
+    // aquelas "piscadas" e menus que fechavam sozinhos na cara da pessoa.
+    // O cronômetro e a barrinha de progresso não entram nessa comparação
+    // de propósito: eles mudam a cada segundo e já são atualizados
+    // direto no lugar, sem redesenhar o quadro (ver o setInterval de 1s
+    // em js/detalhe-modal.js).
+    const assinaturaAgora = assinaturaDoQuadro(tasks);
+    if (assinaturaAgora !== _ultimaAssinaturaQuadro) {
+      _ultimaAssinaturaQuadro = assinaturaAgora;
+      render();
+    }
     updateNowPlaying();
     atualizarBadgeRepasse();
     verificarNotificacoes();

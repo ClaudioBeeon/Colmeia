@@ -1,0 +1,612 @@
+/* -------------------------------------------------------------------
+   Base do app: cores e variáveis, reset, barra lateral, topbar,
+   pílula amarela e a ilha de avisos rápidos.
+
+   Faz parte do style.css, que passou de 3.000 linhas e foi dividido por
+   área. As tags <link> no index.html seguem EXATAMENTE esta ordem, e isso
+   é obrigatório: em CSS, quando duas regras têm o mesmo peso, vence a que
+   foi escrita depois. Trocar a ordem dos arquivos muda a aparência do app.
+   ------------------------------------------------------------------- */
+
+:root {
+  /* Sistema de animação "estilo Apple" — rápido, leve, sempre a mesma
+     curva (o "ease-out" que acelera rápido e desacelera suave no
+     final, usado em quase toda micro-interação do iOS/tvOS/macOS) e
+     durações curtas (150–320ms). Todo o site usa essas mesmas
+     variáveis pra ter uma sensação consistente em vez de cada elemento
+     animar do seu jeito. */
+  --ease-apple: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-apple-spring: cubic-bezier(0.16, 1, 0.3, 1); /* entradas com uma leve "molinha" no final, tipo folha/sheet do iOS */
+  --dur-fast: 150ms;   /* hover, toggle, troca de cor/ícone */
+  --dur-base: 220ms;   /* abrir menu, trocar de estado */
+  --dur-slow: 320ms;   /* pop-ups, painéis, modais maiores */
+
+  --page-bg: #F3F4F6;
+  --sidebar-bg: #FFFFFF;
+  --card-bg: #FFFFFF;
+  --border: #ECEDF2;
+  --text-primary: #16181D;
+  --text-secondary: #6E7180;
+  --text-muted: #9A9DAE;
+
+  --accent: #0000FB;
+  --accent-soft: #E6E6FE;
+  --danger: #E5484D;
+  --danger-soft: #FDECEC;
+  --warning: #F5A623;
+  --warning-soft: #FEF3E0;
+  --kanban-yellow: #FFC700;
+  --kanban-yellow-text: #8A6D00;
+  --success: #22B07D;
+  --purple: #8B5CF6;
+  --purple-soft: #F1EBFE;
+
+  --radius-lg: 16px;
+  --radius-md: 12px;
+
+  --shadow-card: 0 1px 3px rgba(20,20,30,0.07), 0 4px 14px rgba(20,20,30,0.06);
+  --shadow-hover: 0 8px 24px rgba(20,20,30,0.12);
+  --shadow-sidebar: 0 4px 20px rgba(20,20,30,0.08);
+
+  --font-display: 'Questrial', sans-serif;
+  --font-body: 'Questrial', sans-serif;
+}
+
+[data-theme="dark"] {
+  --page-bg: #16121F;
+  --sidebar-bg: rgba(30, 26, 46, 0.55);
+  --card-bg: rgba(255, 255, 255, 0.045);
+  --border: rgba(255, 255, 255, 0.09);
+  --text-primary: #F5F3FA;
+  --text-secondary: #ADA8C2;
+  --text-muted: #7C7793;
+
+  --accent: #5C5CFF;
+  --accent-soft: rgba(92, 92, 255, 0.18);
+  --danger: #FF8A8D;
+  --danger-soft: rgba(255, 138, 141, 0.14);
+  --warning: #FFC069;
+  --warning-soft: rgba(255, 192, 105, 0.14);
+  --kanban-yellow: #FFC700;
+  --kanban-yellow-text: #E8B84A;
+  --success: #5FE0AE;
+  --purple: #C4B5FD;
+  --purple-soft: rgba(196, 181, 253, 0.16);
+}
+
+[data-theme="dark"] body {
+  background:
+    radial-gradient(ellipse 900px 500px at 20% -5%, rgba(124, 58, 237, 0.35), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 10%, rgba(79, 95, 247, 0.25), transparent 55%),
+    #0F0C17;
+}
+
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] .task-card {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body { background: var(--page-bg); transition: background 0.2s var(--ease-apple); overflow: hidden; }
+
+.page {
+  display: flex;
+  gap: 18px;
+  height: 100vh;
+  padding: 22px;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  width: 64px;
+  background: transparent;
+  border: none;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 18px 10px;
+  height: 100%;
+  box-shadow: none;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.22s cubic-bezier(.4,0,.2,1);
+}
+
+.sidebar:hover {
+  width: 248px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sidebar);
+}
+
+.sidebar-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+
+.sidebar-profile-link {
+  margin-top: auto;
+  cursor: pointer;
+}
+
+.theme-switch {
+  display: flex;
+  gap: 2px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+
+.theme-switch button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.theme-switch button svg { width: 15px; height: 15px; }
+
+.theme-switch button.on {
+  background: var(--accent);
+  color: #fff;
+}
+
+.nav-ic {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s var(--ease-apple);
+}
+
+.nav-icon-circle {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--page-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  transition: background 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
+}
+
+.nav-badge {
+  position: absolute; top: -3px; right: -3px;
+  min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--danger); color: #fff;
+  font-size: 10px; font-weight: 700; font-family: var(--font-body);
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--sidebar-bg);
+}
+.nav-badge[hidden] { display: none; }
+
+.nav-icon-circle svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+.nav-ic:hover .nav-icon-circle { background: var(--border); color: var(--text-primary); }
+
+.nav-ic { outline: none; }
+.nav-ic:focus-visible .nav-icon-circle { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--accent); }
+
+.nav-ic.active .nav-icon-circle { background: var(--kanban-yellow); color: #16181D; }
+
+.nav-icon-circle.avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nav-label {
+  font-size: 13.5px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-apple);
+}
+
+.sidebar:hover .nav-label { opacity: 1; transition-delay: 0.08s; }
+
+.nav-ic:hover { color: var(--text-primary); }
+
+/* ===== MAIN ===== */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+.app-page { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+
+.app-page[hidden] { display: none; }
+
+.placeholder-page { align-items: center; justify-content: center; }
+
+.placeholder-box { text-align: center; color: var(--text-muted); }
+.placeholder-box span { font-size: 34px; display: block; margin-bottom: 10px; }
+.placeholder-box p { font-size: 14px; font-weight: 500; }
+
+.clients-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px; padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.client-card {
+  background: var(--card-bg); border-radius: 14px; padding: 18px;
+  box-shadow: var(--shadow-card);
+}
+
+.client-card-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.client-card-count { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px; }
+
+.client-card-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+  flex-shrink: 0;
+}
+
+.topbar-dark {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 18px;
+  background: #14151A;
+  border-radius: 999px;
+  padding: 10px 12px 10px 26px;
+}
+[data-theme="dark"] .topbar-dark { background: #0A0A0D; }
+
+.topbar-dark .page-title {
+  font-family: var(--font-display); font-size: 26px; font-weight: 400; color: #fff;
+  white-space: nowrap; flex-shrink: 0;
+}
+.page-subtitle { display: none; }
+
+.date-pill {
+  display: flex; align-items: center; gap: 8px;
+  background: #24252C; color: #fff;
+  border-radius: 999px; padding: 9px 16px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+  white-space: nowrap; flex-shrink: 0;
+}
+.date-pill svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+/* Envelope do "carrossel" vertical da pílula — a pílula normal (tarefa
+   rodando/ociosa) e a notificação (#pillNotif) ficam empilhadas aqui,
+   uma cobrindo a outra; a classe .pill-notif-ativa (ver mostrarNotifNaPill
+   em js/config.js) desliza as duas ao mesmo tempo: a normal sobe e some,
+   a notificação sobe e aparece — e tirar a classe faz o caminho contrário
+   (desce), sem precisar de nenhuma animação separada pra cada sentido. */
+.now-playing-wrap {
+  flex: 1; min-width: 0; height: 40px; position: relative; overflow: hidden; border-radius: 999px;
+}
+/* Os três "estados" (tarefa rodando, ociosa, notificação) ficam
+   empilhados exatamente um por cima do outro (position: absolute,
+   preenchendo o envelope inteiro) — só assim dá pra deslizar um saindo
+   por cima enquanto o outro entra por baixo, no mesmo espaço. */
+.now-playing-wrap .now-playing,
+.now-playing-wrap .now-playing-idle {
+  position: absolute; inset: 0; width: 100%; margin: 0;
+  transition: transform var(--dur-slow) var(--ease-apple-spring), background 0.15s var(--ease-apple);
+}
+.now-playing-wrap.pill-notif-ativa .now-playing,
+.now-playing-wrap.pill-notif-ativa .now-playing-idle {
+  transform: translateY(-100%);
+}
+
+/* Enquanto o selo de reunião próxima está visível (ver .reuniao-badge
+   abaixo), reserva espaço à direita pra ele — sem isso o conteúdo
+   centralizado de cada estado (tarefa rodando/ociosa/notificação)
+   ficaria "por baixo" do selo ou descentralizado de verdade em relação
+   ao espaço que sobra. */
+.now-playing-wrap.tem-reuniao-proxima .now-playing,
+.now-playing-wrap.tem-reuniao-proxima .now-playing-idle,
+.now-playing-wrap.tem-reuniao-proxima .pill-notif {
+  right: 108px;
+}
+
+.now-playing {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--kanban-yellow); border: none; border-radius: 999px;
+  padding: 10px 20px; cursor: pointer;
+  font-family: var(--font-body);
+  min-width: 0; justify-content: center;
+}
+.now-playing[hidden] { display: none; }
+.now-playing:hover { background: #E0A800; }
+
+.now-playing-idle {
+  min-width: 0; text-align: center;
+  background: var(--kanban-yellow); color: #16181D;
+  border-radius: 999px; padding: 12px 20px;
+  font-size: 13.5px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Sem isso, o "display: flex" logo acima ganha do [hidden] nativo do
+   navegador (mesma especificidade, e o `hidden` sozinho não tem
+   `!important`) — updateNowPlaying() marcava idle.hidden = true com uma
+   tarefa rodando, mas a mensagem "Nenhuma tarefa..." continuava visível
+   por cima da pílula amarela (as duas são position:absolute no mesmo
+   lugar — ver .now-playing-wrap .now-playing-idle acima —, e o idle vem
+   depois no HTML, então pintava por cima mesmo "escondido"). */
+.now-playing-idle[hidden] { display: none; }
+
+/* Notificação "ambiente" dentro da própria pílula (comentário, aviso,
+   upload no Drive, tarefa recebida via repasse) — só usada quando não
+   tem nenhuma aba de tarefa aberta (o painel de detalhe cobre a pílula
+   quando aberto; nesse caso a ilha flutuante do topo é usada no lugar,
+   ver mostrarIlha). */
+.pill-notif {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  background: var(--kanban-yellow); border-radius: 999px; padding: 10px 20px;
+  transform: translateY(100%);
+  transition: transform var(--dur-slow) var(--ease-apple-spring);
+}
+.pill-notif[hidden] { display: none; }
+.pill-notif.clicavel { cursor: pointer; }
+.now-playing-wrap.pill-notif-ativa .pill-notif { transform: translateY(0); }
+
+.pill-notif-conteudo {
+  display: flex; align-items: center; gap: 9px; min-width: 0;
+  animation: pillNotifPop 0.3s var(--ease-apple-spring);
+}
+@keyframes pillNotifPop {
+  from { transform: translateY(55%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.pill-notif-icone {
+  width: 22px; height: 22px; border-radius: 50%; background: rgba(22,24,33,0.14);
+  display: flex; align-items: center; justify-content: center; color: #16181D; flex-shrink: 0;
+}
+.pill-notif-icone svg { width: 11px; height: 11px; }
+.pill-notif-texto { font-size: 13px; font-weight: 700; color: #16181D; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Selo fixo de reunião próxima — fica no canto inferior direito da
+   pílula amarela, sempre visível enquanto falta até 1h pra reunião
+   (não participa do carrossel sobe/desce das outras pílulas, por isso
+   fica FORA da pilha deslizante, direto dentro de .now-playing-wrap,
+   com z-index acima de tudo). O texto muda em degraus (1h, 45m, 30m,
+   15m, 10m, 5m, 1m, agora — nunca conta minuto a minuto), ver
+   atualizarSeloReuniao em js/notificacoes-avisos.js. */
+.reuniao-badge {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%); z-index: 5;
+  display: flex; align-items: center; gap: 5px;
+  background: #16181D; color: var(--kanban-yellow);
+  border-radius: 999px; padding: 5px 10px 5px 6px;
+  font-family: var(--font-body); font-size: 11px; font-weight: 700;
+  white-space: nowrap;
+}
+.reuniao-badge[hidden] { display: none; }
+.reuniao-badge.clicavel { cursor: pointer; }
+.reuniao-badge-icone {
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center;
+}
+.reuniao-badge-icone svg { width: 10px; height: 10px; }
+
+.now-playing-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #16181D;
+  animation: nowPlayingPulse 1.4s ease-in-out infinite; flex-shrink: 0;
+}
+
+@keyframes nowPlayingPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.now-playing-title { font-size: 13px; font-weight: 700; color: #16181D; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.now-playing-time { font-size: 12.5px; font-weight: 700; color: #16181D; font-variant-numeric: tabular-nums; opacity: 0.75; }
+
+/* Cliente + botão de pausar: escondidos por padrão (pílula compacta,
+   só título + tempo), só aparecem passando o mouse por cima — igual a
+   uma "Dynamic Island" que expande no toque/hover em vez de já vir
+   cheia de informação o tempo todo. */
+.now-playing-extra {
+  display: flex; align-items: center; gap: 8px;
+  max-width: 0; opacity: 0; overflow: hidden;
+  transition: max-width 0.25s var(--ease-apple), opacity 0.15s var(--ease-apple);
+  flex-shrink: 0;
+}
+.now-playing:hover .now-playing-extra { max-width: 220px; opacity: 1; }
+
+.now-playing-client {
+  font-size: 11.5px; font-weight: 600; color: #16181D; opacity: 0.72;
+  white-space: nowrap; padding: 4px 10px; background: rgba(22,24,33,0.08); border-radius: 999px;
+}
+
+.now-playing-pause {
+  width: 26px; height: 26px; border-radius: 50%; background: rgba(22,24,33,0.12);
+  display: flex; align-items: center; justify-content: center; color: #16181D; flex-shrink: 0;
+  transition: background 0.15s var(--ease-apple), transform 0.15s var(--ease-apple);
+}
+.now-playing-pause:hover { background: rgba(22,24,33,0.22); transform: scale(1.08); }
+.now-playing-pause svg { width: 11px; height: 11px; }
+
+/* ===== Ilha do topbar (avisos rápidos) ===== */
+.topbar-ilha {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(430px, calc(100vw - 40px));
+  background: #14151A;
+  color: #fff;
+  border-radius: 999px;
+  padding: 9px 14px 9px 9px;
+  box-shadow: 0 14px 32px rgba(10,10,15,0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -14px) scale(0.94);
+  transition: opacity 0.2s var(--ease-apple), transform 0.28s var(--ease-apple-spring);
+}
+[data-theme="dark"] .topbar-ilha { background: #0A0A0D; }
+.topbar-ilha[hidden] { display: none; }
+.topbar-ilha.ilha-entrando { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+.topbar-ilha.ilha-saindo { opacity: 0; transform: translate(-50%, -10px) scale(0.96); }
+.topbar-ilha.clicavel { cursor: pointer; }
+
+.ilha-icone {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--kanban-yellow); color: #16181D;
+}
+.ilha-icone svg { width: 14px; height: 14px; }
+
+.ilha-texto { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.ilha-titulo { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ilha-subtitulo { font-size: 11.5px; opacity: 0.68; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ilha-acoes { display: flex; gap: 6px; margin-left: 6px; flex-shrink: 0; }
+.ilha-acoes button {
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  border: none; border-radius: 999px; padding: 7px 13px; cursor: pointer;
+  background: rgba(255,255,255,0.14); color: #fff;
+  transition: background 0.15s var(--ease-apple);
+  white-space: nowrap;
+}
+.ilha-acoes button:hover { background: rgba(255,255,255,0.24); }
+.ilha-acoes button.ilha-acao-principal { background: var(--kanban-yellow); color: #16181D; }
+.ilha-acoes button.ilha-acao-principal:hover { background: #E0A800; }
+
+.topbar-dark .theme-switch {
+  background: #24252C; border: none; flex-shrink: 0;
+}
+.topbar-dark .theme-switch button { color: #8A8D9A; }
+.topbar-dark .theme-switch button.on { background: var(--kanban-yellow); color: #16181D; }
+
+.topbar-outside { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.icon-btn-circle {
+  width: 46px; height: 46px; border-radius: 50%; border: none;
+  background: #fff; color: #16181D;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; position: relative; flex-shrink: 0;
+}
+.icon-btn-circle svg { width: 18px; height: 18px; }
+.icon-btn-circle.accent { background: var(--kanban-yellow); }
+[data-theme="dark"] .icon-btn-circle { background: #24252C; color: #fff; }
+[data-theme="dark"] .icon-btn-circle.accent { background: var(--kanban-yellow); color: #16181D; }
+
+.page-heading-row {
+  display: flex; align-items: center; justify-content: flex-start; gap: 16px;
+  margin-bottom: 22px; flex-shrink: 0;
+}
+.page-heading-row[hidden] { display: none; }
+.page-heading-row h2 { font-family: var(--font-display); font-size: 32px; font-weight: 400; flex-shrink: 0; }
+
+.coordenacao-pill-wrap { margin-left: 4px; }
+.page-heading-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; margin-left: auto; }
+.page-heading-right .search-box { width: 380px; height: 46px; border-radius: 999px; }
+
+.designer-filter-select {
+  height: 46px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--card-bg); color: var(--text-primary);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  padding: 0 18px; cursor: pointer;
+}
+.designer-filter-select[hidden] { display: none; }
+
+.ver-todas-btn {
+  background: var(--kanban-yellow); color: #16181D; border: none;
+  font-family: var(--font-body); font-size: 13px; font-weight: 700;
+  letter-spacing: 0.02em; border-radius: 999px; padding: 13px 22px;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.ver-todas-btn:hover { background: #E0A800; }
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  height: 40px;
+  padding: 0 14px;
+  color: var(--text-muted);
+  width: 220px;
+}
+
+.search-box svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.search-box input {
+  border: none; outline: none; font-family: var(--font-body); font-size: 14px;
+  width: 100%; color: var(--text-primary); background: transparent;
+}
+
+.view-toggle {
+  display: flex;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+}
+
+.toggle-btn {
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  border: none; background: transparent; color: var(--text-secondary);
+  padding: 8px 14px; border-radius: 8px; cursor: pointer;
+}
+
+.toggle-btn.active { background: var(--text-primary); color: var(--sidebar-bg); }
+
+.user-chip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 12px 4px 4px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card-bg);
+}
+
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
+  color: #fff; font-family: var(--font-display); font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+.avatar-sm { width: 22px; height: 22px; font-size: 9.5px; }
+
+.detail-inner .avatar, .chat-panel .avatar, .rule-modal .avatar {
+  background: var(--kanban-yellow); color: #16181D;
+}
+
+.user-name { font-size: 13.5px; font-weight: 600; }
+

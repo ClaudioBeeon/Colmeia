@@ -8,7 +8,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Questrial&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<!-- O style.css passou de 3.000 linhas e foi dividido por área. A ORDEM
+     abaixo é obrigatória: em CSS, quando duas regras têm o mesmo peso,
+     vence a que foi escrita depois — então trocar a ordem desses arquivos
+     muda a aparência do app. É a mesma ordem em que o conteúdo estava no
+     arquivo único. -->
+<link rel="stylesheet" href="css/01-base.css">
+<link rel="stylesheet" href="css/02-quadro.css">
+<link rel="stylesheet" href="css/03-detalhe.css">
+<link rel="stylesheet" href="css/04-paginas.css">
+<link rel="stylesheet" href="css/05-componentes.css">
 </head>
 <body>
 
@@ -351,6 +360,7 @@
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
 <script src="js/config.js"></script>
+<script src="js/fila-offline.js"></script>
 <script src="js/notificacoes-uploads.js"></script>
 <script src="js/pessoas-fotos.js"></script>
 <script src="js/kanban-polling.js"></script>
@@ -360,6 +370,8 @@
 <script src="js/clientes-hub.js"></script>
 <script src="js/chat-comentarios.js"></script>
 <script src="js/detalhe-modal.js"></script>
+<script src="js/detalhe-cardmae.js"></script>
+<script src="js/detalhe-alteracao.js"></script>
 <script src="js/paginas-designers.js"></script>
 <script src="js/pagina-tipos-runrun.js"></script>
 <script src="js/pagina-repasse.js"></script>

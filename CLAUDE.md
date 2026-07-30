@@ -14,18 +14,49 @@ Se uma sessão futura receber acesso a essa pasta vazia, pedir acesso à pasta c
 
 ## Arquitetura
 
-- `index.html`, `js/*.js` (frontend, separado por assunto em vários arquivos — ver seção
-  "Estrutura do frontend (js/)" abaixo), `style.css` = frontend. Publicado automaticamente
-  no GitHub Pages a cada push.
-- `Código.gs` = backend, roda no Google Apps Script. O nome do arquivo tem que ser exatamente esse
-  (com acento) — é o nome real do arquivo dentro do projeto do Apps Script (confirmado via
-  `clasp clone`); um arquivo local chamado diferente (ex: sem o acento) faria o clasp criar um SEGUNDO
-  arquivo lá dentro, duplicando funções e quebrando tudo. Desde 2026-07-28 o deploy é automático (ver seção
-  "Deploy automático" abaixo) — não é mais preciso colar manualmente no editor do Apps Script.
+- `index.html`, `js/*.js` (separado por assunto — ver "Estrutura do frontend (js/)" abaixo) e
+  `css/*.css` = frontend. Publicado automaticamente no GitHub Pages a cada push.
+  O CSS era um `style.css` único de ~3.200 linhas; em 2026-07-30 virou 5 arquivos por área
+  (`01-base`, `02-quadro`, `03-detalhe`, `04-paginas`, `05-componentes`), carregados por tags
+  `<link>` **nessa ordem exata** — em CSS, quando duas regras têm o mesmo peso, vence a escrita
+  depois, então trocar a ordem muda a aparência. A checagem automática confere isso a cada push.
+- Os arquivos `.gs` na raiz = backend, roda no Google Apps Script. Ver "Estrutura do backend (.gs)"
+  abaixo. `Código.gs` tem que se chamar exatamente assim (com acento) — é o nome real do arquivo
+  dentro do projeto do Apps Script (confirmado via `clasp clone`); um arquivo local chamado diferente
+  (ex: sem o acento) faria o clasp criar um SEGUNDO arquivo lá dentro, duplicando funções e quebrando
+  tudo. Desde 2026-07-28 o deploy é automático (ver seção "Deploy automático" abaixo) — não é mais
+  preciso colar manualmente no editor do Apps Script.
 - Backend integra com API do Runrun.it, Google Drive e Google Sheets (a planilha é o "banco de dados").
 - Projeto irmão "painel-designers-beeon" (outro Apps Script) fornece tempo médio de criação por
   cliente e vínculos de nomes de cliente. URL dele está em `js/config.js` como `PAINEL_BEEON_API_URL`.
 - URL do backend Colmeia está em `js/config.js` como `COLMEIA_API_URL`.
+
+## Estrutura do backend (.gs) — dividido em 2026-07-30
+
+O `Código.gs` era um arquivo único de ~3.000 linhas e foi dividido por assunto em 7 arquivos, **sem
+alterar nenhuma linha de código** (só movendo blocos). Diferente do frontend, aqui **a ordem dos
+arquivos NÃO importa**: o Apps Script avalia todos os `.gs` do projeto antes de atender qualquer
+requisição, e todos compartilham o mesmo espaço de nomes — qualquer função chama qualquer outra sem
+"importar" nada.
+
+- `Código.gs` (~350 linhas) — configuração (chaves, usuários, colunas), as **rotas** (`doGet`/`doPost`/
+  `handleRequest`: quem responde a qual ação do front) e a varredura do quadro compartilhada em cache
+  (`getTarefasColmeia`, `guardarNoCacheEmFatias`, `invalidarCacheDoQuadro`).
+- `RunrunLeitura.gs` (~785 linhas) — tudo que só LÊ do Runrun.it: chamadas base (`runrunFetch`),
+  `transformarTarefaParaColmeia`, buscas do quadro/card mãe/sequência/comentários/anexos/descrição.
+- `RunrunEscrita.gs` (~340 linhas) — tudo que ALTERA algo no Runrun.it: play/pause, comentários,
+  avançar/desfazer sequência, entregar/reabrir, mover etapa, datas, reatribuir, estimativa.
+  Separado de propósito: é onde mora o risco de mexer em dado de verdade do time.
+- `Drive.gs` (~525 linhas) — pastas de card, uploads recentes, atividades do Histórico, backup diário.
+- `Planilha.gs` (~640 linhas) — tudo que lê/grava na planilha (links de clientes, pastas de cards,
+  avisos, clientes ocultos, login, pessoas, prioridades, log de plays). Toda gravação passa por
+  `pegarTravaDaPlanilha`.
+- `IA.gs` (~335 linhas) — Groq/Gemini, frase do dia, briefing da tarefa, resumo da alteração.
+- `Agenda.gs` (~100 linhas) — reuniões de hoje e resposta de convite.
+
+**Ao criar um arquivo `.gs` novo:** é obrigatório liberá-lo no `.claspignore` (que ignora tudo por
+padrão), senão o clasp não o envia e o deploy passa "com sucesso" mas as funções dele não existem em
+produção. A checagem automática (`.github/scripts/checar-arquivos-gs.js`) barra esse esquecimento.
 
 ## Estrutura do frontend (index.html)
 
@@ -36,9 +67,10 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 ## Estrutura do frontend (js/)
 
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
+(em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida entrou a fila offline, 18)
 menores dentro da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não
 tem bundler, TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os
-15 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
+18 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
 
@@ -48,28 +80,56 @@ precisar mover uma função de um arquivo pra outro, verificar se ela usa algo q
 arquivos que vêm depois dela na lista — se sim, ou move os dois juntos, ou ajusta a ordem das tags.
 
 Arquivos, na ordem em que são carregados (`js/`):
-1. `config.js` — ícones SVG, `columnsDef`, URLs da API, nomes de meses.
-2. `notificacoes-uploads.js` — checagem de upload em segundo plano, prompt de "repetir comentário".
-3. `pessoas-fotos.js` — fotos de designers/atendimento, `avatarHTML`, `mapearTarefaDoBackend(t)`
+1. `config.js` — ícones SVG, `columnsDef`, URLs da API, nomes de meses, avisinhos
+   (toast/ilha/pílula) e o painel de diagnóstico (Ctrl+Shift+D).
+2. `fila-offline.js` — `enviarEscritaNoBackend()`: toda ação de escrita que pode chegar
+   atrasada sem problema passa por aqui. Se a internet estiver fora, fica guardada no
+   navegador e vai sozinha quando voltar. Play/pause e avançar/entregar NÃO entram na fila
+   de propósito (ver comentário no topo do arquivo).
+3. `notificacoes-uploads.js` — checagem de upload em segundo plano, prompt de "repetir comentário".
+4. `pessoas-fotos.js` — fotos de designers/atendimento, `avatarHTML`, `mapearTarefaDoBackend(t)`
    (normaliza dados vindos do backend), `calcularEstimatePct`.
-4. `kanban-polling.js` — `agendarAtualizacaoKanban()`, `atualizarKanbanEmBackground()` (poll do quadro).
-5. `painel-pessoas-clientes.js` — painel de Configurações, abas Pessoas e Clientes.
-6. `regras-briefing.js` — regras de tarefa, geração de briefing por IA (`gerarBriefingComIA`).
-7. `kanban-board.js` — `buildBoard()`, `render()`, `cardHTML()`, drag and drop do quadro.
-8. `clientes-hub.js` — links/hub por cliente (Drive, banco de imagens, etc.).
-9. `chat-comentarios.js` — chat flutuante (`abrirChatPanel`, `abrirThreadAqui`), comentários,
+5. `kanban-polling.js` — `agendarAtualizacaoKanban()`, `atualizarKanbanEmBackground()` (poll do quadro).
+6. `painel-pessoas-clientes.js` — painel de Configurações, abas Pessoas e Clientes.
+7. `regras-briefing.js` — regras de tarefa, geração de briefing por IA (`gerarBriefingComIA`).
+8. `kanban-board.js` — `buildBoard()`, `render()`, `cardHTML()`, drag and drop do quadro.
+9. `clientes-hub.js` — links/hub por cliente (Drive, banco de imagens, etc.).
+10. `chat-comentarios.js` — chat flutuante (`abrirChatPanel`, `abrirThreadAqui`), comentários,
    edição de entrega desejada.
-10. `detalhe-modal.js` — `openDetail(idx)`, `renderDetail()`, `closeDetail()`, `stepDetail(dir)`
-    (modal de detalhe da tarefa).
-11. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
+11. `detalhe-modal.js` — `openDetail(idx)`, `renderDetail()`, `closeDetail()`, `applyCommentsState()`,
+    a sequência de responsáveis do cabeçalho (`renderSequenciaHTML`/`wireWorkflowArrows`), o menu de
+    etapa, o cronômetro de 1s e o modo escuro. (Base do pop-up de detalhe da tarefa.)
+12. `detalhe-cardmae.js` — fluxo do CARD MÃE: `buscarCardMaeDoBackend`, `abrirCardMae`,
+    `precarregarCardMaeEmBackground`, aba "Descrição card mãe" e o "carrossel" do pill do cabeçalho
+    (entregue → transferir o card mãe → editar a regra dele ali mesmo).
+13. `detalhe-alteracao.js` — subtarefas de ALTERAÇÃO: `ehTarefaDeAlteracao`,
+    `acharTarefaOriginalDaAlteracao`, `nomeDaPecaOriginalRapido` (usado no card do quadro),
+    `carregarResumoDaAlteracao` (resumo por IA do que mudou) e a aba "Tarefa original".
+14. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
     e "Clientes por atendimento".
-12. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
-13. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
-14. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
-15. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+15. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
+16. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
+17. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
+18. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
+
+## "Essa tarefa é minha?" — usar `ehMinhaTarefa`, não comparar nomes (2026-07-30)
+
+`nomesCorrespondem(a, b)` compara nomes por "um é começo do outro" (acerta "Gio" = "Giovanna", mas
+confundiria "Manu" com "Manuel" E com "Manuela"). Isso é aceitável pra achar FOTO de alguém, mas era
+arriscado pra decidir de quem é uma tarefa — decisão que define o que aparece no seu quadro, o que
+entra na Fila de repasse e de que tarefas você é notificado.
+
+Agora o backend devolve `assigneeId` (id real do Runrun.it) em toda tarefa, e o login devolve
+`runrunId` de quem entrou (guardado em `DESIGNER_ID_LOGADO` e na sessão salva). **Use sempre
+`ehMinhaTarefa(t)`** (js/paginas-designers.js) — ela compara por id quando os dois lados têm, e cai
+na comparação por nome quando falta algum (backend antigo, sessão salva de antes), então nada quebra.
+
+Comparação por NOME continua certa (e inevitável) só onde o nome é a única informação que existe:
+autor de comentário, menções (`<mention>`), dono de arquivo no Drive, o seletor de designer do
+coordenador, os dados do painel-designers-beeon (que é indexado por nome) e `souClaudio()`.
 
 ## Bug recorrente conhecido
 

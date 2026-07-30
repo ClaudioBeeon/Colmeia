@@ -1,0 +1,73 @@
+name: Checagem do Colmeia
+
+# Rede de proteção automática: roda a cada push e a cada pull request e
+# confere as coisas que, se estiverem quebradas, quebram o Colmeia pra
+# todo mundo. É de propósito uma checagem SIMPLES — o projeto não tem
+# bundler, TypeScript nem npm no frontend (é HTML puro), e não faz sentido
+# inventar isso aqui. Só conferimos o que costuma quebrar de verdade:
+#
+#  1) sintaxe de JavaScript de todos os arquivos de js/ e do Código.gs;
+#  2) se os 15 arquivos de js/ continuam TODOS carregados no index.html —
+#     um arquivo novo que ninguém carregou não roda, e um <script> que
+#     aponta pra arquivo apagado dá erro em toda abertura do app;
+#  3) se a ORDEM das tags <script> no index.html continua igual à ordem
+#     documentada no CLAUDE.md (a "regra de ouro": um arquivo pode usar o
+#     que veio antes dele, nunca o que vem depois).
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  checar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Conferir a sintaxe dos arquivos do frontend (js/)
+        run: |
+          erro=0
+          for arquivo in js/*.js; do
+            if node --check "$arquivo" > /dev/null 2>&1; then
+              echo "ok    $arquivo"
+            else
+              echo "ERRO DE SINTAXE em $arquivo:"
+              node --check "$arquivo" || true
+              erro=1
+            fi
+          done
+          exit $erro
+
+      - name: Conferir a sintaxe do backend (arquivos .gs)
+        run: |
+          # O node só entende a extensão .js, então confere numa cópia
+          # temporária de cada um (os arquivos de verdade precisam manter os
+          # nomes .gs — é como o clasp casa cada um com o arquivo lá dentro
+          # do projeto do Apps Script).
+          erro=0
+          for arquivo in *.gs; do
+            cp "$arquivo" /tmp/gs-check.js
+            if node --check /tmp/gs-check.js > /dev/null 2>&1; then
+              echo "ok    $arquivo"
+            else
+              echo "ERRO DE SINTAXE em $arquivo:"
+              node --check /tmp/gs-check.js || true
+              erro=1
+            fi
+          done
+          exit $erro
+
+      - name: Conferir se todos os js/ estão carregados no index.html, na ordem certa
+        run: node .github/scripts/checar-ordem-dos-scripts.js
+
+      - name: Conferir se todo arquivo .gs está liberado no .claspignore
+        run: node .github/scripts/checar-arquivos-gs.js

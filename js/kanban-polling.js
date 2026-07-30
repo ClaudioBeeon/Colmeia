@@ -6,15 +6,20 @@ function agendarAtualizacaoKanban() {
 
 // Além de atualizar depois de cada ação, também atualiza sozinho de
 // tempos em tempos (pega mudanças feitas por outras pessoas do time).
-setInterval(atualizarKanbanEmBackground, 60000);
+// A checagem de DESIGNER_LOGADO evita ficar buscando o quadro inteiro a
+// cada minuto com a tela de login aberta, sem ninguém logado — um
+// navegador esquecido nessa tela consumia servidor pra sempre à toa.
+setInterval(() => {
+  if (!DESIGNER_LOGADO) return;
+  atualizarKanbanEmBackground();
+}, 60000);
 
 async function salvarPrioridadeNoBackend(taskId, prioridade) {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1 || !taskId) return;
   try {
-    await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "definirPrioridade", taskId, prioridade }),
-    });
+    // Passa pela fila: se a internet estiver fora, a prioridade fica
+    // guardada e vai sozinha quando voltar (ver js/fila-offline.js).
+    await enviarEscritaNoBackend({ acao: "definirPrioridade", taskId, prioridade }, "mudar a prioridade");
   } catch (err) {
     console.error("Não consegui salvar a prioridade no backend:", err);
   }
@@ -46,8 +51,15 @@ async function tocarTarefaNoBackend(taskId, taskTitle) {
  * mesmo tempo no Runrun.it). Chama isso sempre antes de iniciar um play.
  */
 function pararOutrasTarefasRodando(exceto) {
+  // Compara por ID, nunca por referência de objeto (`t !== exceto`): quem
+  // chama pode estar segurando uma referência velha da tarefa, recriada
+  // por atualizarKanbanEmBackground. Comparando por referência, a tarefa
+  // que a pessoa acabou de tocar não "batia" com nenhuma das vivas e era
+  // pausada junto — bug recorrente documentado no CLAUDE.md.
+  const idExceto = exceto && exceto.id ? String(exceto.id) : null;
   tasks.forEach(t => {
-    if (t.running && t !== exceto) {
+    const ehAMesma = idExceto ? String(t.id) === idExceto : t === exceto;
+    if (t.running && !ehAMesma) {
       t.running = false;
       t._runningToggleEm = Date.now();
       pausarTarefaNoBackend(t.id);
@@ -164,8 +176,16 @@ async function reatribuirTarefaNoBackend(taskId, responsavelId) {
  * no Runrun.it). Devolve uma lista (vazia se não tiver sequência
  * configurada) — nunca null, pra não quebrar o render.
  */
+// IMPORTANTE: devolve `erro: true` quando a busca FALHOU, pra quem chama
+// poder diferenciar isso de "essa tarefa realmente não tem sequência".
+// Antes os dois casos devolviam lista vazia igual, e isso era perigoso:
+// numa oscilação de internet, uma subtarefa aparecia como "sem sequência"
+// e o botão de CONCLUIR/ENTREGAR tomava o lugar das setas de avançar (dava
+// pra entregar uma tarefa por engano achando que estava só repassando).
+// Na Fila de repasse o erro também ficava gravado em cache, jogando a
+// tarefa pra aba errada até dar F5.
 async function buscarSequenciaDoBackend(taskId) {
-  if (!COLMEIA_API_URL || !taskId) return { sequencia: [], workflowId: null };
+  if (!COLMEIA_API_URL || !taskId) return { sequencia: [], workflowId: null, erro: true };
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
@@ -174,12 +194,12 @@ async function buscarSequenciaDoBackend(taskId) {
     const data = await res.json();
     if (!data.ok) {
       console.error("Erro ao buscar sequência de responsáveis:", data.error);
-      return { sequencia: [], workflowId: null };
+      return { sequencia: [], workflowId: null, erro: true };
     }
-    return { sequencia: data.sequencia || [], workflowId: data.workflowId || null };
+    return { sequencia: data.sequencia || [], workflowId: data.workflowId || null, erro: false };
   } catch (err) {
     console.error("Falha ao buscar sequência no Runrun.it:", err);
-    return { sequencia: [], workflowId: null };
+    return { sequencia: [], workflowId: null, erro: true };
   }
 }
 

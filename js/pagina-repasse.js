@@ -18,7 +18,7 @@ function tarefaEstaComAtendimento(t) {
   if (!t.id || !t.assignee) return false;
   if (ehTarefaDeCoordenacao(t)) return false; // a sua tarefa fixa de coordenação não é "repasse"
   if (idsRepasseIgnorados().has(t.id)) return false; // você já decidiu ficar com essa
-  return nomesCorrespondem(t.assignee, DESIGNER_LOGADO);
+  return ehMinhaTarefa(t);
 }
 
 function tarefasParaRepasse() {
@@ -61,6 +61,10 @@ async function garantirClassificacaoSequencia(t) {
   if (t._temSequencia !== undefined) return t._temSequencia;
   if (!t.id) { t._temSequencia = false; t.sequencia = []; t.workflowId = null; return false; }
   const resultado = await buscarSequenciaDoBackend(t.id);
+  // Erro de rede não vira "sem sequência": não grava nada no cache (assim
+  // a próxima tentativa busca de novo, em vez de a tarefa ficar presa na
+  // aba errada até dar F5) e não zera a sequência que já estava boa.
+  if (resultado.erro) return t._temSequencia;
   t.sequencia = resultado.sequencia;
   t.workflowId = resultado.workflowId;
   t._temSequencia = !!(resultado.sequencia && resultado.sequencia.length > 0);
@@ -73,6 +77,10 @@ async function garantirClassificacaoSequencia(t) {
 async function recarregarSequenciaCard(t) {
   t = tarefaRepasseViva(t);
   const resultado = await buscarSequenciaDoBackend(t.id);
+  // Igual em garantirClassificacaoSequencia: falha de rede não pode virar
+  // "sem sequência" (senão o card passa a mostrar o botão de entregar em
+  // vez da seta de repassar). Mantém o que já estava desenhado.
+  if (resultado.erro) return;
   t.sequencia = resultado.sequencia;
   t.workflowId = resultado.workflowId;
   t._temSequencia = !!(resultado.sequencia && resultado.sequencia.length > 0);
@@ -204,9 +212,9 @@ function repasseCardHTML(t, mostrarClientePill) {
     <div class="repasse-card" data-id="${t.id}">
       <div class="repasse-card-top">
         <span class="badge ${type.class}">${type.label}</span>
-        ${mostrarClientePill ? `<span class="repasse-client-pill">${t.client}</span>` : ""}
+        ${mostrarClientePill ? `<span class="repasse-client-pill">${escaparHTML(t.client)}</span>` : ""}
       </div>
-      <div class="repasse-card-title">${t.title}</div>
+      <div class="repasse-card-title">${escaparHTML(t.title)}</div>
       <div class="repasse-datas-stack">
         <div class="repasse-data-pill" data-campo="publicacao" data-id="${t.id}">
           <span class="repasse-data-label">Publicação</span>
@@ -301,7 +309,18 @@ function montarSequenciaCard(t) {
   const row = document.querySelector(`.repasse-seq-row[data-id="${CSS.escape(String(t.id))}"]`);
   if (!row) return; // card não está mais na tela (trocou de aba/filtro enquanto buscava)
   if (t.sequencia === undefined) {
-    garantirClassificacaoSequencia(t).then(() => montarSequenciaCard(t));
+    garantirClassificacaoSequencia(t).then(() => {
+      // Se a busca falhou, `sequencia` continua indefinida — NÃO pode
+      // chamar montarSequenciaCard de novo na hora, senão vira um laço
+      // infinito de tentativas de rede (buscar, falhar, buscar...). Avisa
+      // na própria linha e deixa a próxima atualização automática tentar.
+      if (t.sequencia === undefined) {
+        const rowAgora = document.querySelector(`.repasse-seq-row[data-id="${CSS.escape(String(t.id))}"]`);
+        if (rowAgora) rowAgora.innerHTML = `<span class="repasse-seq-loading">Não consegui carregar a sequência agora</span>`;
+        return;
+      }
+      montarSequenciaCard(t);
+    });
     return;
   }
   row.innerHTML = renderRepasseSeqHTML(t);
@@ -666,15 +685,55 @@ function renderRepasse() {
     const prioritarias = lista.filter(t => t.priority === "alta");
     renderRepasseListaFlat(board, prioritarias);
   } else {
-    // Pros modos "com sequência" / "sem sequência", precisa classificar
-    // cada tarefa primeiro (busca sob demanda, cacheada em cada tarefa).
-    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Conferindo quais têm sequência configurada...</p>`;
-    Promise.all(lista.map(t => garantirClassificacaoSequencia(t))).then(() => {
-      if (repasseViewMode !== "com_sequencia" && repasseViewMode !== "sem_sequencia") return; // trocou de aba enquanto carregava
-      const filtrada = lista.filter(t => repasseViewMode === "com_sequencia" ? t._temSequencia : !t._temSequencia);
-      renderRepasseColunas(board, filtrada);
-    });
+    // Modos "com sequência" / "sem sequência": cada tarefa precisa ser
+    // classificada, e isso custa uma chamada ao Runrun.it por tarefa.
+    // Antes a tela inteira era apagada e substituída por "Conferindo quais
+    // têm sequência configurada...", só voltando quando TODAS as respostas
+    // chegassem — com muitas tarefas isso era uma espera longa travando
+    // tudo. Agora mostra na hora o que já dá pra mostrar e vai encaixando
+    // as outras conforme as respostas chegam.
+    renderRepasseIncremental(board, lista, repasseViewMode);
   }
+}
+
+// Desenha a aba com o que já se sabe e vai completando. Redesenha de forma
+// "agrupada" (a cada 250ms, não a cada resposta) pra não ficar piscando a
+// tela a cada tarefa que chega.
+let _repasseFillTimeout = null;
+function renderRepasseIncremental(board, lista, modoNoInicio) {
+  const desenhar = () => {
+    // Trocou de aba enquanto as respostas chegavam? Nada a fazer.
+    if (repasseViewMode !== modoNoInicio) return;
+    // Não redesenha por baixo de um pop-up que a pessoa acabou de abrir
+    // (confirmar repasse/entrega ou o "+") — mesmo cuidado que a
+    // atualização automática do quadro já toma.
+    if (document.querySelector("#repasseBoard .repasse-card-popup-aberto")) return;
+
+    const conhecidas = lista.filter(t => t._temSequencia !== undefined);
+    const filtrada = conhecidas.filter(t => modoNoInicio === "com_sequencia" ? t._temSequencia : !t._temSequencia);
+    const faltando = lista.length - conhecidas.length;
+
+    if (filtrada.length === 0 && faltando > 0) {
+      board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Conferindo quais têm sequência configurada...</p>`;
+      return;
+    }
+    renderRepasseColunas(board, filtrada);
+    // Aviso discreto de que ainda tem gente na fila de conferência — sem
+    // isso, a pessoa podia achar que a lista já estava completa.
+    if (faltando > 0) {
+      board.insertAdjacentHTML("beforeend",
+        `<p class="workflow-seq-empty" style="padding:12px 24px;">Conferindo mais ${faltando} tarefa${faltando > 1 ? "s" : ""}...</p>`);
+    }
+  };
+
+  desenhar();
+  lista.forEach(t => {
+    if (t._temSequencia !== undefined) return; // já sabemos, não gasta chamada
+    garantirClassificacaoSequencia(t).then(() => {
+      clearTimeout(_repasseFillTimeout);
+      _repasseFillTimeout = setTimeout(desenhar, 250);
+    });
+  });
 }
 
 // Aba "Prioridades": mesma ordenação por Entrega das outras abas, mas
@@ -844,15 +903,21 @@ function wireRepasseCards(lista) {
       if (!t) return;
       btn.disabled = true;
       btn.textContent = "Assumindo...";
-      const usuarios = await buscarUsuariosRunrun();
-      const eu = usuarios.find(u => nomesCorrespondem(u.nome, DESIGNER_LOGADO));
-      if (!eu) {
+      // Se o login já trouxe o ID, usa ele direto e nem precisa procurar
+      // na lista comparando nome (que confundiria nomes parecidos).
+      let meuId = DESIGNER_ID_LOGADO;
+      if (!meuId) {
+        const usuarios = await buscarUsuariosRunrun();
+        const eu = usuarios.find(u => nomesCorrespondem(u.nome, DESIGNER_LOGADO));
+        meuId = eu ? eu.id : null;
+      }
+      if (!meuId) {
         btn.disabled = false;
         btn.textContent = "Ficar comigo";
         mostrarToast("Não consegui te encontrar na lista de usuários do Runrun.it.", "erro");
         return;
       }
-      const ok = await reatribuirTarefaNoBackend(t.id, eu.id);
+      const ok = await reatribuirTarefaNoBackend(t.id, meuId);
       if (ok) {
         ignorarNaRepasse(t.id);
         removerCardDeRepasseDaTela(btn);
@@ -942,7 +1007,11 @@ document.getElementById("verTodasBtn").addEventListener("click", () => {
 });
 
 document.getElementById("nowPlaying").addEventListener("click", () => {
-  const idx = tasks.findIndex(t => t.running);
+  // Filtra por quem está logado, igual updateNowPlaying já faz pro TEXTO da
+  // pílula — sem isso, no login do coordenador vendo "Todos juntos", o
+  // clique podia abrir a tarefa rodando de OUTRA pessoa (a primeira do
+  // array com running=true), não a que a pílula estava mostrando.
+  const idx = tasks.findIndex(t => t.running && ehMinhaTarefa(t));
   if (idx !== -1) openDetail(idx);
 });
 

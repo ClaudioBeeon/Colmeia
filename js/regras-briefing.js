@@ -369,11 +369,9 @@ async function reabrirTarefaNoBackend(taskId) {
 async function alterarEntregaNoBackend(taskId, novaData) {
   if (!COLMEIA_API_URL || !taskId || !novaData) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "alterarEntrega", taskId, novaData }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "alterarEntrega", taskId, novaData }, "mudar a Entrega Desejada");
     if (!data.ok) console.error("Runrun.it recusou alterar a Entrega Desejada:", data.error);
     return data.ok;
   } catch (err) {
@@ -385,11 +383,9 @@ async function alterarEntregaNoBackend(taskId, novaData) {
 async function alterarPublicacaoNoBackend(taskId, novaData) {
   if (!COLMEIA_API_URL || !taskId || !novaData) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "alterarPublicacao", taskId, novaData }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "alterarPublicacao", taskId, novaData }, "mudar a Data de Publicação");
     if (!data.ok) console.error("Runrun.it recusou alterar a Data de Publicação:", data.error);
     return data.ok;
   } catch (err) {
@@ -401,11 +397,9 @@ async function alterarPublicacaoNoBackend(taskId, novaData) {
 async function moverEtapaNoBackend(taskId, chaveColuna) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "moverEtapa", taskId, chaveColuna }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "moverEtapa", taskId, chaveColuna }, "mover de coluna");
     if (!data.ok) console.error("Runrun.it recusou mover a etapa:", data.error);
     return data.ok;
   } catch (err) {
@@ -420,11 +414,9 @@ async function moverEtapaNoBackend(taskId, chaveColuna) {
 async function moverEtapaArbitrariaNoBackend(taskId, taskStateId) {
   if (!COLMEIA_API_URL || !taskId || !taskStateId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "moverEtapaArbitraria", taskId, taskStateId }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "moverEtapaArbitraria", taskId, taskStateId }, "mover de etapa");
     if (!data.ok) console.error("Runrun.it recusou mover a etapa:", data.error);
     return data.ok;
   } catch (err) {
@@ -436,11 +428,9 @@ async function moverEtapaArbitrariaNoBackend(taskId, taskStateId) {
 async function ajustarEstimativaNoBackend(taskId, minutos) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "ajustarEstimativa", taskId, minutos }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "ajustarEstimativa", taskId, minutos }, "ajustar a estimativa");
     if (!data.ok) console.error("Runrun.it recusou ajustar a estimativa:", data.error);
     return data.ok;
   } catch (err) {
@@ -663,9 +653,14 @@ function escaparHTML(str) {
   return div.innerHTML;
 }
 
+// Existiam DUAS funções quase iguais pra transformar link em clicável
+// (essa e linkifyTexto, em js/chat-comentarios.js), então qualquer
+// correção tinha que ser feita nas duas. Agora essa só escapa o texto e
+// entrega pra outra fazer o trabalho — de brinde, os campos do briefing
+// passaram a reconhecer link começando com "www." e a não engolir
+// pontuação colada no fim do endereço, que a outra já tratava.
 function linkificarTexto(texto) {
-  const escapado = escaparHTML(texto);
-  return escapado.replace(/(https?:\/\/[^\s<]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+  return linkifyTexto(escaparHTML(texto));
 }
 
 /**
@@ -768,15 +763,15 @@ async function gerarBriefingComIA(task) {
     resultEl.innerHTML = `
       ${(plataformas.length || formatos.length) ? `
         <div class="ai-briefing-tags">
-          ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${p}</span>`).join("")}
-          ${formatos.map((f, i) => `<div class="format-box format-box-sm ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${f}</div>`).join("")}
+          ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${escaparHTML(p)}</span>`).join("")}
+          ${formatos.map((f, i) => `<div class="format-box format-box-sm ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${escaparHTML(f)}</div>`).join("")}
         </div>
       ` : ""}
-      ${resumo ? `<p class="ai-briefing-resumo">${resumo}</p>` : ""}
+      ${resumo ? `<p class="ai-briefing-resumo">${escaparHTML(resumo)}</p>` : ""}
       ${campoDestaque ? `
         <div class="ai-briefing-destaque">
           <div class="ai-briefing-destaque-corpo">
-            <p class="ai-briefing-destaque-label">${campoDestaque.pergunta}</p>
+            <p class="ai-briefing-destaque-label">${escaparHTML(campoDestaque.pergunta)}</p>
             <p class="ai-briefing-destaque-valor">${escaparHTML(campoDestaque.resposta)}</p>
             ${blocoVersaoOriginalHTML(campoDestaque.resposta, campoDestaque.respostaOriginal)}
           </div>
@@ -795,7 +790,7 @@ async function gerarBriefingComIA(task) {
                 <div class="ai-briefing-cat ${categoriaCampoBriefing(c.pergunta)}">
                   <div class="ai-briefing-cat-head">
                     <span class="ai-briefing-cat-icon">${c.pergunta.trim().charAt(0).toUpperCase()}</span>
-                    <span class="ai-briefing-cat-label">${c.pergunta}</span>
+                    <span class="ai-briefing-cat-label">${escaparHTML(c.pergunta)}</span>
                   </div>
                   <div class="ai-briefing-cat-corpo">
                     <div class="ai-briefing-cat-valor">${renderValorCampo(c.resposta)}</div>
@@ -808,7 +803,7 @@ async function gerarBriefingComIA(task) {
           ${vazios.length ? `
             <div class="ai-briefing-vazios">
               <span class="ai-briefing-vazios-label">Vazios</span>
-              ${vazios.map(c => `<span class="ai-briefing-vazio-bolha" title="${c.pergunta}">${c.pergunta.trim().charAt(0).toUpperCase()}</span>`).join("")}
+              ${vazios.map(c => `<span class="ai-briefing-vazio-bolha" title="${escaparHTML(c.pergunta)}">${c.pergunta.trim().charAt(0).toUpperCase()}</span>`).join("")}
             </div>
           ` : ""}
         `;
@@ -850,11 +845,9 @@ async function buscarDescricaoDoBackend(taskId) {
 async function salvarDescricaoNoBackend(taskId, texto) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "salvarDescricao", taskId, texto }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "salvarDescricao", taskId, texto }, "salvar a descrição");
     if (!data.ok) console.error("Runrun.it recusou salvar a descrição:", data.error);
     return data.ok;
   } catch (err) {
@@ -885,11 +878,9 @@ async function buscarComentariosDoBackend(taskId) {
 async function enviarComentarioNoBackend(taskId, texto) {
   if (!COLMEIA_API_URL || !taskId || !texto) return false;
   try {
-    const res = await fetch(COLMEIA_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ acao: "adicionarComentario", taskId, texto }),
-    });
-    const data = await res.json();
+    // Passa pela fila de ações: se a internet estiver fora, isso fica
+    // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
+    const data = await enviarEscritaNoBackend({ acao: "adicionarComentario", taskId, texto }, "enviar o comentário");
     if (!data.ok) console.error("Runrun.it recusou o comentário:", data.error);
     return data.ok;
   } catch (err) {

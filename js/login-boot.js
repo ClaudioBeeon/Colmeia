@@ -11,6 +11,13 @@ function iniciarAppPosLogin() {
   const repasseNav = document.querySelector('.nav-ic[data-page="repasse"]');
   if (repasseNav) repasseNav.hidden = !souClaudio();
 
+  // Desenha na hora a última foto do quadro guardada nesse navegador (ver
+  // restaurarSnapshotDoQuadro, js/pessoas-fotos.js) — assim o quadro
+  // aparece instantâneo em vez de esperar o Apps Script "acordar" com a
+  // tela da abelhinha na frente. A abelhinha continua aparecendo no
+  // primeiro acesso de cada navegador, quando não tem foto guardada ainda.
+  // A versão de verdade chega logo depois, em carregarTarefasReais().
+  restaurarSnapshotDoQuadro();
   buildBoard();
   render();
   mostrarPagina("kanban");
@@ -20,6 +27,16 @@ function iniciarAppPosLogin() {
   carregarLinksClientes();
   carregarProgressoClientes();
   carregarClientesOcultos();
+  // Avisos e agenda agora só são buscados com alguém logado (antes ficavam
+  // rodando até na tela de senha, à toa). As duas checagens periódicas
+  // continuam ligadas nos arquivos delas — aqui é só pra fazer a PRIMEIRA
+  // acontecer na hora que a pessoa entra, em vez de esperar o próximo
+  // ciclo (até 5 min pros avisos, até 3 min pra agenda).
+  atualizarBadgeAvisos();
+  verificarReunioesProximas();
+  // Poda as marcações velhas guardadas no navegador (uploads dispensados e
+  // chats lidos) — elas nunca eram limpas e só cresciam.
+  limparLixoAntigoDoNavegador();
 }
 
 // Algumas coisas (Fila de Repasse, lançar Avisos) são só do Cláudio,
@@ -43,9 +60,12 @@ function lerSessaoSalva() {
   }
 }
 
-function salvarSessao(nome, papel) {
+function salvarSessao(nome, papel, runrunId) {
   try {
-    localStorage.setItem(SESSAO_CHAVE, JSON.stringify({ nome, papel }));
+    // Guarda também o ID no Runrun.it, pra "essa tarefa é minha?" continuar
+    // sendo decidido por ID (e não por nome parecido) quando a pessoa
+    // reabrir o Colmeia sem digitar a senha de novo. Ver ehMinhaTarefa.
+    localStorage.setItem(SESSAO_CHAVE, JSON.stringify({ nome, papel, runrunId: runrunId || null }));
   } catch (err) {
     console.error("Não consegui salvar a sessão:", err);
   }
@@ -106,7 +126,8 @@ document.getElementById("loginForm").addEventListener("submit", async e => {
 
     DESIGNER_LOGADO = data.nome;
     PAPEL_LOGADO = data.papel;
-    salvarSessao(data.nome, data.papel);
+    DESIGNER_ID_LOGADO = data.runrunId || null;
+    salvarSessao(data.nome, data.papel, data.runrunId);
     iniciarAppPosLogin();
   } catch (err) {
     console.error("Falha ao tentar logar:", err);
@@ -122,6 +143,9 @@ const sessaoSalva = lerSessaoSalva();
 if (sessaoSalva && sessaoSalva.nome && sessaoSalva.papel) {
   DESIGNER_LOGADO = sessaoSalva.nome;
   PAPEL_LOGADO = sessaoSalva.papel;
+  // Sessão salva antes dessa mudança não tem o id — aí ehMinhaTarefa volta
+  // a comparar por nome, como antes, até a pessoa logar de novo.
+  DESIGNER_ID_LOGADO = sessaoSalva.runrunId || null;
   iniciarAppPosLogin();
 } else {
   buscarFraseDoDia();

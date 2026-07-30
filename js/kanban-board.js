@@ -26,7 +26,7 @@ tasksFake.forEach(t => {
   const now = new Date();
   t.dueISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(t.day).padStart(2, "0")}`;
 });
-tasksFake.forEach((t, i) => { t.timerSeconds = 0; t.running = false; t.estimatePct = [12, 35, 48, 60, 20, 75, 30, 55, 18, 42, 65, 25, 50][i % 13]; t.hasChange = i % 4 === 1; });
+tasksFake.forEach((t, i) => { t.timerSeconds = 0; t.running = false; t.estimatePct = [12, 35, 48, 60, 20, 75, 30, 55, 18, 42, 65, 25, 50][i % 13]; });
 
 // Começa vazio de propósito — mostra tela de carregando até o backend
 // responder (ou, em último caso, cair pros dados fake).
@@ -68,10 +68,18 @@ function formatTime(sec) {
 function cardHTML(task, idx) {
   const type = typeLabels[task.type];
   const atrasada = task.dueISO && task.dueISO < hojeISO();
+  // Card de alteração ganha etiqueta própria e o nome da peça que ele está
+  // pedindo pra mudar — antes ele era visualmente igual a qualquer outro e
+  // só dizia "Alteração 01", então não dava pra saber de que peça se trata
+  // sem abrir. O nome sai de graça das tarefas já carregadas (ver
+  // nomeDaPecaOriginalRapido, js/detalhe-modal.js).
+  const ehAlteracao = ehTarefaDeAlteracao(task);
+  const pecaOriginal = ehAlteracao ? nomeDaPecaOriginalRapido(task) : null;
   return `
-    <div class="task-card priority-${task.priority} ${atrasada ? "task-overdue" : ""}" draggable="true" data-idx="${idx}">
+    <div class="task-card priority-${task.priority} ${atrasada ? "task-overdue" : ""} ${ehAlteracao ? "task-alteracao" : ""}" draggable="true" data-idx="${idx}">
       <div class="card-top">
         <span class="badge ${type.class}">${type.label}</span>
+        ${ehAlteracao ? `<span class="badge badge-alteracao">Alteração</span>` : ""}
         <div class="priority-wrap" data-idx="${idx}">
           <button type="button" class="card-priority-tag priority-btn">${priorityLabels[task.priority]}</button>
           <div class="priority-menu">
@@ -81,8 +89,9 @@ function cardHTML(task, idx) {
           </div>
         </div>
       </div>
-      <div class="card-title">${task.title}</div>
-      <div class="card-client">${task.client}</div>
+      <div class="card-title">${escaparHTML(task.title)}</div>
+      ${pecaOriginal ? `<div class="card-alteracao-de" title="Essa alteração é da peça: ${escaparHTML(pecaOriginal)}">↳ ${escaparHTML(pecaOriginal)}</div>` : ""}
+      <div class="card-client">${escaparHTML(task.client)}</div>
       <div class="card-progress">
         <div class="progress-head">
           <button type="button" class="play-btn" data-idx="${idx}" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
@@ -191,7 +200,7 @@ let searchQuery = "";
  * única função, fácil de ajustar.
  */
 function ehTarefaDeCoordenacao(t) {
-  return !!(t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO) && normalizarParaComparar(t.title).includes("coordenacao"));
+  return !!(t.id && ehMinhaTarefa(t) && normalizarParaComparar(t.title).includes("coordenacao"));
 }
 
 function encontrarTarefaDeCoordenacao() {
@@ -204,18 +213,31 @@ function renderCoordenacaoPill() {
   const t = encontrarTarefaDeCoordenacao();
   if (!t) { wrap.innerHTML = ""; return; }
   wrap.innerHTML = `
-    <button type="button" class="coordenacao-pill" id="coordenacaoPillBtn" data-id="${t.id}" title="${t.title}">
+    <button type="button" class="coordenacao-pill" id="coordenacaoPillBtn" data-id="${t.id}" title="${escaparHTML(t.title)}">
       <span class="coordenacao-pill-play">${t.running ? pauseIcon : playIcon}</span>
       <span class="coordenacao-pill-label">Coordenação</span>
       <span class="coordenacao-pill-timer">${formatTime(t.timerSeconds)}</span>
     </button>
   `;
   document.getElementById("coordenacaoPillBtn").addEventListener("click", () => {
-    const vaiComecar = !t.running;
-    if (vaiComecar) pararOutrasTarefasRodando(t);
-    t.running = vaiComecar;
-    if (t.running) tocarTarefaNoBackend(t.id, t.title);
-    else pausarTarefaNoBackend(t.id);
+    // Busca a tarefa VIVA pelo id no momento do clique — nunca usa o `t`
+    // capturado quando a pílula foi desenhada. Se atualizarKanbanEmBackground
+    // rodou nesse meio-tempo, `t` é um objeto fantasma: mexer no .running
+    // dele não aparece em lugar nenhum, e pararOutrasTarefasRodando(t)
+    // comparava por referência contra objetos vivos que nunca batiam — o
+    // que fazia essa função PAUSAR a própria tarefa de coordenação que
+    // acabou de receber o play. Mesmo bug documentado no CLAUDE.md.
+    const tarefaViva = (t.id && tasks.find(x => String(x.id) === String(t.id))) || t;
+    const vaiComecar = !tarefaViva.running;
+    if (vaiComecar) pararOutrasTarefasRodando(tarefaViva);
+    tarefaViva.running = vaiComecar;
+    // Sem marcar isso, a proteção de 8s (ver atualizarKanbanEmBackground)
+    // não valia pra essa pílula: uma atualização automática caindo logo
+    // depois do clique trazia running=false do Runrun.it e desfazia o play
+    // na tela, mesmo a tarefa já estando rodando de verdade lá.
+    tarefaViva._runningToggleEm = Date.now();
+    if (tarefaViva.running) tocarTarefaNoBackend(tarefaViva.id, tarefaViva.title);
+    else pausarTarefaNoBackend(tarefaViva.id);
     render();
     updateNowPlaying();
   });
@@ -226,7 +248,7 @@ function render() {
   columnsDef.forEach(({ key }) => {
     let list = tasks.filter(t => t.status === key && !ehTarefaDeCoordenacao(t));
     if (PAPEL_LOGADO === "designer") {
-      list = list.filter(t => nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+      list = list.filter(ehMinhaTarefa);
     } else if (PAPEL_LOGADO === "coordenador" && filtroDesignerCoordenador !== "todos") {
       const alvoNome = filtroDesignerCoordenador === "eu" ? DESIGNER_LOGADO : filtroDesignerCoordenador;
       list = list.filter(t => nomesCorrespondem(t.assignee, alvoNome));
@@ -274,6 +296,9 @@ function setupDragAndDrop() {
           if (!ok) {
             task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
             render();
+            // Sem esse aviso, o card só "voltava" sozinho pra coluna antiga
+            // e ninguém entendia por quê (parecia bug do Colmeia).
+            mostrarToast("Não consegui mover essa tarefa de coluna agora.", "erro");
           } else {
             agendarAtualizacaoKanban();
           }
@@ -321,6 +346,7 @@ function attachCardDragHandlers() {
             if (!ok) {
               task.status = statusAntigo;
               render();
+              mostrarToast("Marquei a prioridade, mas não consegui mover a tarefa pra coluna Prioridades agora.", "erro");
             } else {
               agendarAtualizacaoKanban();
             }
@@ -347,7 +373,11 @@ function attachCardDragHandlers() {
           if (!novaData || novaData === task.dueISO) return;
           wrap.innerHTML = `<span class="card-due-saving">Salvando...</span>`;
           const ok = await alterarEntregaNoBackend(task.id, novaData);
-          if (!ok) { render(); return; }
+          if (!ok) {
+            render(); // volta a data antiga
+            mostrarToast("Não consegui alterar a Entrega Desejada agora.", "erro");
+            return;
+          }
           const [ano, mes, dia] = novaData.split("-").map(Number);
           task.dueISO = novaData;
           task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
@@ -421,7 +451,7 @@ function attachCardDragHandlers() {
             render();
             agendarAtualizacaoKanban();
           } else {
-            alert("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.");
+            mostrarToast("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");
           }
         });
       });

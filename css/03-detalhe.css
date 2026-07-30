@@ -1,0 +1,776 @@
+/* -------------------------------------------------------------------
+   O pop-up de detalhe da tarefa (quase tela cheia) e o chat de
+   comentários que divide a tela com ele.
+
+   Faz parte do style.css, que passou de 3.000 linhas e foi dividido por
+   área. As tags <link> no index.html seguem EXATAMENTE esta ordem, e isso
+   é obrigatório: em CSS, quando duas regras têm o mesmo peso, vence a que
+   foi escrita depois. Trocar a ordem dos arquivos muda a aparência do app.
+   ------------------------------------------------------------------- */
+
+/* ===== Painel de detalhes da tarefa (overlay quase tela cheia) ===== */
+.task-detail {
+  display: none;
+  position: fixed;
+  top: 22px; right: 22px; bottom: 22px; left: 106px;
+  gap: 16px;
+  opacity: 0;
+  transform: translateX(24px) scale(0.99);
+  transition: opacity var(--dur-slow) var(--ease-apple-spring), transform var(--dur-slow) var(--ease-apple-spring);
+  z-index: 100;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+}
+
+.task-detail.visible { display: flex; }
+
+[data-theme="dark"] .detail-inner,
+[data-theme="dark"] .chat-panel,
+[data-theme="dark"] .priority-menu,
+[data-theme="dark"] .status-menu,
+[data-theme="dark"] .detail-more-menu {
+  background: #0C0B12;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-theme="dark"] .desc-pane,
+[data-theme="dark"] .detail-side {
+  background: #0C0B12;
+}
+.task-detail.open { opacity: 1; transform: translateX(0) scale(1); }
+
+.detail-inner {
+  display: flex; flex-direction: column; width: 100%; min-height: 0;
+  transition: transform 0.26s var(--ease-apple), opacity 0.26s var(--ease-apple);
+  position: relative;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(10,10,20,0.28);
+  overflow: hidden;
+}
+
+.detail-inner.panel-exit-up { transform: translateY(-26px); opacity: 0; }
+
+.detail-inner.panel-enter-below { transform: translateY(26px); opacity: 0; }
+
+.detail-inner.panel-exit-down { transform: translateY(26px); opacity: 0; }
+
+.detail-inner.panel-enter-above { transform: translateY(-26px); opacity: 0; }
+
+.detail-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; flex-shrink: 0; gap: 14px;
+}
+
+.detail-header-pill {
+  display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;
+  background: #14151A; border-radius: 999px; padding: 8px 8px 8px 8px;
+  position: relative;
+}
+.detail-header-pill > * { position: relative; z-index: 2; }
+
+/* Conteúdo normal do pill (play, tempo, nome, sequência do card
+   aberto, status...) — em uso quase o tempo todo, então SEM altura
+   fixa nem overflow cortado aqui: o pill cresce pro tamanho natural do
+   conteúdo (importante pro card mãe aberto direto, que tem uma fileira
+   de fotinhos mais alta que os 46px do botão de play sozinho — com
+   altura fixa esse conteúdo ficava cortado/vazando pra fora do fundo
+   preto arredondado). */
+.pill-face-normal {
+  display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;
+}
+
+/* "Carrossel" do fluxo de entregar/transferir card mãe (ver
+   mostrarFluxoCardMaeNoPill em js/detalhe-modal.js): SÓ enquanto esse
+   fluxo está ativo (.card-mae-modo) o pill vira um "palco" de altura
+   fixa com as duas faces (conteúdo normal x fluxo do card mãe)
+   empilhadas exatamente uma sobre a outra — a classe .card-mae-ativo
+   desliza as duas ao mesmo tempo: a normal sobe e sai, a do card mãe
+   sobe e aparece; tirar a classe faz o caminho contrário (desce), mesma
+   técnica já usada na pílula do topbar (now-playing-wrap). A altura
+   fixa + overflow cortado só existem NESSE modo — o resto do tempo o
+   pill volta a crescer livre pro tamanho natural do conteúdo normal
+   (ver .pill-face-normal acima), senão os menus que abrem pra baixo
+   (status da etapa, lista de subtarefas) ficariam cortados/escondidos,
+   já que eles "escapam" da altura do pill.
+   IMPORTANTE: .card-mae-modo entra JUNTO com .card-mae-ativo, mas sai
+   um pouquinho DEPOIS (só depois da animação de descida terminar) —
+   ver esconderFluxoCardMaeNoPill em js/detalhe-modal.js — senão o pill
+   voltaria pro tamanho normal ANTES da pílula do card mãe terminar de
+   descer, cortando a própria animação de saída. */
+/* 56px (não 46px) — a etapa da regra (status-badge + fileira de
+   fotinhos com bordas) precisa de ~34px de altura de conteúdo; com o
+   padding de 8px em cima/embaixo do pill, 46px só sobrava 30px e
+   cortava essas peças na borda de cima/baixo. */
+/* transition de height: sem isso, trocar de estado (ex: da regra pro
+   "Entregue ✓", que é bem mais baixo) mudava a altura da pílula na
+   hora (ajustarAlturaCardMaeNoPill escreve pill.style.height direto,
+   sem transição) enquanto o conteúdo deslizava suave por cima —
+   os dois movimentos descompassados pareciam um "pulo". */
+.detail-header-pill.card-mae-modo { height: 56px; overflow: hidden; transition: height var(--dur-slow) var(--ease-apple-spring); }
+.detail-header-pill.card-mae-modo .pill-face {
+  position: absolute; inset: 0;
+  transition: transform var(--dur-slow) var(--ease-apple-spring), opacity 0.24s var(--ease-apple);
+}
+.detail-header-pill.card-mae-modo .pill-face-cardmae { transform: translateY(100%); opacity: 0; }
+.detail-header-pill.card-mae-modo.card-mae-ativo .pill-face-normal { transform: translateY(-100%); opacity: 0; }
+.detail-header-pill.card-mae-modo.card-mae-ativo .pill-face-cardmae { transform: translateY(0); opacity: 1; }
+.pill-face-cardmae { display: flex; align-items: center; gap: 10px; }
+.pill-face-cardmae[hidden] { display: none; }
+
+.pill-cardmae-conteudo {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0;
+  box-sizing: border-box; padding: 0 8px;
+  animation: colmeia-pill-face-pop 0.3s var(--ease-apple-spring);
+}
+/* .pill-face (o "palco" do card mãe) usa position:absolute; inset:0 —
+   isso ignora o padding do .detail-header-pill (8px) e deixa o conteúdo
+   encostado exatamente na curva do canto arredondado (999px de raio
+   numa pílula de 56px de altura), cortando visualmente o canto do
+   status-badge (esquerda) e do botão de fechar (direita). O padding
+   acima devolve essa margem de segurança. */
+@keyframes colmeia-pill-face-pop {
+  from { transform: translateY(55%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.pill-cardmae-icone {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--kanban-yellow); color: #16181D;
+}
+.pill-cardmae-icone.entregue { background: #2F9E44; color: #fff; }
+.pill-cardmae-icone svg { width: 12px; height: 12px; }
+.pill-cardmae-texto { color: #fff; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill-cardmae-conteudo.centralizado { justify-content: center; }
+
+.pill-cardmae-acoes { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+/* Quando o conteúdo é centralizado como um grupo só (ver .centralizado
+   acima), os botões ficam grudados no texto em vez de empurrados pra
+   ponta — senão o grupo inteiro não fica realmente no centro do pill. */
+.pill-cardmae-conteudo.centralizado .pill-cardmae-acoes { margin-left: 0; }
+.pill-cardmae-acoes button {
+  font-family: var(--font-body); font-size: 11.5px; font-weight: 700; border: none;
+  border-radius: 999px; padding: 6px 13px; cursor: pointer; white-space: nowrap;
+  background: rgba(255,255,255,0.12); color: #fff;
+  transition: background 0.15s var(--ease-apple);
+}
+.pill-cardmae-acoes button:hover { background: rgba(255,255,255,0.2); }
+.pill-cardmae-acoes button.principal { background: var(--kanban-yellow); color: #16181D; }
+.pill-cardmae-acoes button.principal:hover { background: #E0B400; }
+
+/* Etapa final (D): a própria regra do card mãe, editável ali dentro —
+   3 zonas (grid), pra nada ficar "jogado" numa ponta só: etapa (status)
+   na esquerda, nome + regra centralizados no meio, fechar na direita.
+   A regra em si reaproveita renderSequenciaHTML/wireWorkflowArrows (as
+   MESMAS flechinhas de voltar/avançar/adicionar/entregar do pill normal
+   — ver js/detalhe-modal.js), só redesenhando #pillCardMaeSeq em vez de
+   #workflowSeqGroup depois de cada ação. */
+.pill-cardmae-regra {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.pill-cardmae-regra-centro {
+  display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0;
+}
+.pill-cardmae-nome {
+  color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+/* "X" de voltar/fechar — de propósito NÃO é verde/check: só sai dessa
+   etapa e volta o pill pro normal, não conclui nem entrega nada (quem
+   entrega é a flechinha de entregar dentro da própria regra, reaproveitada
+   de renderSequenciaHTML). */
+.pill-cardmae-fechar {
+  width: 26px; height: 26px; border-radius: 50%; background: #24252C; color: #fff;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer;
+  border: none; transition: background 0.15s var(--ease-apple);
+}
+.pill-cardmae-fechar:hover { background: #33343B; }
+.pill-cardmae-fechar svg { width: 12px; height: 12px; }
+
+/* Pop-up de "adicionar pessoa" do fluxo do card mãe dentro do pill —
+   mesmo tratamento visual do .repasse-quick-add, só que position:fixed
+   (posicionado em JS por posicionarPopupFixo, igual ao calendário). */
+.pill-cardmae-quickpick {
+  position: fixed; z-index: 500; width: 220px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 6px; box-shadow: var(--shadow-hover); max-height: 220px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  animation: colmeia-modal-pop var(--dur-fast) var(--ease-apple-spring);
+}
+.pill-cardmae-quickpick button {
+  display: flex; align-items: center; gap: 8px; border: none; background: transparent;
+  text-align: left; font-family: var(--font-body); font-size: 13px; font-weight: 500;
+  color: var(--text-primary); padding: 8px; border-radius: 8px; cursor: pointer; width: 100%;
+}
+.pill-cardmae-quickpick button:hover { background: var(--page-bg); }
+
+.detail-header-pill-right { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 1; min-width: 0; }
+
+.detail-header-pill .status-badge { background: #24252C; color: #fff; }
+.detail-header-pill .status-badge:hover { color: var(--kanban-yellow); }
+
+.detail-header-pill .play-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--kanban-yellow); color: #16181D; flex-shrink: 0;
+}
+.detail-header-pill .play-btn svg { width: 13px; height: 13px; }
+
+.detail-header-pill .timer-text { color: #fff; }
+.detail-header-pill .detail-sep { color: #33343B; }
+.detail-header-pill .detail-taskname { color: #fff; }
+
+.detail-sep { color: var(--border); }
+
+.detail-taskname { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 40px; }
+
+.detail-taskname-copy {
+  flex-shrink: 0; width: 18px; height: 18px; padding: 0; border: none; background: none;
+  color: #6b6d76; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; transition: color 0.15s var(--ease-apple), background 0.15s var(--ease-apple);
+}
+.detail-taskname-copy svg { width: 13px; height: 13px; }
+.detail-taskname-copy:hover { color: #9a9ca5; background: rgba(255,255,255,0.06); }
+.detail-taskname-copy.copied { color: #2F9E44; }
+
+.detail-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.nav-dot { width: 26px; height: 26px; border-radius: 50%; border: none; background: var(--page-bg); cursor: pointer; overflow: hidden; padding: 0; display: flex; align-items: center; justify-content: center; }
+.nav-dot.active { background: var(--accent); }
+.nav-dot .avatar-xs { width: 100%; height: 100%; font-size: 10px; }
+
+.nav-arrow {
+  width: 26px; height: 26px; border-radius: 50%; border: none; background: transparent;
+  color: #8A8D9A; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+}
+.nav-arrow svg { width: 16px; height: 16px; }
+.nav-arrow:hover { background: #24252C; color: #fff; }
+
+.status-wrap { position: relative; }
+
+.status-badge {
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  color: var(--text-secondary); background: var(--page-bg); border: none;
+  padding: 9px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+}
+.status-badge:hover { color: var(--text-primary); }
+
+.status-menu {
+  position: fixed; z-index: 200;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 6px; box-shadow: var(--shadow-hover);
+  display: flex; flex-direction: column; gap: 2px; min-width: 150px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.92) translateY(-4px); transform-origin: top right;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear var(--dur-fast);
+}
+.status-menu.open {
+  opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear;
+}
+
+.status-menu button {
+  border: none; background: transparent; text-align: left;
+  font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--text-primary);
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+}
+.status-menu button:hover { background: var(--page-bg); }
+.status-menu button.active { color: var(--kanban-yellow-text); font-weight: 700; }
+
+.detail-more-wrap { position: relative; }
+
+.nav-dots-group { display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+.detail-more {
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: var(--page-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.detail-more svg { width: 16px; height: 16px; }
+.detail-more:hover { color: var(--text-primary); }
+
+.detail-more-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 6px; box-shadow: var(--shadow-hover);
+  display: flex; flex-direction: column; gap: 2px; min-width: 160px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.92) translateY(-4px); transform-origin: top right;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear var(--dur-fast);
+}
+.detail-more-menu.open {
+  opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear;
+}
+
+.detail-more-menu button, .detail-more-menu a {
+  border: none; background: transparent; text-align: left;
+  font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  text-decoration: none; display: block;
+}
+.detail-more-menu button:hover, .detail-more-menu a:hover { background: var(--page-bg); }
+
+.detail-close {
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: var(--page-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.detail-close svg { width: 14px; height: 14px; }
+
+.detail-body { display: flex; flex: 1; min-height: 0; }
+
+.desc-pane {
+  display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--border);
+  flex: 1 1 100%;
+}
+
+.detail-tabs { display: flex; gap: 8px; padding: 16px 20px 0; flex-shrink: 0; }
+
+.detail-tab {
+  font-family: var(--font-body); font-size: 13.5px; font-weight: 600;
+  border: none; background: var(--page-bg); color: var(--text-secondary);
+  padding: 10px 16px; border-radius: 10px 10px 0 0; cursor: pointer;
+}
+
+.detail-tab.active { background: var(--card-bg); color: var(--kanban-yellow-text); box-shadow: 0 -1px 0 var(--border) inset; }
+
+.change-tab {
+  padding: 10px 12px;
+  display: flex; align-items: center;
+  color: var(--danger);
+  position: relative;
+}
+.change-tab svg { width: 17px; height: 17px; }
+.change-tab.active { color: var(--danger); background: var(--card-bg); }
+.change-tab::after {
+  content: ""; position: absolute; top: 7px; right: 7px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--danger);
+}
+
+.desc-stack { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+.desc-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; transition: flex-basis 0.32s var(--ease-apple); }
+.desc-content[hidden] { display: none; }
+
+/* Aba "Descrição card mãe" — mostra o nome do card mãe bem em cima
+   (pra dar contexto na hora, já que a subtarefa pode ter um nome
+   genérico tipo "Alteração 01") e a descrição dele logo abaixo. */
+.descmae-content { padding: 20px; overflow-y: auto; flex: 1 1 100%; }
+.descmae-content[hidden] { display: none; }
+.descmae-titulo {
+  font-family: var(--font-display); font-size: 15px; font-weight: 600;
+  color: var(--text-primary); margin-bottom: 14px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.change-panel {
+  flex: 0 0 0%; overflow: hidden; opacity: 0;
+  border-top: 1px solid var(--border);
+  background: var(--page-bg);
+  transition: flex-basis 0.32s var(--ease-apple), opacity 0.25s var(--ease-apple);
+}
+
+[data-theme="dark"] .change-panel { background: rgba(255,255,255,0.03); }
+
+.change-panel.open { flex-basis: 55%; opacity: 1; }
+.desc-stack:has(.change-panel.open) .desc-content { flex-basis: 45%; }
+
+.change-panel-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; color: var(--danger);
+  padding: 16px 20px 8px;
+}
+.change-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
+
+.change-summary { font-size: 13.5px; color: var(--text-primary); line-height: 1.6; padding: 0 20px 20px; }
+
+.children-btn-wrap { position: relative; }
+
+.children-float {
+  position: absolute; top: calc(100% + 10px); left: 0; z-index: 40;
+  width: 300px; max-height: 340px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-hover);
+  padding: 10px;
+  display: none;
+  flex-direction: column;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+
+[data-theme="dark"] .children-float { background: #0C0B12; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+.children-float.open { display: flex; }
+
+.children-float-head { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); padding: 4px 6px 8px; }
+
+.children-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+
+.child-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--page-bg); border: 2px solid transparent;
+  border-radius: 10px; padding: 9px 10px; cursor: pointer; width: 100%; text-align: left;
+  font-family: var(--font-body);
+}
+
+.child-item.done { border-color: var(--success); }
+
+.child-avatar { flex-shrink: 0; }
+
+.child-title { flex: 1; font-size: 12.5px; font-weight: 500; color: var(--text-primary); }
+
+.child-priority,
+.header-priority {
+  font-size: 10px; font-weight: 700; color: #fff; padding: 3px 8px;
+  border-radius: 999px; flex-shrink: 0; white-space: nowrap;
+}
+
+.header-priority { font-size: 11px; padding: 4px 10px; }
+
+.pv-alta { background: var(--danger); }
+.pv-media { background: var(--warning); }
+.pv-baixa { background: var(--success); }
+
+.child-check { width: 16px; height: 16px; color: var(--success); flex-shrink: 0; }
+
+.detail-desc { font-size: 14px; color: var(--text-primary); line-height: 1.7; margin-bottom: 20px; }
+
+.ai-format-boxes { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.format-box {
+  border-radius: 12px; padding: 14px 20px;
+  font-size: 13.5px; font-weight: 700; color: #fff;
+}
+
+.fb-purple { background: var(--purple); }
+.fb-pink { background: var(--danger); }
+.fb-blue { background: var(--kanban-yellow); color: #16181D; }
+.fb-teal { background: var(--success); }
+.fb-orange { background: var(--warning); }
+
+.comments-thread { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+.comment-bubble { display: flex; gap: 10px; max-width: 80%; position: relative; }
+.comment-bubble.mine { align-self: flex-end; text-align: right; }
+.comment-delete-btn {
+  position: absolute; top: -4px; right: -4px;
+  width: 18px; height: 18px; border-radius: 50%;
+  border: none; background: var(--card-bg); color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.12s var(--ease-apple); cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.comment-bubble:hover .comment-delete-btn { opacity: 1; }
+.comment-delete-btn svg { width: 10px; height: 10px; }
+.comment-delete-btn:hover { background: #FFE3E3; color: #E03131; }
+
+.comment-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--page-bg); flex-shrink: 0; }
+
+.comment-body { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; }
+[data-theme="dark"] .comment-body { background: rgba(255,255,255,0.04); }
+
+.comment-bubble.mine .comment-body { background: #FFF4CC; border-color: transparent; }
+.comment-bubble.mine .comment-text { color: #16181D; }
+[data-theme="dark"] .comment-bubble.mine .comment-body { background: #3D3210; }
+[data-theme="dark"] .comment-bubble.mine .comment-text { color: #FFE9A8; }
+
+/* Bolha otimista: aparece na hora que clica enviar, opaca/pendente, e
+   "acende" (cor normal) assim que o Runrun.it confirma o envio. */
+.comment-bubble { animation: commentPop 0.18s var(--ease-apple); }
+@keyframes commentPop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.comment-bubble.pending { opacity: 0.5; transition: opacity 0.25s var(--ease-apple); }
+.comment-bubble.pending .comment-body { background: var(--page-bg); }
+.comment-bubble.pending .comment-time { font-style: italic; }
+.comment-bubble:not(.pending) { transition: opacity 0.25s var(--ease-apple); }
+
+.comment-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+.comment-bubble.mine .comment-meta { flex-direction: row-reverse; }
+.comment-author { font-size: 12.5px; font-weight: 600; }
+.comment-time { font-size: 10.5px; color: var(--text-muted); }
+.comment-text { font-size: 13px; color: var(--text-primary); line-height: 1.5; text-align: left; }
+.comment-text a { color: var(--accent); text-decoration: underline; word-break: break-word; }
+.comment-text a:hover { text-decoration: none; }
+.mention-tag { color: var(--accent); font-weight: 700; }
+
+.comment-input {
+  position: relative;
+  padding: 10px 20px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+}
+.comment-input input {
+  flex: 1; height: 40px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--page-bg); padding: 0 14px; font-family: var(--font-body); font-size: 13.5px; color: var(--text-primary);
+}
+.comment-tool-btn {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px;
+  border: none; background: transparent; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; cursor: pointer;
+}
+.comment-tool-btn:hover { background: var(--page-bg); }
+.comment-tool-btn svg { width: 17px; height: 17px; }
+.comment-send-btn {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px;
+  border: none; background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.comment-send-btn svg { width: 16px; height: 16px; }
+
+.emoji-picker {
+  position: absolute; bottom: 100%; left: 20px; margin-bottom: 6px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px; box-shadow: var(--shadow-hover);
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+  z-index: 20;
+}
+.emoji-opt { border: none; background: transparent; font-size: 17px; cursor: pointer; padding: 4px; border-radius: 6px; }
+.emoji-opt:hover { background: var(--page-bg); }
+
+.comment-mention-list {
+  position: absolute; bottom: 100%; left: 20px; right: 20px; margin-bottom: 6px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 4px; box-shadow: var(--shadow-hover);
+  display: flex; flex-direction: column; gap: 2px;
+  z-index: 20; max-height: 160px; overflow-y: auto;
+}
+.mention-opt {
+  border: none; background: transparent; text-align: left;
+  font-family: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; cursor: pointer;
+}
+.mention-opt:hover { background: var(--page-bg); }
+
+.comment-attach-preview {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 20px 10px; font-size: 12.5px; color: var(--text-secondary);
+}
+.attach-preview-nome { background: var(--page-bg); padding: 4px 10px; border-radius: 999px; }
+.comment-attach-preview button {
+  border: none; background: transparent; color: var(--text-muted);
+  cursor: pointer; font-size: 15px;
+}
+
+/* ===== Chat flutuante (botão + painel separado que divide a tela com a tarefa) ===== */
+
+.chat-fab {
+  position: absolute; bottom: 20px; right: 20px; z-index: 15;
+  width: 52px; height: 52px; border-radius: 50%; border: none;
+  background: var(--kanban-yellow); color: #16181D; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 18px rgba(255,199,0,0.4);
+  transition: transform .12s var(--ease-apple);
+}
+.chat-fab:hover { transform: scale(1.06); }
+.chat-fab svg { width: 22px; height: 22px; }
+
+.chat-fab-badge {
+  position: absolute; top: -3px; right: -3px;
+  min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  background: var(--danger); color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--card-bg);
+}
+.chat-fab-badge[hidden] { display: none; }
+
+.task-detail.chat-open .detail-inner {
+  width: 70%; flex: 0 0 70%; min-width: 320px;
+}
+
+.chat-panel {
+  display: none; flex-direction: column; flex: 0 0 30%; min-width: 280px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(10,10,20,0.28);
+  overflow: hidden;
+}
+.task-detail.chat-open .chat-panel { display: flex; }
+
+.chat-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.chat-panel-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-panel-close {
+  width: 28px; height: 28px; border-radius: 8px; border: none;
+  background: var(--page-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+}
+.chat-panel-close svg { width: 14px; height: 14px; }
+
+.chat-panel-tabs { display: flex; gap: 8px; padding: 14px 20px 0; flex-shrink: 0; }
+.chat-panel-tab {
+  border: none; background: var(--page-bg); color: var(--text-secondary);
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  padding: 8px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+}
+.chat-panel-tab.active { background: var(--kanban-yellow); color: #16181D; }
+
+.upload-check-btn {
+  border: none; background: transparent; color: var(--text-muted);
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  padding: 8px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  margin-left: auto;
+}
+.upload-check-btn:hover { background: var(--page-bg); color: var(--text-primary); }
+.upload-check-btn:disabled { opacity: 0.6; cursor: default; }
+
+@media (max-width: 900px) {
+  .task-detail.chat-open .detail-inner { display: none; }
+  .task-detail.chat-open .chat-panel { flex: 1 1 100%; }
+}
+
+.detail-side {
+  flex: 1;
+  min-width: 320px;
+  max-width: 360px;
+  background: var(--card-bg);
+  padding: 24px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+[data-theme="dark"] .detail-side { background: rgba(255,255,255,0.03); }
+
+.side-block {
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 14px; padding: 14px 16px;
+  box-shadow: 0 2px 10px rgba(10,10,20,0.06);
+}
+
+.side-block.attach-block { flex: 1; min-height: 0; }
+
+.side-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.side-label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+
+.mother-card-btn {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  color: #16181D; background: var(--kanban-yellow); border: none;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.mother-card-btn svg { width: 14px; height: 14px; }
+
+.side-date { font-size: 15px; font-weight: 600; }
+.side-date-row { display: flex; align-items: center; gap: 8px; }
+.side-date-edit-btn {
+  width: 24px; height: 24px; border-radius: 50%; border: none; background: transparent;
+  color: var(--text-muted); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  flex-shrink: 0;
+}
+.side-date-edit-btn:hover { background: var(--page-bg); color: var(--accent); }
+.side-date-edit-btn svg { width: 14px; height: 14px; }
+.side-date-saving { font-size: 13px; color: var(--text-muted); }
+
+.side-block .badge { align-self: flex-start; }
+.side-block .badge-estatico, .side-block .badge-video, .side-block .badge-email, .side-block .badge-cliente {
+  background: #FFF4CC; color: #7A5C00;
+}
+
+.hub-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.hub-empty { font-size: 12px; color: var(--text-muted); font-style: italic; }
+.side-block .hub-pill { background: #16181D; color: #fff; }
+
+.hub-pill { font-size: 11.5px; font-weight: 600; color: #fff; padding: 5px 11px; border-radius: 999px; text-decoration: none; }
+.hub-purple { background: var(--purple); }
+.hub-pink { background: var(--danger); }
+.hub-blue { background: var(--accent); }
+.hub-orange { background: var(--warning); }
+.hub-teal { background: var(--success); }
+
+.side-person { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+
+.discord-ctas { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+
+.discord-cta {
+  display: flex; align-items: center; gap: 9px;
+  background: #16181D; color: #fff;
+  font-size: 12.5px; font-weight: 600; text-decoration: none;
+  padding: 9px 12px; border-radius: 10px;
+}
+.discord-cta:hover { opacity: 0.9; }
+.discord-cta.disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+.discord-cta.ghost { background: #F3F4F6; color: var(--text-primary); }
+
+.discord-cta-icon { width: 16px; height: 16px; flex-shrink: 0; display: flex; }
+.discord-cta-icon svg { width: 100%; height: 100%; }
+
+.download-all-btn {
+  font-size: 10.5px; font-weight: 600; color: #7A5C00;
+  background: #FFF4CC; border: none; border-radius: 999px;
+  padding: 4px 9px; cursor: pointer; white-space: nowrap;
+}
+
+.attach-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  flex: 1;
+  min-height: 90px;
+  overflow-y: auto;
+}
+
+.attach-list { display: flex; flex-direction: column; gap: 6px; }
+
+.attach-item {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: var(--page-bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-weight: 500;
+  font-family: var(--font-body); text-align: left; cursor: pointer;
+  color: var(--text-primary); transition: border-color .12s var(--ease-apple);
+}
+.attach-item:hover { border-color: var(--text-muted); }
+.attach-item:disabled { opacity: 0.6; cursor: default; }
+.attach-item svg { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
+
+.attach-empty { font-size: 12.5px; color: var(--text-muted); font-style: italic; padding: 4px 2px; }
+.attach-size { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+
+.attach-toggle {
+  width: 20px; height: 20px; border-radius: 50%; border: none;
+  background: var(--text-primary); color: var(--card-bg);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.attach-toggle svg { width: 11px; height: 11px; }
+
+@media (max-width: 720px) {
+  .page { padding: 14px; gap: 10px; }
+  .search-box { display: none; }
+  .task-detail { left: 14px; right: 14px; top: 14px; bottom: 14px; }
+  .detail-side { display: none; }
+}
+
+
+/* Crachá de etapa quando a tarefa JÁ FOI ENTREGUE — antes ele continuava
+   dizendo "Fazendo" (no Runrun.it, entregar fecha a tarefa mas não muda a
+   etapa dela). Ver rotuloDaEtapa em js/detalhe-modal.js. */
+.status-badge.entregue { background: #E8F8F5; color: #1A6B55; }
+[data-theme="dark"] .status-badge.entregue { background: rgba(26,107,85,0.30); color: #8FE0D0; }
+
+/* Atalho em destaque no menu de etapa, pra tarefa que está numa etapa fora
+   das 5 colunas do quadro (o caso do card mãe, em "Cards Mães"): mostra o
+   caminho pronto — "Cards Mães → Revisão" — pra resolver num clique, em vez
+   de obrigar a achar a coluna certa na lista. Ver abrirMenuEtapa. */
+.status-menu-atalho {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  border: none; cursor: pointer; text-align: left;
+  background: var(--kanban-yellow); color: #16181D;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
+  padding: 9px 10px; border-radius: 8px;
+}
+.status-menu-atalho:hover { filter: brightness(0.96); }
+.status-menu-atalho-de { opacity: 0.72; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
+.status-menu-atalho-seta { opacity: 0.72; }
+.status-menu-atalho-para { white-space: nowrap; }
+.status-menu-sep { height: 1px; background: var(--border); margin: 5px 2px; }

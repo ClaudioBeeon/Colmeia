@@ -56,13 +56,47 @@ function salvarNotificacoesLog(lista) {
 // rede por tarefa toda vez que o sino é aberto de novo em seguida
 // (ex: abrir/fechar sem querer, ou dar uma segunda olhada logo depois).
 const CACHE_COMENTARIOS_TTL_MS = 30 * 1000;
-const cacheComentariosPorTarefa = new Map(); // taskId -> { comentarios, quando }
+const cacheComentariosPorTarefa = new Map(); // taskId -> { comentarios, quando, lastActivityAt }
 
-async function buscarComentariosComCache(taskId) {
+/**
+ * Busca os comentários de uma tarefa, mas SÓ vai à rede se algo tiver
+ * mudado nela de verdade.
+ *
+ * Por que isso importa: verificarNotificacoes roda depois de QUALQUER
+ * atualização do quadro (a cada 60s e ~1s depois de cada ação) e chamava
+ * isso pra cada tarefa sua. Com 15 tarefas eram ~15 idas ao Apps Script
+ * por minuto, por pessoa — a maior fonte de tráfego do app, competindo
+ * com as ações de verdade e deixando tudo mais lento.
+ *
+ * O Runrun.it já devolve `lastActivityAt` (updated_at) de cada tarefa na
+ * busca do quadro, que a gente pega "de graça". Se ele não mudou desde a
+ * última vez que buscamos os comentários, não tem comentário novo — então
+ * reaproveita o que já está guardado, sem gastar nenhuma chamada. Na
+ * maioria dos ciclos isso cai pra ZERO chamadas.
+ */
+// Teto de segurança: mesmo que a data de atividade da tarefa não mude,
+// rebusca de tempos em tempos. É uma rede de proteção caso o Runrun.it
+// não atualize `updated_at` ao receber um comentário — sem isso, a
+// notificação daquela tarefa poderia nunca mais ser checada. Continua
+// cortando a grande maioria das chamadas, e o pior caso vira "o sino
+// demora até 10 min", nunca "o sino não avisa".
+const TETO_REBUSCA_COMENTARIOS_MS = 10 * 60 * 1000;
+
+async function buscarComentariosComCache(taskId, lastActivityAt) {
   const cache = cacheComentariosPorTarefa.get(taskId);
-  if (cache && (Date.now() - cache.quando) < CACHE_COMENTARIOS_TTL_MS) return cache.comentarios;
+  if (cache) {
+    const idade = Date.now() - cache.quando;
+    const aindaFresco = idade < CACHE_COMENTARIOS_TTL_MS;
+    // "Nada mudou na tarefa desde a última busca" só vale quando as duas
+    // pontas realmente têm essa data — sem ela, cai na regra de tempo de
+    // sempre, pra nunca deixar de perceber um comentário novo.
+    const nadaMudouNaTarefa = !!lastActivityAt && !!cache.lastActivityAt
+      && String(lastActivityAt) === String(cache.lastActivityAt)
+      && idade < TETO_REBUSCA_COMENTARIOS_MS;
+    if (aindaFresco || nadaMudouNaTarefa) return cache.comentarios;
+  }
   const comentarios = await buscarComentariosDoBackend(taskId);
-  cacheComentariosPorTarefa.set(taskId, { comentarios, quando: Date.now() });
+  cacheComentariosPorTarefa.set(taskId, { comentarios, quando: Date.now(), lastActivityAt: lastActivityAt || null });
   return comentarios;
 }
 
@@ -95,13 +129,15 @@ async function verificarNotificacoes() {
 async function _verificarNotificacoesImpl() {
   const primeiraVez = _primeiraChecagemNotificacoes;
   _primeiraChecagemNotificacoes = false;
-  const minhasTarefas = tasks.filter(t => t.id && nomesCorrespondem(t.assignee, DESIGNER_LOGADO));
+  const minhasTarefas = tasks.filter(t => t.id && ehMinhaTarefa(t));
   let log = carregarNotificacoesLog();
   const chavesExistentes = new Set(log.map(n => n.taskId + "::" + n.comentarioId));
   const novos = [];
 
   await Promise.all(minhasTarefas.map(async t => {
-    const comentarios = await buscarComentariosComCache(t.id);
+    // Passa a data de última atividade da tarefa: se ela não mudou, o
+    // cache responde sem gastar chamada nenhuma (ver buscarComentariosComCache).
+    const comentarios = await buscarComentariosComCache(t.id, t.lastActivityAt);
     t.comments = comentarios; // aproveita e já deixa cacheado pro chat também
     comentarios
       .filter(c => !nomesCorrespondem(c.autor, DESIGNER_LOGADO))
@@ -275,7 +311,12 @@ document.getElementById("notificationsBtn").addEventListener("click", async () =
   const panel = document.getElementById("notificationsPanel");
   panel.classList.toggle("open");
   if (panel.classList.contains("open")) {
-    document.getElementById("notificationsBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
+    // Mostra NA HORA o que já está guardado no navegador (o log de
+    // notificações dos últimos 2 dias) em vez de exibir "Carregando..." e
+    // esperar a busca de todas as tarefas. A atualização acontece por trás
+    // e a lista se completa sozinha quando termina.
+    if (notificacoes.length === 0) notificacoes = carregarNotificacoesLog();
+    renderNotificacoes();
     await verificarNotificacoes();
     renderNotificacoes();
     // Abrir o sino zera o contador, mas os cards continuam na lista —
@@ -360,14 +401,24 @@ function renderAvisos() {
       e.stopPropagation();
       const id = btn.dataset.id;
       btn.disabled = true;
-      const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify({ acao: "excluirAviso", id }) });
-      const data = await res.json();
-      if (data.ok) {
-        avisosCache = avisosCache.filter(a => a.id !== id);
-        renderAvisos();
-      } else {
+      // O try/catch aqui não é enfeite: sem ele, uma queda de internet no
+      // meio do caminho estourava um erro e o botão ficava desabilitado
+      // PARA SEMPRE (só F5 resolvia), sem nenhuma mensagem explicando.
+      // Mesmo cuidado do resto do app — sempre devolver o botão ao normal.
+      try {
+        const res = await fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify({ acao: "excluirAviso", id }) });
+        const data = await res.json();
+        if (data.ok) {
+          avisosCache = avisosCache.filter(a => a.id !== id);
+          renderAvisos();
+          return;
+        }
         btn.disabled = false;
-        alert(data.error || "Não consegui excluir esse aviso agora.");
+        mostrarToast(data.error || "Não consegui excluir esse aviso agora.", "erro");
+      } catch (err) {
+        console.error("Falha ao excluir aviso:", err);
+        btn.disabled = false;
+        mostrarToast("Falha de conexão. Não consegui excluir esse aviso agora.", "erro");
       }
     });
   });
@@ -381,7 +432,12 @@ document.getElementById("avisosBtn").addEventListener("click", async () => {
   const novoWrap = document.getElementById("avisosNovoWrap");
   if (novoWrap) novoWrap.hidden = !souClaudio(); // só o Cláudio lança aviso novo — os outros só veem
 
-  document.getElementById("avisosBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
+  // O app já busca os avisos sozinho a cada 5 minutos, então quase sempre
+  // temos a lista em mãos — mostra ela na hora em vez de "Carregando..."
+  // e só atualiza por trás. Sem nada guardado ainda (primeira abertura da
+  // sessão), aí sim mostra o aviso de carregando.
+  if (avisosCache.length > 0) renderAvisos();
+  else document.getElementById("avisosBody").innerHTML = `<p class="quick-access-empty">Carregando...</p>`;
   avisosCache = await buscarAvisosDoBackend();
   renderAvisos();
   // Abrir o painel já marca tudo como visto — o contador zera na hora.
@@ -399,20 +455,30 @@ document.getElementById("avisosNovoBtn").addEventListener("click", async () => {
   const btn = document.getElementById("avisosNovoBtn");
   btn.disabled = true;
   btn.textContent = "Lançando...";
-  const res = await fetch(COLMEIA_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ acao: "criarAviso", autor: DESIGNER_LOGADO, texto }),
-  });
-  const data = await res.json();
-  btn.disabled = false;
-  btn.textContent = "Lançar aviso";
-  if (data.ok) {
-    textarea.value = "";
-    avisosCache = await buscarAvisosDoBackend();
-    renderAvisos();
-    marcarAvisosVistos(avisosCache);
-  } else {
-    alert(data.error || "Não consegui lançar o aviso agora.");
+  // O `finally` garante que o botão SEMPRE volta ao normal — antes, uma
+  // falha de conexão no meio do envio deixava ele preso em "Lançando..."
+  // desabilitado pra sempre (só F5 resolvia), e o texto do aviso ficava
+  // refém dele. O texto digitado só é apagado quando o envio dá certo.
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "criarAviso", autor: DESIGNER_LOGADO, texto }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      textarea.value = "";
+      avisosCache = await buscarAvisosDoBackend();
+      renderAvisos();
+      marcarAvisosVistos(avisosCache);
+    } else {
+      mostrarToast(data.error || "Não consegui lançar o aviso agora.", "erro");
+    }
+  } catch (err) {
+    console.error("Falha ao lançar aviso:", err);
+    mostrarToast("Falha de conexão. O aviso não foi lançado — o texto continua aí, tenta de novo.", "erro");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Lançar aviso";
   }
 });
 
@@ -426,6 +492,9 @@ let _primeiraChecagemAvisos = true;
 async function atualizarBadgeAvisos() {
   const badge = document.getElementById("avisosBadge");
   if (!badge || !COLMEIA_API_URL) return;
+  // Não fica buscando avisos com a tela de login aberta (ninguém logado) —
+  // mesmo motivo da checagem no polling do quadro.
+  if (!DESIGNER_LOGADO) return;
   avisosCache = await buscarAvisosDoBackend();
   const vistos = idsAvisosVistos();
   const novosAvisos = avisosCache.filter(a => !vistos.has(a.id));

@@ -1,7 +1,9 @@
 let detailIdx = null;
-let changeOpen = false;
 let childrenOpen = false;
 let descMaeAberta = false;
+// Aba "Tarefa original" aberta? (só existe em subtarefa de alteração — ver
+// ehTarefaDeAlteracao em js/detalhe-modal.js)
+let originalAberta = false;
 
 // ===== Chat flutuante (comentários em pop-up separado, fora do card) =====
 let chatThreadAtivo = "aqui"; // "aqui" (a tarefa aberta) ou "mae" (o card mãe dela)
@@ -58,6 +60,8 @@ function abrirThreadAqui(task) {
   const tabMae = document.getElementById("chatTabMae");
   if (tabAqui) tabAqui.classList.add("active");
   if (tabMae) tabMae.classList.remove("active");
+  const tabTudoAqui = document.getElementById("chatTabTudo");
+  if (tabTudoAqui) tabTudoAqui.classList.remove("active");
   const titulo = document.getElementById("chatPanelTitle");
   if (titulo) titulo.textContent = task.title;
   const thread = document.getElementById("commentsThread");
@@ -82,6 +86,8 @@ async function abrirThreadDoCardMae(task) {
   const tabMae = document.getElementById("chatTabMae");
   if (tabMae) tabMae.classList.add("active");
   if (tabAqui) tabAqui.classList.remove("active");
+  const tabTudoMae = document.getElementById("chatTabTudo");
+  if (tabTudoMae) tabTudoMae.classList.remove("active");
   const thread = document.getElementById("commentsThread");
   if (thread) thread.innerHTML = `<p class="comments-empty">Carregando comentários do card mãe...</p>`;
 
@@ -110,12 +116,78 @@ async function abrirThreadDoCardMae(task) {
 }
 
 /**
+ * Linha do tempo única de uma subtarefa de ALTERAÇÃO: junta, em ordem de
+ * hora, os comentários das três pontas que contam a história daquela peça
+ * — a própria alteração, a tarefa original (a peça que foi feita) e o card
+ * mãe (onde o atendimento normalmente escreve o pedido do cliente).
+ *
+ * É isso que responde "o que exatamente pediram nessa alteração": antes
+ * essas conversas viviam em lugares separados (e a da tarefa original nem
+ * era acessível pelo Colmeia), então o designer abria uma subtarefa
+ * chamada só "Alteração 01" sem nenhum contexto do que mudar.
+ *
+ * Comentar por aqui vai pra própria alteração (é a tarefa aberta).
+ */
+async function abrirThreadLinhaDoTempo(task) {
+  chatThreadAtivo = "tudo";
+  chatAlvoTaskId = task.id;
+  ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("active", id === "chatTabTudo");
+  });
+  const thread = document.getElementById("commentsThread");
+  if (thread) thread.innerHTML = `<p class="comments-empty">Montando a linha do tempo...</p>`;
+
+  const taskId = task.id;
+  const original = acharTarefaOriginalDaAlteracao(task);
+  const infoMae = cardMaeCache.get(taskId);
+
+  // As três buscas em paralelo (a da alteração e a do card mãe costumam
+  // já estar em cache do pré-carregamento).
+  const [comentariosAqui, comentariosOriginal, comentariosMae] = await Promise.all([
+    task.comments !== undefined ? Promise.resolve(task.comments) : buscarComentariosDoBackend(taskId),
+    original ? buscarComentariosDoBackend(original.id) : Promise.resolve([]),
+    (infoMae && infoMae.ok && infoMae.temPai)
+      ? (chatMaeCache.has(taskId)
+          ? Promise.resolve(chatMaeCache.get(taskId).comments)
+          : buscarComentariosDoBackend(infoMae.cardMae.id))
+      : Promise.resolve([]),
+  ]);
+
+  // Trocou de aba ou de tarefa enquanto carregava? Compara por id.
+  if (chatThreadAtivo !== "tudo" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
+
+  const juntos = []
+    .concat((comentariosAqui || []).map(c => Object.assign({}, c, { _origem: "Nesta alteração" })))
+    .concat((comentariosOriginal || []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })))
+    .concat((comentariosMae || []).map(c => Object.assign({}, c, { _origem: "Card mãe" })))
+    .sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0));
+
+  const titulo = document.getElementById("chatPanelTitle");
+  if (titulo) titulo.textContent = "Linha do tempo · " + task.title;
+  if (thread) {
+    thread.innerHTML = juntos.length
+      ? renderComentariosHTML({ id: taskId, comments: juntos })
+      : `<p class="comments-empty">Nenhum comentário em nenhuma das três pontas ainda.</p>`;
+    wireExcluirComentario();
+    thread.scrollTop = thread.scrollHeight;
+  }
+}
+
+/**
  * Recarrega a thread que está sendo mostrada agora no chat (a da
- * própria tarefa ou a do card mãe) — usado depois de enviar, excluir
- * ou reagir a um comentário.
+ * própria tarefa, a do card mãe ou a linha do tempo da alteração) —
+ * usado depois de enviar, excluir ou reagir a um comentário.
  */
 async function recarregarThreadAtiva() {
   const task = tasks[detailIdx];
+  if (chatThreadAtivo === "tudo") {
+    // Rebusca os comentários da própria alteração (é onde a pessoa acabou
+    // de escrever) e remonta a linha do tempo inteira.
+    task.comments = await buscarComentariosDoBackend(task.id);
+    await abrirThreadLinhaDoTempo(task);
+    return;
+  }
   if (chatThreadAtivo === "aqui") {
     await carregarComentarios(task);
     return;
@@ -181,8 +253,65 @@ function prepararTextoComentario(textoBruto) {
   if (!textoBruto) return "";
   const jaTemLinkPronto = /<a\s/i.test(textoBruto);
   const comMencoes = formatarMencoes(textoBruto);
-  if (jaTemLinkPronto) return aplicarMarcadoresDeMencao(comMencoes);
+  // Texto que já vem com link pronto NÃO é mais inserido cru na tela: em
+  // vez de "confiar na fonte", passa por uma peneira que deixa só as
+  // marcações inofensivas de formatação (ver peneirarHTMLDeComentario).
+  // Assim o link continua clicável, mas nada além disso entra.
+  if (jaTemLinkPronto) return aplicarMarcadoresDeMencao(peneirarHTMLDeComentario(comMencoes));
   return aplicarMarcadoresDeMencao(linkifyTexto(escaparHTML(comMencoes)));
+}
+
+/**
+ * Peneira o HTML de um comentário vindo do Runrun.it: reconstrói o texto
+ * deixando passar SÓ um punhado de marcações de formatação conhecidas
+ * (link, negrito, itálico, quebra de linha, parágrafo, lista) e jogando
+ * fora qualquer outra coisa — script, imagem, evento de clique, estilo.
+ *
+ * Antes, um comentário que já vinha com <a> pronto era inserido na tela
+ * exatamente como veio, "confiando" no que o Runrun.it mandou. Como só
+ * gente do time escreve lá o risco era baixo, mas era uma porta aberta
+ * pra HTML estranho quebrar (ou fazer coisa indevida com) a tela do chat.
+ * Nos links, além de exigir http/https, força abrir em outra aba.
+ */
+const TAGS_PERMITIDAS_COMENTARIO = ["A", "B", "STRONG", "I", "EM", "U", "BR", "P", "UL", "OL", "LI", "SPAN", "DIV"];
+
+function peneirarHTMLDeComentario(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  function limpar(no) {
+    Array.from(no.childNodes).forEach(filho => {
+      if (filho.nodeType === Node.TEXT_NODE) return; // texto puro sempre pode
+      if (filho.nodeType !== Node.ELEMENT_NODE) { filho.remove(); return; }
+
+      if (TAGS_PERMITIDAS_COMENTARIO.indexOf(filho.tagName) === -1) {
+        // Tag não permitida: some com ela, mas preserva o texto de dentro
+        // (assim nenhuma palavra do comentário é perdida).
+        const textoDentro = doc.createTextNode(filho.textContent || "");
+        filho.replaceWith(textoDentro);
+        return;
+      }
+
+      // Tira TODOS os atributos (é aí que moram os onclick, style, etc)...
+      const href = filho.tagName === "A" ? filho.getAttribute("href") : null;
+      Array.from(filho.attributes).forEach(attr => filho.removeAttribute(attr.name));
+      // ...e devolve só o href, se for um link http/https de verdade.
+      if (filho.tagName === "A") {
+        if (href && /^https?:\/\//i.test(href)) {
+          filho.setAttribute("href", href);
+          filho.setAttribute("target", "_blank");
+          filho.setAttribute("rel", "noopener");
+        } else {
+          const textoDentro = doc.createTextNode(filho.textContent || "");
+          filho.replaceWith(textoDentro);
+          return;
+        }
+      }
+      limpar(filho);
+    });
+  }
+
+  limpar(doc.body);
+  return doc.body.innerHTML;
 }
 
 function renderComentariosHTML(task) {
@@ -201,7 +330,7 @@ function renderComentariosHTML(task) {
     <div class="comment-bubble ${minha ? "mine" : ""}" data-comment-id="${c.id}">
       ${minha ? "" : avatarHTML(c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
-        <div class="comment-meta"><span class="comment-author">${minha ? "Você" : c.autor}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span></div>
+        <div class="comment-meta"><span class="comment-author">${minha ? "Você" : escaparHTML(c.autor)}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span>${c._origem ? `<span class="comment-origem">${escaparHTML(c._origem)}</span>` : ""}</div>
         <div class="comment-text">${prepararTextoComentario(c.texto)}</div>
         ${(c.reactions || []).length ? `
           <div class="comment-reactions">
@@ -304,31 +433,184 @@ function formatarTamanhoArquivo(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function carregarAnexos(task) {
-  if (!task.id || !task.attachmentsCount) return;
-  let anexos = [];
+/**
+ * Carrega TUDO que o pop-up da tarefa precisa num único pedido ao backend
+ * (ação "abrirTarefa") e distribui o resultado pela tela.
+ *
+ * Antes, abrir um card disparava de 8 a 12 pedidos separados — é por isso
+ * que ele aparecia em pedaços, com vários "Carregando..." ao mesmo tempo.
+ * Agora é um pedido só; lá dentro o backend busca do Runrun.it em paralelo.
+ *
+ * Se essa ação não existir no backend (janela de alguns minutos entre a
+ * publicação do site e a do backend, ou backend antigo), volta sozinho pro
+ * jeito antigo — um pedido por assunto. Assim nada quebra durante a troca.
+ */
+async function carregarTudoDaTarefa(task) {
+  if (!task.id) return;
+  const taskId = task.id;
+  // Avisa que a pasta do card já vem NESSA resposta, pra verificarPastaJaSalva
+  // (chamada pelo renderDetail, que roda antes disso terminar) não sair
+  // fazendo um pedido próprio em paralelo à toa.
+  task._abrindoTudo = true;
+
+  let data = null;
   try {
     const res = await fetch(COLMEIA_API_URL, {
       method: "POST",
-      body: JSON.stringify({ acao: "buscarAnexos", taskId: task.id }),
+      body: JSON.stringify({ acao: "abrirTarefa", taskId }),
+    });
+    data = await res.json();
+  } catch (err) {
+    console.error("Falha ao abrir a tarefa:", err);
+  }
+  task._abrindoTudo = false;
+
+  if (!data || !data.ok) {
+    // Backend ainda não conhece "abrirTarefa" (ou deu erro): faz do jeito
+    // antigo, cada coisa no seu pedido.
+    if (data && data.error && String(data.error).indexOf("desconhecida") !== -1) {
+      console.error("Backend antigo: usando o modo antigo de abrir o card (um pedido por assunto).");
+    }
+    carregarComentarios(task);
+    carregarDescricao(task);
+    carregarSequencia(task);
+    carregarAnexos(task);
+    carregarCronometroReal(task);
+    const btnPastaFallback = document.getElementById("criarPastaDriveBtn");
+    if (btnPastaFallback) verificarPastaJaSalva(task, btnPastaFallback);
+    return;
+  }
+
+  // Trocou de tarefa enquanto carregava? Compara por id, nunca por
+  // referência (bug recorrente do CLAUDE.md).
+  const aindaNaMesma = () => tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId);
+
+  // --- Cronômetro: nunca deixa o tempo voltar pra trás ---
+  const fresco = mapearTarefaDoBackend(data.tarefa);
+  task.timerSeconds = Math.max(task.timerSeconds || 0, fresco.timerSeconds);
+  task.tempoMedioMinutos = fresco.tempoMedioMinutos;
+  task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
+  task.attachmentsCount = fresco.attachmentsCount;
+
+  // --- Sequência de responsáveis ---
+  task.sequencia = data.sequencia || [];
+  task.workflowId = data.workflowId || null;
+
+  // --- Comentários ---
+  task.comments = data.comentarios || [];
+
+  // --- Pasta do Drive (veio de leitura na planilha, sem tocar no Drive) ---
+  if (data.pastaUrl !== undefined) task.pastaUrlSalva = data.pastaUrl;
+
+  if (!aindaNaMesma()) return;
+
+  // Agora desenha tudo de uma vez.
+  const timerEl = document.getElementById("detailTimer");
+  if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
+
+  const descEl = document.getElementById("descTextReal");
+  if (descEl) descEl.innerHTML = data.descricao
+    ? formatarDescricaoRunrun(data.descricao)
+    : "Sem descrição cadastrada nessa tarefa.";
+
+  const seqEl = document.getElementById("workflowSeqGroup");
+  if (seqEl) {
+    seqEl.innerHTML = renderSequenciaHTML(task);
+    wireWorkflowArrows(task);
+  }
+
+  atualizarBadgeChat(task);
+  const chatPanel = document.getElementById("chatPanel");
+  if (chatPanel && !chatPanel.hidden && chatThreadAtivo === "aqui") {
+    marcarChatVisto(task);
+    atualizarBadgeChat(task);
+    const thread = document.getElementById("commentsThread");
+    if (thread) { thread.innerHTML = renderComentariosHTML(task); wireExcluirComentario(); }
+  }
+
+  if (task.pastaUrlSalva) {
+    const btnPasta = document.getElementById("criarPastaDriveBtn");
+    if (btnPasta) {
+      btnPasta.dataset.pastaUrl = task.pastaUrlSalva;
+      const label = btnPasta.querySelector(".pasta-drive-btn-label");
+      if (label) label.textContent = "Acessar pasta do card";
+      mostrarPillCopiarLinkDaPasta(task.pastaUrlSalva);
+    }
+    atualizarLabelLinkManual(true);
+  }
+
+  // Anexos: vieram junto (no Runrun.it eles moram dentro dos comentários).
+  // Numa subtarefa de alteração ainda falta buscar os da tarefa original,
+  // então nesse caso deixa carregarAnexos cuidar de tudo.
+  if (ehTarefaDeAlteracao(task)) carregarAnexos(task);
+  else desenharAnexos(task, data.anexos || []);
+
+  // "É card mãe?" também já veio na mesma resposta.
+  if (data.temSubtarefas) carregarFilhosSeForCardMae(task);
+}
+
+async function buscarAnexosDeUmaTarefa(taskId) {
+  try {
+    const res = await fetch(COLMEIA_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ acao: "buscarAnexos", taskId }),
     });
     const data = await res.json();
-    if (data.ok) anexos = data.anexos || [];
+    return data.ok ? (data.anexos || []) : [];
   } catch (err) {
     console.error("Falha ao buscar anexos:", err);
+    return [];
+  }
+}
+
+async function carregarAnexos(task) {
+  if (!task.id) return;
+  // Numa subtarefa de ALTERAÇÃO, os arquivos que o designer precisa (a peça
+  // que vai ser alterada) estão na tarefa ORIGINAL, não nela — então aqui
+  // busca nas duas e junta, marcando de onde cada arquivo veio. Por isso a
+  // checagem de attachmentsCount não pode mais barrar a busca de saída:
+  // a alteração costuma ter zero anexos próprios e é justamente aí que
+  // precisamos ir ver os da original.
+  const ehAlteracao = ehTarefaDeAlteracao(task);
+  if (!task.attachmentsCount && !ehAlteracao) return;
+
+  let anexos = task.attachmentsCount ? await buscarAnexosDeUmaTarefa(task.id) : [];
+
+  if (ehAlteracao) {
+    // O card mãe (e a lista de irmãs) já vem pré-carregado quando a
+    // subtarefa abre; se ainda não chegou, espera.
+    if (!cardMaeCache.has(task.id)) await precarregarCardMaeEmBackground(task.id);
+    const original = acharTarefaOriginalDaAlteracao(task);
+    if (original) {
+      const anexosOriginal = await buscarAnexosDeUmaTarefa(original.id);
+      anexos = anexos.concat(anexosOriginal.map(a => Object.assign({}, a, { _daOriginal: true })));
+    }
   }
   if (!tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de tarefa enquanto carregava
+  desenharAnexos(task, anexos);
+}
+
+/**
+ * Desenha a lista de anexos na tela. Separado da BUSCA porque agora os
+ * anexos podem chegar de dois caminhos: junto com todo o resto, no pedido
+ * único de abrir o card (carregarTudoDaTarefa — no Runrun.it os anexos
+ * moram dentro dos comentários, então vêm de graça), ou numa busca própria
+ * (subtarefa de alteração, que também precisa dos anexos da tarefa
+ * original). Os dois caminhos desenham igual, por aqui.
+ */
+function desenharAnexos(task, anexos) {
   const listaEl = document.getElementById("attachList");
   if (!listaEl) return;
   const allBtn = document.getElementById("downloadAllBtn");
-  if (anexos.length === 0) {
+  if (!anexos || anexos.length === 0) {
     listaEl.innerHTML = `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`;
     if (allBtn) allBtn.hidden = true;
     return;
   }
+  if (allBtn) allBtn.hidden = false;
   listaEl.innerHTML = anexos.map(a => `
-    <button type="button" class="attach-item" data-doc-id="${a.id}" data-nome="${a.nome}">
-      <span>${a.nome}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}</span>
+    <button type="button" class="attach-item" data-doc-id="${a.id}" data-nome="${escaparHTML(a.nome)}">
+      <span>${escaparHTML(a.nome)}${a._daOriginal ? ` <span class="attach-origem">da tarefa original</span>` : ""}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}</span>
       <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   `).join("");
@@ -378,6 +660,12 @@ async function carregarCronometroReal(task) {
     const timerEl = document.getElementById("detailTimer");
     if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
   }
+  // Essa mesma resposta já diz se a tarefa tem subtarefas — aproveita e
+  // resolve aqui o "isso é um card mãe?", que antes custava uma SEGUNDA
+  // chamada lendo exatamente a mesma tarefa no Runrun.it a cada abertura
+  // de card. A lista de subtarefas (que custa uma leitura por subtarefa)
+  // só é buscada quando realmente é card mãe.
+  if (resultado.temSubtarefas) carregarFilhosSeForCardMae(task);
 }
 
 /**
@@ -425,7 +713,7 @@ async function baixarAnexo(documentId, nome, btnEl, taskId) {
     // motivo real que o backend devolveu (ex: arquivo grande demais,
     // Runrun.it recusou, documento não existe mais) — agora mostra o
     // motivo de verdade quando tem um.
-    alert("Não consegui baixar esse anexo agora: " + (err.message || "erro desconhecido") + "\nTenta de novo em alguns segundos.");
+    mostrarToast("Não consegui baixar esse anexo agora: " + (err.message || "erro desconhecido"), "erro");
   } finally {
     btnEl.disabled = false;
     btnEl.innerHTML = original;
@@ -532,7 +820,12 @@ async function confirmarECriarPastaDoCard(task) {
     btn.disabled = false;
 
     if (!data.ok) {
-      trocarTextoBotaoPasta(data.error ? data.error.slice(0, 40) : "Não consegui criar a pasta");
+      // O erro vai pro avisinho (que cabe a mensagem inteira, sem cortar em
+      // 40 letras) e o botão VOLTA ao texto normal — antes ele ficava preso
+      // exibindo o erro picado e a pessoa não descobria que podia tentar de
+      // novo sem fechar e reabrir a tarefa.
+      mostrarToast(data.error || "Não consegui criar a pasta do card agora.", "erro");
+      trocarTextoBotaoPasta("Criar pasta do card");
       return;
     }
     btn.dataset.pastaUrl = data.url;
@@ -543,7 +836,8 @@ async function confirmarECriarPastaDoCard(task) {
   } catch (err) {
     console.error("Falha ao criar pasta do card no Drive:", err);
     btn.disabled = false;
-    trocarTextoBotaoPasta("Falha de conexão");
+    mostrarToast("Falha de conexão. Não consegui criar a pasta agora — tenta de novo em alguns segundos.", "erro");
+    trocarTextoBotaoPasta("Criar pasta do card");
   }
 }
 
@@ -568,6 +862,9 @@ function mostrarPillCopiarLinkDaPasta(url) {
 
 async function verificarPastaJaSalva(task, btn) {
   if (!task.id) return;
+  // A abertura do card já traz a pasta na mesma resposta (ver
+  // carregarTudoDaTarefa) — não faz um pedido separado em paralelo com ela.
+  if (task._abrindoTudo) return;
 
   if (task.pastaUrlSalva !== undefined) {
     if (task.pastaUrlSalva) {
@@ -795,27 +1092,4 @@ function wireExcluirComentario() {
   });
 }
 
-
-function taskDescription(task) {
-  return `Produção de conteúdo do tipo ${typeLabels[task.type].label.toLowerCase()} para o cliente ${task.client}. Seguir o briefing combinado com o time de atendimento, manter a identidade visual do cliente e alinhar qualquer dúvida antes da entrega final.`;
-}
-
-const formatsByType = {
-  estatico: [
-    { label: "Feed 1x1", cls: "fb-purple" },
-    { label: "Stories 9:16", cls: "fb-pink" },
-  ],
-  video: [
-    { label: "Vídeo Feed 1x1", cls: "fb-blue" },
-    { label: "Vídeo Stories 9:16", cls: "fb-teal" },
-  ],
-  email: [
-    { label: "Banner desktop", cls: "fb-orange" },
-    { label: "Banner mobile", cls: "fb-purple" },
-  ],
-};
-
-function priorityVar(p) {
-  return p === "alta" ? "danger" : p === "media" ? "warning" : "success";
-}
 
