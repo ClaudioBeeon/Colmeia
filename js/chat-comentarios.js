@@ -599,6 +599,7 @@ async function carregarAnexos(task) {
  * original). Os dois caminhos desenham igual, por aqui.
  */
 function desenharAnexos(task, anexos) {
+  if (task && task.id) anexosJaBuscados.set(String(task.id), anexos || []);
   const listaEl = document.getElementById("attachList");
   if (!listaEl) return;
   const allBtn = document.getElementById("downloadAllBtn");
@@ -628,6 +629,32 @@ function desenharAnexos(task, anexos) {
     });
   });
   if (allBtn) allBtn.onclick = () => baixarTodosAnexos(anexos, allBtn, task.id);
+}
+
+/**
+ * Guarda os anexos que já foram buscados de cada tarefa, só enquanto o
+ * Colmeia está aberto.
+ *
+ * Existe por causa disto: a busca dos anexos acontece UMA vez, quando o
+ * card abre — mas o pop-up inteiro é redesenhado (renderDetail) em várias
+ * situações depois disso: dar play/pausa, trocar a etapa, mudar a data de
+ * entrega, salvar alguém no painel de Pessoas, mexer no card mãe. Cada um
+ * desses redesenhos apagava a lista e escrevia "Carregando anexos..." de
+ * novo — e essa mensagem ficava pra sempre, porque ninguém mandava buscar
+ * outra vez. Agora o redesenho reaproveita o que já tinha sido buscado
+ * (ver redesenharAnexosGuardados, chamada no fim do renderDetail).
+ */
+const anexosJaBuscados = new Map();
+
+function redesenharAnexosGuardados(task) {
+  if (!task || !task.id) return;
+  const guardados = anexosJaBuscados.get(String(task.id));
+  // Sem nada guardado é porque a primeira busca ainda está a caminho
+  // (o card acabou de abrir) — aí "Carregando anexos..." está certo, e
+  // quem chegar depois desenha. Não pede de novo de propósito: pedir
+  // aqui faria uma busca extra a cada abertura de card, justamente o
+  // que o pedido único de abrir a tarefa veio evitar.
+  if (guardados) desenharAnexos(task, guardados);
 }
 
 const ICONE_BAIXAR = `<svg viewBox="0 0 24 24" fill="none"><path d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;

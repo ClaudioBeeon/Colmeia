@@ -1165,6 +1165,12 @@ function renderDetail() {
 
   atualizarBadgeChat(task);
 
+  // O pop-up foi redesenhado do zero, então a lista de anexos voltou a
+  // ser o "Carregando anexos...". Se esses anexos já tinham sido
+  // buscados, redesenha na hora — senão a mensagem ficava eternamente
+  // na tela, porque a busca só acontecia na abertura do card.
+  redesenharAnexosGuardados(task);
+
   applyCommentsState();
 }
 
