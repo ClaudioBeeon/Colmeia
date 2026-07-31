@@ -195,6 +195,8 @@ function handleRequest(e, method) {
         output = excluirMemoriaBee(body.id);
       } else if (body.acao === 'beeDna') {
         output = beeDnaDoCliente(body.cliente);
+      } else if (body.acao === 'beeBuscarDrive') {
+        output = beeBuscarNoDrive(body.termo);
       } else if (body.acao === 'beeHistorico') {
         output = { ok: true, conversa: lerConversaBee(body.taskId) };
       } else if (body.acao === 'reabrirTarefa') {

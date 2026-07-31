@@ -655,6 +655,130 @@ async function enviarParaBeeLivre(textoDireto) {
   carregarRecentesDaBee(); // a lista de recentes mudou (conversa nova ou hora nova)
 }
 
+// ===== Busca universal =====
+//
+// Divisão de trabalho de propósito: o que o Colmeia JÁ TEM na memória
+// (tarefas, clientes, conversas com a Bee) é procurado aqui mesmo, na
+// hora e de graça. Só os arquivos e pastas do Drive precisam do backend
+// — e lá a busca lê um índice montado 1x por dia, então também é rápida.
+//
+// Comentários ficaram de fora por enquanto: procurar neles exigiria
+// buscar tarefa por tarefa no Runrun.it a cada tecla digitada.
+
+let _buscaTimer = null;
+let _buscaSequencia = 0;
+
+function agendarBuscaUniversal(termo) {
+  clearTimeout(_buscaTimer);
+  const texto = (termo || "").trim();
+  if (texto.length < 2) {
+    desenharRecentesDaBee(texto);
+    return;
+  }
+  // Mostra na hora o que é local; o Drive chega logo depois.
+  desenharResultadosDaBusca(texto, buscarLocalmente(texto), null);
+  _buscaTimer = setTimeout(() => buscarNoDrivePelaBee(texto), 420);
+}
+
+function buscarLocalmente(termo) {
+  const alvo = normalizarParaComparar(termo);
+  const bate = t => normalizarParaComparar(t || "").includes(alvo);
+
+  const lista = (typeof tasksTodas !== "undefined" && tasksTodas.length) ? tasksTodas : tasks;
+  const tarefas = lista.filter(t => bate(t.title) || bate(t.client)).slice(0, 6);
+
+  const clientes = (typeof listarTodosClientesConhecidos === "function"
+    ? listarTodosClientesConhecidos()
+    : []).filter(bate).slice(0, 4);
+
+  const conversas = (beeRecentesLista || [])
+    .filter(c => bate(c.titulo) || bate(c.previa)).slice(0, 4);
+
+  return { tarefas, clientes, conversas };
+}
+
+async function buscarNoDrivePelaBee(termo) {
+  const meu = ++_buscaSequencia;
+  const data = await chamarBackend({ acao: "beeBuscarDrive", termo });
+  // Chegou depois de uma busca mais nova? Descarta — senão a tela pisca
+  // com o resultado de um termo que a pessoa já apagou.
+  if (meu !== _buscaSequencia) return;
+  const campo = document.getElementById("beeBusca");
+  if (!campo || campo.value.trim() !== termo) return;
+  desenharResultadosDaBusca(termo, buscarLocalmente(termo), (data && data.ok) ? data.resultados : []);
+}
+
+function desenharResultadosDaBusca(termo, local, arquivos) {
+  const alvo = document.getElementById("beeRecentes");
+  if (!alvo) return;
+  const blocos = [];
+
+  if (local.tarefas.length) {
+    blocos.push(blocoDeBusca("Tarefas", local.tarefas.map(t => ({
+      titulo: t.title,
+      sub: t.client || "",
+      acao: `abrirTarefaPorId(${Number(t.id)})`,
+    }))));
+  }
+  if (arquivos && arquivos.length) {
+    blocos.push(blocoDeBusca("No Drive", arquivos.map(a => ({
+      titulo: a.nome,
+      sub: (a.tipo === "pasta" ? "pasta · " : "") + (a.caminho || ""),
+      url: a.url,
+    }))));
+  } else if (arquivos === null) {
+    blocos.push(`<p class="bee-vazio">Procurando no Drive...</p>`);
+  }
+  if (local.clientes.length) {
+    blocos.push(blocoDeBusca("Clientes", local.clientes.map(c => ({ titulo: c, sub: "" }))));
+  }
+  if (local.conversas.length) {
+    blocos.push(blocoDeBusca("Conversas com a Bee", local.conversas.map(c => ({
+      titulo: c.titulo, sub: c.previa, chave: c.chave,
+    }))));
+  }
+
+  alvo.innerHTML = blocos.length
+    ? blocos.join("")
+    : `<p class="bee-vazio">Não achei nada com "${escaparHTML(termo)}".</p>`;
+
+  alvo.querySelectorAll("[data-chave-busca]").forEach(btn => {
+    btn.addEventListener("click", () => beeAbrirConversa(btn.dataset.chaveBusca));
+  });
+  alvo.querySelectorAll("[data-task-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      beeFecharPainel();
+      abrirTarefaPorId(Number(btn.dataset.taskId));
+    });
+  });
+}
+
+function blocoDeBusca(titulo, itens) {
+  return `
+    <div class="bee-busca-bloco">
+      <p class="bee-busca-lab">${titulo}</p>
+      ${itens.map(i => {
+        const conteudo = `
+          <span class="bee-recente-txt">
+            <span class="bee-recente-t">${escaparHTML(i.titulo)}</span>
+            ${i.sub ? `<span class="bee-recente-s">${escaparHTML(i.sub)}</span>` : ""}
+          </span>`;
+        if (i.url) {
+          return `<a class="bee-recente" href="${i.url}" target="_blank" rel="noopener">${conteudo}<span class="bee-recente-h">abrir</span></a>`;
+        }
+        if (i.chave) {
+          return `<button type="button" class="bee-recente" data-chave-busca="${escaparHTML(i.chave)}">${conteudo}</button>`;
+        }
+        if (i.acao) {
+          const id = i.acao.match(/\d+/);
+          return `<button type="button" class="bee-recente" data-task-id="${id ? id[0] : ""}">${conteudo}</button>`;
+        }
+        return `<div class="bee-recente">${conteudo}</div>`;
+      }).join("")}
+    </div>
+  `;
+}
+
 function ligarJanelaDaBee() {
   const fab = document.getElementById("beeFabBtn");
   if (fab) {
@@ -683,7 +807,7 @@ function ligarJanelaDaBee() {
   });
 
   const busca = document.getElementById("beeBusca");
-  if (busca) busca.addEventListener("input", () => desenharRecentesDaBee(busca.value));
+  if (busca) busca.addEventListener("input", () => agendarBuscaUniversal(busca.value));
 
   desenharAtalhosDaBee();
 }

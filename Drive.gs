@@ -548,6 +548,17 @@ function fazerBackupDaPlanilha() {
   } catch (err) {
     Logger.log('Erro ao limpar conversas antigas da Bee: ' + err.message);
   }
+  // Reconstrói o índice de nomes do Drive (ver montarIndiceDoDrive em
+  // Bee.gs) — é o que faz a busca da Bee ser instantânea em vez de
+  // varrer o Drive a cada pergunta. Por último de propósito: é a parte
+  // mais demorada, e se estourar o tempo do Apps Script o backup e a
+  // limpeza já terminaram.
+  try {
+    var indice = montarIndiceDoDrive();
+    Logger.log('Índice do Drive: ' + (indice.ok ? indice.itens + ' itens' : indice.error));
+  } catch (err) {
+    Logger.log('Erro ao montar o índice do Drive: ' + err.message);
+  }
 }
 
 function limparBackupsAntigos(pastaBackups) {

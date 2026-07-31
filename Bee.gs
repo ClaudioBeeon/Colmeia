@@ -698,6 +698,193 @@ function beeConferirEntrega(taskId, idOriginal, cliente) {
   return { ok: true, resposta: resultado.texto.trim(), conversa: conversa };
 }
 
+// ============ 6) BUSCA: ÍNDICE DO DRIVE + AO VIVO ============
+//
+// "Onde está o modelo de vagas?", "onde fica o brandbook?" — procurar
+// isso varrendo o Drive na hora demoraria mais que o Apps Script aguenta.
+// Então uma rotina diária guarda os NOMES de pastas e arquivos numa aba
+// (o índice), e a busca lê essa aba: instantânea e barata.
+//
+// Se o índice não achar nada, aí sim vale a pena a busca ao vivo — é o
+// caso raro (arquivo criado hoje), e aí a demora se justifica.
+
+var INDICE_MAX_PROFUNDIDADE = 4;   // Clientes > cliente > ano > mês > card
+var INDICE_MAX_ITENS = 6000;       // teto de segurança: aba gigante fica lenta de ler
+var INDICE_MAX_ARQUIVOS_POR_PASTA = 40;
+
+function getIndiceDriveSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('IndiceDrive');
+  if (!sheet) {
+    sheet = ss.insertSheet('IndiceDrive');
+    sheet.getRange('A1:E1').setValues([['nome', 'tipo', 'caminho', 'url', 'cliente']]);
+  }
+  return sheet;
+}
+
+/**
+ * Roda 1x por dia, junto do backup. Percorre a pasta Beeon do Drive até
+ * uma profundidade limitada e guarda nome, tipo, caminho e link de cada
+ * pasta/arquivo. Não desce infinitamente de propósito: o objetivo é
+ * ACHAR onde as coisas estão, não copiar o Drive inteiro.
+ */
+function montarIndiceDoDrive() {
+  var linhas = [];
+  var raiz;
+  try {
+    raiz = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
+  } catch (e) {
+    return { ok: false, error: 'Não consegui abrir a pasta raiz do Drive: ' + e.message };
+  }
+
+  function percorrer(pasta, caminho, profundidade, cliente) {
+    if (linhas.length >= INDICE_MAX_ITENS || profundidade > INDICE_MAX_PROFUNDIDADE) return;
+
+    var arquivos = pasta.getFiles();
+    var contador = 0;
+    while (arquivos.hasNext() && contador < INDICE_MAX_ARQUIVOS_POR_PASTA && linhas.length < INDICE_MAX_ITENS) {
+      var arq = arquivos.next();
+      linhas.push([arq.getName(), 'arquivo', caminho, arq.getUrl(), cliente || '']);
+      contador++;
+    }
+
+    var subs = pasta.getFolders();
+    while (subs.hasNext() && linhas.length < INDICE_MAX_ITENS) {
+      var sub = subs.next();
+      var nome = sub.getName();
+      var caminhoFilho = caminho ? caminho + ' › ' + nome : nome;
+      linhas.push([nome, 'pasta', caminho, sub.getUrl(), cliente || '']);
+      // No nível de "Clientes", o nome da subpasta É o cliente — daí em
+      // diante todo mundo lá dentro herda esse cliente.
+      var clienteFilho = cliente || (/clientes/i.test(pasta.getName()) ? nome : '');
+      percorrer(sub, caminhoFilho, profundidade + 1, clienteFilho);
+    }
+  }
+
+  percorrer(raiz, raiz.getName(), 0, '');
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getIndiceDriveSheet();
+    sheet.clear();
+    sheet.getRange('A1:E1').setValues([['nome', 'tipo', 'caminho', 'url', 'cliente']]);
+    if (linhas.length) {
+      sheet.getRange(2, 1, linhas.length, 5).setValues(linhas);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true, itens: linhas.length };
+}
+
+// Tira acento, deixa minúsculo — pra "publicações" achar "publicacoes".
+function normalizarBusca(texto) {
+  return String(texto || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim();
+}
+
+// Sinônimos do dia a dia da agência: quem procura "logo" quer achar
+// "marca"/"identidade"; quem procura "vaga" quer achar "recrutamento".
+// É uma lista curta de propósito — sinônimo demais traz lixo.
+var BEE_SINONIMOS = {
+  'logo': ['marca', 'identidade', 'logotipo'],
+  'marca': ['logo', 'identidade', 'brandbook', 'manual'],
+  'brandbook': ['manual', 'marca', 'identidade'],
+  'vaga': ['vagas', 'recrutamento', 'contratacao', 'job'],
+  'post': ['feed', 'publicacao', 'arte'],
+  'story': ['stories', 'storie'],
+  'modelo': ['template', 'padrao', 'base'],
+  'template': ['modelo', 'padrao'],
+  'foto': ['imagem', 'banco de imagens', 'fotos'],
+  'video': ['reels', 'motion', 'animacao'],
+  'apresentacao': ['slide', 'deck', 'ppt'],
+};
+
+function termosDaBusca(termo) {
+  var base = normalizarBusca(termo);
+  var palavras = base.split(/\s+/).filter(function (p) { return p.length > 2; });
+  var todos = palavras.slice();
+  palavras.forEach(function (p) {
+    (BEE_SINONIMOS[p] || []).forEach(function (s) {
+      if (todos.indexOf(s) === -1) todos.push(normalizarBusca(s));
+    });
+  });
+  return { palavras: palavras, todos: todos };
+}
+
+function buscarNoIndiceDoDrive(termo, limite) {
+  var sheet = getIndiceDriveSheet();
+  var linhas = sheet.getDataRange().getValues();
+  if (linhas.length < 2) return [];
+
+  var t = termosDaBusca(termo);
+  if (!t.palavras.length) return [];
+  var achados = [];
+
+  for (var i = 1; i < linhas.length; i++) {
+    var nome = normalizarBusca(linhas[i][0]);
+    var caminho = normalizarBusca(linhas[i][2]);
+    var cliente = normalizarBusca(linhas[i][4]);
+    var alvo = nome + ' ' + caminho + ' ' + cliente;
+
+    // Pontuação simples: bater a palavra que a pessoa digitou vale mais
+    // que bater um sinônimo, e bater no NOME vale mais que no caminho.
+    var pontos = 0;
+    t.palavras.forEach(function (p) {
+      if (nome.indexOf(p) !== -1) pontos += 10;
+      else if (alvo.indexOf(p) !== -1) pontos += 4;
+    });
+    t.todos.forEach(function (p) {
+      if (t.palavras.indexOf(p) === -1 && alvo.indexOf(p) !== -1) pontos += 2;
+    });
+    if (!pontos) continue;
+    if (linhas[i][1] === 'pasta') pontos += 3; // "onde fica" quase sempre é pasta
+
+    achados.push({
+      nome: linhas[i][0], tipo: linhas[i][1], caminho: linhas[i][2],
+      url: linhas[i][3], cliente: linhas[i][4], pontos: pontos
+    });
+  }
+  achados.sort(function (a, b) { return b.pontos - a.pontos; });
+  return achados.slice(0, limite || 8);
+}
+
+/**
+ * O caso raro: o índice não achou nada (arquivo criado hoje, por
+ * exemplo). Aí sim pergunta pro Drive na hora, com um teto baixo de
+ * resultados pra não estourar o tempo do Apps Script.
+ */
+function buscarNoDriveAoVivo(termo) {
+  var achados = [];
+  var busca = String(termo).replace(/'/g, "\\'");
+  try {
+    var arquivos = DriveApp.searchFiles('title contains \'' + busca + '\' and trashed = false');
+    var n = 0;
+    while (arquivos.hasNext() && n < 6) {
+      var a = arquivos.next();
+      achados.push({ nome: a.getName(), tipo: 'arquivo', caminho: '(busca ao vivo)', url: a.getUrl(), cliente: '' });
+      n++;
+    }
+    var pastas = DriveApp.searchFolders('title contains \'' + busca + '\' and trashed = false');
+    var m = 0;
+    while (pastas.hasNext() && m < 4) {
+      var p = pastas.next();
+      achados.push({ nome: p.getName(), tipo: 'pasta', caminho: '(busca ao vivo)', url: p.getUrl(), cliente: '' });
+      m++;
+    }
+  } catch (e) { /* Drive recusou a busca — devolve o que deu */ }
+  return achados;
+}
+
+function beeBuscarNoDrive(termo) {
+  if (!termo || !String(termo).trim()) return { ok: true, resultados: [] };
+  var doIndice = buscarNoIndiceDoDrive(termo);
+  if (doIndice.length) return { ok: true, resultados: doIndice, origem: 'indice' };
+  return { ok: true, resultados: buscarNoDriveAoVivo(termo), origem: 'aovivo' };
+}
+
 // ============ ONDE A CONVERSA FICA GUARDADA ============
 //
 // UMA LINHA POR TAREFA, com a conversa inteira dentro de uma célula só
