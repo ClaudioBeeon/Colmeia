@@ -19,7 +19,7 @@
 
 function tocarTarefa(taskId, taskTitle, designer) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
-  var resultado = runrunPost('/tasks/' + taskId + '/play');
+  var resultado = runrunPost('/tasks/' + taskId + '/play', null, tokenRunrunDoAutor(designer));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou o play (status ' + resultado.status + ').' };
   }
@@ -27,22 +27,23 @@ function tocarTarefa(taskId, taskTitle, designer) {
   return { ok: true };
 }
 
-function pausarTarefa(taskId) {
+function pausarTarefa(taskId, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
-  var resultado = runrunPost('/tasks/' + taskId + '/pause');
+  var resultado = runrunPost('/tasks/' + taskId + '/pause', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou o pause (status ' + resultado.status + ').' };
   }
   return { ok: true };
 }
 
-function salvarDescricao(taskId, texto) {
+function salvarDescricao(taskId, texto, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var token = tokenRunrunDoAutor(autor);
 
-  var tentativa1 = runrunRequest('/tasks/' + taskId + '/description', 'put', { description: texto });
+  var tentativa1 = runrunRequest('/tasks/' + taskId + '/description', 'put', { description: texto }, token);
   if (tentativa1.ok) return { ok: true };
 
-  var tentativa2 = runrunRequest('/tasks/' + taskId, 'put', { description: texto });
+  var tentativa2 = runrunRequest('/tasks/' + taskId, 'put', { description: texto }, token);
   if (tentativa2.ok) return { ok: true };
 
   return {
@@ -51,43 +52,43 @@ function salvarDescricao(taskId, texto) {
   };
 }
 
-function adicionarComentario(taskId, texto) {
+function adicionarComentario(taskId, texto, autor) {
   if (!taskId || !texto) return { ok: false, error: 'taskId ou texto ausente.' };
-  var resultado = runrunPost('/tasks/' + taskId + '/comments', { text: texto });
+  var resultado = runrunPost('/tasks/' + taskId + '/comments', { text: texto }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou o comentário (status ' + resultado.status + ').' };
   }
   return { ok: true };
 }
 
-function excluirComentario(commentId) {
+function excluirComentario(commentId, autor) {
   if (!commentId) return { ok: false, error: 'commentId ausente.' };
-  var resultado = runrunRequest('/comments/' + commentId, 'delete', null);
+  var resultado = runrunRequest('/comments/' + commentId, 'delete', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou excluir (status ' + resultado.status + ').' };
   }
   return { ok: true };
 }
 
-function editarComentario(commentId, texto) {
+function editarComentario(commentId, texto, autor) {
   if (!commentId || !texto) return { ok: false, error: 'commentId ou texto ausente.' };
-  var resultado = runrunRequest('/comments/' + commentId, 'put', { text: texto });
+  var resultado = runrunRequest('/comments/' + commentId, 'put', { text: texto }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou editar o comentário (status ' + resultado.status + ').' };
   }
   return { ok: true };
 }
 
-function reagirComentario(commentId, emoji) {
+function reagirComentario(commentId, emoji, autor) {
   if (!commentId || !emoji) return { ok: false, error: 'commentId ou emoji ausente.' };
-  var resultado = runrunPost('/comments/' + commentId + '/reaction', { emoji: emoji });
+  var resultado = runrunPost('/comments/' + commentId + '/reaction', { emoji: emoji }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou a reação (status ' + resultado.status + ').' };
   }
   return { ok: true };
 }
 
-function adicionarComentarioComAnexo(taskId, texto, nomeArquivo, mimeType, base64Dados) {
+function adicionarComentarioComAnexo(taskId, texto, nomeArquivo, mimeType, base64Dados, autor) {
   if (!taskId || !nomeArquivo || !base64Dados) {
     return { ok: false, error: 'Dados do arquivo incompletos.' };
   }
@@ -98,7 +99,7 @@ function adicionarComentarioComAnexo(taskId, texto, nomeArquivo, mimeType, base6
       method: 'post',
       headers: {
         'App-Key': RUNRUN_APP_KEY,
-        'User-Token': RUNRUN_USER_TOKEN
+        'User-Token': tokenRunrunDoAutor(autor)
       },
       payload: {
         text: texto || '',
@@ -119,36 +120,36 @@ function adicionarComentarioComAnexo(taskId, texto, nomeArquivo, mimeType, base6
 
 // ============ MOVER ETAPA, DATA E REATRIBUIR ============
 
-function avancarWorkflowTarefa(taskId) {
+function avancarWorkflowTarefa(taskId, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
-  var resultado = runrunPost('/tasks/' + taskId + '/complete_workflow_step');
+  var resultado = runrunPost('/tasks/' + taskId + '/complete_workflow_step', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou avançar a sequência (status ' + resultado.status + '). Talvez essa tarefa não tenha uma Sequência de responsáveis configurada.' };
   }
   return { ok: true, novoResponsavel: resultado.body ? resultado.body.responsible_name : null };
 }
 
-function desfazerWorkflowTarefa(taskId) {
+function desfazerWorkflowTarefa(taskId, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
-  var resultado = runrunPost('/tasks/' + taskId + '/undo_workflow_step');
+  var resultado = runrunPost('/tasks/' + taskId + '/undo_workflow_step', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou desfazer (status ' + resultado.status + ').' };
   }
   return { ok: true, novoResponsavel: resultado.body ? resultado.body.responsible_name : null };
 }
 
-function entregarTarefa(taskId) {
+function entregarTarefa(taskId, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
-  var resultado = runrunPost('/tasks/' + taskId + '/deliver');
+  var resultado = runrunPost('/tasks/' + taskId + '/deliver', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou entregar a tarefa (status ' + resultado.status + ').' };
   }
   return { ok: true };
 }
 
-function reabrirTarefa(taskId) {
+function reabrirTarefa(taskId, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
-  var resultado = runrunPost('/tasks/' + taskId + '/reopen');
+  var resultado = runrunPost('/tasks/' + taskId + '/reopen', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou reabrir a tarefa (status ' + resultado.status + ').' };
   }
@@ -158,7 +159,7 @@ function reabrirTarefa(taskId) {
   // aborta se essa segunda chamada falhar: a tarefa já reabriu de
   // verdade, só não caiu na coluna certa (a pessoa ainda pode mover à
   // mão, melhor que a reabertura inteira falhar por causa disso).
-  moverEtapaTarefa(taskId, 'pendentes');
+  moverEtapaTarefa(taskId, 'pendentes', autor);
   return { ok: true };
 }
 
@@ -171,9 +172,9 @@ function reabrirTarefa(taskId) {
  * no dispatcher (ação 'criarRegra'), chamada por adicionarPessoaOtimista
  * (js/regras-briefing.js) sempre que a tarefa ainda não tem workflowId.
  */
-function criarWorkflowDaTarefa(taskId) {
+function criarWorkflowDaTarefa(taskId, autor) {
   if (!taskId) return { ok: false, error: 'taskId ausente.' };
-  var resultado = runrunRequest('/tasks/' + taskId + '/workflow', 'post', {});
+  var resultado = runrunRequest('/tasks/' + taskId + '/workflow', 'post', {}, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou criar a sequência (status ' + resultado.status + ').', bodyBruto: resultado.body };
   }
@@ -191,18 +192,18 @@ function diagnosticoCriarWorkflowTeste() {
   }
 }
 
-function adicionarPessoaNaRegra(workflowId, userId) {
+function adicionarPessoaNaRegra(workflowId, userId, autor) {
   if (!workflowId || !userId) return { ok: false, error: 'workflowId ou userId ausente.' };
-  var resultado = runrunRequest('/workflows/' + workflowId + '/workflow_elements', 'post', { user_id: userId });
+  var resultado = runrunRequest('/workflows/' + workflowId + '/workflow_elements', 'post', { user_id: userId }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou adicionar na regra (status ' + resultado.status + ').' };
   }
   return { ok: true };
 }
 
-function removerDaRegra(workflowId, elementId) {
+function removerDaRegra(workflowId, elementId, autor) {
   if (!workflowId || !elementId) return { ok: false, error: 'workflowId ou elementId ausente.' };
-  var resultado = runrunRequest('/workflows/' + workflowId + '/workflow_elements/' + elementId, 'delete', null);
+  var resultado = runrunRequest('/workflows/' + workflowId + '/workflow_elements/' + elementId, 'delete', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou remover da regra (status ' + resultado.status + ').' };
   }
@@ -219,7 +220,7 @@ function removerDaRegra(workflowId, elementId) {
  * dizia "alocado!" pra uma tarefa que continuava sem dono.
  */
 function tarefaEstaAlocadaPara(taskId, responsavelId) {
-  var leitura = runrunRequest('/tasks/' + taskId, 'get');
+  var leitura = runrunRequest('/tasks/' + taskId, 'get', null);
   if (!leitura.ok || !leitura.body) return false;
   var t = leitura.body;
   if (String(t.user_id || '') === String(responsavelId)) return true;
@@ -241,21 +242,22 @@ function tarefaEstaAlocadaPara(taskId, responsavelId) {
  * respondeu. É isso que aparece no aviso quando a alocação falha — sem
  * ele, "não consegui alocar" não dá nenhuma pista do motivo.
  */
-function alocarResponsavelNaTarefa(taskId, responsavelId) {
+function alocarResponsavelNaTarefa(taskId, responsavelId, autor) {
   if (!taskId || !responsavelId) return { ok: false, error: 'taskId ou responsavelId ausente.' };
+  var token = tokenRunrunDoAutor(autor);
 
   var tentativas = [
     { nome: 'PUT assignments', executar: function () {
-      return runrunRequest('/tasks/' + taskId, 'put', { assignments: [{ assignee_id: responsavelId }] });
+      return runrunRequest('/tasks/' + taskId, 'put', { assignments: [{ assignee_id: responsavelId }] }, token);
     } },
     { nome: 'POST /assignments', executar: function () {
-      return runrunRequest('/tasks/' + taskId + '/assignments', 'post', { assignee_id: responsavelId });
+      return runrunRequest('/tasks/' + taskId + '/assignments', 'post', { assignee_id: responsavelId }, token);
     } },
     { nome: 'PUT user_id', executar: function () {
-      return runrunRequest('/tasks/' + taskId, 'put', { user_id: responsavelId });
+      return runrunRequest('/tasks/' + taskId, 'put', { user_id: responsavelId }, token);
     } },
     { nome: 'PUT task.assignments', executar: function () {
-      return runrunRequest('/tasks/' + taskId, 'put', { task: { assignments: [{ assignee_id: responsavelId }] } });
+      return runrunRequest('/tasks/' + taskId, 'put', { task: { assignments: [{ assignee_id: responsavelId }] } }, token);
     } }
   ];
 
@@ -271,8 +273,8 @@ function alocarResponsavelNaTarefa(taskId, responsavelId) {
   return { ok: false, error: 'Runrun.it não alocou a pessoa.', diagnostico: log.join(' | ') };
 }
 
-function reatribuirTarefa(taskId, responsavelId) {
-  return alocarResponsavelNaTarefa(taskId, responsavelId);
+function reatribuirTarefa(taskId, responsavelId, autor) {
+  return alocarResponsavelNaTarefa(taskId, responsavelId, autor);
 }
 
 /**
@@ -280,12 +282,12 @@ function reatribuirTarefa(taskId, responsavelId) {
  * ✅ CONFIRMADO: o campo certo pra ESCREVER é "task_state_id", não
  * "board_stage_id" — esse último é só leitura.
  */
-function moverEtapaTarefa(taskId, chaveColuna) {
+function moverEtapaTarefa(taskId, chaveColuna, autor) {
   if (!taskId || !chaveColuna) return { ok: false, error: 'taskId ou coluna ausente.' };
   var novoStageId = COLUNA_STAGE_IDS[chaveColuna];
   if (!novoStageId) return { ok: false, error: 'Coluna "' + chaveColuna + '" sem ID configurado em COLUNA_STAGE_IDS.' };
 
-  var resultado = runrunRequest('/tasks/' + taskId, 'put', { task_state_id: novoStageId });
+  var resultado = runrunRequest('/tasks/' + taskId, 'put', { task_state_id: novoStageId }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou mover a etapa (status ' + resultado.status + ').' };
   }
@@ -301,9 +303,9 @@ function moverEtapaTarefa(taskId, chaveColuna) {
  * pego de outra tarefa que já está naquela coluna (ver
  * transformarTarefaParaColmeia -> taskStateId).
  */
-function moverParaEtapaArbitraria(taskId, taskStateId) {
+function moverParaEtapaArbitraria(taskId, taskStateId, autor) {
   if (!taskId || !taskStateId) return { ok: false, error: 'taskId ou taskStateId ausente.' };
-  var resultado = runrunRequest('/tasks/' + taskId, 'put', { task_state_id: taskStateId });
+  var resultado = runrunRequest('/tasks/' + taskId, 'put', { task_state_id: taskStateId }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou mover a etapa (status ' + resultado.status + ').' };
   }
@@ -318,13 +320,13 @@ function moverParaEtapaArbitraria(taskId, taskStateId) {
  * mas ignora o valor e a Entrega Desejada não muda de verdade. O
  * horário fica fixo em 18:00 (horário de Brasília).
  */
-function alterarDataEntregaTarefa(taskId, novaData) {
+function alterarDataEntregaTarefa(taskId, novaData, autor) {
   if (!taskId || !novaData) return { ok: false, error: 'taskId ou novaData ausente.' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(novaData)) return { ok: false, error: 'Formato de data inválido (esperado AAAA-MM-DD).' };
   var resultado = runrunRequest('/tasks/' + taskId, 'put', {
     desired_date: novaData,
     desired_date_with_time: novaData + 'T18:00:00-03:00'
-  });
+  }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou alterar a data de entrega (status ' + resultado.status + ').' };
   }
@@ -341,12 +343,12 @@ function alterarDataEntregaTarefa(taskId, novaData) {
  * `diagnosticoAlterarDataPublicacao` manualmente pelo editor numa tarefa
  * de teste e confira no Log se a data realmente mudou.
  */
-function alterarDataPublicacaoTarefa(taskId, novaData) {
+function alterarDataPublicacaoTarefa(taskId, novaData, autor) {
   if (!taskId || !novaData) return { ok: false, error: 'taskId ou novaData ausente.' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(novaData)) return { ok: false, error: 'Formato de data inválido (esperado AAAA-MM-DD).' };
   var camposCustom = {};
   camposCustom[CAMPO_DATA_PUBLICACAO] = novaData;
-  var resultado = runrunRequest('/tasks/' + taskId, 'put', { custom_fields: camposCustom });
+  var resultado = runrunRequest('/tasks/' + taskId, 'put', { custom_fields: camposCustom }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou alterar a Data de Publicação (status ' + resultado.status + ').' };
   }
@@ -409,6 +411,7 @@ function criarTarefaRunrun(dados) {
   if (!dados || !dados.titulo || !dados.projectId) {
     return { ok: false, error: 'Faltam campos obrigatórios (título ou cliente).' };
   }
+  var token = tokenRunrunDoAutor(dados.autor);
 
   // O front-end manda o ID direto (a lista de "quem vai trabalhar" agora é
   // a de TODO MUNDO do Runrun.it, não só os 3 designers). O caminho por
@@ -437,7 +440,7 @@ function criarTarefaRunrun(dados) {
   if (dados.tipo) descricaoFinal += 'Tipo: ' + dados.tipo + '\n\n';
   if (dados.descricao) descricaoFinal += dados.descricao;
 
-  var resultado = runrunRequest('/tasks', 'post', { task: corpoTask });
+  var resultado = runrunRequest('/tasks', 'post', { task: corpoTask }, token);
   if (!resultado.ok || !resultado.body || !resultado.body.id) {
     return {
       ok: false,
@@ -459,7 +462,7 @@ function criarTarefaRunrun(dados) {
     if (tarefaEstaAlocadaPara(novoId, responsavelId)) {
       alocou = true;
     } else {
-      var r = alocarResponsavelNaTarefa(novoId, responsavelId);
+      var r = alocarResponsavelNaTarefa(novoId, responsavelId, dados.autor);
       alocou = !!r.ok;
       diagnosticoAlocacao = r.diagnostico || r.error || '';
     }
@@ -469,7 +472,7 @@ function criarTarefaRunrun(dados) {
   // Runrun.it. Descrição vem numa segunda chamada, mesmo padrão de
   // salvarDescricao.
   if (dados.prioridade) definirPrioridade(novoId, dados.prioridade);
-  if (descricaoFinal) runrunRequest('/tasks/' + novoId, 'put', { description: descricaoFinal });
+  if (descricaoFinal) runrunRequest('/tasks/' + novoId, 'put', { description: descricaoFinal }, token);
 
   // A tarefa foi criada de qualquer jeito — `alocou: false` só avisa o
   // front-end pra ele dizer que ficou faltando escolher o responsável, em
@@ -486,12 +489,12 @@ function criarTarefaRunrun(dados) {
 /**
  * Ajusta a estimativa de horas de uma tarefa.
  */
-function ajustarEstimativaTarefa(taskId, minutos) {
+function ajustarEstimativaTarefa(taskId, minutos, autor) {
   if (!taskId || !minutos) return { ok: false, error: 'taskId ou minutos ausente.' };
   var segundos = Math.round(Number(minutos) * 60);
   if (!segundos || segundos <= 0) return { ok: false, error: 'Valor de horas inválido.' };
 
-  var resultado = runrunRequest('/tasks/' + taskId, 'put', { current_estimate_seconds: segundos });
+  var resultado = runrunRequest('/tasks/' + taskId, 'put', { current_estimate_seconds: segundos }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou ajustar a estimativa (status ' + resultado.status + ').' };
   }

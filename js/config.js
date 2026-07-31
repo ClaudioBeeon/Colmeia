@@ -240,6 +240,16 @@ async function chamarBackend(corpo, opcoes) {
   opcoes = opcoes || {};
   if (!COLMEIA_API_URL) return { ok: false, semRede: true, error: "Backend não configurado." };
 
+  // Quem está pedindo isso, de verdade — vai em TODA chamada, sem
+  // precisar lembrar disso em cada um dos ~50 lugares que chamam
+  // chamarBackend. É o que resolve o bug de toda ação (play, comentário,
+  // entregar etc) aparecer no Runrun.it como se fosse do Cláudio, não
+  // importa quem esteja logado no Colmeia — o backend usa isso pra
+  // escolher o token de API certo (ver tokenRunrunDoAutor, RunrunLeitura.gs).
+  if (!corpo.autor && typeof DESIGNER_LOGADO !== "undefined" && DESIGNER_LOGADO) {
+    corpo.autor = DESIGNER_LOGADO;
+  }
+
   // AbortController é o jeito padrão do navegador de cancelar um pedido
   // que demorou demais — sem ele, o fetch fica pendurado indefinidamente.
   const controller = new AbortController();

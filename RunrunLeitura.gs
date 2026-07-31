@@ -15,12 +15,33 @@
  */
 // ============ RUNRUN.IT — LEITURA (GET) ============
 
-function runrunFetch(caminho) {
+/**
+ * Acha o token de API certo pra usar numa chamada de ESCRITA no
+ * Runrun.it, a partir do NOME de quem está fazendo aquilo no Colmeia
+ * (vem em `body.autor`, injetado sozinho em toda chamada por
+ * chamarBackend, ver js/config.js). Sem isso — ou sem o token dessa
+ * pessoa cadastrado ainda em RUNRUN_TOKENS_POR_EMAIL — cai pro token do
+ * Cláudio, que é o comportamento de ANTES (funciona, só com a
+ * atribuição errada). Leitura nunca precisa disso: dado do Runrun.it é
+ * o mesmo pra qualquer token que perguntar.
+ */
+function tokenRunrunDoAutor(nomeAutor) {
+  if (!nomeAutor) return RUNRUN_USER_TOKEN;
+  var alvo = normalizarNomeParaComparar(nomeAutor);
+  for (var email in RUNRUN_USUARIOS) {
+    if (normalizarNomeParaComparar(RUNRUN_USUARIOS[email]) === alvo) {
+      return RUNRUN_TOKENS_POR_EMAIL[email] || RUNRUN_USER_TOKEN;
+    }
+  }
+  return RUNRUN_USER_TOKEN;
+}
+
+function runrunFetch(caminho, token) {
   var res = UrlFetchApp.fetch(RUNRUN_BASE_URL + caminho, {
     method: 'get',
     headers: {
       'App-Key': RUNRUN_APP_KEY,
-      'User-Token': RUNRUN_USER_TOKEN,
+      'User-Token': token || RUNRUN_USER_TOKEN,
       'Content-Type': 'application/json'
     },
     muteHttpExceptions: true
@@ -81,12 +102,12 @@ function runrunFetchAll(caminhos) {
   });
 }
 
-function runrunRequest(caminho, metodo, payload) {
+function runrunRequest(caminho, metodo, payload, token) {
   var opcoes = {
     method: metodo,
     headers: {
       'App-Key': RUNRUN_APP_KEY,
-      'User-Token': RUNRUN_USER_TOKEN,
+      'User-Token': token || RUNRUN_USER_TOKEN,
       'Content-Type': 'application/json'
     },
     muteHttpExceptions: true
@@ -112,8 +133,8 @@ function runrunRequest(caminho, metodo, payload) {
   };
 }
 
-function runrunPost(caminho, payload) {
-  return runrunRequest(caminho, 'post', payload);
+function runrunPost(caminho, payload, token) {
+  return runrunRequest(caminho, 'post', payload, token);
 }
 
 /**

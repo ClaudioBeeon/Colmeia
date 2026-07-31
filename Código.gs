@@ -25,6 +25,17 @@
  * implementado por inferência (não veio 100% confirmado na
  * documentação) — rode diagnosticoPlayPause(taskId) manualmente pelo
  * editor antes de confiar cegamente nele em produção.
+ *
+ * TOKEN POR PESSOA (2026-07-31) — corrige um problema sério: até aqui,
+ * TODA ação de escrita (play, pause, comentário, entregar, mover etapa
+ * etc.) usava sempre o MESMO token — o do Cláudio — não importa quem
+ * estivesse logado no Colmeia. Pro Runrun.it, então, tudo que o Gustavo
+ * ou o Erick faziam aparecia como se fosse o Cláudio fazendo. Agora cada
+ * um tem o PRÓPRIO token (RUNRUN_USER_TOKEN_GUSTAVO/_ERICK), e toda
+ * chamada de escrita usa o token de quem está logado de verdade — ver
+ * tokenRunrunDoAutor em RunrunLeitura.gs. Sem o token de alguém
+ * cadastrado ainda, cai pro token do Cláudio (funciona, só com a
+ * atribuição errada de antes) em vez de travar a ação.
  */
 
 // ============ CONFIGURAÇÃO ============
@@ -37,7 +48,11 @@
 // vez): no editor do Apps Script, vá em "Configurações do projeto" (ícone
 // de engrenagem) > "Propriedades do script" > "Adicionar propriedade
 // do script", e cadastre cada uma destas com o valor de verdade:
-// RUNRUN_APP_KEY, GROQ_API_KEY, GEMINI_API_KEY, RUNRUN_USER_TOKEN.
+// RUNRUN_APP_KEY, GROQ_API_KEY, GEMINI_API_KEY, RUNRUN_USER_TOKEN,
+// RUNRUN_USER_TOKEN_GUSTAVO, RUNRUN_USER_TOKEN_ERICK — as duas últimas
+// são o token pessoal de cada um (gerado por ELES, dentro da própria
+// conta deles no Runrun.it — o do Cláudio não serve pros dois), ver o
+// comentário "TOKEN POR PESSOA" ali em cima.
 var RUNRUN_APP_KEY = PropertiesService.getScriptProperties().getProperty('RUNRUN_APP_KEY');
 var GROQ_API_KEY = PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY');
 var GROQ_MODEL = 'llama-3.3-70b-versatile';
@@ -54,8 +69,18 @@ var GEMINI_MODEL = 'gemini-3.1-flash-lite';
 // GEMINI_MODEL_CONVERSA com o nome do modelo. Se o nome não existir, a
 // Bee cai sozinha no modelo rápido em vez de dar erro (ver chamarGeminiTexto).
 var GEMINI_MODEL_CONVERSA = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_CONVERSA') || 'gemini-3.1-pro';
-var RUNRUN_USER_TOKEN = PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN');
+var RUNRUN_USER_TOKEN = PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN'); // Cláudio
+var RUNRUN_USER_TOKEN_GUSTAVO = PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_GUSTAVO');
+var RUNRUN_USER_TOKEN_ERICK = PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_ERICK');
 var RUNRUN_BASE_URL = 'https://secure.runrun.it/api/v1.0';
+
+// email -> token pessoal, usado por tokenRunrunDoAutor (RunrunLeitura.gs)
+// pra escolher qual token entra em cada chamada de ESCRITA no Runrun.it.
+var RUNRUN_TOKENS_POR_EMAIL = {
+  'claudio@beeon.com.br': RUNRUN_USER_TOKEN,
+  'gustavo@beeon.com.br': RUNRUN_USER_TOKEN_GUSTAVO,
+  'erick@beeon.com.br': RUNRUN_USER_TOKEN_ERICK
+};
 
 // URL do Web App do painel-designers-beeon (o outro painel, já publicado).
 // O Colmeia só faz LEITURA aqui — nunca escreve nada nesse painel. Usado
@@ -130,13 +155,13 @@ function handleRequest(e, method) {
       } else if (body.acao === 'buscarTarefasHoje') {
         output = buscarPlaysDeHoje(body.designer, body.janela);
       } else if (body.acao === 'pausarTarefa') {
-        output = pausarTarefa(body.taskId);
+        output = pausarTarefa(body.taskId, body.autor);
       } else if (body.acao === 'listarComentarios') {
         output = listarComentarios(body.taskId);
       } else if (body.acao === 'buscarDescricao') {
         output = buscarDescricao(body.taskId);
       } else if (body.acao === 'salvarDescricao') {
-        output = salvarDescricao(body.taskId, body.texto);
+        output = salvarDescricao(body.taskId, body.texto, body.autor);
       } else if (body.acao === 'buscarAnexos') {
         output = buscarAnexosTarefa(body.taskId);
       } else if (body.acao === 'baixarAnexo') {
@@ -148,23 +173,24 @@ function handleRequest(e, method) {
       } else if (body.acao === 'resumirAlteracao') {
         output = resumirAlteracao(body.taskId, body.idOriginal);
       } else if (body.acao === 'adicionarComentario') {
-        output = adicionarComentario(body.taskId, body.texto);
+        output = adicionarComentario(body.taskId, body.texto, body.autor);
       } else if (body.acao === 'excluirComentario') {
-        output = excluirComentario(body.commentId);
+        output = excluirComentario(body.commentId, body.autor);
       } else if (body.acao === 'editarComentario') {
-        output = editarComentario(body.commentId, body.texto);
+        output = editarComentario(body.commentId, body.texto, body.autor);
       } else if (body.acao === 'buscarProjetosRunrun') {
         output = { ok: true, projetos: buscarProjetosRunrun() || [] };
       } else if (body.acao === 'criarTarefa') {
+        if (body.dados) body.dados.autor = body.autor;
         output = criarTarefaRunrun(body.dados);
       } else if (body.acao === 'reagirComentario') {
-        output = reagirComentario(body.commentId, body.emoji);
+        output = reagirComentario(body.commentId, body.emoji, body.autor);
       } else if (body.acao === 'adicionarComentarioComAnexo') {
-        output = adicionarComentarioComAnexo(body.taskId, body.texto, body.nomeArquivo, body.mimeType, body.base64Dados);
+        output = adicionarComentarioComAnexo(body.taskId, body.texto, body.nomeArquivo, body.mimeType, body.base64Dados, body.autor);
       } else if (body.acao === 'avancarWorkflow') {
-        output = avancarWorkflowTarefa(body.taskId);
+        output = avancarWorkflowTarefa(body.taskId, body.autor);
       } else if (body.acao === 'desfazerWorkflow') {
-        output = desfazerWorkflowTarefa(body.taskId);
+        output = desfazerWorkflowTarefa(body.taskId, body.autor);
       } else if (body.acao === 'buscarSequencia') {
         output = buscarSequenciaResponsaveis(body.taskId);
       } else if (body.acao === 'buscarCardMae') {
@@ -176,7 +202,7 @@ function handleRequest(e, method) {
       } else if (body.acao === 'abrirTarefa') {
         output = abrirTarefaParaColmeia(body.taskId);
       } else if (body.acao === 'entregarTarefa') {
-        output = entregarTarefa(body.taskId);
+        output = entregarTarefa(body.taskId, body.autor);
         // Carimba a data de entrega na conversa da Bee, que é o que
         // dispara a contagem dos 15 dias até ela ser apagada (ver
         // marcarEntregaParaBee/limparConversasBeeAntigas em Bee.gs).
@@ -220,25 +246,25 @@ function handleRequest(e, method) {
       } else if (body.acao === 'beeHistorico') {
         output = { ok: true, conversa: lerConversaBee(body.taskId) };
       } else if (body.acao === 'reabrirTarefa') {
-        output = reabrirTarefa(body.taskId);
+        output = reabrirTarefa(body.taskId, body.autor);
       } else if (body.acao === 'criarRegra') {
-        output = criarWorkflowDaTarefa(body.taskId);
+        output = criarWorkflowDaTarefa(body.taskId, body.autor);
       } else if (body.acao === 'adicionarNaRegra') {
-        output = adicionarPessoaNaRegra(body.workflowId, body.userId);
+        output = adicionarPessoaNaRegra(body.workflowId, body.userId, body.autor);
       } else if (body.acao === 'removerDaRegra') {
-        output = removerDaRegra(body.workflowId, body.elementId);
+        output = removerDaRegra(body.workflowId, body.elementId, body.autor);
       } else if (body.acao === 'reatribuir') {
-        output = reatribuirTarefa(body.taskId, body.responsavelId);
+        output = reatribuirTarefa(body.taskId, body.responsavelId, body.autor);
       } else if (body.acao === 'moverEtapa') {
-        output = moverEtapaTarefa(body.taskId, body.chaveColuna);
+        output = moverEtapaTarefa(body.taskId, body.chaveColuna, body.autor);
       } else if (body.acao === 'moverEtapaArbitraria') {
-        output = moverParaEtapaArbitraria(body.taskId, body.taskStateId);
+        output = moverParaEtapaArbitraria(body.taskId, body.taskStateId, body.autor);
       } else if (body.acao === 'alterarEntrega') {
-        output = alterarDataEntregaTarefa(body.taskId, body.novaData);
+        output = alterarDataEntregaTarefa(body.taskId, body.novaData, body.autor);
       } else if (body.acao === 'alterarPublicacao') {
-        output = alterarDataPublicacaoTarefa(body.taskId, body.novaData);
+        output = alterarDataPublicacaoTarefa(body.taskId, body.novaData, body.autor);
       } else if (body.acao === 'ajustarEstimativa') {
-        output = ajustarEstimativaTarefa(body.taskId, body.minutos);
+        output = ajustarEstimativaTarefa(body.taskId, body.minutos, body.autor);
       } else if (body.acao === 'buscarExtrasRunrunCompleto') {
         output = buscarExtrasRunrunCompleto();
       } else if (body.acao === 'listarUsuarios') {
