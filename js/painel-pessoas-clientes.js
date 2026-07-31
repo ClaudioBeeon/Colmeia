@@ -482,14 +482,32 @@ let memoriasClienteSelecionado = null;
 let memoriasDnaAtual = null;
 let memoriasCarregando = false;
 
-function renderPainelMemoriasBee() {
-  const body = document.getElementById("peopleModalBody");
-  if (!body) return;
+/**
+ * Monta o bloco de Memórias da Bee dentro de QUALQUER container.
+ *
+ * Existe em dois lugares: na aba "Memórias da Bee" das Configurações (só
+ * do coordenador) e no perfil do designer (ver abrirPerfilDoDesigner) —
+ * porque Gustavo e Erick também alimentam a Bee, não só o Cláudio. O
+ * miolo é o mesmo nos dois; muda só a lista de clientes que aparece no
+ * seletor e onde ele é desenhado.
+ *
+ * `redesenhar` é quem chamar de novo quando a pessoa troca de cliente no
+ * seletor — cada tela sabe redesenhar a si mesma.
+ */
+function montarBlocoMemorias(container, clientes, redesenhar) {
+  if (!container) return;
+  if (!clientes.length) {
+    container.innerHTML = `<p class="workflow-seq-empty">Nenhum cliente encontrado pra mostrar memórias.</p>`;
+    return;
+  }
+  // Se o cliente escolhido antes não está nesta lista (ex: o designer vê
+  // só os clientes dele), começa no primeiro daqui.
+  if (!memoriasClienteSelecionado || !clientes.some(c => c === memoriasClienteSelecionado)) {
+    memoriasClienteSelecionado = clientes[0];
+    memoriasDnaAtual = null;
+  }
 
-  const clientes = listarTodosClientesConhecidos();
-  if (!memoriasClienteSelecionado && clientes.length) memoriasClienteSelecionado = clientes[0];
-
-  body.innerHTML = `
+  container.innerHTML = `
     <div class="memorias-topo">
       <select id="memoriasCliente" class="memorias-select">
         ${clientes.map(c => `<option value="${escaparHTML(c)}"${c === memoriasClienteSelecionado ? " selected" : ""}>${escaparHTML(c)}</option>`).join("")}
@@ -508,7 +526,7 @@ function renderPainelMemoriasBee() {
     select.addEventListener("change", () => {
       memoriasClienteSelecionado = select.value;
       memoriasDnaAtual = null;
-      renderPainelMemoriasBee();
+      redesenhar();
     });
   }
 
@@ -522,6 +540,14 @@ function renderPainelMemoriasBee() {
 
   desenharListaDeMemorias();
   if (!memoriasDnaAtual) carregarDnaDoCliente();
+}
+
+function renderPainelMemoriasBee() {
+  montarBlocoMemorias(
+    document.getElementById("peopleModalBody"),
+    listarTodosClientesConhecidos(),
+    renderPainelMemoriasBee
+  );
 }
 
 async function carregarDnaDoCliente() {
@@ -686,4 +712,147 @@ async function atualizarMemoriaDeduzida(btn) {
   }
   memoriasDnaAtual = null;
   carregarDnaDoCliente();
+}
+
+// ===== Perfil do designer =====
+//
+// O que Gustavo e Erick veem ao clicar na própria foto na barra lateral.
+// O Cláudio, sendo coordenador, cai nas Configurações — quem decide isso
+// é o handler do clique (js/notificacoes-avisos.js).
+//
+// Desenhado a partir do protótipo 3 aprovado pelo Cláudio: capa amarela
+// com foto e nome, a linha "agora em" com o cronômetro do que está
+// rodando, os clientes em quadradinhos com o atendimento de cada um, e as
+// Memórias da Bee no fim — porque eles também alimentam ela, não só o
+// coordenador (mesmo bloco das Configurações, ver montarBlocoMemorias).
+
+function abrirPerfilDoDesigner() {
+  const overlay = document.getElementById("perfilModalOverlay");
+  if (!overlay) return;
+  overlay.hidden = false;
+  renderPerfilDoDesigner();
+}
+
+function fecharPerfilDoDesigner() {
+  const overlay = document.getElementById("perfilModalOverlay");
+  if (overlay) overlay.hidden = true;
+  pararRelogioDoPerfil();
+}
+
+function renderPerfilDoDesigner() {
+  const overlay = document.getElementById("perfilModalOverlay");
+  if (!overlay || overlay.hidden) return;
+
+  const nomeEl = document.getElementById("perfilNome");
+  if (nomeEl) nomeEl.textContent = DESIGNER_LOGADO || "";
+
+  const fotoEl = document.getElementById("perfilFoto");
+  if (fotoEl) {
+    const foto = resolverFotoManual(DESIGNER_LOGADO) || fotoDoDesigner(DESIGNER_LOGADO);
+    if (foto) {
+      fotoEl.style.backgroundImage = `url("${foto}")`;
+      fotoEl.textContent = "";
+      fotoEl.classList.add("com-foto");
+    } else {
+      fotoEl.style.backgroundImage = "";
+      fotoEl.classList.remove("com-foto");
+      fotoEl.textContent = initials(DESIGNER_LOGADO);
+    }
+  }
+
+  atualizarLinhaAgoraDoPerfil();
+  iniciarRelogioDoPerfil();
+
+  // --- Clientes ---
+  const clientesEl = document.getElementById("perfilClientes");
+  const meusClientes = nomesDosMeusClientes();
+  if (clientesEl) {
+    if (!meusClientes.length) {
+      clientesEl.innerHTML = `<p class="workflow-seq-empty">Nenhum cliente encontrado pra você no painel-designers-beeon.</p>`;
+    } else {
+      clientesEl.innerHTML = meusClientes.map(cliente => {
+        const atend = getAtendimentoDoCliente(cliente) || "Sem atendimento";
+        const servico = servicoDoCliente(cliente);
+        return `
+          <button type="button" class="perfil-cliente" data-cliente="${escaparHTML(cliente)}">
+            <span class="perfil-cliente-txt">
+              <span class="perfil-cliente-nome">${escaparHTML(formatarNomeExibicao(cliente))}</span>
+              <span class="perfil-cliente-atend">Atendimento: ${escaparHTML(atend)}</span>
+            </span>
+            ${servico ? `<span class="perfil-cliente-tag" style="background:${mcCorServico(servico)};">${escaparHTML(servico)}</span>` : ""}
+          </button>
+        `;
+      }).join("");
+
+      clientesEl.querySelectorAll(".perfil-cliente").forEach(btn => {
+        btn.addEventListener("click", () => {
+          fecharPerfilDoDesigner();
+          abrirHubDoCliente(btn.dataset.cliente, DESIGNER_LOGADO);
+        });
+      });
+    }
+  }
+
+  // --- Memórias da Bee (só dos clientes dele) ---
+  montarBlocoMemorias(
+    document.getElementById("perfilMemorias"),
+    meusClientes,
+    renderPerfilDoDesigner
+  );
+}
+
+// Nomes dos clientes do designer logado, sem repetir e sem os que o
+// coordenador escondeu. Mesma fonte da página "Meus clientes".
+function nomesDosMeusClientes() {
+  const lista = clientesDoDesignerNoPainel(DESIGNER_LOGADO) || [];
+  const vistos = new Set();
+  const nomes = [];
+  lista.forEach(c => {
+    if (!c || !c.cliente) return;
+    if (typeof clienteEstaOculto === "function" && clienteEstaOculto(DESIGNER_LOGADO, c.cliente)) return;
+    const chave = normalizarParaComparar(c.cliente);
+    if (vistos.has(chave)) return;
+    vistos.add(chave);
+    nomes.push(c.cliente);
+  });
+  return nomes.sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function servicoDoCliente(cliente) {
+  const lista = clientesDoDesignerNoPainel(DESIGNER_LOGADO) || [];
+  const achado = lista.find(c => c.cliente && normalizarParaComparar(c.cliente) === normalizarParaComparar(cliente));
+  return (achado && achado.servicos && achado.servicos[0]) || "";
+}
+
+/**
+ * A linha "Agora em <tarefa> · 02:01". Some quando não tem nada rodando —
+ * em vez de mostrar "parado", que não acrescenta nada.
+ */
+function atualizarLinhaAgoraDoPerfil() {
+  const el = document.getElementById("perfilAgora");
+  if (!el) return;
+  const rodando = tasks.find(t => t.running && ehMinhaTarefa(t));
+  if (!rodando) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `
+    <span class="perfil-ponto-vivo"></span>
+    <span>Agora em <b>${escaparHTML(rodando.title)}</b> · <span class="perfil-tempo">${formatTime(rodando.timerSeconds)}</span></span>
+  `;
+}
+
+// O cronômetro anda de 1 em 1 segundo enquanto o perfil está aberto, e
+// para junto com ele — sem isso ficaria um intervalo rodando à toa pelo
+// resto da sessão.
+let _relogioDoPerfil = null;
+function iniciarRelogioDoPerfil() {
+  pararRelogioDoPerfil();
+  _relogioDoPerfil = setInterval(() => {
+    const overlay = document.getElementById("perfilModalOverlay");
+    if (!overlay || overlay.hidden) { pararRelogioDoPerfil(); return; }
+    atualizarLinhaAgoraDoPerfil();
+  }, 1000);
+}
+function pararRelogioDoPerfil() {
+  clearInterval(_relogioDoPerfil);
+  _relogioDoPerfil = null;
 }

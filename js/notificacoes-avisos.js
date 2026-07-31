@@ -899,9 +899,20 @@ ruleModalOverlay.addEventListener("click", e => {
 const peopleModalOverlay = document.getElementById("peopleModalOverlay");
 document.getElementById("sidebarProfileLink").addEventListener("click", e => {
   e.preventDefault();
-  if (PAPEL_LOGADO !== "coordenador") return; // só o coordenador mexe nessas configurações
-  abrirPainelPessoas();
+  // Coordenador cai nas Configurações (Pessoas, links de clientes,
+  // memórias da Bee de TODOS). Designer abre o perfil dele — antes o
+  // clique simplesmente não fazia nada pra eles.
+  if (PAPEL_LOGADO === "coordenador") abrirPainelPessoas();
+  else abrirPerfilDoDesigner();
 });
+
+const perfilModalOverlay = document.getElementById("perfilModalOverlay");
+if (perfilModalOverlay) {
+  document.getElementById("perfilFechar").addEventListener("click", fecharPerfilDoDesigner);
+  perfilModalOverlay.addEventListener("click", e => {
+    if (e.target === perfilModalOverlay) fecharPerfilDoDesigner();
+  });
+}
 document.getElementById("peopleModalClose").addEventListener("click", () => {
   peopleModalOverlay.hidden = true;
 });

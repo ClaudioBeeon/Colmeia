@@ -13,11 +13,11 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-07-31t">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31t">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31t">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31t">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31t">
+<link rel="stylesheet" href="css/01-base.css?v=2026-07-31u">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31u">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31u">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31u">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31u">
 </head>
 <body>
 
@@ -242,6 +242,32 @@
         </div>
         <p class="people-modal-hint" id="configHint">Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.</p>
         <div class="rule-modal-body" id="peopleModalBody"></div>
+      </div>
+    </div>
+
+    <!-- Perfil do designer: o que Gustavo e Erick veem ao clicar na
+         própria foto na barra lateral (o Cláudio, sendo coordenador, cai
+         nas Configurações acima). Aprovado a partir do protótipo 3. -->
+    <div class="rule-modal-overlay" id="perfilModalOverlay" hidden>
+      <div class="perfil-modal">
+        <div class="perfil-capa">
+          <span class="perfil-foto" id="perfilFoto"></span>
+          <div class="perfil-capa-txt">
+            <div class="perfil-nome" id="perfilNome"></div>
+            <div class="perfil-papel">Designer</div>
+          </div>
+          <button type="button" class="perfil-x" id="perfilFechar" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="perfil-agora" id="perfilAgora" hidden></div>
+        <div class="perfil-corpo">
+          <span class="perfil-secao">Clientes</span>
+          <div class="perfil-clientes" id="perfilClientes"></div>
+          <span class="perfil-secao perfil-secao-bee">Memórias da Bee</span>
+          <p class="perfil-secao-hint">O que você escrever aqui a Bee usa em toda conversa sobre esse cliente — manias, o que evitar, o que faz aprovar mais rápido.</p>
+          <div id="perfilMemorias"></div>
+        </div>
       </div>
     </div>
 
@@ -560,24 +586,24 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-07-31t"></script>
-<script src="js/fila-offline.js?v=2026-07-31t"></script>
-<script src="js/notificacoes-uploads.js?v=2026-07-31t"></script>
-<script src="js/pessoas-fotos.js?v=2026-07-31t"></script>
-<script src="js/kanban-polling.js?v=2026-07-31t"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-07-31t"></script>
-<script src="js/regras-briefing.js?v=2026-07-31t"></script>
-<script src="js/kanban-board.js?v=2026-07-31t"></script>
-<script src="js/clientes-hub.js?v=2026-07-31t"></script>
-<script src="js/chat-comentarios.js?v=2026-07-31t"></script>
-<script src="js/detalhe-modal.js?v=2026-07-31t"></script>
-<script src="js/detalhe-cardmae.js?v=2026-07-31t"></script>
-<script src="js/detalhe-alteracao.js?v=2026-07-31t"></script>
-<script src="js/bee.js?v=2026-07-31t"></script>
-<script src="js/paginas-designers.js?v=2026-07-31t"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-07-31t"></script>
-<script src="js/pagina-repasse.js?v=2026-07-31t"></script>
-<script src="js/notificacoes-avisos.js?v=2026-07-31t"></script>
-<script src="js/login-boot.js?v=2026-07-31t"></script>
+<script src="js/config.js?v=2026-07-31u"></script>
+<script src="js/fila-offline.js?v=2026-07-31u"></script>
+<script src="js/notificacoes-uploads.js?v=2026-07-31u"></script>
+<script src="js/pessoas-fotos.js?v=2026-07-31u"></script>
+<script src="js/kanban-polling.js?v=2026-07-31u"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-07-31u"></script>
+<script src="js/regras-briefing.js?v=2026-07-31u"></script>
+<script src="js/kanban-board.js?v=2026-07-31u"></script>
+<script src="js/clientes-hub.js?v=2026-07-31u"></script>
+<script src="js/chat-comentarios.js?v=2026-07-31u"></script>
+<script src="js/detalhe-modal.js?v=2026-07-31u"></script>
+<script src="js/detalhe-cardmae.js?v=2026-07-31u"></script>
+<script src="js/detalhe-alteracao.js?v=2026-07-31u"></script>
+<script src="js/bee.js?v=2026-07-31u"></script>
+<script src="js/paginas-designers.js?v=2026-07-31u"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-07-31u"></script>
+<script src="js/pagina-repasse.js?v=2026-07-31u"></script>
+<script src="js/notificacoes-avisos.js?v=2026-07-31u"></script>
+<script src="js/login-boot.js?v=2026-07-31u"></script>
 </body>
 </html>

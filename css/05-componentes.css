@@ -992,3 +992,102 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
   display: flex; align-items: center; font-size: 11px; color: var(--text-muted);
   margin-bottom: 8px;
 }
+
+/* -------------------------------------------------------------------
+   PERFIL DO DESIGNER
+   O que Gustavo e Erick veem ao clicar na própria foto na barra lateral
+   (o coordenador cai nas Configurações). Vem do protótipo 3 aprovado
+   pelo Cláudio: capa amarela, a linha "agora em" com o cronômetro, os
+   clientes em quadradinhos e as Memórias da Bee no fim.
+   ------------------------------------------------------------------- */
+
+.perfil-modal {
+  width: 340px; max-width: calc(100vw - 32px);
+  max-height: min(84vh, 720px);
+  background: var(--card-bg); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-hover);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.perfil-capa {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 16px 16px; flex-shrink: 0;
+  background: linear-gradient(160deg, var(--kanban-yellow) 0%, #FFE08A 100%);
+}
+[data-theme="dark"] .perfil-capa { background: linear-gradient(160deg, #4A3C0E 0%, #2E2718 100%); }
+
+.perfil-foto {
+  width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;
+  background-color: rgba(255,255,255,.55); background-size: cover; background-position: center;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.6);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 16px; font-weight: 600; color: #16181D;
+}
+.perfil-foto.com-foto { color: transparent; }
+[data-theme="dark"] .perfil-foto { box-shadow: 0 0 0 3px rgba(255,255,255,.15); color: #FFE9A8; }
+
+.perfil-capa-txt { flex: 1; min-width: 0; }
+.perfil-nome {
+  font-family: var(--font-display); font-size: 17px; font-weight: 600;
+  color: #16181D; letter-spacing: -.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.perfil-papel { font-size: 12.5px; color: #6B5A15; }
+[data-theme="dark"] .perfil-nome { color: #FFE9A8; }
+[data-theme="dark"] .perfil-papel { color: #C2AE72; }
+
+.perfil-x {
+  width: 30px; height: 30px; border-radius: 50%; border: none; flex-shrink: 0;
+  background: rgba(255,255,255,.45); color: #16181D; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.perfil-x:hover { background: rgba(255,255,255,.8); }
+.perfil-x svg { width: 16px; height: 16px; }
+[data-theme="dark"] .perfil-x { background: rgba(255,255,255,.1); color: #FFE9A8; }
+[data-theme="dark"] .perfil-x:hover { background: rgba(255,255,255,.2); }
+
+/* Linha "Agora em <tarefa> · 02:01". Fica escondida quando não tem nada
+   rodando — dizer "parado" não acrescentaria nada. */
+.perfil-agora {
+  display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+  padding: 10px 16px; background: var(--page-bg);
+  font-size: 12px; color: var(--text-secondary);
+}
+.perfil-agora[hidden] { display: none; }
+.perfil-agora b { color: var(--text-primary); font-weight: 600; }
+.perfil-tempo { font-variant-numeric: tabular-nums; }
+.perfil-ponto-vivo {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: var(--success); box-shadow: 0 0 0 3px rgba(34,176,125,.2);
+}
+
+.perfil-corpo {
+  padding: 14px; overflow-y: auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.perfil-secao {
+  font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600;
+}
+.perfil-secao-bee { margin-top: 8px; }
+.perfil-secao-hint { font-size: 11.5px; color: var(--text-muted); margin: -4px 0 4px; line-height: 1.4; }
+
+.perfil-clientes { display: flex; flex-direction: column; gap: 7px; }
+.perfil-cliente {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: var(--page-bg); border: none; border-radius: var(--radius-md);
+  padding: 9px 11px; cursor: pointer; font-family: inherit;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.perfil-cliente:hover { background: var(--border); }
+.perfil-cliente-txt { flex: 1; min-width: 0; }
+.perfil-cliente-nome {
+  display: block; font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.perfil-cliente-atend { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.perfil-cliente-tag {
+  flex-shrink: 0; font-size: 9.5px; font-weight: 700; color: #16181D;
+  padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .02em;
+}
