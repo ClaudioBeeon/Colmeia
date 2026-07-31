@@ -28,6 +28,30 @@
  * repetir o id do comentário daria erro toda hora; pedir um número de
  * uma lista que a gente mesmo montou é confiável.
  */
+/**
+ * Troca cada <img> do texto por uma frase que a IA consegue ler.
+ *
+ * Todo lugar que manda texto pra IA faz `replace(/<[^>]*>/g, ' ')` pra
+ * tirar as marcações de formatação. O problema é que uma imagem colada
+ * TAMBÉM é uma marcação — então ela virava um espaço em branco e a IA
+ * nunca ficava sabendo que existia. Na prática a Bee dizia "não tem
+ * referência" numa tarefa onde a referência estava colada na descrição.
+ *
+ * Não dá pra IA "ver" a imagem por aqui (ela recebe só texto nessa
+ * chamada), mas saber que existe uma já muda a resposta: ela passa a
+ * apontar a imagem em vez de fingir que a tarefa não tem material.
+ */
+function marcarImagensNoTexto(html) {
+  if (!html) return '';
+  return String(html).replace(/<img\b[^>]*>/gi, function (tag) {
+    var alt = tag.match(/\balt\s*=\s*["']([^"']*)["']/i);
+    var descricao = alt && alt[1] ? alt[1].trim() : '';
+    return descricao
+      ? ' [IMAGEM colada aqui: ' + descricao + '] '
+      : ' [IMAGEM colada aqui — abrir a tarefa pra ver] ';
+  });
+}
+
 function beeMaterialDaTarefa(taskId, idOriginal) {
   var tarefa = runrunFetch('/tasks/' + taskId);
   if (!tarefa || tarefa.erroFetch) return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
@@ -38,7 +62,11 @@ function beeMaterialDaTarefa(taskId, idOriginal) {
     if (!texto || !String(texto).trim()) return;
     mensagens.push({
       n: mensagens.length + 1,
-      texto: String(texto).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
+      // marcarImagensNoTexto ANTES de tirar as marcações: senão o print
+      // colado (que é uma marcação <img>) virava um espaço em branco e a
+      // Bee lia a descrição como se a imagem não existisse — ela dizia
+      // "não tem referência" numa tarefa que tinha a referência colada ali.
+      texto: String(marcarImagensNoTexto(texto)).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
       autor: autor || 'alguém',
       data: data || '',
       onde: onde,
@@ -495,7 +523,7 @@ function beeMemoriaDoCliente(cliente, taskIds, forcar) {
     var r = listarComentarios(id);
     if (!r.ok) return;
     r.comentarios.forEach(function (c) {
-      var texto = String(c.texto || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      var texto = String(marcarImagensNoTexto(c.texto)).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
       if (texto) conversas.push(c.autor + ': ' + texto);
     });
   });

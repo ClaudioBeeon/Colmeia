@@ -141,6 +141,8 @@ function handleRequest(e, method) {
         output = buscarAnexosTarefa(body.taskId);
       } else if (body.acao === 'baixarAnexo') {
         output = baixarDocumentoAnexo(body.documentId);
+      } else if (body.acao === 'baixarImagemDaDescricao') {
+        output = baixarImagemDaDescricao(body.url);
       } else if (body.acao === 'gerarBriefing') {
         output = gerarBriefingDaTarefa(body.taskId);
       } else if (body.acao === 'resumirAlteracao') {

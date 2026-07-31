@@ -113,6 +113,10 @@ function pintarThread(thread, html, opcoes) {
   thread.innerHTML = html;
   thread._htmlPintado = html;
   wireExcluirComentario();
+  // Print colado na descrição/num comentário: busca a imagem de verdade
+  // pelo backend (o navegador sozinho não consegue — ver
+  // carregarImagensDaDescricao).
+  carregarImagensDaDescricao(thread);
   if (rolarPraBaixo || estavaNoFim) thread.scrollTop = thread.scrollHeight;
   else thread.scrollTop = posicaoAntes;
   return true;
@@ -467,7 +471,13 @@ function prepararTextoComentario(textoBruto) {
  * pra HTML estranho quebrar (ou fazer coisa indevida com) a tela do chat.
  * Nos links, além de exigir http/https, força abrir em outra aba.
  */
-const TAGS_PERMITIDAS_COMENTARIO = ["A", "B", "STRONG", "I", "EM", "U", "BR", "P", "UL", "OL", "LI", "SPAN", "DIV"];
+// IMG entra na lista porque print colado (na descrição ou num comentário)
+// é conteúdo de verdade do pedido — sem ele, a Linha do tempo mostrava a
+// descrição sem as imagens, como se não existissem. O `src` só sobrevive
+// se apontar pro Runrun.it (aí carregarImagensDaDescricao busca a imagem
+// pelo backend) ou se já for uma imagem embutida; qualquer outro endereço
+// é jogado fora igual antes.
+const TAGS_PERMITIDAS_COMENTARIO = ["A", "B", "STRONG", "I", "EM", "U", "BR", "P", "UL", "OL", "LI", "SPAN", "DIV", "IMG"];
 
 function peneirarHTMLDeComentario(html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -516,7 +526,24 @@ function peneirarHTMLDeComentario(html) {
 
       // Tira TODOS os atributos (é aí que moram os onclick, style, etc)...
       const href = filho.tagName === "A" ? filho.getAttribute("href") : null;
+      const srcImagem = filho.tagName === "IMG" ? filho.getAttribute("src") : null;
       Array.from(filho.attributes).forEach(attr => filho.removeAttribute(attr.name));
+
+      if (filho.tagName === "IMG") {
+        // Só endereço do Runrun.it (que o backend sabe buscar) ou imagem
+        // já embutida. Qualquer outro vira nada — inclusive os que servem
+        // pra rastrear quem abriu a mensagem.
+        const aceito = srcImagem && (ehImagemProtegidaDoRunrun(srcImagem) || srcImagem.startsWith("data:image/"));
+        if (!aceito) { filho.remove(); return; }
+        if (srcImagem.startsWith("data:image/")) {
+          // Já vem embutida — mostra direto, não tem o que buscar.
+          filho.setAttribute("src", srcImagem);
+          filho.setAttribute("class", "desc-imagem");
+        } else {
+          prepararImagemProBackend(filho, srcImagem);
+        }
+        return;
+      }
       // ...e devolve só o href, se for um link http/https de verdade.
       if (filho.tagName === "A") {
         if (href && /^https?:\/\//i.test(href)) {
@@ -607,7 +634,104 @@ function formatarDescricaoRunrun(html) {
   doc.querySelectorAll("[style]").forEach(el => el.removeAttribute("style"));
   doc.querySelectorAll("[class]").forEach(el => el.removeAttribute("class"));
 
+  // Cada print colado sai daqui SEM endereço, só com ele guardado de
+  // lado. Quem vai buscar a imagem de verdade é carregarImagensDaDescricao
+  // (ver lá embaixo) — se o endereço original ficasse no lugar, o
+  // navegador ia tentar buscar sozinho, tomar "não autorizado" e desenhar
+  // o ícone de quebrada antes da imagem certa chegar.
+  doc.querySelectorAll("img[src]").forEach(img => prepararImagemProBackend(img, img.getAttribute("src")));
+
   return doc.body.innerHTML;
+}
+
+// ===== Imagens coladas na descrição =====
+//
+// Um print colado direto no editor do Runrun.it vira um <img> apontando
+// pro servidor deles, que só entrega a imagem pra quem manda as chaves de
+// acesso. O navegador do designer não tem essas chaves (e não pode ter),
+// então ele pedia a imagem, tomava "não autorizado" e desenhava aquele
+// ícone de imagem quebrada. O backend busca a imagem COM as chaves e
+// devolve os bytes dela (ver baixarImagemDaDescricao, RunrunLeitura.gs);
+// aqui a gente troca o endereço original pela imagem já embutida.
+//
+// Cada imagem é buscada UMA vez por sessão: a descrição é redesenhada
+// várias vezes (abrir o card, recarregar, trocar de aba) e sem esse cache
+// cada redesenho custaria um download novo de cada print.
+const cacheImagensDescricao = new Map();
+// Teto baixo de propósito: aqui cada item é a imagem INTEIRA guardada na
+// memória (não um endereço), então 40 prints grandes numa aba aberta o dia
+// todo pesariam de verdade no navegador.
+const MAX_IMAGENS_DESCRICAO_CACHE = 20;
+
+// Imagem transparente de 1 pixel, escrita aqui dentro mesmo (não é um
+// arquivo, não vai buscar nada na internet). Serve de "vaga" enquanto a
+// imagem de verdade não chega.
+const PIXEL_TRANSPARENTE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+function ehImagemProtegidaDoRunrun(src) {
+  return !!src && /^https:\/\/([^\/:?#]*\.)?runrun\.it\//i.test(src);
+}
+
+/**
+ * Deixa um <img> pronto pra ser preenchido pelo backend: tira o endereço
+ * que o navegador não consegue buscar e guarda ele de lado.
+ */
+function prepararImagemProBackend(img, url) {
+  if (!ehImagemProtegidaDoRunrun(url)) return;
+  img.setAttribute("data-url-original", url);
+  img.setAttribute("src", PIXEL_TRANSPARENTE);
+  img.setAttribute("class", "desc-imagem carregando");
+}
+
+async function carregarImagensDaDescricao(container) {
+  if (!container) return;
+  const imagens = [...container.querySelectorAll("img[data-url-original]")];
+  if (!imagens.length) return;
+
+  await Promise.all(imagens.map(async img => {
+    const url = img.dataset.urlOriginal;
+
+    if (cacheImagensDescricao.has(url)) {
+      const guardada = cacheImagensDescricao.get(url);
+      img.classList.remove("carregando");
+      if (guardada) img.src = guardada;
+      else marcarImagemQuebrada(img, url);
+      return;
+    }
+
+    const data = await chamarBackend({ acao: "baixarImagemDaDescricao", url });
+    // Sem rede não é "a imagem não existe" — não grava nada no cache
+    // (senão a falha grudava) e deixa pra próxima vez.
+    if (caiuARede(data)) { img.classList.remove("carregando"); return; }
+    img.classList.remove("carregando");
+
+    if (data.ok && data.base64) {
+      const embutida = `data:${data.mimeType};base64,${data.base64}`;
+      cacheImagensDescricao.set(url, embutida);
+      podarCacheMap(cacheImagensDescricao, MAX_IMAGENS_DESCRICAO_CACHE);
+      // A imagem pode ter saído da tela enquanto baixava (redesenho, troca
+      // de card) — nesse caso o cache já guardou pra próxima vez.
+      if (img.isConnected) img.src = embutida;
+    } else {
+      cacheImagensDescricao.set(url, null);
+      console.warn("[Colmeia] Não consegui carregar imagem da descrição:", data.error);
+      marcarImagemQuebrada(img, url);
+    }
+  }));
+}
+
+// Em vez do ícone de imagem quebrada do navegador (que não explica nada),
+// deixa um link pra abrir a imagem no Runrun.it, onde a sessão da própria
+// pessoa dá conta de mostrar.
+function marcarImagemQuebrada(img, url) {
+  if (!img.isConnected) return;
+  const aviso = document.createElement("a");
+  aviso.className = "desc-imagem-falhou";
+  aviso.href = url;
+  aviso.target = "_blank";
+  aviso.rel = "noopener";
+  aviso.textContent = "🖼 Imagem da descrição — abrir no Runrun.it";
+  img.replaceWith(aviso);
 }
 
 /**
@@ -630,7 +754,10 @@ async function carregarDescricao(task) {
     // isso em vez de AFIRMAR que a tarefa não tem descrição — só quando o
     // backend responde de verdade "" é que a tarefa está mesmo sem texto.
     if (texto === null) el.innerHTML = "Não consegui carregar a descrição agora.";
-    else el.innerHTML = texto ? formatarDescricaoRunrun(texto) : "Sem descrição cadastrada nessa tarefa.";
+    else {
+      el.innerHTML = texto ? formatarDescricaoRunrun(texto) : "Sem descrição cadastrada nessa tarefa.";
+      carregarImagensDaDescricao(el);
+    }
   }
 }
 
@@ -753,9 +880,12 @@ async function carregarTudoDaTarefa(task) {
   if (timerEl) timerEl.textContent = formatTime(task.timerSeconds);
 
   const descEl = document.getElementById("descTextReal");
-  if (descEl) descEl.innerHTML = data.descricao
-    ? formatarDescricaoRunrun(data.descricao)
-    : "Sem descrição cadastrada nessa tarefa.";
+  if (descEl) {
+    descEl.innerHTML = data.descricao
+      ? formatarDescricaoRunrun(data.descricao)
+      : "Sem descrição cadastrada nessa tarefa.";
+    carregarImagensDaDescricao(descEl);
+  }
   // Guarda a descrição na própria tarefa: a Linha do tempo mostra ela
   // como a primeira mensagem (ver abrirThreadLinhaDoTempo), e é isso que
   // faz o "ver original" da Bee ter pra onde apontar quando o pedido veio

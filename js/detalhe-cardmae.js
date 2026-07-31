@@ -59,6 +59,7 @@ async function carregarDescricaoCardMae(task) {
   textoEl.innerHTML = resultado.cardMae.descricao
     ? formatarDescricaoRunrun(resultado.cardMae.descricao)
     : "Sem descrição cadastrada no card mãe.";
+  carregarImagensDaDescricao(textoEl);
 }
 
 // taskId da subtarefa -> resultado de buscarCardMaeDoBackend (já com

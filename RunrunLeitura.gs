@@ -811,6 +811,75 @@ function buscarAnexosTarefa(taskId) {
   return { ok: true, anexos: anexos };
 }
 
+/**
+ * Baixa uma IMAGEM COLADA na descrição (ou num comentário) do Runrun.it e
+ * devolve ela embutida, pro navegador conseguir mostrar.
+ *
+ * Por que isso precisa existir: quando alguém cola um print direto no
+ * editor do Runrun.it, o que fica salvo na descrição é um <img> apontando
+ * pro servidor DELES — e esse endereço só entrega a imagem pra quem manda
+ * as chaves de acesso (App-Key/User-Token) no pedido. O navegador do
+ * designer não tem essas chaves e nunca vai ter (elas não podem sair
+ * daqui de dentro), então ele pedia a imagem, tomava "não autorizado" de
+ * volta e desenhava aquele ícone de imagem quebrada.
+ *
+ * Aqui o Apps Script busca a imagem COM as chaves e devolve os bytes
+ * dela junto da resposta — o navegador então mostra a imagem sem precisar
+ * pedir nada pro Runrun.it.
+ *
+ * SEGURANÇA: só aceita endereço do próprio Runrun.it. Sem essa trava,
+ * essa ação viraria um "busque qualquer endereço da internet pra mim,
+ * autenticado" pra quem descobrisse a URL do backend.
+ */
+var LIMITE_IMAGEM_DESCRICAO_BYTES = 8 * 1024 * 1024;
+
+function urlEhDoRunrun(url) {
+  if (!url) return false;
+  var m = String(url).match(/^https:\/\/([^\/:?#]+)/i);
+  if (!m) return false;
+  var host = m[1].toLowerCase();
+  // ".runrun.it" tem 10 caracteres — pegar o tamanho errado aqui faria o
+  // backend recusar justamente "secure.runrun.it", que é o endereço que o
+  // Runrun.it usa de verdade.
+  return host === 'runrun.it' || host.slice(-10) === '.runrun.it';
+}
+
+function baixarImagemDaDescricao(url) {
+  if (!url) return { ok: false, error: 'URL não informada.' };
+  if (!urlEhDoRunrun(url)) {
+    return { ok: false, error: 'Só imagens hospedadas no Runrun.it podem ser buscadas por aqui.' };
+  }
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: {
+        'App-Key': RUNRUN_APP_KEY,
+        'User-Token': RUNRUN_USER_TOKEN
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+    var codigo = res.getResponseCode();
+    if (codigo < 200 || codigo >= 300) {
+      return { ok: false, error: 'Runrun.it recusou entregar a imagem (status ' + codigo + ').' };
+    }
+    var blob = res.getBlob();
+    var tipo = blob.getContentType() || '';
+    // Se não voltou uma imagem, não adianta embutir — normalmente é uma
+    // página de login em HTML, sinal de que as chaves não serviram.
+    if (tipo.indexOf('image/') !== 0) {
+      return { ok: false, error: 'O endereço não devolveu uma imagem (veio "' + tipo + '").' };
+    }
+    var bytes = blob.getBytes();
+    if (bytes.length > LIMITE_IMAGEM_DESCRICAO_BYTES) {
+      return { ok: false, error: 'Imagem grande demais pra mostrar embutida (' + Math.round(bytes.length / 1024 / 1024) + ' MB).' };
+    }
+    return { ok: true, base64: Utilities.base64Encode(bytes), mimeType: tipo };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao buscar a imagem: ' + err.message };
+  }
+}
+
 function baixarDocumentoAnexo(documentId) {
   if (!documentId) return { ok: false, error: 'documentId não informado.' };
   try {

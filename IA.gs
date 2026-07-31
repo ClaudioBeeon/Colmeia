@@ -228,7 +228,10 @@ function gerarBriefingDaTarefa(taskId) {
     'Responda SOMENTE com um JSON válido, exatamente neste formato, sem nenhum texto antes ou depois:\n' +
     '{"plataformas": ["..."], "formatos": ["..."], "resumo": "...", "campos": [{"pergunta": "...", ' +
     '"resposta": "..." ou null, "respostaOriginal": "..." ou null}]}\n\n' +
-    'Descrição da tarefa (HTML):\n' + descricaoHtml;
+    // marcarImagensNoTexto (Bee.gs): print colado vira "[IMAGEM colada
+    // aqui]" em vez de um <img src=...> comprido e ilegível — assim a IA
+    // sabe que existe imagem sem gastar o prompt com o endereço dela.
+    'Descrição da tarefa (HTML):\n' + marcarImagensNoTexto(descricaoHtml);
 
   var resultado = chamarGemini(prompt);
   if (!resultado.ok) return resultado;
@@ -260,7 +263,7 @@ function resumirAlteracao(taskId, idOriginal) {
     return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
   }
 
-  var descricao = buscarDescricao(taskId).descricao || '';
+  var descricao = marcarImagensNoTexto(buscarDescricao(taskId).descricao || '');
   var comentariosAlteracao = listarComentarios(taskId);
   var textosAlteracao = comentariosAlteracao.ok
     ? comentariosAlteracao.comentarios.map(function (c) { return c.autor + ': ' + c.texto; })

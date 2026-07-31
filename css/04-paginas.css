@@ -67,6 +67,31 @@
   list-style: none;
   margin-bottom: 2px;
 }
+/* Print colado na descrição (ou num comentário). Nunca estoura a largura
+   da coluna, mesmo que a imagem original seja enorme. */
+.desc-imagem {
+  display: block; max-width: 100%; height: auto;
+  margin: 8px 0; border-radius: 10px;
+  background: var(--page-bg, #F5F5F5);
+}
+/* Enquanto o backend busca a imagem, fica uma faixa cinza no lugar dela
+   (o src é um pixel transparente, então não tem ícone de quebrada
+   nenhum) — assim o texto em volta não pula quando a imagem chega. */
+.desc-imagem.carregando {
+  width: 100%; min-height: 90px;
+  animation: desc-imagem-pulsando 1.4s ease-in-out infinite;
+}
+@keyframes desc-imagem-pulsando {
+  0%, 100% { opacity: .45; }
+  50% { opacity: .8; }
+}
+.desc-imagem-falhou {
+  display: inline-block; margin: 8px 0; padding: 8px 12px;
+  border-radius: 10px; background: var(--page-bg, #F5F5F5);
+  font-size: 12.5px; text-decoration: none; color: inherit; opacity: .75;
+}
+.desc-imagem-falhou:hover { opacity: 1; }
+
 .desc-text-real.editando {
   outline: none; border: 1.5px solid var(--kanban-yellow); border-radius: 10px;
   padding: 10px 12px; background: var(--page-bg);
