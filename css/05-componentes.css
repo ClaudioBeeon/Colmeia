@@ -689,7 +689,11 @@ body.bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
 
 .bee-painel {
   width: 500px; max-width: 60vw; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden;
-  background: var(--card-bg); border-radius: 18px;
+  /* Mesmo degradê amarelinho leve do .chat-panel, cobrindo o painel
+     inteiro (não só o topo) — o balão branco (.comment-text) quase
+     sumia em cima de um fundo também branco. */
+  background: linear-gradient(180deg, rgba(255,199,0,0.10), #FFFFFF 340px);
+  border-radius: 18px;
   box-shadow: 0 18px 50px rgba(10,10,20,0.16);
   /* -520px = a largura + o gap de 18px do .page (+ folga): fechado ele
      ocupa espaço zero, sem "empurrar" nada. */
@@ -698,6 +702,7 @@ body.bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
 }
 body.bee-aberta .bee-painel { margin-right: 0; opacity: 1; pointer-events: auto; }
 body.card-aberto .bee-painel { display: none; }
+[data-theme="dark"] .bee-painel { background: var(--card-bg); }
 
 .bee-tela { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .bee-tela[hidden] { display: none; }

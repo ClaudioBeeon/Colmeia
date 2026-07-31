@@ -637,9 +637,9 @@
 .comment-text {
   background: #FFFFFF; border-radius: 20px;
   padding: 11px 16px; font-size: 13.5px; line-height: 1.5; color: #111111;
-  text-align: left; box-shadow: 0 2px 10px rgba(0,0,0,.04);
+  text-align: left; box-shadow: 0 3px 14px rgba(0,0,0,.09);
 }
-[data-theme="dark"] .comment-text { background: #1B1A22; color: var(--text-primary); box-shadow: 0 2px 10px rgba(0,0,0,.2); }
+[data-theme="dark"] .comment-text { background: #1B1A22; color: var(--text-primary); box-shadow: 0 3px 14px rgba(0,0,0,.3); }
 .comment-text a { color: var(--accent); text-decoration: underline; word-break: break-word; }
 .comment-text a:hover { text-decoration: none; }
 .mention-tag { color: var(--accent); font-weight: 700; }
@@ -754,11 +754,17 @@
 
 .chat-panel {
   display: none; flex-direction: column; flex: 0 0 30%; min-width: 280px;
-  background: var(--card-bg);
+  /* Degradê amarelinho bem leve cobrindo o painel inteiro (não só uma
+     tira no topo) — sem isso o balão branco (.comment-text) quase
+     sumia em cima de um fundo também branco. Fica no PAINEL (que não
+     rola), não na lista de mensagens — assim não "anda" junto com o
+     scroll. */
+  background: linear-gradient(180deg, rgba(255,199,0,0.10), #FFFFFF 340px);
   border-radius: 18px;
   box-shadow: 0 20px 60px rgba(10,10,20,0.28);
   overflow: hidden;
 }
+[data-theme="dark"] .chat-panel { background: var(--card-bg); }
 .task-detail.chat-open .chat-panel { display: flex; }
 
 .chat-panel-header {

@@ -1125,6 +1125,14 @@ function renderDetail() {
     const alvoId = chatAlvoTaskId;
     const eraThreadAqui = chatThreadAtivo === "aqui";
     const arquivoAtual = arquivoParaAnexar;
+    // No Runrun.it de verdade, "@Nome" escolhido na lista vira uma menção
+    // de verdade (a pessoa é avisada) — não é só texto colorido. O jeito
+    // que o Runrun.it manda ISSO pra gente quando LÊ um comentário é
+    // "<mention>@Nome</mention>" dentro do texto (ver formatarMencoes,
+    // js/regras-briefing.js) — então é essa mesma marcação que a gente
+    // manda de volta pra ELE reconhecer como menção de verdade ao criar
+    // o comentário, não só "@Nome" solto.
+    const textoParaEnviar = converterMencoesParaTagRunrun(texto);
     commentInput.value = "";
     commentInput.disabled = true;
     limparAnexoSelecionado();
@@ -1149,8 +1157,8 @@ function renderDetail() {
     }
 
     const ok = arquivoAtual
-      ? await enviarComentarioComAnexoNoBackend(alvoId, texto, arquivoAtual)
-      : await enviarComentarioNoBackend(alvoId, texto);
+      ? await enviarComentarioComAnexoNoBackend(alvoId, textoParaEnviar, arquivoAtual)
+      : await enviarComentarioNoBackend(alvoId, textoParaEnviar);
 
     commentInput.disabled = false;
     const bolhaTemporaria = document.querySelector(`.comment-bubble[data-comment-id="${idTemporario}"]`);
@@ -1160,7 +1168,7 @@ function renderDetail() {
       if (bolhaTemporaria) bolhaTemporaria.classList.remove("pending");
       recarregarThreadAtiva();
       agendarAtualizacaoKanban();
-      if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, texto);
+      if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, textoParaEnviar);
     } else {
       if (bolhaTemporaria) bolhaTemporaria.remove(); // não foi enviado — some a bolha
       // Devolve o texto pro campo em vez de perder o que a pessoa escreveu:
@@ -1261,6 +1269,22 @@ function renderDetail() {
       );
     }
     return Array.from(nomes);
+  }
+  // Troca "@Nome" (de gente conhecida de verdade) por "<mention>@Nome</mention>"
+  // antes de mandar pro Runrun.it — é assim que ELE manda de volta uma menção
+  // de verdade quando a gente LÊ um comentário (ver formatarMencoes), então é
+  // essa marcação que ele deve reconhecer ao CRIAR também. Nomes maiores
+  // primeiro ("Ana Paula" antes de "Ana"), pra não cortar no meio.
+  function converterMencoesParaTagRunrun(texto) {
+    if (!texto || texto.indexOf("@") === -1) return texto;
+    const nomes = todosNomesParaMencao().sort((a, b) => b.length - a.length);
+    let resultado = texto;
+    nomes.forEach(nome => {
+      const escapado = nome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp("@" + escapado + "(?![\\wÀ-ÿ])", "gi");
+      resultado = resultado.replace(regex, `<mention>@${nome}</mention>`);
+    });
+    return resultado;
   }
   if (commentInput && mentionList) {
     commentInput.addEventListener("input", () => {
