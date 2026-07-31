@@ -559,6 +559,14 @@ function fazerBackupDaPlanilha() {
   } catch (err) {
     Logger.log('Erro ao montar o índice do Drive: ' + err.message);
   }
+  // Mesma ideia pro índice de links dos comentários (ver montarIndiceDeLinks
+  // em Bee.gs) — é o que faz "achar o link perdido" ser instantâneo.
+  try {
+    var indiceLinks = montarIndiceDeLinks();
+    Logger.log('Índice de links: ' + (indiceLinks.ok ? indiceLinks.itens + ' itens' : indiceLinks.error));
+  } catch (err) {
+    Logger.log('Erro ao montar o índice de links: ' + err.message);
+  }
 }
 
 function limparBackupsAntigos(pastaBackups) {

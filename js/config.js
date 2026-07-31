@@ -228,6 +228,7 @@ const ACOES_DEMORADAS = [
   "beeInspirar",           // IA lendo a tarefa inteira
   "beeConferirEntrega",    // IA + varredura da pasta do card no Drive
   "beeMemoriaCliente",     // le os comentarios de ate 15 tarefas do cliente
+  "montarIndiceDeLinks",   // so usado manualmente pelo editor do Apps Script
   "buscarExtrasRunrunCompleto", // pagina 15 dias de entregues dos 3 designers
   "listarPastasClientesDrive",  // varre pastas do Drive
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive

@@ -902,3 +902,35 @@ a.bee-recente { text-decoration: none; }
 
 .bee-pastilhas { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 4px; }
 .bee-pastilhas .bee-acao { margin-top: 0; }
+
+/* ===== Cartões de resultado dentro da bolha da Bee =====
+   Usados nas respostas FUNCIONAIS (achar link, achar card mãe, achar
+   responsável) — em vez de texto corrido, um cartão clicável, no mesmo
+   espírito visual dos resultados da Busca Universal (.bee-recente). */
+.bee-cards { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.bee-card-resultado {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 12px; text-align: left; font-family: var(--font-body);
+}
+button.bee-card-resultado-clicavel {
+  width: 100%; cursor: pointer; color: var(--text-primary);
+  transition: border-color .12s var(--ease-apple), transform .12s var(--ease-apple);
+}
+button.bee-card-resultado-clicavel:hover { border-color: var(--text-muted); transform: translateY(-1px); }
+.bee-card-resultado-topo { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.bee-card-resultado-titulo { font-size: 12.5px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bee-card-resultado-tag {
+  font-size: 10px; font-weight: 700; color: var(--text-muted);
+  background: var(--page-bg); border-radius: 999px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0;
+}
+.bee-card-resultado-trecho {
+  font-size: 11.5px; color: var(--text-secondary); font-style: italic;
+  margin: 4px 0; line-height: 1.4;
+}
+.bee-card-resultado-meta { font-size: 10.5px; color: var(--text-muted); margin-bottom: 6px; }
+.bee-card-resultado-acoes { display: flex; gap: 6px; }
+.bee-card-resultado-acoes .bee-acao { margin-top: 0; }
+
+.bee-pessoa-resultado { display: flex; align-items: center; gap: 9px; margin: 8px 0; }
+.bee-pessoa-resultado-nome { font-size: 13px; font-weight: 700; }
+.bee-acao.principal svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }

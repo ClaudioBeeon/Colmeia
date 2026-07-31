@@ -1045,6 +1045,144 @@ function beeBuscarNoDrive(termo, cliente) {
   return { ok: true, resultados: aoVivo, origem: 'aovivo', cliente: cliente || null };
 }
 
+// ============ 7) ACHAR O LINK PERDIDO ============
+//
+// "Cadê o link de aprovação que a Marina mandou?" — links importantes
+// se perdem no meio de uma conversa de comentários, e não tem busca
+// nenhuma pra isso hoje. Mesmo princípio do índice do Drive: um índice
+// montado 1x por dia (não dá pra varrer comentário de toda tarefa aberta
+// a cada pergunta), guardando cada URL encontrada com o contexto dela.
+
+var INDICE_LINKS_MAX_TAREFAS = 400;   // teto de segurança pra não estourar o tempo do gatilho diário
+var INDICE_LINKS_MAX_ITENS = 3000;
+var REGEX_URL = /https?:\/\/[^\s<>"')\]]+/g;
+
+function getIndiceLinksSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('IndiceLinks');
+  if (!sheet) {
+    sheet = ss.insertSheet('IndiceLinks');
+    sheet.getRange('A1:G1').setValues([['url', 'task_id', 'tarefa', 'cliente', 'autor', 'data', 'trecho']]);
+  }
+  return sheet;
+}
+
+/**
+ * Roda 1x por dia, junto do backup e do índice do Drive. Percorre as
+ * tarefas ABERTAS (normais + card mãe — é onde a conversa de verdade
+ * acontece) e tira todo link dos comentários delas.
+ */
+function montarIndiceDeLinks() {
+  var comecouEm = new Date().getTime();
+  var LIMITE_MS = 4 * 60 * 1000; // pára de propósito antes do teto do gatilho (6 min), pra sempre terminar salvando algo
+
+  var separadas = buscarTarefasAbertasSeparadas();
+  var tarefas = separadas.normais.concat(separadas.cardMae).slice(0, INDICE_LINKS_MAX_TAREFAS);
+
+  var linhas = [];
+  for (var i = 0; i < tarefas.length; i++) {
+    if (linhas.length >= INDICE_LINKS_MAX_ITENS) break;
+    if ((new Date().getTime() - comecouEm) > LIMITE_MS) break; // tempo esgotando: salva o que já tem, não trava o gatilho
+
+    var t = tarefas[i];
+    var r = listarComentarios(t.id);
+    if (!r.ok) continue;
+
+    r.comentarios.forEach(function (c) {
+      if (linhas.length >= INDICE_LINKS_MAX_ITENS) return;
+      var texto = String(c.texto || '').replace(/<[^>]*>/g, ' ');
+      var urls = texto.match(REGEX_URL);
+      if (!urls) return;
+      urls.forEach(function (url) {
+        if (linhas.length >= INDICE_LINKS_MAX_ITENS) return;
+        var pos = texto.indexOf(url);
+        var trecho = texto.substring(Math.max(0, pos - 40), pos).trim() ;
+        linhas.push([url, t.id, t.title || '', t.client || '', c.autor || '', c.data || '', trecho]);
+      });
+    });
+  }
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getIndiceLinksSheet();
+    sheet.clear();
+    sheet.getRange('A1:G1').setValues([['url', 'task_id', 'tarefa', 'cliente', 'autor', 'data', 'trecho']]);
+    if (linhas.length) sheet.getRange(2, 1, linhas.length, 7).setValues(linhas);
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true, itens: linhas.length, tarefasVarridas: tarefas.length };
+}
+
+function beeBuscarLink(termo, cliente) {
+  if (!termo || !String(termo).trim()) return { ok: true, resultados: [] };
+  var sheet = getIndiceLinksSheet();
+  var linhas = sheet.getDataRange().getValues();
+  if (linhas.length < 2) return { ok: true, resultados: [] };
+
+  var t = termosDaBusca(termo);
+  var filtroCliente = cliente ? normalizarBusca(cliente) : null;
+  var achados = [];
+
+  for (var i = 1; i < linhas.length; i++) {
+    var tarefa = normalizarBusca(linhas[i][2]);
+    var clienteLinha = normalizarBusca(linhas[i][3]);
+    var trecho = normalizarBusca(linhas[i][6]);
+    if (filtroCliente && clienteLinha.indexOf(filtroCliente) === -1) continue;
+
+    var alvo = tarefa + ' ' + trecho;
+    var pontos = 0;
+    t.todos.forEach(function (p) { if (alvo.indexOf(p) !== -1) pontos += 1; });
+    // Sem nenhum termo batendo: só entra se tiver cliente escolhido (aí a
+    // pergunta já é "os links desse cliente", não precisa achar palavra.
+    if (!pontos && !filtroCliente) continue;
+
+    achados.push({
+      url: linhas[i][0], taskId: linhas[i][1], tarefa: linhas[i][2],
+      cliente: linhas[i][3], autor: linhas[i][4], data: linhas[i][5],
+      trecho: linhas[i][6], pontos: pontos
+    });
+  }
+  achados.sort(function (a, b) { return b.pontos - a.pontos; });
+  return { ok: true, resultados: achados.slice(0, 8) };
+}
+
+// ============ 8) ACHAR O CARD MÃE POR ASSUNTO ============
+//
+// "Qual é a campanha do post de aniversário do cliente X?" — quando a
+// pessoa lembra do ASSUNTO mas não do nome exato da tarefa. Os cards mãe
+// ficam fora do quadro normal (etapa "Cards Mães"), então busca comum de
+// tarefa nunca os acha. Usa o mesmo cache do board scan de sempre — não
+// gera nenhuma ida a mais ao Runrun.it na maioria das vezes.
+
+function beeAcharCardMae(termo, cliente) {
+  if (!termo || !String(termo).trim()) return { ok: true, resultados: [] };
+
+  var cardMae = null;
+  try {
+    var cacheado = CacheService.getScriptCache().get(CACHE_CARD_MAE_ABERTOS);
+    if (cacheado) cardMae = JSON.parse(cacheado);
+  } catch (e) { /* cache indisponível — busca fresco abaixo */ }
+  if (!cardMae) cardMae = buscarTarefasAbertasSeparadas().cardMae;
+
+  var t = termosDaBusca(termo);
+  var filtroCliente = cliente ? normalizarBusca(cliente) : null;
+  var achados = [];
+
+  cardMae.forEach(function (c) {
+    var clienteNorm = normalizarBusca(c.client);
+    if (filtroCliente && clienteNorm.indexOf(filtroCliente) === -1) return;
+    var alvo = normalizarBusca(c.title) + ' ' + clienteNorm;
+    var pontos = 0;
+    t.todos.forEach(function (p) { if (alvo.indexOf(p) !== -1) pontos += 1; });
+    if (!pontos) return;
+    achados.push({ taskId: c.id, titulo: c.title, cliente: c.client, etapa: c.runrunStage || '', pontos: pontos });
+  });
+  achados.sort(function (a, b) { return b.pontos - a.pontos; });
+  return { ok: true, resultados: achados.slice(0, 8) };
+}
+
 // ============ ONDE A CONVERSA FICA GUARDADA ============
 //
 // UMA LINHA POR TAREFA, com a conversa inteira dentro de uma célula só

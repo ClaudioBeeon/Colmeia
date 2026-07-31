@@ -149,6 +149,7 @@ function desenharThreadBee(task) {
     + conversa.map((m, i) => renderMensagemDaConversa(m, i)).join("")
     + `<div class="bee-pastilhas"><button type="button" class="bee-acao" id="beeInspirarBtn">🎲 Me inspirar nessa peça</button></div>`;
   wireThreadBee(task);
+  ligarCliquesDeResultadoFuncional(thread);
   thread.scrollTop = thread.scrollHeight;
 }
 
@@ -211,6 +212,7 @@ const iconeMandarProRunrun = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 1
 
 function renderMensagemDaConversa(m, indice) {
   if (m.autor === "bee") {
+    if (m._funcional) return bolhaDaBee(renderRespostaFuncional(m._funcional), indice);
     const extra = m._inspiracao ? renderLinksDeInspiracao(m._inspiracao.termos) : "";
     return bolhaDaBee(formatarFalaDaBee(m.texto) + extra, indice);
   }
@@ -252,6 +254,138 @@ function formatarFalaDaBee(texto) {
     })
     .join("<br>")
     .replace(/<br>(\s*<div class="bee-firefly")/g, "$1");
+}
+
+// ===== Perguntas FUNCIONAIS =====
+//
+// Achar link, achar responsável, achar card mãe: são coisas que dá pra
+// responder na hora com uma busca/consulta direta, sem precisar da IA
+// "pensar" — e são mais confiáveis assim (é dado de verdade, não texto
+// gerado). Por isso, antes de mandar a pergunta pro Gemini, o Colmeia
+// tenta reconhecer esses três casos e responde direto, com um cartão
+// clicável dentro da própria bolha da Bee — funciona tanto no chat da
+// tarefa quanto na Bee solta (a bolinha do canto).
+//
+// Se nada bater, cai no fluxo normal (a conversa com a IA), sem custar
+// nada a mais.
+
+/**
+ * @param {string} pergunta
+ * @param {Object} [contexto]  { cliente } quando a pergunta é dentro de
+ *                              uma tarefa — já sabe de qual cliente é,
+ *                              sem precisar adivinhar pelo texto.
+ * @returns {Promise<{tipo, dados}|null>}  null = não reconheceu nada,
+ *                              segue pro fluxo normal com a IA.
+ */
+async function beeReconhecerPerguntaFuncional(pergunta, contexto) {
+  const texto = normalizarParaComparar(pergunta);
+  const clientes = typeof listarTodosClientesConhecidos === "function" ? listarTodosClientesConhecidos() : [];
+  const clienteDoContexto = (contexto && contexto.cliente) || null;
+  const clienteCitado = clientes.find(c => texto.includes(normalizarParaComparar(c)));
+  const cliente = clienteCitado || clienteDoContexto;
+
+  if (/\b(link|url)\b/.test(texto) && /\b(cad[eê]|onde|achar|acha|procura)\b/.test(texto)) {
+    const data = await chamarBackend({ acao: "beeBuscarLink", termo: pergunta, cliente });
+    return { tipo: "link", pergunta, cliente, resultados: (data && data.ok) ? data.resultados : [] };
+  }
+
+  if (/atendimento|discord|quem cuida|quem.*respons[aá]vel/.test(texto)) {
+    const alvo = cliente || clientes.find(c => texto.includes(normalizarParaComparar(c)));
+    if (alvo) return { tipo: "responsavel", pergunta, cliente: alvo };
+  }
+
+  if (/campanha|card m[aã]e|qual.*(tarefa|card)/.test(texto)) {
+    const data = await chamarBackend({ acao: "beeAcharCardMae", termo: pergunta, cliente });
+    return { tipo: "cardmae", pergunta, cliente, resultados: (data && data.ok) ? data.resultados : [] };
+  }
+
+  return null;
+}
+
+// Vira uma "fala da Bee" comum (mesmo formato das outras), só que com
+// _funcional guardando o tipo/resultado — é isso que faz desenharThreadBee/
+// desenharJanelaDaBee saberem montar o cartão certo em vez de markdown.
+function beeMensagemFuncional(resultado) {
+  return { autor: "bee", texto: "", quando: Date.now(), _funcional: resultado };
+}
+
+function renderRespostaFuncional(f) {
+  if (f.tipo === "link") {
+    if (!f.resultados.length) {
+      return `<p>Não achei nenhum link ${f.cliente ? "do cliente " + escaparHTML(f.cliente) : ""} batendo com isso. Pode ter sumido do índice — ele é atualizado 1x por dia.</p>`;
+    }
+    return `<p class="bee-titulo">Achei ${f.resultados.length === 1 ? "este link" : "estes links"}</p>` +
+      `<div class="bee-cards">` + f.resultados.map(r => `
+        <div class="bee-card-resultado">
+          <div class="bee-card-resultado-topo">
+            <span class="bee-card-resultado-titulo">${escaparHTML(r.tarefa || "tarefa")}</span>
+            ${r.cliente ? `<span class="bee-card-resultado-tag">${escaparHTML(r.cliente)}</span>` : ""}
+          </div>
+          ${r.trecho ? `<p class="bee-card-resultado-trecho">"...${escaparHTML(r.trecho)}"</p>` : ""}
+          <div class="bee-card-resultado-meta">${escaparHTML(r.autor || "")}${r.data ? " · " + beeDataCurtaFront(r.data) : ""}</div>
+          <div class="bee-card-resultado-acoes">
+            <a class="bee-acao principal" href="${escaparHTML(r.url)}" target="_blank" rel="noopener">Abrir link</a>
+            <button type="button" class="bee-acao" data-abrir-tarefa="${Number(r.taskId)}">Abrir tarefa</button>
+          </div>
+        </div>
+      `).join("") + `</div>`;
+  }
+
+  if (f.tipo === "cardmae") {
+    if (!f.resultados.length) {
+      return `<p>Não achei nenhuma campanha ${f.cliente ? "do cliente " + escaparHTML(f.cliente) : ""} batendo com isso.</p>`;
+    }
+    return `<p class="bee-titulo">Achei ${f.resultados.length === 1 ? "esta campanha" : "estas campanhas"}</p>` +
+      `<div class="bee-cards">` + f.resultados.map(r => `
+        <button type="button" class="bee-card-resultado bee-card-resultado-clicavel" data-abrir-tarefa="${Number(r.taskId)}">
+          <div class="bee-card-resultado-topo">
+            <span class="bee-card-resultado-titulo">${escaparHTML(r.titulo)}</span>
+            ${r.cliente ? `<span class="bee-card-resultado-tag">${escaparHTML(r.cliente)}</span>` : ""}
+          </div>
+          <div class="bee-card-resultado-meta">${escaparHTML(r.etapa || "Card mãe")}</div>
+        </button>
+      `).join("") + `</div>`;
+  }
+
+  if (f.tipo === "responsavel") {
+    const nomeAtendimento = (typeof getAtendimentoDoCliente === "function" && getAtendimentoDoCliente(f.cliente)) || null;
+    if (!nomeAtendimento) {
+      return `<p>Não achei quem atende o cliente ${escaparHTML(f.cliente)}. Vale conferir em Configurações › Clientes por atendimento.</p>`;
+    }
+    const linkPessoa = typeof getDiscordDaPessoa === "function" ? getDiscordDaPessoa(nomeAtendimento) : null;
+    const avatar = typeof avatarAtendimentoHTML === "function" ? avatarAtendimentoHTML(nomeAtendimento, "avatar-sm") : "";
+    return `
+      <p class="bee-titulo">Atendimento de ${escaparHTML(f.cliente)}</p>
+      <div class="bee-pessoa-resultado">
+        ${avatar}
+        <span class="bee-pessoa-resultado-nome">${escaparHTML(nomeAtendimento)}</span>
+      </div>
+      ${linkPessoa
+        ? `<a class="bee-acao principal" href="${escaparHTML(linkPessoa)}" target="_blank" rel="noopener">${discordIcon} Chamar no Discord</a>`
+        : `<p class="bee-aviso">Sem Discord cadastrado pra essa pessoa (Configurações › Pessoas).</p>`}
+    `;
+  }
+
+  return "";
+}
+
+function beeDataCurtaFront(iso) {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  } catch (e) {
+    return "";
+  }
+}
+
+function ligarCliquesDeResultadoFuncional(escopo) {
+  escopo.querySelectorAll("[data-abrir-tarefa]").forEach(el => {
+    el.addEventListener("click", () => {
+      beeFecharPainel();
+      abrirTarefaPorId(Number(el.dataset.abrirTarefa));
+    });
+  });
 }
 
 // ===== Ações da Bee dentro da tarefa =====
@@ -690,7 +824,7 @@ function desenharConversaDaBee() {
          <span class="bee-avatar">${beeIcon}</span>
          <div class="comment-body">
            <div class="comment-meta"><span class="comment-author">Bee</span></div>
-           <div class="comment-text">${formatarFalaDaBee(m.texto)}</div>
+           <div class="comment-text">${m._funcional ? renderRespostaFuncional(m._funcional) : formatarFalaDaBee(m.texto)}</div>
          </div>
        </div>`
     : `<div class="comment-bubble mine">
@@ -704,6 +838,7 @@ function desenharConversaDaBee() {
   if (beePensandoLivre) {
     thread.insertAdjacentHTML("beforeend", `<p class="bee-vazio">A Bee está pensando...</p>`);
   }
+  ligarCliquesDeResultadoFuncional(thread);
   // Os botões de copiar do bloco do Firefly são recriados a cada
   // redesenho (o innerHTML acima troca todos os elementos), então
   // precisam ser religados aqui.
@@ -737,6 +872,17 @@ async function enviarParaBeeLivre(textoDireto) {
   beeConversaAtual.mensagens.push({ autor: "designer", texto, quando: Date.now() });
   beePensandoLivre = true;
   desenharConversaDaBee();
+
+  // Pergunta funcional? Responde na hora, sem gastar IA nem gravar no
+  // backend — a Bee solta não guarda histórico de resultado de busca, só
+  // de conversa de verdade.
+  const reconhecida = await beeReconhecerPerguntaFuncional(texto, {});
+  if (reconhecida) {
+    beePensandoLivre = false;
+    beeConversaAtual.mensagens.push(beeMensagemFuncional(reconhecida));
+    desenharConversaDaBee();
+    return;
+  }
 
   const chaveNaHoraDoEnvio = beeConversaAtual.chave;
   const data = await chamarBackend({
@@ -1161,6 +1307,16 @@ async function perguntarParaBee(task, texto) {
   conversa.push({ autor: "designer", texto, quando: Date.now() });
   beeConversas.set(taskId, conversa);
   desenharThreadBee(task);
+
+  // Pergunta funcional (achar link, achar responsável, achar card mãe)?
+  // Responde na hora com dado de verdade, sem gastar IA nenhuma.
+  const reconhecida = await beeReconhecerPerguntaFuncional(texto, { cliente: task.client });
+  if (reconhecida) {
+    conversa.push(beeMensagemFuncional(reconhecida));
+    beeConversas.set(taskId, conversa);
+    desenharThreadBee(task);
+    return;
+  }
 
   const thread = document.getElementById("commentsThread");
   if (thread) {
