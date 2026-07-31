@@ -858,3 +858,13 @@ body.card-aberto .bee-painel { display: none; }
   color: var(--text-muted); margin: 0 0 6px 4px;
 }
 a.bee-recente { text-decoration: none; }
+.bee-busca-cliente {
+  display: flex; align-items: center; gap: 7px; margin: 8px 18px 0;
+  font-size: 11px; color: var(--text-muted);
+}
+.bee-busca-cliente[hidden] { display: none; }
+.bee-busca-cliente select {
+  flex: 1; min-width: 0; font-family: var(--font-body); font-size: 11.5px; font-weight: 700;
+  border: 1px solid var(--border); background: var(--card-bg); color: var(--text-primary);
+  border-radius: 999px; padding: 4px 9px; cursor: pointer;
+}

@@ -671,13 +671,55 @@ let _buscaSequencia = 0;
 function agendarBuscaUniversal(termo) {
   clearTimeout(_buscaTimer);
   const texto = (termo || "").trim();
+  const wrap = document.getElementById("beeBuscaClienteWrap");
   if (texto.length < 2) {
+    if (wrap) wrap.hidden = true;
     desenharRecentesDaBee(texto);
     return;
   }
+  prepararSeletorDeCliente(texto);
   // Mostra na hora o que é local; o Drive chega logo depois.
   desenharResultadosDaBusca(texto, buscarLocalmente(texto), null);
   _buscaTimer = setTimeout(() => buscarNoDrivePelaBee(texto), 420);
+}
+
+// Qual cliente está escolhido pra busca no Drive. "" = todos.
+let beeClienteDaBusca = "";
+
+/**
+ * Mostra o seletor de cliente e tenta adivinhar sozinho: se o que a
+ * pessoa digitou contém o nome de um cliente conhecido, já escolhe ele.
+ * "brandbook do beeon" vira busca só na pasta do Beeon, sem ninguém
+ * precisar clicar em nada.
+ */
+function prepararSeletorDeCliente(termo) {
+  const wrap = document.getElementById("beeBuscaClienteWrap");
+  const select = document.getElementById("beeBuscaCliente");
+  if (!wrap || !select) return;
+  wrap.hidden = false;
+
+  const clientes = typeof listarTodosClientesConhecidos === "function" ? listarTodosClientesConhecidos() : [];
+  if (!select.options.length) {
+    select.innerHTML = `<option value="">todos os clientes</option>`
+      + clientes.map(c => `<option value="${escaparHTML(c)}">${escaparHTML(c)}</option>`).join("");
+    select.addEventListener("change", () => {
+      beeClienteDaBusca = select.value;
+      select.dataset.escolhaManual = "1";
+      const campo = document.getElementById("beeBusca");
+      if (campo && campo.value.trim().length >= 2) {
+        desenharResultadosDaBusca(campo.value.trim(), buscarLocalmente(campo.value.trim()), null);
+        buscarNoDrivePelaBee(campo.value.trim());
+      }
+    });
+  }
+
+  // Só adivinha enquanto ninguém escolheu na mão — senão o palpite
+  // ficaria trocando a escolha da pessoa a cada tecla.
+  if (select.dataset.escolhaManual === "1") return;
+  const alvo = normalizarParaComparar(termo);
+  const achado = clientes.find(c => alvo.includes(normalizarParaComparar(c)));
+  beeClienteDaBusca = achado || "";
+  select.value = beeClienteDaBusca;
 }
 
 function buscarLocalmente(termo) {
@@ -699,7 +741,7 @@ function buscarLocalmente(termo) {
 
 async function buscarNoDrivePelaBee(termo) {
   const meu = ++_buscaSequencia;
-  const data = await chamarBackend({ acao: "beeBuscarDrive", termo });
+  const data = await chamarBackend({ acao: "beeBuscarDrive", termo, cliente: beeClienteDaBusca || null });
   // Chegou depois de uma busca mais nova? Descarta — senão a tela pisca
   // com o resultado de um termo que a pessoa já apagou.
   if (meu !== _buscaSequencia) return;
@@ -721,7 +763,7 @@ function desenharResultadosDaBusca(termo, local, arquivos) {
     }))));
   }
   if (arquivos && arquivos.length) {
-    blocos.push(blocoDeBusca("No Drive", arquivos.map(a => ({
+    blocos.push(blocoDeBusca(beeClienteDaBusca ? `No Drive · ${escaparHTML(beeClienteDaBusca)}` : "No Drive", arquivos.map(a => ({
       titulo: a.nome,
       sub: (a.tipo === "pasta" ? "pasta · " : "") + (a.caminho || ""),
       url: a.url,

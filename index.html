@@ -13,11 +13,11 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-07-31c">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31c">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31c">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31c">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31c">
+<link rel="stylesheet" href="css/01-base.css?v=2026-07-31d">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31d">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31d">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31d">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31d">
 </head>
 <body>
 
@@ -436,7 +436,16 @@
         <p class="bee-h-sub">Aqui eu não vejo suas tarefas — pra isso, abre o card e fala comigo por lá.</p>
         <div class="bee-busca">
           <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <input type="text" id="beeBusca" placeholder="Buscar nas suas conversas...">
+          <input type="text" id="beeBusca" placeholder="Buscar tarefas, arquivos, clientes...">
+        </div>
+        <!-- Sem cliente escolhido, a busca no Drive vasculha tudo que
+             está indexado — e uma busca por "brandbook" traz o brandbook
+             de todo mundo. Escolhendo o cliente, ela olha só a pasta
+             dele. O Colmeia tenta adivinhar o cliente pelo que foi
+             digitado, mas dá pra trocar aqui. -->
+        <div class="bee-busca-cliente" id="beeBuscaClienteWrap" hidden>
+          <span>Procurar no Drive de</span>
+          <select id="beeBuscaCliente"></select>
         </div>
         <div class="bee-grid" id="beeGrid"></div>
         <div class="bee-rec-topo">
@@ -478,24 +487,24 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-07-31c"></script>
-<script src="js/fila-offline.js?v=2026-07-31c"></script>
-<script src="js/notificacoes-uploads.js?v=2026-07-31c"></script>
-<script src="js/pessoas-fotos.js?v=2026-07-31c"></script>
-<script src="js/kanban-polling.js?v=2026-07-31c"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-07-31c"></script>
-<script src="js/regras-briefing.js?v=2026-07-31c"></script>
-<script src="js/kanban-board.js?v=2026-07-31c"></script>
-<script src="js/clientes-hub.js?v=2026-07-31c"></script>
-<script src="js/chat-comentarios.js?v=2026-07-31c"></script>
-<script src="js/detalhe-modal.js?v=2026-07-31c"></script>
-<script src="js/detalhe-cardmae.js?v=2026-07-31c"></script>
-<script src="js/detalhe-alteracao.js?v=2026-07-31c"></script>
-<script src="js/bee.js?v=2026-07-31c"></script>
-<script src="js/paginas-designers.js?v=2026-07-31c"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-07-31c"></script>
-<script src="js/pagina-repasse.js?v=2026-07-31c"></script>
-<script src="js/notificacoes-avisos.js?v=2026-07-31c"></script>
-<script src="js/login-boot.js?v=2026-07-31c"></script>
+<script src="js/config.js?v=2026-07-31d"></script>
+<script src="js/fila-offline.js?v=2026-07-31d"></script>
+<script src="js/notificacoes-uploads.js?v=2026-07-31d"></script>
+<script src="js/pessoas-fotos.js?v=2026-07-31d"></script>
+<script src="js/kanban-polling.js?v=2026-07-31d"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-07-31d"></script>
+<script src="js/regras-briefing.js?v=2026-07-31d"></script>
+<script src="js/kanban-board.js?v=2026-07-31d"></script>
+<script src="js/clientes-hub.js?v=2026-07-31d"></script>
+<script src="js/chat-comentarios.js?v=2026-07-31d"></script>
+<script src="js/detalhe-modal.js?v=2026-07-31d"></script>
+<script src="js/detalhe-cardmae.js?v=2026-07-31d"></script>
+<script src="js/detalhe-alteracao.js?v=2026-07-31d"></script>
+<script src="js/bee.js?v=2026-07-31d"></script>
+<script src="js/paginas-designers.js?v=2026-07-31d"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-07-31d"></script>
+<script src="js/pagina-repasse.js?v=2026-07-31d"></script>
+<script src="js/notificacoes-avisos.js?v=2026-07-31d"></script>
+<script src="js/login-boot.js?v=2026-07-31d"></script>
 </body>
 </html>

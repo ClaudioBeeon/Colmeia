@@ -814,7 +814,7 @@ function termosDaBusca(termo) {
   return { palavras: palavras, todos: todos };
 }
 
-function buscarNoIndiceDoDrive(termo, limite) {
+function buscarNoIndiceDoDrive(termo, limite, clienteAlvo) {
   var sheet = getIndiceDriveSheet();
   var linhas = sheet.getDataRange().getValues();
   if (linhas.length < 2) return [];
@@ -822,11 +822,17 @@ function buscarNoIndiceDoDrive(termo, limite) {
   var t = termosDaBusca(termo);
   if (!t.palavras.length) return [];
   var achados = [];
+  var filtro = clienteAlvo ? normalizarBusca(clienteAlvo) : null;
 
   for (var i = 1; i < linhas.length; i++) {
     var nome = normalizarBusca(linhas[i][0]);
     var caminho = normalizarBusca(linhas[i][2]);
     var cliente = normalizarBusca(linhas[i][4]);
+    // Com cliente escolhido, só o que está DENTRO da pasta dele — é o
+    // que faz a busca parar de trazer o arquivo parecido de outros 30
+    // clientes. O caminho entra na conta porque a pasta do próprio
+    // cliente não tem o campo "cliente" preenchido (ela é o cliente).
+    if (filtro && cliente.indexOf(filtro) === -1 && caminho.indexOf(filtro) === -1 && nome.indexOf(filtro) === -1) continue;
     var alvo = nome + ' ' + caminho + ' ' + cliente;
 
     // Pontuação simples: bater a palavra que a pessoa digitou vale mais
@@ -856,6 +862,56 @@ function buscarNoIndiceDoDrive(termo, limite) {
  * exemplo). Aí sim pergunta pro Drive na hora, com um teto baixo de
  * resultados pra não estourar o tempo do Apps Script.
  */
+/**
+ * Busca ao vivo DENTRO da pasta de um cliente. Muito mais barata que
+ * varrer o Drive inteiro — e é o caso normal, já que quase toda pergunta
+ * é sobre um cliente específico.
+ */
+function buscarAoVivoNaPastaDoCliente(termo, cliente) {
+  var achados = [];
+  try {
+    var beeonFolder = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
+    var clientesFolder = (beeonFolder.getName() === 'Clientes') ? beeonFolder : getSubfolderPorNome(beeonFolder, 'Clientes');
+    if (!clientesFolder) return [];
+    var pastaCliente = acharPastaDoCliente(clientesFolder, cliente);
+    if (!pastaCliente) return [];
+
+    var t = termosDaBusca(termo);
+    var visitadas = 0;
+
+    function varrer(pasta, caminho, profundidade) {
+      if (achados.length >= 10 || visitadas > 120 || profundidade > 3) return;
+      visitadas++;
+      var arquivos = pasta.getFiles();
+      while (arquivos.hasNext() && achados.length < 10) {
+        var a = arquivos.next();
+        if (bateComOsTermos(a.getName(), t)) {
+          achados.push({ nome: a.getName(), tipo: 'arquivo', caminho: caminho, url: a.getUrl(), cliente: cliente });
+        }
+      }
+      var subs = pasta.getFolders();
+      while (subs.hasNext() && achados.length < 10) {
+        var sub = subs.next();
+        var nome = sub.getName();
+        if (bateComOsTermos(nome, t)) {
+          achados.push({ nome: nome, tipo: 'pasta', caminho: caminho, url: sub.getUrl(), cliente: cliente });
+        }
+        varrer(sub, caminho + ' › ' + nome, profundidade + 1);
+      }
+    }
+    varrer(pastaCliente, cliente, 0);
+  } catch (e) { /* sem acesso à pasta do cliente — devolve o que deu */ }
+  return achados;
+}
+
+function bateComOsTermos(nome, t) {
+  var alvo = normalizarBusca(nome);
+  for (var i = 0; i < t.todos.length; i++) {
+    if (alvo.indexOf(t.todos[i]) !== -1) return true;
+  }
+  return false;
+}
+
 function buscarNoDriveAoVivo(termo) {
   var achados = [];
   var busca = String(termo).replace(/'/g, "\\'");
@@ -878,11 +934,21 @@ function buscarNoDriveAoVivo(termo) {
   return achados;
 }
 
-function beeBuscarNoDrive(termo) {
+/**
+ * @param {string} termo    o que a pessoa digitou
+ * @param {string} [cliente] quando vem, procura SÓ dentro da pasta desse
+ *                           cliente — tanto no índice quanto na busca ao
+ *                           vivo. Sem isso, uma busca por "brandbook"
+ *                           traz o brandbook de todo mundo.
+ */
+function beeBuscarNoDrive(termo, cliente) {
   if (!termo || !String(termo).trim()) return { ok: true, resultados: [] };
-  var doIndice = buscarNoIndiceDoDrive(termo);
-  if (doIndice.length) return { ok: true, resultados: doIndice, origem: 'indice' };
-  return { ok: true, resultados: buscarNoDriveAoVivo(termo), origem: 'aovivo' };
+  var doIndice = buscarNoIndiceDoDrive(termo, 8, cliente);
+  if (doIndice.length) return { ok: true, resultados: doIndice, origem: 'indice', cliente: cliente || null };
+  // Nada no índice: cai pra busca ao vivo. Com cliente, varre só a pasta
+  // dele; sem cliente, aí sim pergunta pro Drive inteiro.
+  var aoVivo = cliente ? buscarAoVivoNaPastaDoCliente(termo, cliente) : buscarNoDriveAoVivo(termo);
+  return { ok: true, resultados: aoVivo, origem: 'aovivo', cliente: cliente || null };
 }
 
 // ============ ONDE A CONVERSA FICA GUARDADA ============
