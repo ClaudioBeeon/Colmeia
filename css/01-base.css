@@ -222,6 +222,18 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   font-weight: 600;
 }
 
+/* Com foto cadastrada, a bolinha vira a própria foto (antes era sempre o
+   círculo azul com as iniciais, mesmo pra quem tem foto). O azul de
+   fundo sai junto — senão ele apareceria por trás de foto com fundo
+   transparente. */
+.nav-icon-circle.avatar.com-foto {
+  background-color: var(--page-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: transparent;
+}
+
 .nav-label {
   font-size: 13.5px;
   font-weight: 500;

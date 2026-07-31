@@ -3,7 +3,11 @@ function iniciarAppPosLogin() {
   document.getElementById("page").hidden = false;
 
   document.getElementById("sidebarNomeUsuario").textContent = DESIGNER_LOGADO;
+  // Começa nas iniciais e vira a foto assim que ela chegar — as fotos vêm
+  // de carregarPessoasSalvas() e carregarDadosPainelBeeon(), logo abaixo,
+  // e as duas chamam atualizarAvatarDaSidebar() quando terminam.
   document.getElementById("sidebarAvatarIniciais").textContent = initials(DESIGNER_LOGADO);
+  atualizarAvatarDaSidebar();
   document.getElementById("sidebarProfileLink").title = PAPEL_LOGADO === "coordenador" ? "Configurações" : DESIGNER_LOGADO;
 
   // Fila de repasse é só do Cláudio (ele que atende os clientes e

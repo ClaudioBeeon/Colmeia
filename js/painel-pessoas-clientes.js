@@ -141,7 +141,10 @@ function renderPainelPessoas() {
         const avisoEl = row.querySelector(".people-row-saved");
         avisoEl.textContent = aliases.length ? "✓ Vinculado" : "✓ Salvo";
 
-        // Atualiza as fotos em tudo que já está na tela agora.
+        // Atualiza as fotos em tudo que já está na tela agora — incluindo
+        // a bolinha da barra lateral, se a foto trocada foi a de quem
+        // está logado.
+        atualizarAvatarDaSidebar();
         render();
         buildClientsPage();
         buildAtendimentoPage();

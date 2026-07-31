@@ -54,10 +54,63 @@ async function carregarPessoasSalvas() {
     const data = await chamarBackend({ acao: "listarPessoas" });
     if (data.ok) {
       pessoasSalvas = data.pessoas || [];
+      // É aqui que as fotos cadastradas chegam — sem isso a bolinha da
+      // barra lateral ficaria nas iniciais pra sempre, porque ela é
+      // desenhada no login, antes desta busca terminar.
+      atualizarAvatarDaSidebar();
     }
   } catch (err) {
     console.error("Falha ao carregar pessoas salvas:", err);
   }
+}
+
+/**
+ * Põe a foto de quem está logado na bolinha da barra lateral (embaixo, o
+ * atalho de Configurações). Antes ali era só um círculo azul com as
+ * iniciais, mesmo com a pessoa tendo foto cadastrada.
+ *
+ * A foto é a MESMA que aparece nos cards e comentários — sai de
+ * resolverFotoManual (a cadastrada no painel de Pessoas) ou de
+ * fotoDoDesigner (a do painel-designers-beeon). Não tem foto nova pra
+ * cadastrar em lugar nenhum: é a que já está lá.
+ *
+ * Pode ser chamada quantas vezes for preciso. Ela é chamada de novo
+ * sempre que uma dessas duas fontes termina de carregar (as duas chegam
+ * DEPOIS do login) e sempre que o coordenador troca uma foto.
+ */
+function atualizarAvatarDaSidebar() {
+  const el = document.getElementById("sidebarAvatarIniciais");
+  if (!el || !DESIGNER_LOGADO) return;
+
+  const foto = resolverFotoManual(DESIGNER_LOGADO) || fotoDoDesigner(DESIGNER_LOGADO);
+  if (!foto) {
+    // Sem foto cadastrada: volta pro círculo com as iniciais.
+    el.style.backgroundImage = "";
+    el.classList.remove("com-foto");
+    el.textContent = initials(DESIGNER_LOGADO);
+    return;
+  }
+
+  // Só troca se mudou — sem isso, cada chamada remontaria a imagem e ela
+  // piscaria à toa.
+  if (el.dataset.foto === foto) return;
+
+  // Confere que a foto carrega ANTES de mostrar. Se o link estiver
+  // quebrado, um background-image simplesmente não aparece e sobraria uma
+  // bolinha vazia, pior que as iniciais.
+  const teste = new Image();
+  teste.onload = () => {
+    el.dataset.foto = foto;
+    el.textContent = "";
+    el.classList.add("com-foto");
+    el.style.backgroundImage = `url("${foto}")`;
+  };
+  teste.onerror = () => {
+    el.style.backgroundImage = "";
+    el.classList.remove("com-foto");
+    el.textContent = initials(DESIGNER_LOGADO);
+  };
+  teste.src = foto;
 }
 
 async function salvarPessoaNoBackend(nome, foto, aliases, discord) {
