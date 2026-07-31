@@ -1016,6 +1016,11 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
   box-shadow: var(--shadow-hover);
   display: flex; flex-direction: column; overflow: hidden;
 }
+/* Mesmo problema do .rule-modal (ver comentário lá, css/04-paginas.css):
+   --card-bg no escuro é translúcido, e esse modal não usa a classe
+   .rule-modal (é a própria caixa), então precisa do mesmo conserto
+   separado. */
+[data-theme="dark"] .perfil-modal { background: #0C0B12; }
 
 .perfil-capa {
   display: flex; align-items: center; gap: 12px;

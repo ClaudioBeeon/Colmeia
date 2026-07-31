@@ -50,12 +50,31 @@ function chavesDeApelidosAbsorvidos() {
   return absorvidos;
 }
 
+// `nomesVistos` (js/pessoas-fotos.js) só cresce enquanto a pessoa navega
+// pelo Colmeia NESSA sessão (abre tarefa, vê cliente etc) — começa
+// VAZIO a cada vez que a página carrega. Usar só ele como fonte fazia
+// esse painel e a aba "Chamadas Discord" do perfil mostrarem "ninguém
+// ainda" mesmo com gente já cadastrada/vinculada há tempos em
+// `pessoasSalvas` (que veio pronta do backend) — bastava não ter
+// clicado em nada ainda nessa aba do navegador. Junta os dois: quem já
+// está salvo aparece sempre, e quem só apareceu agora (ainda sem
+// cadastro) também, pra dar pra cadastrar na hora.
+function nomesConhecidosOuVistos() {
+  const absorvidos = chavesDeApelidosAbsorvidos();
+  const mapa = new Map();
+  pessoasSalvas.forEach(p => {
+    const chave = normalizarParaComparar(p.nome);
+    if (!absorvidos.has(chave)) mapa.set(chave, { nomeOriginal: p.nome, fotoAtual: p.foto || "" });
+  });
+  nomesVistos.forEach((info, chave) => {
+    if (!absorvidos.has(chave) && !mapa.has(chave)) mapa.set(chave, info);
+  });
+  return Array.from(mapa.entries()).sort((a, b) => a[1].nomeOriginal.localeCompare(b[1].nomeOriginal));
+}
+
 function renderPainelPessoas() {
   const body = document.getElementById("peopleModalBody");
-  const absorvidos = chavesDeApelidosAbsorvidos();
-  const nomes = Array.from(nomesVistos.entries())
-    .filter(([chave]) => !absorvidos.has(chave))
-    .sort((a, b) => a[1].nomeOriginal.localeCompare(b[1].nomeOriginal));
+  const nomes = nomesConhecidosOuVistos();
 
   if (nomes.length === 0) {
     body.innerHTML = `<p class="workflow-seq-empty">Nenhum nome visto ainda nessa sessão — navegue pelo Colmeia (abra tarefas, veja clientes) e volte aqui.</p>`;
@@ -829,10 +848,7 @@ function renderAbaClientesDoPerfil(corpo) {
 const PREFIXO_DISCORD_DM = "discord://discord.com/channels/@me/";
 
 function renderAbaDiscordDoPerfil(corpo) {
-  const absorvidos = chavesDeApelidosAbsorvidos();
-  const nomes = Array.from(nomesVistos.entries())
-    .filter(([chave]) => !absorvidos.has(chave))
-    .sort((a, b) => a[1].nomeOriginal.localeCompare(b[1].nomeOriginal));
+  const nomes = nomesConhecidosOuVistos();
 
   corpo.innerHTML = `
     <p class="perfil-discord-hint">

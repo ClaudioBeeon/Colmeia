@@ -499,6 +499,15 @@ body.card-aberto .quick-access-panel { display: none; }
   display: flex; flex-direction: column;
   overflow: hidden;
 }
+/* --card-bg no escuro é branco translúcido (rgba .045) — pensado pra
+   ficar por cima de outro fundo escuro sólido (o .page em volta), não
+   pra SER o fundo. Em modais isso deixava o quadro por trás aparecendo
+   através do pop-up inteiro. Mesmo bug já corrigido no .chat-panel e no
+   .bee-painel — aqui é a base de TODOS os modais (acesso rápido,
+   Configurações, Nova tarefa, criar pasta etc), então corrige todos de
+   uma vez. Cor igual à já usada em .children-float, mesmo espírito de
+   painel flutuante. */
+[data-theme="dark"] .rule-modal { background: #0C0B12; }
 .rule-modal-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 20px; border-bottom: 1px solid var(--border);
