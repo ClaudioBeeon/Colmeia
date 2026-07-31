@@ -852,6 +852,10 @@ const BEE_ATALHOS = [
 ];
 
 function beeAbrirPainel() {
+  // Notificações/Avisos/Acesso rápido empurram o quadro pelo mesmo lado
+  // que a Bee, então os dois abertos juntos espremeriam o quadro em dobro
+  // (ver fecharPaineisLaterais em js/notificacoes-avisos.js).
+  if (typeof fecharPaineisLaterais === "function") fecharPaineisLaterais(null, false);
   document.body.classList.add("bee-aberta");
   const painel = document.getElementById("beePainel");
   if (painel) painel.setAttribute("aria-hidden", "false");

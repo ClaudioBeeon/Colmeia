@@ -527,8 +527,14 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .page-heading-row h2 { font-family: var(--font-display); font-size: 32px; font-weight: 400; flex-shrink: 0; }
 
 .coordenacao-pill-wrap { margin-left: 4px; }
-.page-heading-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; margin-left: auto; }
-.page-heading-right .search-box { width: 380px; height: 46px; border-radius: 999px; }
+/* PODE encolher (flex-shrink: 1 + min-width: 0) — antes era flex-shrink: 0.
+   Quando um painel lateral abre (Bee, Notificações, Acesso rápido), o .main
+   fica ~340px mais estreito; com a linha travada no tamanho cheio ela
+   transbordava pra direita em vez de acompanhar, e o último item — o botão
+   "+ Nova tarefa" — saía da tela. Quem cede espaço é a busca (regra abaixo),
+   que continua utilizável estreita; os botões nunca encolhem. */
+.page-heading-right { display: flex; align-items: center; gap: 16px; flex-shrink: 1; min-width: 0; margin-left: auto; }
+.page-heading-right .search-box { width: 380px; min-width: 120px; flex-shrink: 1; height: 46px; border-radius: 999px; }
 
 .designer-filter-select {
   height: 46px; border-radius: 999px; border: 1px solid var(--border);
@@ -570,7 +576,10 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 
 .search-box input {
   border: none; outline: none; font-family: var(--font-body); font-size: 14px;
-  width: 100%; color: var(--text-primary); background: transparent;
+  /* min-width: 0 é o que DEIXA a busca encolher de verdade: por padrão um
+     campo de texto tem largura mínima própria e trava o flex, fazendo a
+     linha do cabeçalho transbordar quando um painel lateral abre. */
+  width: 100%; min-width: 0; color: var(--text-primary); background: transparent;
 }
 
 .view-toggle {

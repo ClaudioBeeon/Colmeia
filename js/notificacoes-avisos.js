@@ -342,10 +342,35 @@ function renderNotificacoes() {
   });
 }
 
+/**
+ * Fecha os painéis laterais (Notificações, Avisos, Acesso rápido) e a Bee
+ * solta — menos o que estiver sendo aberto agora.
+ *
+ * Virou obrigatório quando esses painéis deixaram de flutuar por cima do
+ * conteúdo e passaram a EMPURRAR o quadro pra esquerda (ver
+ * .quick-access-panel em css/04-paginas.css): dois abertos ao mesmo tempo
+ * empurrariam em dobro e espremeriam o quadro à toa. Antes eles se
+ * sobrepunham em silêncio e ninguém notava.
+ */
+function fecharPaineisLaterais(exceto, incluirBee) {
+  if (incluirBee === undefined) incluirBee = true;
+  document.querySelectorAll(".quick-access-panel.open").forEach(p => {
+    if (p !== exceto) p.classList.remove("open");
+  });
+  // A Bee solta ocupa o mesmo lugar na tela, então entra na mesma regra —
+  // menos quando é a PRÓPRIA Bee que está abrindo e chamou isso pra tirar
+  // os outros da frente (aí `incluirBee` vem false, senão ela se fecharia
+  // sozinha no mesmo instante em que abre).
+  if (incluirBee && document.body.classList.contains("bee-aberta") && typeof beeFecharPainel === "function") {
+    beeFecharPainel();
+  }
+}
+
 // Notificações reais: comentários novos nas tarefas do designer logado.
 document.getElementById("notificationsBtn").addEventListener("click", async () => {
   const panel = document.getElementById("notificationsPanel");
   panel.classList.toggle("open");
+  fecharPaineisLaterais(panel);
   if (panel.classList.contains("open")) {
     // Mostra NA HORA o que já está guardado no navegador (o log de
     // notificações dos últimos 2 dias) em vez de exibir "Carregando..." e
@@ -455,6 +480,7 @@ function renderAvisos() {
 const avisosPanel = document.getElementById("avisosPanel");
 document.getElementById("avisosBtn").addEventListener("click", async () => {
   avisosPanel.classList.toggle("open");
+  fecharPaineisLaterais(avisosPanel);
   if (!avisosPanel.classList.contains("open")) return;
 
   const novoWrap = document.getElementById("avisosNovoWrap");
@@ -723,6 +749,7 @@ let acessoRapidoCache = [];
 
 document.getElementById("quickAccessBtn").addEventListener("click", () => {
   quickAccessPanel.classList.toggle("open");
+  fecharPaineisLaterais(quickAccessPanel);
   if (quickAccessPanel.classList.contains("open")) carregarAcessoRapido();
 });
 document.getElementById("quickAccessClose").addEventListener("click", () => {

@@ -13,11 +13,11 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-07-31o">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31o">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31o">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31o">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31o">
+<link rel="stylesheet" href="css/01-base.css?v=2026-07-31p">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31p">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31p">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31p">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31p">
 </head>
 <body>
 
@@ -175,52 +175,6 @@
         <button type="button" class="ver-todas-btn nova-tarefa-btn" id="novaTarefaBtn" hidden>+ Nova tarefa</button>
       </div>
     </div>
-
-    <aside class="quick-access-panel" id="notificationsPanel">
-      <div class="quick-access-header">
-        <h3>Notificações</h3>
-        <button type="button" id="notificationsClose" aria-label="Fechar">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-      <div class="quick-access-body" id="notificationsBody">
-        <p class="quick-access-empty">Carregando...</p>
-      </div>
-    </aside>
-
-    <aside class="quick-access-panel" id="avisosPanel">
-      <div class="quick-access-header">
-        <h3>Avisos</h3>
-        <button type="button" id="avisosClose" aria-label="Fechar">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-      <div class="avisos-novo" id="avisosNovoWrap" hidden>
-        <textarea id="avisosNovoTexto" placeholder="Lançar um aviso novo pra todo mundo... (ex: Manu está de férias, os clientes dela ficam com a Julia até dia 30)" rows="3"></textarea>
-        <button type="button" id="avisosNovoBtn">Lançar aviso</button>
-      </div>
-      <div class="quick-access-body" id="avisosBody">
-        <p class="quick-access-empty">Carregando...</p>
-      </div>
-    </aside>
-
-    <aside class="quick-access-panel" id="quickAccessPanel">
-      <div class="quick-access-header">
-        <h3>Acesso rápido</h3>
-        <button type="button" id="quickAccessClose" aria-label="Fechar">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-      <div class="quick-access-body" id="acessoRapidoBody">
-        <p class="quick-access-empty">Carregando...</p>
-      </div>
-      <div class="quick-access-footer">
-        <button type="button" class="acesso-rapido-novo-btn" id="acessoRapidoNovoBtn">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-          Novo acesso rápido
-        </button>
-      </div>
-    </aside>
 
     <div class="rule-modal-overlay" id="acessoRapidoModalOverlay" hidden>
       <div class="rule-modal acesso-rapido-modal">
@@ -473,6 +427,58 @@
        tarefa é a do painel de comentários, dentro do card. -->
   <button type="button" class="bee-fab" id="beeFabBtn" aria-label="Falar com a Bee" title="Falar com a Bee"></button>
 
+  <!-- Notificações, Avisos e Acesso rápido: itens flex do .page (irmãos da
+       sidebar e do .main), pelo mesmo motivo do .bee-painel logo abaixo —
+       assim eles EMPURRAM o quadro pra esquerda ao abrir, em vez de cobrir.
+       Antes eram pop-ups flutuantes (position: fixed) e passavam por cima
+       do conteúdo. Só um deles fica aberto por vez (ver fecharPaineisLaterais
+       em js/notificacoes-avisos.js). -->
+  <aside class="quick-access-panel" id="notificationsPanel">
+    <div class="quick-access-header">
+      <h3>Notificações</h3>
+      <button type="button" id="notificationsClose" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="quick-access-body" id="notificationsBody">
+      <p class="quick-access-empty">Carregando...</p>
+    </div>
+  </aside>
+
+  <aside class="quick-access-panel" id="avisosPanel">
+    <div class="quick-access-header">
+      <h3>Avisos</h3>
+      <button type="button" id="avisosClose" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="avisos-novo" id="avisosNovoWrap" hidden>
+      <textarea id="avisosNovoTexto" placeholder="Lançar um aviso novo pra todo mundo... (ex: Manu está de férias, os clientes dela ficam com a Julia até dia 30)" rows="3"></textarea>
+      <button type="button" id="avisosNovoBtn">Lançar aviso</button>
+    </div>
+    <div class="quick-access-body" id="avisosBody">
+      <p class="quick-access-empty">Carregando...</p>
+    </div>
+  </aside>
+
+  <aside class="quick-access-panel" id="quickAccessPanel">
+    <div class="quick-access-header">
+      <h3>Acesso rápido</h3>
+      <button type="button" id="quickAccessClose" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="quick-access-body" id="acessoRapidoBody">
+      <p class="quick-access-empty">Carregando...</p>
+    </div>
+    <div class="quick-access-footer">
+      <button type="button" class="acesso-rapido-novo-btn" id="acessoRapidoNovoBtn">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        Novo acesso rápido
+      </button>
+    </div>
+  </aside>
+
   <!-- O painel é um item flex do .page (irmão da sidebar e do .main), não
        um pop-up flutuante: é isso que faz ele EMPURRAR o quadro pra
        esquerda em vez de cobrir. Fechado, ele fica com margem negativa
@@ -554,24 +560,24 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-07-31o"></script>
-<script src="js/fila-offline.js?v=2026-07-31o"></script>
-<script src="js/notificacoes-uploads.js?v=2026-07-31o"></script>
-<script src="js/pessoas-fotos.js?v=2026-07-31o"></script>
-<script src="js/kanban-polling.js?v=2026-07-31o"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-07-31o"></script>
-<script src="js/regras-briefing.js?v=2026-07-31o"></script>
-<script src="js/kanban-board.js?v=2026-07-31o"></script>
-<script src="js/clientes-hub.js?v=2026-07-31o"></script>
-<script src="js/chat-comentarios.js?v=2026-07-31o"></script>
-<script src="js/detalhe-modal.js?v=2026-07-31o"></script>
-<script src="js/detalhe-cardmae.js?v=2026-07-31o"></script>
-<script src="js/detalhe-alteracao.js?v=2026-07-31o"></script>
-<script src="js/bee.js?v=2026-07-31o"></script>
-<script src="js/paginas-designers.js?v=2026-07-31o"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-07-31o"></script>
-<script src="js/pagina-repasse.js?v=2026-07-31o"></script>
-<script src="js/notificacoes-avisos.js?v=2026-07-31o"></script>
-<script src="js/login-boot.js?v=2026-07-31o"></script>
+<script src="js/config.js?v=2026-07-31p"></script>
+<script src="js/fila-offline.js?v=2026-07-31p"></script>
+<script src="js/notificacoes-uploads.js?v=2026-07-31p"></script>
+<script src="js/pessoas-fotos.js?v=2026-07-31p"></script>
+<script src="js/kanban-polling.js?v=2026-07-31p"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-07-31p"></script>
+<script src="js/regras-briefing.js?v=2026-07-31p"></script>
+<script src="js/kanban-board.js?v=2026-07-31p"></script>
+<script src="js/clientes-hub.js?v=2026-07-31p"></script>
+<script src="js/chat-comentarios.js?v=2026-07-31p"></script>
+<script src="js/detalhe-modal.js?v=2026-07-31p"></script>
+<script src="js/detalhe-cardmae.js?v=2026-07-31p"></script>
+<script src="js/detalhe-alteracao.js?v=2026-07-31p"></script>
+<script src="js/bee.js?v=2026-07-31p"></script>
+<script src="js/paginas-designers.js?v=2026-07-31p"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-07-31p"></script>
+<script src="js/pagina-repasse.js?v=2026-07-31p"></script>
+<script src="js/notificacoes-avisos.js?v=2026-07-31p"></script>
+<script src="js/login-boot.js?v=2026-07-31p"></script>
 </body>
 </html>
