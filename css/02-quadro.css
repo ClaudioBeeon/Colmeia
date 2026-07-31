@@ -23,6 +23,14 @@
   min-height: 0;
 }
 
+/* Com o painel da Bee aberto, o quadro perde os ~500px dela — sem isso,
+   a coluna que não coubesse mais ficava cortada bem na borda do painel
+   (parecia "por baixo" do chat) em vez de encolher junto com as outras,
+   porque min-width:254px não deixava encolher o bastante. Só nesse
+   estado (painel aberto) as colunas encolhem mais, pra caber tudo. */
+body.bee-aberta .board { gap: 16px; }
+body.bee-aberta .column { min-width: 190px; }
+
 .column-header {
   display: flex;
   align-items: center;
