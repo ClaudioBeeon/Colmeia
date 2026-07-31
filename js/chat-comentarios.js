@@ -27,6 +27,129 @@ function podarCacheMap(mapa, maximo) {
   }
 }
 
+// ===== Conversa que não pisca =====
+//
+// Dois problemas viviam juntos aqui:
+//
+// 1. Toda recarga fazia `thread.innerHTML = ...` mesmo quando NADA tinha
+//    mudado. Como isso apaga e redesenha a lista inteira, a conversa
+//    piscava e o scroll pulava — a cada 8 segundos, a cada comentário
+//    enviado, a cada troca de aba do navegador.
+// 2. Abrir um card já visto antes começava do zero ("Carregando
+//    comentários...") e só mostrava a conversa quando o Runrun.it
+//    respondesse.
+//
+// `pintarThread` resolve o primeiro: compara o desenho novo com o que já
+// está na tela e só encosta no DOM se for diferente de verdade. O cache
+// abaixo resolve o segundo: a última conversa conhecida de cada tarefa
+// fica guardada no navegador e aparece na hora, enquanto a busca real
+// acontece por baixo. Se a busca trouxer o mesmo, ninguém vê nada
+// acontecer — que é exatamente o objetivo.
+const CHAVE_CACHE_CHAT = "colmeia_chat_cache_v1";
+const MAX_TAREFAS_CACHE_CHAT = 80;
+
+function lerCacheChatLocal() {
+  try { return JSON.parse(localStorage.getItem(CHAVE_CACHE_CHAT) || "{}"); } catch (err) { return {}; }
+}
+
+function comentariosDoCacheLocal(chave) {
+  const cache = lerCacheChatLocal();
+  const item = cache[String(chave)];
+  return item && Array.isArray(item.comments) ? item.comments : null;
+}
+
+function guardarComentariosNoCacheLocal(chave, comentarios) {
+  if (!chave || !Array.isArray(comentarios)) return;
+  try {
+    const cache = lerCacheChatLocal();
+    cache[String(chave)] = { comments: comentarios, quando: Date.now() };
+    // Teto por quantidade: descarta as conversas guardadas há mais tempo.
+    const chaves = Object.keys(cache);
+    if (chaves.length > MAX_TAREFAS_CACHE_CHAT) {
+      chaves
+        .sort((a, b) => (cache[a].quando || 0) - (cache[b].quando || 0))
+        .slice(0, chaves.length - MAX_TAREFAS_CACHE_CHAT)
+        .forEach(k => delete cache[k]);
+    }
+    localStorage.setItem(CHAVE_CACHE_CHAT, JSON.stringify(cache));
+  } catch (err) {
+    // Armazenamento cheio ou bloqueado (aba anônima) — o chat funciona
+    // igual, só sem o "abre instantâneo".
+  }
+}
+
+/**
+ * Desenha uma lista de mensagens na thread SEM piscar.
+ *
+ * - Se o desenho for igual ao que já está lá, não faz absolutamente nada.
+ * - Se mudou, troca o conteúdo preservando a posição da rolagem — e só
+ *   desce automaticamente pro fim se a pessoa já estava lendo o fim (ou
+ *   se `rolarPraBaixo` for pedido, ex: acabou de enviar uma mensagem).
+ *
+ * Devolve true se realmente mudou alguma coisa na tela.
+ */
+/**
+ * Esquece o que `pintarThread` acha que está desenhado na tela.
+ *
+ * É preciso sempre que outra parte do app escreve na thread por fora (a
+ * Bee desenha a conversa dela ali mesmo). Sem isso, ao voltar da Bee pros
+ * comentários o `pintarThread` compararia com o desenho ANTIGO, concluiria
+ * que "nada mudou" e deixaria a conversa da Bee na tela.
+ */
+function esquecerPinturaDaThread() {
+  const thread = document.getElementById("commentsThread");
+  if (thread) thread._htmlPintado = null;
+}
+
+function pintarThread(thread, html, opcoes) {
+  if (!thread) return false;
+  const rolarPraBaixo = !!(opcoes && opcoes.rolarPraBaixo);
+  if (thread._htmlPintado === html) {
+    if (rolarPraBaixo) thread.scrollTop = thread.scrollHeight;
+    return false;
+  }
+  const estavaNoFim = (thread.scrollHeight - thread.scrollTop - thread.clientHeight) < 60;
+  const posicaoAntes = thread.scrollTop;
+  thread.innerHTML = html;
+  thread._htmlPintado = html;
+  wireExcluirComentario();
+  if (rolarPraBaixo || estavaNoFim) thread.scrollTop = thread.scrollHeight;
+  else thread.scrollTop = posicaoAntes;
+  return true;
+}
+
+// ===== Nome da conversa ativa, no topo do chat =====
+//
+// O topo mostra a conversa em que você está ("Comentários", "Card mãe",
+// "Linha do tempo", "Bee") com uma setinha do lado pra trocar ali mesmo.
+// Antes ele mostrava o nome da tarefa e a troca de aba estava escondida
+// dentro do menu de "...", que sumiu.
+function nomeDaConversaAtiva() {
+  if (chatThreadAtivo === "bee") return "Bee";
+  if (chatThreadAtivo === "mae") return "Card mãe";
+  if (chatThreadAtivo === "tudo") return "Linha do tempo";
+  return "Comentários";
+}
+
+function atualizarTituloDoChat() {
+  const titulo = document.getElementById("chatPanelTitle");
+  if (titulo) titulo.textContent = nomeDaConversaAtiva();
+
+  const porAba = { aqui: "chatTabAqui", mae: "chatTabMae", tudo: "chatTabTudo" };
+  let quantasAbas = 0;
+  ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle("active", porAba[chatThreadAtivo] === id);
+    if (!el.hidden) quantasAbas++;
+  });
+
+  // Tarefa sem card mãe e que não é alteração tem uma aba só — aí a
+  // setinha não serviria pra nada e some, junto com o clique.
+  const botao = document.getElementById("chatPanelMenuBtn");
+  if (botao) botao.classList.toggle("sem-opcoes", quantasAbas < 2);
+}
+
 function chaveVistoChat(taskId) {
   return "colmeia_chat_visto_" + taskId;
 }
@@ -81,20 +204,17 @@ function abrirThreadAqui(task) {
   chatAlvoTaskId = task.id;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
-  const tabAqui = document.getElementById("chatTabAqui");
-  const tabMae = document.getElementById("chatTabMae");
-  if (tabAqui) tabAqui.classList.add("active");
-  if (tabMae) tabMae.classList.remove("active");
-  const tabTudoAqui = document.getElementById("chatTabTudo");
-  if (tabTudoAqui) tabTudoAqui.classList.remove("active");
-  const titulo = document.getElementById("chatPanelTitle");
-  if (titulo) titulo.textContent = task.title;
+  atualizarTituloDoChat();
+  // Nunca começa em branco: se a conversa dessa tarefa já foi vista antes
+  // neste navegador, ela aparece na hora e a busca real corrige por baixo.
+  if (task.comments === undefined) {
+    const guardados = comentariosDoCacheLocal(task.id);
+    if (guardados) task.comments = guardados;
+  }
   const thread = document.getElementById("commentsThread");
   if (thread) {
-    thread.innerHTML = renderComentariosHTML(task);
-    wireExcluirComentario();
+    pintarThread(thread, renderComentariosHTML(task), { rolarPraBaixo: true });
     inserirLinhaDaBeeNaThread(task);
-    thread.scrollTop = thread.scrollHeight;
   }
   const avisos = document.getElementById("beeInlineAvisos");
   if (avisos) avisos.innerHTML = "";
@@ -112,49 +232,49 @@ async function abrirThreadDoCardMae(task) {
   chatAlvoTaskId = null;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
-  const tabAqui = document.getElementById("chatTabAqui");
-  const tabMae = document.getElementById("chatTabMae");
-  if (tabMae) tabMae.classList.add("active");
-  if (tabAqui) tabAqui.classList.remove("active");
-  const tabTudoMae = document.getElementById("chatTabTudo");
-  if (tabTudoMae) tabTudoMae.classList.remove("active");
+  atualizarTituloDoChat();
   const thread = document.getElementById("commentsThread");
-  if (thread) thread.innerHTML = `<p class="comments-empty">Carregando comentários do card mãe...</p>`;
   const avisosMae = document.getElementById("beeInlineAvisos");
   if (avisosMae) avisosMae.innerHTML = "";
 
   let cache = chatMaeCache.get(task.id);
+  // Já vi essa conversa antes neste navegador? Mostra ela na hora, e a
+  // busca de verdade acontece logo abaixo sem apagar nada.
+  if (!cache && thread) {
+    const guardados = comentariosDoCacheLocal("mae-" + task.id);
+    if (guardados) pintarThread(thread, renderComentariosHTML({ id: task.id, comments: guardados }), { rolarPraBaixo: true });
+    else pintarThread(thread, `<p class="comments-empty">Carregando comentários do card mãe...</p>`);
+  }
   if (!cache) {
     const resultado = await buscarCardMaeDoBackend(task.id);
     if (!resultado.ok || !resultado.temPai) {
       if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id && thread) {
-        thread.innerHTML = `<p class="comments-empty">Essa tarefa não tem card mãe.</p>`;
+        pintarThread(thread, `<p class="comments-empty">Essa tarefa não tem card mãe.</p>`);
       }
       return;
     }
     const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
     if (comentarios === null) {
-      // Não deu pra perguntar. Avisa e sai SEM guardar em cache — senão a
-      // lista vazia ficaria grudada como se fosse a verdade até trocar de
-      // tarefa (ver buscarComentariosDoBackend).
-      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id && thread) {
-        thread.innerHTML = `<p class="comments-empty">Não consegui carregar os comentários do card mãe agora.</p>`;
+      // Não deu pra perguntar. Sai SEM guardar em cache — senão a lista
+      // vazia ficaria grudada como se fosse a verdade até trocar de tarefa
+      // (ver buscarComentariosDoBackend). E não apaga o que já está na
+      // tela: se veio do cache do navegador, continua valendo mais do que
+      // um aviso de erro.
+      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id && thread
+          && !comentariosDoCacheLocal("mae-" + task.id)) {
+        pintarThread(thread, `<p class="comments-empty">Não consegui carregar os comentários do card mãe agora.</p>`);
       }
       return;
     }
     cache = { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios };
     chatMaeCache.set(task.id, cache);
     podarCacheMap(chatMaeCache, MAX_ITENS_CACHE_CARDMAE);
+    guardarComentariosNoCacheLocal("mae-" + task.id, comentarios);
   }
   if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de aba/tarefa enquanto carregava
   chatAlvoTaskId = cache.id;
-  const titulo = document.getElementById("chatPanelTitle");
-  if (titulo) titulo.textContent = cache.title;
-  if (thread) {
-    thread.innerHTML = renderComentariosHTML({ id: cache.id, comments: cache.comments });
-    wireExcluirComentario();
-    thread.scrollTop = thread.scrollHeight;
-  }
+  atualizarTituloDoChat();
+  if (thread) pintarThread(thread, renderComentariosHTML({ id: cache.id, comments: cache.comments }));
 }
 
 /**
@@ -175,16 +295,19 @@ async function abrirThreadLinhaDoTempo(task) {
   chatAlvoTaskId = task.id;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
-  ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle("active", id === "chatTabTudo");
-  });
+  atualizarTituloDoChat();
   const thread = document.getElementById("commentsThread");
-  if (thread) thread.innerHTML = `<p class="comments-empty">Montando a linha do tempo...</p>`;
   const avisosTudo = document.getElementById("beeInlineAvisos");
   if (avisosTudo) avisosTudo.innerHTML = "";
 
   const taskId = task.id;
+  // Mesma ideia das outras abas: a última linha do tempo montada fica
+  // guardada no navegador e reaparece na hora, sem "Montando...".
+  if (thread) {
+    const guardados = comentariosDoCacheLocal("tudo-" + taskId);
+    if (guardados) pintarThread(thread, renderComentariosHTML({ id: taskId, comments: guardados }), { rolarPraBaixo: true });
+    else pintarThread(thread, `<p class="comments-empty">Montando a linha do tempo...</p>`);
+  }
   const original = acharTarefaOriginalDaAlteracao(task);
   const infoMae = cardMaeCache.get(taskId);
 
@@ -229,15 +352,19 @@ async function abrirThreadLinhaDoTempo(task) {
     });
   }
 
-  const titulo = document.getElementById("chatPanelTitle");
-  if (titulo) titulo.textContent = "Linha do tempo · " + task.title;
+  atualizarTituloDoChat();
+  // Só guarda quando a linha do tempo veio COMPLETA — uma montada com uma
+  // das três pontas faltando seria uma versão capenga da conversa, e ela
+  // ficaria guardada como se fosse a verdade.
+  if (!algumaFalhou && juntos.length) guardarComentariosNoCacheLocal("tudo-" + taskId, juntos);
+
   if (thread) {
-    if (juntos.length) thread.innerHTML = renderComentariosHTML({ id: taskId, comments: juntos });
-    else if (algumaFalhou) thread.innerHTML = `<p class="comments-empty">Não consegui carregar a linha do tempo agora.</p>`;
-    else thread.innerHTML = `<p class="comments-empty">Nenhum comentário em nenhuma das três pontas ainda.</p>`;
-    wireExcluirComentario();
+    let html;
+    if (juntos.length) html = renderComentariosHTML({ id: taskId, comments: juntos });
+    else if (algumaFalhou) html = `<p class="comments-empty">Não consegui carregar a linha do tempo agora.</p>`;
+    else html = `<p class="comments-empty">Nenhum comentário em nenhuma das três pontas ainda.</p>`;
+    pintarThread(thread, html);
     inserirLinhaDaBeeNaThread(task);
-    thread.scrollTop = thread.scrollHeight;
   }
 }
 
@@ -267,12 +394,10 @@ async function recarregarThreadAtiva() {
   if (comentariosMae === null) return; // não chegou: preserva o que está na tela
   cache.comments = comentariosMae;
   chatMaeCache.set(task.id, cache);
+  guardarComentariosNoCacheLocal("mae-" + task.id, comentariosMae);
   if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return;
   const thread = document.getElementById("commentsThread");
-  if (thread) {
-    thread.innerHTML = renderComentariosHTML({ id: cache.id, comments: cache.comments });
-    wireExcluirComentario();
-  }
+  if (thread) pintarThread(thread, renderComentariosHTML({ id: cache.id, comments: cache.comments }));
 }
 
 /**
@@ -531,6 +656,7 @@ async function carregarComentarios(task) {
   // — ver comentário acima do porquê.
   if (minhaVez !== _cargaComentariosSeq) return;
   task.comments = comentarios;
+  guardarComentariosNoCacheLocal(taskId, comentarios);
   // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa
   // (compara por ID, não por referência — ver comentário em carregarDescricao).
   if (tasks[detailIdx] && tasks[detailIdx].id === taskId) {
@@ -541,10 +667,9 @@ async function carregarComentarios(task) {
       marcarChatVisto(task);
       atualizarBadgeChat(task);
       const thread = document.getElementById("commentsThread");
-      if (thread) {
-        thread.innerHTML = renderComentariosHTML(task);
-        wireExcluirComentario();
-      }
+      // pintarThread: se não chegou comentário novo, a tela nem é tocada
+      // — é isso que acaba com o piscar a cada checagem.
+      if (thread) pintarThread(thread, renderComentariosHTML(task));
     }
   }
 }
@@ -649,7 +774,7 @@ async function carregarTudoDaTarefa(task) {
     marcarChatVisto(task);
     atualizarBadgeChat(task);
     const thread = document.getElementById("commentsThread");
-    if (thread) { thread.innerHTML = renderComentariosHTML(task); wireExcluirComentario(); }
+    if (thread) pintarThread(thread, renderComentariosHTML(task));
   }
 
   if (task.pastaUrlSalva) {

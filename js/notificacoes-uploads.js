@@ -81,6 +81,41 @@ function limparLixoAntigoDoNavegador() {
  * o momento mais comum de ter acabado de subir algo no Drive em outra
  * aba/janela e voltado pro Colmeia pra copiar o link).
  */
+/**
+ * "Há quanto tempo esse arquivo subiu", do jeito que o Cláudio pediu:
+ * de 10 em 10 segundos até 1 minuto, depois de minuto em minuto. Passou
+ * de JANELA_NOTIFICACAO_UPLOAD_MS (30 min), o arquivo já não conta mais e
+ * a notificação some sozinha.
+ */
+function idadeDoUpload(quando) {
+  const segundos = Math.max(0, Math.floor((Date.now() - quando) / 1000));
+  if (segundos < 60) return `${Math.floor(segundos / 10) * 10}s`;
+  return `${Math.floor(segundos / 60)}min`;
+}
+
+/**
+ * Mantém os "10s / 20s / 3min" da notificação andando sem redesenhar a
+ * notificação inteira — só troca o texto de cada etiqueta. Redesenhar
+ * faria a fala da Bee piscar a cada 10 segundos.
+ */
+let _intervalIdadeUpload = null;
+function iniciarRelogioDasIdadesDeUpload() {
+  clearInterval(_intervalIdadeUpload);
+  _intervalIdadeUpload = setInterval(() => {
+    const etiquetas = document.querySelectorAll("#beeUploadAviso .upload-notif-idade");
+    if (!etiquetas.length) { clearInterval(_intervalIdadeUpload); _intervalIdadeUpload = null; return; }
+    etiquetas.forEach(el => {
+      const quando = Number(el.dataset.quando);
+      // Passou da janela? A notificação inteira já não vale mais.
+      if (Date.now() - quando >= JANELA_NOTIFICACAO_UPLOAD_MS) {
+        document.getElementById("beeUploadAviso")?.remove();
+        return;
+      }
+      el.textContent = idadeDoUpload(quando);
+    });
+  }, 10000);
+}
+
 let _intervalChecagemUpload = null;
 function iniciarChecagemUploadEmSegundoPlano(task) {
   pararChecagemUploadEmSegundoPlano();
@@ -158,6 +193,18 @@ async function renderNotificacoesUpload(task) {
   if (jaMostrando && jaMostrando.dataset.chave === chaveConjunto) return;
 
   const qtd = arquivosRelevantes.length;
+  // Nomes dos arquivos, um embaixo do outro, com há quanto tempo cada um
+  // subiu — sem isso a notificação dizia só "você adicionou 2 arquivos" e
+  // não dava pra saber SE eram os certos sem abrir o Drive.
+  const listaArquivos = arquivosRelevantes
+    .slice()
+    .sort((a, b) => (b.quando || 0) - (a.quando || 0))
+    .map(u => `
+      <li>
+        <span class="upload-notif-nome">${escaparHTML(u.arquivo)}</span>
+        <span class="upload-notif-idade" data-quando="${u.quando}">${idadeDoUpload(u.quando)}</span>
+      </li>
+    `).join("");
   // Nome de verdade da pasta (normalmente o título da tarefa) — o
   // backend não manda mais o texto fixo "pasta do card"; se por algum
   // motivo vier vazio, cai no título da própria tarefa como último recurso.
@@ -172,6 +219,7 @@ async function renderNotificacoesUpload(task) {
   // 2026-07-29 na memória "barra_amarela_dynamic_island".
   const corpo = `
     <p>Você adicionou ${qtd} arquivo${qtd > 1 ? "s" : ""} em <strong>${escaparHTML(nomeDaPasta)}</strong>${task.client ? ` <span class="upload-notif-cliente">(${escaparHTML(task.client)})</span>` : ""}</p>
+    <ul class="upload-notif-arquivos">${listaArquivos}</ul>
     <div class="bee-pastilhas">
       <button type="button" class="bee-acao principal" data-upload-acao="copiar">Adicionar ao comentário</button>
       <a class="bee-acao" href="${escaparHTML(link)}" target="_blank" rel="noopener">Ver</a>
@@ -186,42 +234,37 @@ async function renderNotificacoesUpload(task) {
     marcarUploadVisto(chaveConjunto);
     wrap.remove();
   });
-  wrap.querySelector('[data-upload-acao="copiar"]').addEventListener("click", e => {
-    adicionarComentarioDeUpload(task, wrap, link, qtd, chaveConjunto, e.currentTarget);
+  wrap.querySelector('[data-upload-acao="copiar"]').addEventListener("click", () => {
+    adicionarComentarioDeUpload(task, wrap, link, qtd, chaveConjunto);
   });
+  iniciarRelogioDasIdadesDeUpload();
 }
 
-// Posta um comentário no Runrun.it com o link da pasta — usado tanto
-// pelo botão "Adicionar ao comentário" dentro da aba Comentários quanto
-// pela ação equivalente na ilha do topbar (mostrarIlha), que pode ser
-// clicada bem depois, quando o `btn` original talvez nem exista mais na
-// tela — por isso essa função nunca depende de um elemento de botão
-// específico pra funcionar, só usa `btn` (opcional) pra dar feedback
-// visual quando ele existe.
-async function adicionarComentarioDeUpload(task, wrap, link, qtd, chave, btn) {
+/**
+ * Põe o texto do link da pasta NA CAIXA de escrever — e só isso.
+ *
+ * Antes esse botão mandava o comentário direto pro Runrun.it no clique,
+ * sem chance de revisar nem de completar a frase. Agora ele prepara a
+ * mensagem e deixa o cursor no fim: quem decide enviar (e o que mais
+ * escrever antes) é a pessoa. É a mesma regra que já vale pra Bee — nada
+ * daqui vai pro Runrun.it sozinho.
+ */
+function adicionarComentarioDeUpload(task, wrap, link, qtd, chave) {
   if (!task.id) return;
-  const original = btn ? btn.textContent : null;
-  // Feedback NA HORA do clique — texto "Adicionado ✓" e o sumiço da
-  // notificação acontecem antes de qualquer resposta do Runrun.it, sem
-  // esperar a ida e volta (mesmo padrão otimista do resto do app). Só
-  // desfaz tudo (e avisa por toast) se o Runrun.it recusar de verdade.
-  if (btn) { btn.disabled = true; btn.textContent = "Adicionado ✓"; }
-  const removerTimeout = setTimeout(() => { wrap?.remove(); }, 900);
+  const campo = document.getElementById("commentInput");
+  if (!campo) return;
 
   const texto = `${qtd > 1 ? "Arquivos adicionados" : "Arquivo adicionado"} na pasta: ${link}`;
-  const ok = await enviarComentarioNoBackend(task.id, texto);
-  if (ok) {
-    marcarUploadVisto(chave);
-    if (chatThreadAtivo === "aqui" && chatAlvoTaskId === task.id) recarregarThreadAtiva();
-    // Mesmo prompt de "repetir no card mãe?" que aparece depois de
-    // qualquer comentário manual (ver detalhe-modal.js) — faltava aqui,
-    // então comentar por esse atalho nunca oferecia replicar pro card mãe.
-    if (task.parentTaskId) mostrarPromptRepetirComentario(task, texto);
-  } else {
-    clearTimeout(removerTimeout);
-    if (btn) { btn.disabled = false; btn.textContent = original; }
-    mostrarToast("Não consegui adicionar o comentário agora. Tenta de novo em alguns segundos.", "erro");
-  }
+  // Se já tinha algo escrito, acrescenta em vez de apagar o que a pessoa
+  // estava digitando.
+  campo.value = campo.value.trim() ? `${campo.value.trim()} ${texto}` : texto;
+  campo.focus();
+  campo.setSelectionRange(campo.value.length, campo.value.length);
+
+  // A notificação já cumpriu o papel dela — some, e não volta pra esse
+  // mesmo conjunto de arquivos.
+  marcarUploadVisto(chave);
+  wrap?.remove();
 }
 
 /**
@@ -230,13 +273,16 @@ async function adicionarComentarioDeUpload(task, wrap, link, qtd, chave, btn) {
  * mesma coisa pro atendimento acompanhar).
  */
 function mostrarPromptRepetirComentario(task, texto) {
-  const thread = document.getElementById("commentsThread");
-  if (!thread) return;
+  // Fica em #beeInlineAvisos, FORA da lista de mensagens, pelo mesmo
+  // motivo da notificação de upload: a lista é redesenhada sozinha (a
+  // cada recarga, a cada checagem) e levava esse aviso junto antes de dar
+  // tempo de clicar em qualquer coisa.
+  const avisos = document.getElementById("beeInlineAvisos");
+  if (!avisos) return;
 
   const redesenhar = corpoHTML => {
     document.getElementById("beeRepetirPrompt")?.remove();
-    thread.insertAdjacentHTML("beforeend", `<div id="beeRepetirPrompt">${bolhaDaBee(corpoHTML, -1)}</div>`);
-    thread.scrollTop = thread.scrollHeight;
+    avisos.insertAdjacentHTML("beforeend", `<div id="beeRepetirPrompt">${bolhaDaBee(corpoHTML, -1)}</div>`);
     return document.getElementById("beeRepetirPrompt");
   };
 

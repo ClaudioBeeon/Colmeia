@@ -946,6 +946,24 @@ body.card-aberto .quick-access-panel { display: none; }
    etiqueta do nome do cliente continua usada ali dentro. */
 .upload-notif-cliente { font-weight: 600; opacity: 0.8; }
 
+/* Nomes dos arquivos que acabaram de subir, um embaixo do outro, com há
+   quanto tempo cada um entrou na pasta (10s, 20s... 1min, 2min...). */
+.upload-notif-arquivos {
+  list-style: none; margin: 6px 0 2px; padding: 0;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.upload-notif-arquivos li {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; line-height: 1.35;
+}
+.upload-notif-nome {
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.upload-notif-idade {
+  flex-shrink: 0; font-size: 11px; font-weight: 500; opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ===== Reações de emoji nos comentários ===== */
 .comment-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .comment-reaction-chip {

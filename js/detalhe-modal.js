@@ -807,40 +807,35 @@ function renderDetail() {
     </div>
 
     <div class="chat-panel" id="chatPanel" hidden>
-      <!-- Cabeçalho em 3 zonas, igual à referência que o Cláudio mandou:
-           voltar na esquerda, título centralizado, "..." na direita. Tudo
-           que antes ficava solto numa segunda linha (trocar entre
-           Comentários/Bee, as abas e "Verificar upload") mora agora dentro
-           do menu do "...", pra área de conversa ficar sendo só conversa,
-           sem barra nenhuma em cima. -->
+      <!-- Cabeçalho em 3 zonas: voltar na esquerda, NOME DA ABA ATIVA no
+           meio (com uma setinha pra trocar de aba ali mesmo) e o ícone da
+           Bee na direita, no lugar onde ficavam os "..." — clicar nele
+           entra no chat dela, clicar de novo volta pros comentários.
+           O botão "Verificar upload" saiu: o Colmeia já checa sozinho a
+           cada 8s e sempre que a aba do navegador volta a ficar em foco
+           (ver iniciarChecagemUploadEmSegundoPlano). -->
       <div class="chat-panel-header">
         <button type="button" class="chat-hdr-btn" id="chatPanelClose" aria-label="Voltar">
           <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <div class="chat-panel-title" id="chatPanelTitle">${escaparHTML(task.title)}</div>
-        <div class="chat-hdr-menu-wrap">
-          <button type="button" class="chat-hdr-btn" id="chatPanelMenuBtn" aria-label="Mais opções">
-            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+        <div class="chat-hdr-menu-wrap chat-abas-wrap">
+          <button type="button" class="chat-aba-atual" id="chatPanelMenuBtn" aria-label="Trocar de conversa">
+            <span class="chat-panel-title" id="chatPanelTitle">Comentários</span>
+            <svg class="chat-aba-seta" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <div class="chat-hdr-menu" id="chatPanelMenu" hidden>
-            <button type="button" class="chat-troca-btn active" id="chatIconeComentarios">
-              <span class="chat-menu-ic">${chatIcon}</span>Comentários <em>vão pro Runrun.it</em>
-            </button>
-            ${task.id ? `
-              <button type="button" class="chat-troca-btn" id="chatIconeBee">
-                <span class="chat-menu-ic">${beeIcon}</span>Bee <em>fica só no Colmeia</em>
-              </button>
+            <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários <em>vão pro Runrun.it</em></button>
+            <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Card mãe</button>
+            ${ehTarefaDeAlteracao(task) ? `
+              <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
             ` : ""}
-            <div class="chat-grupo-comentarios" id="chatGrupoComentarios">
-              <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
-              <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
-              ${ehTarefaDeAlteracao(task) ? `
-                <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
-              ` : ""}
-            </div>
-            ${task.id ? `<button type="button" class="upload-check-btn" id="uploadCheckBtn" title="Verificar se subiu algum arquivo novo na pasta do card">↻ Verificar upload</button>` : ""}
           </div>
         </div>
+        ${task.id ? `
+          <button type="button" class="chat-hdr-btn chat-hdr-bee" id="chatIconeBee" aria-label="Falar com a Bee" title="Bee — fica só no Colmeia">
+            ${beeIcon}
+          </button>
+        ` : `<span class="chat-hdr-btn" aria-hidden="true"></span>`}
       </div>
       <div class="comments-thread" id="commentsThread">
         ${renderComentariosHTML(task)}
@@ -1135,7 +1130,11 @@ function renderDetail() {
       return;
     }
     const alvoId = chatAlvoTaskId;
-    const eraThreadAqui = chatThreadAtivo === "aqui";
+    // "aqui" e "tudo" (Linha do tempo) escrevem os dois na PRÓPRIA tarefa
+    // — então nos dois casos faz sentido a Bee perguntar se é pra repetir
+    // no card mãe. Antes só valia pra "aqui", e quem comentava pela Linha
+    // do tempo (o caminho normal numa alteração) nunca recebia a oferta.
+    const eraThreadAqui = chatThreadAtivo === "aqui" || chatThreadAtivo === "tudo";
     const arquivoAtual = arquivoParaAnexar;
     // No Runrun.it de verdade, "@Nome" escolhido na lista vira uma menção
     // de verdade (a pessoa é avisada) — não é só texto colorido. O jeito
@@ -1178,7 +1177,10 @@ function renderDetail() {
       // Confirma visualmente (some o opaco/pendente) até a lista real
       // (com a bolha de verdade vinda do Runrun.it) substituir tudo.
       if (bolhaTemporaria) bolhaTemporaria.classList.remove("pending");
-      recarregarThreadAtiva();
+      // ESPERA a thread recarregar antes de oferecer o "repetir no card
+      // mãe?" — a recarga redesenha a conversa e levava o aviso junto,
+      // então ele aparecia e sumia num piscar.
+      await recarregarThreadAtiva();
       agendarAtualizacaoKanban();
       if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, textoParaEnviar);
     } else {
@@ -1328,9 +1330,9 @@ function renderDetail() {
   const chatPanelClose = document.getElementById("chatPanelClose");
   if (chatPanelClose) chatPanelClose.addEventListener("click", fecharChatPanel);
 
-  // Menu do "..." do cabeçalho do chat. Fecha sozinho ao escolher
-  // qualquer opção (e ao clicar fora — ver o handler global de clique no
-  // fim de js/kanban-board.js).
+  // Listinha de trocar de conversa, que abre na setinha do nome da aba.
+  // Fecha sozinha ao escolher qualquer opção (e ao clicar fora — ver o
+  // handler global de clique no fim de js/kanban-board.js).
   const chatPanelMenuBtn = document.getElementById("chatPanelMenuBtn");
   const chatPanelMenu = document.getElementById("chatPanelMenu");
   if (chatPanelMenuBtn && chatPanelMenu) {
@@ -1355,23 +1357,18 @@ function renderDetail() {
   const beeConferirBtn = document.getElementById("beeConferirBtn");
   if (beeConferirBtn) beeConferirBtn.addEventListener("click", () => conferirEntregaComABee(tasks[detailIdx] || task, beeConferirBtn));
 
+  // Um botão só, que vai e volta: nos comentários ele leva pra Bee, e
+  // dentro da Bee ele traz de volta pros comentários.
   const chatIconeBee = document.getElementById("chatIconeBee");
-  if (chatIconeBee) chatIconeBee.addEventListener("click", () => abrirThreadBee(tasks[detailIdx] || task));
-
-  const chatIconeComentarios = document.getElementById("chatIconeComentarios");
-  if (chatIconeComentarios) chatIconeComentarios.addEventListener("click", () => abrirThreadComentarios(tasks[detailIdx] || task));
-
-  const uploadCheckBtn = document.getElementById("uploadCheckBtn");
-  if (uploadCheckBtn) {
-    uploadCheckBtn.addEventListener("click", async () => {
-      uploadCheckBtn.disabled = true;
-      uploadCheckBtn.textContent = "Verificando...";
-      await renderNotificacoesUpload(task);
-      uploadCheckBtn.disabled = false;
-      uploadCheckBtn.textContent = "↻ Verificar upload";
+  if (chatIconeBee) {
+    chatIconeBee.addEventListener("click", () => {
+      const alvo = tasks[detailIdx] || task;
+      if (chatThreadAtivo === "bee") abrirThreadComentarios(alvo);
+      else abrirThreadBee(alvo);
     });
   }
 
+  atualizarTituloDoChat();
   atualizarBadgeChat(task);
 
   // O pop-up foi redesenhado do zero, então a lista de anexos voltou a

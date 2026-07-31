@@ -41,8 +41,7 @@ async function abrirThreadBee(task) {
   chatAlvoTaskId = null; // nada daqui vai pro Runrun.it por engano
   marcarAbaBeeAtiva(true);
 
-  const titulo = document.getElementById("chatPanelTitle");
-  if (titulo) titulo.textContent = "Bee · " + task.title;
+  atualizarTituloDoChat();
   atualizarCampoParaBee(true);
 
   const taskId = task.id;
@@ -55,16 +54,23 @@ async function abrirThreadBee(task) {
 }
 
 function marcarAbaBeeAtiva(ativa) {
-  ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove("active");
-  });
-  const grupoComentarios = document.getElementById("chatGrupoComentarios");
-  if (grupoComentarios) grupoComentarios.classList.toggle("escondido", ativa);
+  // A Bee escreve na mesma thread dos comentários. Entrar OU sair da
+  // conversa dela invalida o que o pintarThread tem em memória sobre o
+  // que está desenhado ali (ver esquecerPinturaDaThread).
+  esquecerPinturaDaThread();
+  if (ativa) {
+    ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove("active");
+    });
+  }
+  // O ícone da Bee no topo fica aceso enquanto você está na conversa dela
+  // — e é o mesmo botão que traz de volta pros comentários.
   const botaoBee = document.getElementById("chatIconeBee");
-  if (botaoBee) botaoBee.classList.toggle("active", ativa);
-  const botaoComentarios = document.getElementById("chatIconeComentarios");
-  if (botaoComentarios) botaoComentarios.classList.toggle("active", !ativa);
+  if (botaoBee) {
+    botaoBee.classList.toggle("active", ativa);
+    botaoBee.title = ativa ? "Voltar pros comentários" : "Bee — fica só no Colmeia";
+  }
 }
 
 /**

@@ -274,6 +274,27 @@ function idDoDesignerPorNome(nome) {
   return emailAlvo ? (mapa[emailAlvo] || null) : null;
 }
 
+/**
+ * Igual idDoDesignerPorNome, mas vale pra QUALQUER pessoa do Runrun.it —
+ * não só os 3 nomes de RUNRUN_USUARIOS. Usada como reserva na criação de
+ * tarefa: antes, escolher alguém de fora dessa lista devolvia null e a
+ * tarefa nascia sem dono caladinha.
+ */
+function idDoUsuarioRunrunPorNome(nome) {
+  if (!nome) return null;
+  var direto = idDoDesignerPorNome(nome);
+  if (direto) return direto;
+
+  var usuarios = buscarUsuariosRunrunComCache();
+  if (!Array.isArray(usuarios)) return null;
+  var alvo = nome.toString().trim().toLowerCase();
+  for (var i = 0; i < usuarios.length; i++) {
+    var u = usuarios[i];
+    if ((u.name || '').toString().trim().toLowerCase() === alvo) return u.id;
+  }
+  return null;
+}
+
 function buscarIdsResponsaveisRunrun() {
   var cache = CacheService.getScriptCache();
   var cacheado = cache.get('idsResponsaveisRunrun');

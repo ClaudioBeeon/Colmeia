@@ -510,11 +510,7 @@ async function abrirModalNovaTarefa() {
   aviso.textContent = "";
 
   const respSelect = document.getElementById("novaTarefaResponsavel");
-  if (!respSelect.dataset.montado) {
-    respSelect.innerHTML = DESIGNERS_EQUIPE.map(n => `<option value="${n}">${n}</option>`).join("");
-    respSelect.dataset.montado = "1";
-  }
-  respSelect.value = DESIGNER_LOGADO && DESIGNERS_EQUIPE.includes(DESIGNER_LOGADO) ? DESIGNER_LOGADO : DESIGNERS_EQUIPE[0];
+  preencherResponsaveisNovaTarefa(respSelect);
 
   overlay.hidden = false;
   document.getElementById("novaTarefaTitulo").focus();
@@ -533,6 +529,46 @@ async function abrirModalNovaTarefa() {
   _projetosRunrunCache = data.projetos;
   // Se o modal já foi fechado enquanto isso carregava, não mexe mais na tela.
   if (!overlay.hidden) preencherClientesNovaTarefa(clienteSelect, _projetosRunrunCache);
+}
+
+/**
+ * Monta a lista de "quem vai trabalhar nessa tarefa" com TODO MUNDO do
+ * Runrun.it — atendimento, redação, mídia, não só os 3 designers.
+ *
+ * Antes essa lista era o DESIGNERS_EQUIPE fixo (Cláudio/Gustavo/Erick) e
+ * mandava o NOME pro backend, que só sabia converter esses 3 nomes em id.
+ * Agora manda o id direto, que é o que o Runrun.it precisa pra alocar.
+ *
+ * A lista já vem carregada: o login pede ela em segundo plano (ver
+ * iniciarAppPosLogin, js/login-boot.js), então na prática ela aparece
+ * pronta. Se ainda não tiver chegado, mostra o aviso e completa sozinha
+ * quando chegar — sem travar a abertura do modal.
+ */
+async function preencherResponsaveisNovaTarefa(select) {
+  if (!select) return;
+
+  const marcarPadrao = () => {
+    // Deixa quem está logado já escolhido — é quem cria a tarefa na
+    // maioria das vezes.
+    const meu = [...select.options].find(o =>
+      (DESIGNER_ID_LOGADO && String(o.value) === String(DESIGNER_ID_LOGADO)) ||
+      nomesCorrespondem(o.textContent, DESIGNER_LOGADO)
+    );
+    if (meu) select.value = meu.value;
+  };
+
+  if (select.dataset.montado === "1") { marcarPadrao(); return; }
+
+  select.innerHTML = `<option value="">Carregando pessoas...</option>`;
+  const usuarios = ordenarUsuariosParaRegra(await buscarUsuariosRunrun());
+  if (!usuarios.length) {
+    select.innerHTML = `<option value="">Não consegui carregar as pessoas</option>`;
+    return;
+  }
+  select.innerHTML = `<option value="">Ninguém por enquanto</option>` +
+    usuarios.map(u => `<option value="${u.id}">${escaparHTML(u.nome)}</option>`).join("");
+  select.dataset.montado = "1";
+  marcarPadrao();
 }
 
 /**
@@ -596,7 +632,11 @@ async function criarTarefaViaModal() {
     titulo,
     projectId,
     tipo: document.getElementById("novaTarefaTipo").value,
-    responsavelNome: document.getElementById("novaTarefaResponsavel").value,
+    // Agora vai o ID do Runrun.it (a lista virou a de todo mundo, ver
+    // preencherResponsaveisNovaTarefa). O nome vai junto só pra aparecer
+    // legível no aviso de erro do backend.
+    responsavelId: document.getElementById("novaTarefaResponsavel").value || null,
+    responsavelNome: document.getElementById("novaTarefaResponsavel").selectedOptions[0]?.textContent || null,
     prioridade: document.getElementById("novaTarefaPrioridade").value,
     desiredDate: document.getElementById("novaTarefaData").value || null,
     descricao: document.getElementById("novaTarefaDescricao").value.trim() || null,
@@ -622,6 +662,10 @@ async function criarTarefaViaModal() {
   // o responsável (ver criarTarefaRunrun, RunrunEscrita.gs). Avisa em vez
   // de deixar a pessoa descobrir depois que a tarefa está sem dono.
   if (data.alocou === false) {
+    // O diagnóstico diz o que o Runrun.it respondeu em cada tentativa de
+    // alocar (ver alocarResponsavelNaTarefa, RunrunEscrita.gs) — sem ele,
+    // "não consegui alocar" não dá nenhuma pista do motivo.
+    console.warn("[Colmeia] Alocação falhou:", data.diagnosticoAlocacao || "(sem diagnóstico)");
     mostrarToast("Tarefa criada, mas não consegui alocar o responsável — escolhe direto no card.", "erro");
   } else {
     mostrarToast("Tarefa criada!", "sucesso");

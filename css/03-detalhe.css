@@ -795,7 +795,7 @@
   padding: 14px 12px 10px; flex-shrink: 0;
 }
 .chat-panel-title {
-  flex: 1; min-width: 0; text-align: center;
+  min-width: 0; text-align: center;
   font-size: 16px; font-weight: 600; color: #111111;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -810,11 +810,35 @@
 [data-theme="dark"] .chat-hdr-btn { color: var(--text-primary); }
 [data-theme="dark"] .chat-hdr-btn:hover { background: rgba(255,255,255,0.08); }
 
-/* Menu do "..." — tudo que antes ocupava uma barra de abas em cima da
-   conversa mora aqui dentro. */
+/* Nome da conversa ativa + setinha, no meio do cabeçalho. É o botão que
+   abre a listinha de trocar de conversa (Comentários / Card mãe / Linha
+   do tempo) — antes isso vivia escondido dentro do menu de "...". */
+.chat-abas-wrap { flex: 1; min-width: 0; display: flex; justify-content: center; }
+.chat-aba-atual {
+  display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
+  border: none; background: transparent; cursor: pointer;
+  padding: 4px 8px; border-radius: 10px; font-family: inherit;
+  transition: background 180ms ease-out;
+}
+.chat-aba-atual:hover { background: #F5F5F5; }
+[data-theme="dark"] .chat-aba-atual:hover { background: rgba(255,255,255,0.08); }
+.chat-aba-seta {
+  width: 15px; height: 15px; flex-shrink: 0; color: #9A9AA0;
+  transition: transform 180ms ease-out;
+}
+.chat-aba-atual.sem-opcoes { pointer-events: none; }
+.chat-aba-atual.sem-opcoes .chat-aba-seta { display: none; }
+
+/* Ícone da Bee no topo, no lugar onde ficavam os "...". Aceso enquanto a
+   conversa dela é a que está aberta. */
+.chat-hdr-bee.active { background: var(--kanban-yellow, #FFE9A8); }
+[data-theme="dark"] .chat-hdr-bee.active { background: rgba(255,214,102,0.22); }
+
+/* Listinha de trocar de conversa. */
 .chat-hdr-menu-wrap { position: relative; flex-shrink: 0; }
+.chat-abas-wrap.chat-hdr-menu-wrap { flex-shrink: 1; }
 .chat-hdr-menu {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 40;
   min-width: 232px; padding: 6px; border-radius: 16px;
   background: #FFFFFF; box-shadow: 0 8px 30px rgba(0,0,0,.12);
   display: flex; flex-direction: column; gap: 2px;
@@ -835,8 +859,6 @@
 [data-theme="dark"] .chat-hdr-menu button { color: var(--text-primary); }
 [data-theme="dark"] .chat-hdr-menu button:hover,
 [data-theme="dark"] .chat-hdr-menu button.active { background: rgba(255,255,255,0.08); }
-.chat-menu-ic { width: 18px; height: 18px; flex-shrink: 0; color: var(--kanban-yellow-text, #B08900); display: flex; }
-.chat-menu-ic svg { width: 18px; height: 18px; }
 
 @media (max-width: 900px) {
   .task-detail.chat-open .detail-inner { display: none; }

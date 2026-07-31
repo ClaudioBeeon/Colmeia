@@ -525,9 +525,11 @@ async function buscarAtividadesPainelBeeon() {
   }
 }
 
-// Só avisa sobre upload que aconteceu nas últimas 3 horas — depois
-// disso não faz mais sentido como "notificação" do momento.
-const JANELA_NOTIFICACAO_UPLOAD_MS = 3 * 60 * 60 * 1000;
+// Só avisa sobre upload que aconteceu nos últimos 30 minutos — depois
+// disso não faz mais sentido como "notificação" do momento, e a fala da
+// Bee some sozinha da conversa (era 3 horas, tempo demais pra algo que
+// serve pra "acabei de subir o arquivo").
+const JANELA_NOTIFICACAO_UPLOAD_MS = 30 * 60 * 1000;
 
 /**
  * Aviso rápido (toast) que aparece embaixo da tela e some sozinho —

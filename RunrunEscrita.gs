@@ -209,19 +209,70 @@ function removerDaRegra(workflowId, elementId) {
   return { ok: true };
 }
 
-function reatribuirTarefa(taskId, responsavelId) {
+/**
+ * Confere, LENDO a tarefa de volta, se a pessoa está mesmo alocada nela.
+ *
+ * Por que isso existe: o Runrun.it tem o hábito de responder "200 OK" pra
+ * uma alteração que ele simplesmente ignorou — foi exatamente o que
+ * aconteceu com a Entrega Desejada (ver alterarDataEntregaTarefa) e é o
+ * que acontecia aqui. Sem ler de volta, o Colmeia acreditava no 200 e
+ * dizia "alocado!" pra uma tarefa que continuava sem dono.
+ */
+function tarefaEstaAlocadaPara(taskId, responsavelId) {
+  var leitura = runrunRequest('/tasks/' + taskId, 'get');
+  if (!leitura.ok || !leitura.body) return false;
+  var t = leitura.body;
+  if (String(t.user_id || '') === String(responsavelId)) return true;
+  if (Array.isArray(t.assignments)) {
+    for (var i = 0; i < t.assignments.length; i++) {
+      var a = t.assignments[i];
+      if (String(a.assignee_id || a.user_id || '') === String(responsavelId)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Aloca alguém numa tarefa, tentando os caminhos possíveis da API do
+ * Runrun.it EM ORDEM e conferindo o resultado de verdade depois de cada
+ * um (ver tarefaEstaAlocadaPara). Para no primeiro que realmente pegou.
+ *
+ * Devolve também `diagnostico`: o que foi tentado e o que cada tentativa
+ * respondeu. É isso que aparece no aviso quando a alocação falha — sem
+ * ele, "não consegui alocar" não dá nenhuma pista do motivo.
+ */
+function alocarResponsavelNaTarefa(taskId, responsavelId) {
   if (!taskId || !responsavelId) return { ok: false, error: 'taskId ou responsavelId ausente.' };
 
-  var tentativaUserId = runrunRequest('/tasks/' + taskId, 'put', { user_id: responsavelId });
-  if (tentativaUserId.ok) return { ok: true };
+  var tentativas = [
+    { nome: 'PUT assignments', executar: function () {
+      return runrunRequest('/tasks/' + taskId, 'put', { assignments: [{ assignee_id: responsavelId }] });
+    } },
+    { nome: 'POST /assignments', executar: function () {
+      return runrunRequest('/tasks/' + taskId + '/assignments', 'post', { assignee_id: responsavelId });
+    } },
+    { nome: 'PUT user_id', executar: function () {
+      return runrunRequest('/tasks/' + taskId, 'put', { user_id: responsavelId });
+    } },
+    { nome: 'PUT task.assignments', executar: function () {
+      return runrunRequest('/tasks/' + taskId, 'put', { task: { assignments: [{ assignee_id: responsavelId }] } });
+    } }
+  ];
 
-  var tentativaAssignment = runrunRequest('/tasks/' + taskId + '/assignments', 'post', { assignee_id: responsavelId });
-  if (tentativaAssignment.ok) return { ok: true };
+  var log = [];
+  for (var i = 0; i < tentativas.length; i++) {
+    var r = tentativas[i].executar();
+    if (r.ok && tarefaEstaAlocadaPara(taskId, responsavelId)) {
+      return { ok: true, comoFoi: tentativas[i].nome };
+    }
+    log.push(tentativas[i].nome + ' → ' + (r.ok ? 'respondeu 200 mas não alocou' : 'status ' + r.status));
+  }
 
-  return {
-    ok: false,
-    error: 'Runrun.it recusou reatribuir a tarefa (status ' + tentativaUserId.status + ' e ' + tentativaAssignment.status + '). Precisa de diagnóstico.'
-  };
+  return { ok: false, error: 'Runrun.it não alocou a pessoa.', diagnostico: log.join(' | ') };
+}
+
+function reatribuirTarefa(taskId, responsavelId) {
+  return alocarResponsavelNaTarefa(taskId, responsavelId);
 }
 
 /**
@@ -359,13 +410,24 @@ function criarTarefaRunrun(dados) {
     return { ok: false, error: 'Faltam campos obrigatórios (título ou cliente).' };
   }
 
-  var responsavelId = dados.responsavelNome ? idDoDesignerPorNome(dados.responsavelNome) : null;
+  // O front-end manda o ID direto (a lista de "quem vai trabalhar" agora é
+  // a de TODO MUNDO do Runrun.it, não só os 3 designers). O caminho por
+  // nome fica como reserva: idDoDesignerPorNome só conhece os 3 nomes de
+  // RUNRUN_USUARIOS, então qualquer outra pessoa voltava null ali — e uma
+  // tarefa criada pra ela nascia sem dono, sem ninguém avisar.
+  var responsavelId = dados.responsavelId || null;
+  if (!responsavelId && dados.responsavelNome) {
+    responsavelId = idDoUsuarioRunrunPorNome(dados.responsavelNome);
+  }
 
   var corpoTask = {
     project_id: dados.projectId,
     title: dados.titulo,
   };
-  if (responsavelId) corpoTask.user_id = responsavelId;
+  // Alocar já na criação, no formato que a API documenta (`assignments`).
+  // O `user_id` que estava aqui antes era aceito com 200 e ignorado — a
+  // tarefa nascia com "Alocados" vazio.
+  if (responsavelId) corpoTask.assignments = [{ assignee_id: responsavelId }];
   if (dados.desiredDate) {
     corpoTask.desired_date = dados.desiredDate;
     corpoTask.desired_date_with_time = dados.desiredDate + 'T18:00:00-03:00';
@@ -385,19 +447,22 @@ function criarTarefaRunrun(dados) {
   }
   var novoId = resultado.body.id;
 
-  // ALOCAR de verdade, num segundo passo.
+  // CONFERIR a alocação — e insistir se não pegou.
   //
-  // O `user_id` mandado junto na criação acima NÃO aloca ninguém: a tarefa
-  // nascia sem responsável ("Alocados" vazio no Runrun.it), que era
-  // exatamente o problema relatado. Alocar é outra operação — e o Colmeia
-  // já tem uma que funciona todo dia em produção (`reatribuirTarefa`, usada
-  // pelo menu de trocar responsável no card), que ainda por cima tenta os
-  // dois caminhos possíveis da API. Reaproveitar ela aqui é mais seguro do
-  // que apostar num formato novo na criação.
+  // Mesmo mandando `assignments` na criação, o Runrun.it pode responder
+  // 200 e não alocar ninguém. Então aqui a gente LÊ a tarefa de volta; só
+  // se ela realmente não estiver alocada é que entram as outras tentativas
+  // (ver alocarResponsavelNaTarefa).
   var alocou = true;
+  var diagnosticoAlocacao = '';
   if (responsavelId) {
-    var r = reatribuirTarefa(novoId, responsavelId);
-    alocou = !!r.ok;
+    if (tarefaEstaAlocadaPara(novoId, responsavelId)) {
+      alocou = true;
+    } else {
+      var r = alocarResponsavelNaTarefa(novoId, responsavelId);
+      alocou = !!r.ok;
+      diagnosticoAlocacao = r.diagnostico || r.error || '';
+    }
   }
 
   // Prioridade é só do Colmeia (planilha própria) — não é campo do
@@ -413,6 +478,7 @@ function criarTarefaRunrun(dados) {
     ok: true,
     taskId: novoId,
     alocou: alocou,
+    diagnosticoAlocacao: diagnosticoAlocacao,
     link: 'https://runrun.it/tasks/' + novoId
   };
 }

@@ -541,14 +541,10 @@
    seria alguém mandar pro cliente uma pergunta que era pra ela.
    ------------------------------------------------------------------- */
 
-/* Trocar entre "Comentários" e "Bee": desde a reconstrução do chat (a
-   partir da referência que o Cláudio mandou), isso deixou de ser dois
-   ícones soltos em cima da conversa e virou item do menu "..." do
-   cabeçalho — a área de conversa ficou sendo só conversa, sem barra
-   nenhuma. A aparência dos dois botões vem toda de `.chat-hdr-menu
-   button` (css/03-detalhe.css); aqui só sobra o grupo das abas. */
-.chat-grupo-comentarios { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.chat-grupo-comentarios.escondido { display: none; }
+/* Trocar entre "Comentários" e "Bee" é feito pelo ícone dela no topo do
+   chat (`.chat-hdr-bee`, css/03-detalhe.css), e trocar entre as abas de
+   comentários pela setinha do nome da conversa (`.chat-aba-atual`, mesmo
+   arquivo). Não sobra estilo próprio aqui. */
 
 /* O campo de escrever muda de cara no chat da Bee — é o aviso mais
    importante da tela: o que for digitado aqui NÃO vai pro Runrun.it.
