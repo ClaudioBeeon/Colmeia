@@ -115,157 +115,102 @@ function extrairLinkDaReuniao(ev) {
 // front-end mostra "conectando" em vez de inventar número.
 
 /**
- * Rodada 2 do diagnóstico do timesheet.
+ * Rodada 3 — agora que sabemos que a fonte é /work_periods, esta rodada
+ * responde COMO pedir só o pedaço certo, em vez de varrer tudo.
  *
- * A rodada 1 deu 404 nos 12 endereços testados — todos abaixo de
- * /api/v1.0. Como /tasks e /users funcionam normalmente por ali, o 404
- * significa mesmo "essa rota não existe", não problema de chave.
+ * Três perguntas:
+ *   1. O `sortDir` funciona? (compara o 1º registro com asc e com desc)
+ *   2. O `page` funciona? (compara a página 1 com a página 2)
+ *   3. Existe algum nome de filtro de data que funcione? (testa 6 pares
+ *      de nomes e confere se o resultado REALMENTE respeitou a janela)
  *
- * Esta rodada amplia em três direções:
- *   1. mais nomes possíveis abaixo de /api/v1.0;
- *   2. endereços presos a UMA TAREFA (o tempo pode ser filho dela, não
- *      uma lista solta);
- *   3. endereços FORA de /api/v1.0 — a tela Tempo é do site do Runrun.it
- *      (runrun.it/pt-BR/me/timesheet), e o site pode falar com um
- *      endereço próprio, que não faz parte da API pública.
- *
- * Também mostra o corpo inteiro de qualquer coisa que NÃO seja 404: um
- * 401/403 seria ótima notícia — significa "essa rota existe, só pede
- * outra permissão".
- *
- * SÓ LEITURA. Nenhuma chamada aqui altera nada.
+ * SÓ LEITURA.
  *
  * Como rodar: no editor do Apps Script, escolha "diagnosticoTimesheet" no
- * seletor ao lado de "Executar", clique em Executar, e copie tudo que
- * aparecer em "Registro de execução".
+ * seletor ao lado de "Executar", clique em Executar, e copie o log.
  */
 function diagnosticoTimesheet() {
   var meuId = idDoUsuarioRunrunPorNome('Cláudio');
-  var hoje = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
-  var seteDiasAtras = Utilities.formatDate(
-    new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000),
-    'America/Sao_Paulo', 'yyyy-MM-dd');
+  var hoje = new Date();
+  var segunda = segundaFeiraDaSemana(hoje);
+  var iniISO = Utilities.formatDate(segunda, 'America/Sao_Paulo', 'yyyy-MM-dd');
+  var fimISO = Utilities.formatDate(new Date(segunda.getTime() + 6 * 86400000), 'America/Sao_Paulo', 'yyyy-MM-dd');
 
-  Logger.log('=== DIAGNÓSTICO TIMESHEET — RODADA 2 ===');
-  Logger.log('meu id no Runrun.it: ' + meuId);
-  Logger.log('janela: ' + seteDiasAtras + ' até ' + hoje);
+  Logger.log('=== DIAGNÓSTICO /work_periods — RODADA 3 ===');
+  Logger.log('id: ' + meuId + ' | semana desta tela: ' + iniISO + ' a ' + fimISO);
   Logger.log('');
 
-  // --- Uma tarefa minha de verdade, pra testar os endereços de tarefa ---
-  var taskId = null;
-  var minhas = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(meuId) + '&limit=1');
-  if (Array.isArray(minhas) && minhas.length) taskId = minhas[0].id;
-  Logger.log('tarefa usada nos testes por tarefa: ' + taskId);
-  Logger.log('');
-
-  // --- PARTE 1: campos de tempo que a tarefa JÁ devolve ---
-  // Se algum deles trouxer a quebra por dia, nem precisamos de rota nova.
-  Logger.log('--- PARTE 1: o que a própria tarefa já devolve sobre tempo ---');
-  if (taskId) {
-    var t = runrunFetch('/tasks/' + taskId);
-    if (t && !t.erroFetch) {
-      Object.keys(t).forEach(function (chave) {
-        if (/time|worked|hour|period|played|track/i.test(chave)) {
-          Logger.log('   ' + chave + ' = ' + JSON.stringify(t[chave]).substring(0, 200));
-        }
-      });
-      if (Array.isArray(t.assignments) && t.assignments.length) {
-        Logger.log('   assignments[0] completo:');
-        Logger.log('   ' + JSON.stringify(t.assignments[0]).substring(0, 800));
-      }
-    }
+  function resumir(rotulo, caminho) {
+    var lote = runrunFetch(caminho);
+    if (!Array.isArray(lote)) { Logger.log('❌ ' + rotulo + ' — não veio lista'); return null; }
+    if (!lote.length) { Logger.log('⚪ ' + rotulo + ' — veio VAZIO'); return lote; }
+    var datas = lote.map(function (b) { return b.start ? String(b.start).substring(0, 10) : '?'; });
+    var ordenadas = datas.slice().sort();
+    Logger.log('   ' + rotulo);
+    Logger.log('      qtd=' + lote.length +
+               ' | 1º=' + datas[0] + ' | último=' + datas[datas.length - 1] +
+               ' | mais antigo=' + ordenadas[0] + ' | mais novo=' + ordenadas[ordenadas.length - 1]);
+    Logger.log('      1º id=' + lote[0].id);
+    return lote;
   }
-  Logger.log('');
 
-  // --- PARTE 2: rotas abaixo de /api/v1.0 ---
-  Logger.log('--- PARTE 2: rotas novas abaixo de /api/v1.0 ---');
-  var candidatos = [
-    '/time_worked_entries?user_id=' + meuId,
-    '/work_periods?user_id=' + meuId,
-    '/workperiods?user_id=' + meuId,
-    '/task_time_entries?user_id=' + meuId,
-    '/user_worked_times?user_id=' + meuId,
-    '/punches?user_id=' + meuId,
-    '/time_cards?user_id=' + meuId,
-    '/timecards?user_id=' + meuId,
-    '/attendances?user_id=' + meuId,
-    '/journeys?user_id=' + meuId,
-    '/user_journeys?user_id=' + meuId,
-    '/timesheet?user_id=' + meuId,
-    '/timesheet',
-    '/me',
-    '/me/timesheet',
-    '/reports/time?user_id=' + meuId,
-    '/reports/timesheet?user_id=' + meuId,
-    '/time_report?user_id=' + meuId,
-    '/worked_hours?user_id=' + meuId,
-    '/task_works?user_id=' + meuId,
-    '/works?user_id=' + meuId,
-    '/timers?user_id=' + meuId
-  ];
-  if (taskId) {
-    candidatos = candidatos.concat([
-      '/tasks/' + taskId + '/time_entries',
-      '/tasks/' + taskId + '/work_periods',
-      '/tasks/' + taskId + '/time_worked',
-      '/tasks/' + taskId + '/works',
-      '/tasks/' + taskId + '/timers',
-      '/tasks/' + taskId + '/punches'
-    ]);
+  Logger.log('--- 1) O sortDir funciona? ---');
+  var asc = resumir('sortDir=asc ', '/work_periods?user_id=' + meuId + '&sort=start&sortDir=asc&limit=100');
+  var desc = resumir('sortDir=desc', '/work_periods?user_id=' + meuId + '&sort=start&sortDir=desc&limit=100');
+  if (asc && desc && asc.length && desc.length) {
+    Logger.log(asc[0].id === desc[0].id
+      ? '   >>> IGUAIS: o sortDir é IGNORADO.'
+      : '   >>> DIFERENTES: o sortDir FUNCIONA.');
   }
-  candidatos.forEach(function (caminho) { testarEndereco(caminho, null); });
 
-  // --- PARTE 3: fora de /api/v1.0 (o site do Runrun.it) ---
   Logger.log('');
-  Logger.log('--- PARTE 3: endereços fora da API pública ---');
-  var raiz = 'https://secure.runrun.it';
-  var forasDaApi = [
-    raiz + '/timesheet.json',
-    raiz + '/me/timesheet.json',
-    raiz + '/pt-BR/me/timesheet.json',
-    raiz + '/api/timesheet?user_id=' + meuId,
-    raiz + '/api/v1.0/timesheets/' + meuId,
-    raiz + '/api/internal/timesheet?user_id=' + meuId
+  Logger.log('--- 2) O page funciona? ---');
+  var p1 = resumir('page=1', '/work_periods?user_id=' + meuId + '&limit=100&page=1');
+  var p2 = resumir('page=2', '/work_periods?user_id=' + meuId + '&limit=100&page=2');
+  if (p1 && p2 && p1.length && p2.length) {
+    Logger.log(p1[0].id === p2[0].id
+      ? '   >>> IGUAIS: o page é IGNORADO (cuidado com laço infinito).'
+      : '   >>> DIFERENTES: o page FUNCIONA.');
+  }
+
+  Logger.log('');
+  Logger.log('--- 3) Algum filtro de data funciona? ---');
+  Logger.log('    (só vale se TODAS as datas ficarem dentro de ' + iniISO + '..' + fimISO + ')');
+  var pares = [
+    ['start_date/end_date', 'start_date=' + iniISO + '&end_date=' + fimISO],
+    ['from/to', 'from=' + iniISO + '&to=' + fimISO],
+    ['since/until', 'since=' + iniISO + '&until=' + fimISO],
+    ['start_at/end_at', 'start_at=' + iniISO + '&end_at=' + fimISO],
+    ['start/end', 'start=' + iniISO + '&end=' + fimISO],
+    ['date_from/date_to', 'date_from=' + iniISO + '&date_to=' + fimISO]
   ];
-  forasDaApi.forEach(function (url) { testarEndereco(null, url); });
+  pares.forEach(function (par) {
+    var lote = runrunFetch('/work_periods?user_id=' + meuId + '&limit=100&' + par[1]);
+    if (!Array.isArray(lote)) { Logger.log('   ❌ ' + par[0] + ' — não veio lista'); return; }
+    if (!lote.length) { Logger.log('   ⚪ ' + par[0] + ' — vazio'); return; }
+    var fora = lote.filter(function (b) {
+      var d = b.start ? String(b.start).substring(0, 10) : '';
+      return d < iniISO || d > fimISO;
+    }).length;
+    Logger.log((fora === 0 ? '   ✅ ' : '   ❌ ') + par[0] +
+               ' — qtd=' + lote.length + ', fora da janela=' + fora +
+               (fora === 0 ? '  <<< ESSE FUNCIONA' : ''));
+  });
+
+  Logger.log('');
+  Logger.log('--- 4) Tem hora lançada nesta semana? ---');
+  var daSemana = buscarBlocosDeTrabalho(meuId, iniISO, fimISO);
+  if (daSemana === null) {
+    Logger.log('   não consegui ler.');
+  } else {
+    var soma = 0;
+    daSemana.forEach(function (b) { soma += Number(b.worked_time) || 0; });
+    Logger.log('   blocos achados: ' + daSemana.length + ' | total: ' + Math.round(soma / 3600 * 100) / 100 + 'h');
+    if (daSemana.length) Logger.log('   exemplo: ' + JSON.stringify(daSemana[0]));
+  }
 
   Logger.log('');
   Logger.log('=== FIM. Copie TUDO acima e mande pro Claude. ===');
-}
-
-/**
- * Faz uma chamada de LEITURA e registra o resultado de um jeito útil:
- * 404 = a rota não existe; qualquer outra coisa é pista boa e o corpo
- * inteiro é mostrado.
- */
-function testarEndereco(caminhoDaApi, urlCompleta) {
-  var rotulo = caminhoDaApi || urlCompleta;
-  try {
-    var res;
-    if (caminhoDaApi) {
-      res = runrunRequest(caminhoDaApi, 'get');
-    } else {
-      var bruto = UrlFetchApp.fetch(urlCompleta, {
-        method: 'get',
-        headers: { 'App-Key': RUNRUN_APP_KEY, 'User-Token': RUNRUN_USER_TOKEN },
-        muteHttpExceptions: true,
-        followRedirects: false
-      });
-      var corpo = bruto.getContentText();
-      res = { ok: bruto.getResponseCode() >= 200 && bruto.getResponseCode() < 300,
-              status: bruto.getResponseCode(), body: corpo.substring(0, 600) };
-    }
-
-    if (res.status === 404) { Logger.log('❌ 404   ' + rotulo); return; }
-
-    Logger.log((res.ok ? '✅ FUNCIONOU (' + res.status + ')' : '⚠️  status ' + res.status) + '  ' + rotulo);
-    var amostra = '';
-    try { amostra = typeof res.body === 'string' ? res.body : JSON.stringify(res.body); }
-    catch (e) { amostra = '(não deu pra ler o corpo)'; }
-    Logger.log('     corpo: ' + String(amostra).substring(0, 700));
-  } catch (err) {
-    Logger.log('💥 erro  ' + rotulo + ' — ' + err.message);
-  }
 }
 
 /**
@@ -347,8 +292,11 @@ function buscarBlocosDeTrabalho(userId, primeiroDia, ultimoDia) {
   var corteFim = new Date(ultimoDia + 'T23:59:59-03:00').getTime();
 
   var encontrados = [];
+  var jaPeguei = {};              // id -> true, evita repetir se a página não avançar
+  var assinaturaAnterior = '';
+  var ordemDecrescente = null;    // null = ainda não sei em que ordem vem
   var pagina = 1;
-  var TETO_PAGINAS = 8; // rede de segurança: nunca varre a conta inteira
+  var TETO_PAGINAS = 40;          // rede de segurança: nunca varre sem fim
 
   while (pagina <= TETO_PAGINAS) {
     var caminho = '/work_periods?user_id=' + encodeURIComponent(userId) +
@@ -359,17 +307,42 @@ function buscarBlocosDeTrabalho(userId, primeiroDia, ultimoDia) {
     if (!Array.isArray(lote)) return pagina === 1 ? null : encontrados;
     if (lote.length === 0) break;
 
-    var passouDoCorte = false;
+    // A API pode ignorar `page`. Se a página vier igualzinha à anterior,
+    // não adianta continuar pedindo — seria um laço infinito.
+    var assinatura = lote.map(function (b) { return b && b.id; }).join(',');
+    if (assinatura === assinaturaAnterior) break;
+    assinaturaAnterior = assinatura;
+
+    // Descobre a ordem OLHANDO O DADO, em vez de confiar no `sortDir`.
+    // Foi exatamente esse palpite que zerou a tela na primeira versão: a
+    // API ignora o `sortDir` e devolve do mais VELHO pro mais novo, então
+    // o primeiro registro já era anterior à janela e a busca parava ali,
+    // sem nunca chegar na semana pedida.
+    if (ordemDecrescente === null && lote.length > 1) {
+      var primeiro = new Date(lote[0].start).getTime();
+      var ultimo = new Date(lote[lote.length - 1].start).getTime();
+      if (primeiro !== ultimo) ordemDecrescente = primeiro > ultimo;
+    }
+
+    var maisNovoDaPagina = 0;
+    var maisVelhoDaPagina = Infinity;
     for (var i = 0; i < lote.length; i++) {
       var b = lote[i];
       if (!b || !b.start) continue;
       var quando = new Date(b.start).getTime();
-      if (quando > corteFim) continue;        // mais novo que a janela: ainda não chegou
-      if (quando < corteInicio) { passouDoCorte = true; break; } // passou: pode parar
-      encontrados.push(b);
+      if (quando > maisNovoDaPagina) maisNovoDaPagina = quando;
+      if (quando < maisVelhoDaPagina) maisVelhoDaPagina = quando;
+      if (quando >= corteInicio && quando <= corteFim && !jaPeguei[b.id]) {
+        jaPeguei[b.id] = true;
+        encontrados.push(b);
+      }
     }
 
-    if (passouDoCorte || lote.length < 100) break;
+    // Só para cedo quando dá pra ter CERTEZA de que o resto não interessa.
+    // Sem saber a ordem, continua virando página até o teto.
+    if (ordemDecrescente === true && maisNovoDaPagina < corteInicio) break;
+    if (ordemDecrescente === false && maisVelhoDaPagina > corteFim) break;
+    if (lote.length < 100) break;
     pagina++;
   }
 
