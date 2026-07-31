@@ -4,7 +4,20 @@
 // notificação já desaparecia da lista pra sempre. Cada item:
 // {taskId, taskTitle, autor, texto, comentarioId, criadoEm, vista}
 let notificacoes = [];
+// O log de notificações é POR PESSOA, não por navegador.
+//
+// Antes a chave era uma só ("colmeia_notificacoes_log_v2") pro navegador
+// inteiro. Como o Cláudio entra no login do Gustavo e do Erick no mesmo
+// computador pra conferir coisa, o log dele continuava salvo ali e as
+// notificações DELE apareciam pra eles — inclusive menção que era pra ele
+// ("a Laura me marcou e apareceu pra eles"). O nome de quem está logado
+// entra na chave, então cada um tem a sua lista e trocar de login não
+// mistura mais nada.
 const NOTIF_LOG_KEY = "colmeia_notificacoes_log_v2";
+
+function chaveLogNotificacoes() {
+  return NOTIF_LOG_KEY + "_" + normalizarParaComparar(DESIGNER_LOGADO || "sem-login");
+}
 const NOTIF_RETENCAO_MS = 2 * 24 * 60 * 60 * 1000; // 2 dias
 
 // Marca o instante em que o Colmeia abriu — usado pra garantir que o
@@ -26,7 +39,7 @@ function comentarioMencionaDesigner(texto) {
 
 function carregarNotificacoesLog() {
   let bruto = [];
-  try { bruto = JSON.parse(localStorage.getItem(NOTIF_LOG_KEY) || "[]"); } catch (err) { bruto = []; }
+  try { bruto = JSON.parse(localStorage.getItem(chaveLogNotificacoes()) || "[]"); } catch (err) { bruto = []; }
   const agora = Date.now();
   // A retenção de 2 dias tem que contar a partir de quando O COLMEIA
   // VIU o comentário (registradoEm), NUNCA da data do comentário em si
@@ -41,7 +54,7 @@ function carregarNotificacoesLog() {
   return bruto.filter(n => n && (n.registradoEm || n.criadoEm) && (agora - (n.registradoEm || n.criadoEm)) < NOTIF_RETENCAO_MS);
 }
 function salvarNotificacoesLog(lista) {
-  try { localStorage.setItem(NOTIF_LOG_KEY, JSON.stringify(lista)); } catch (err) { /* sem problema */ }
+  try { localStorage.setItem(chaveLogNotificacoes(), JSON.stringify(lista)); } catch (err) { /* sem problema */ }
 }
 
 /**

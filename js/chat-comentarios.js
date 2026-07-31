@@ -154,8 +154,13 @@ function atualizarTituloDoChat() {
   if (botao) botao.classList.toggle("sem-opcoes", quantasAbas < 2);
 }
 
+// Também por pessoa, pelo mesmo motivo do log de notificações (ver
+// chaveLogNotificacoes, js/notificacoes-avisos.js): "eu já li essa
+// conversa" é de quem está logado, não do computador. Sem o nome na
+// chave, entrar no login de outra pessoa no mesmo navegador fazia ela
+// herdar os "já lidos" de quem usou antes.
 function chaveVistoChat(taskId) {
-  return "colmeia_chat_visto_" + taskId;
+  return "colmeia_chat_visto_" + taskId + "_" + normalizarParaComparar(DESIGNER_LOGADO || "sem-login");
 }
 function marcarChatVisto(task) {
   if (!task.id || !task.comments || task.comments.length === 0) return;

@@ -1,5 +1,7 @@
+// Por pessoa também (ver chaveLogNotificacoes, js/notificacoes-avisos.js):
+// "eu já dispensei esse aviso" é de quem está logado, não do computador.
 function chaveUploadVisto(link) {
-  return "colmeia_upload_visto_" + link;
+  return "colmeia_upload_visto_" + normalizarParaComparar(DESIGNER_LOGADO || "sem-login") + "_" + link;
 }
 function uploadJaVisto(link) {
   try { return localStorage.getItem(chaveUploadVisto(link)) === "1"; } catch (err) { return false; }
@@ -28,6 +30,11 @@ const MAX_CHAVES_CHAT_VISTO = 400;
 
 function limparLixoAntigoDoNavegador() {
   try {
+    // Log de notificações da época em que a chave era uma só pro navegador
+    // inteiro (sem o nome da pessoa). Agora cada um tem a sua — esse
+    // sobrou e não é lido por ninguém, só ocupa espaço.
+    localStorage.removeItem("colmeia_notificacoes_log_v2");
+
     const agora = Date.now();
     const chatVistos = [];
     for (let i = 0; i < localStorage.length; i++) {
