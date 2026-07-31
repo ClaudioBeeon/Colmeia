@@ -833,6 +833,13 @@ function renderDetail() {
       <div class="comments-thread" id="commentsThread">
         ${renderComentariosHTML(task)}
       </div>
+      <!-- Fica FORA da thread de propósito: #commentsThread é reconstruído
+           do zero (thread.innerHTML = ...) toda vez que os comentários são
+           recarregados (depois de enviar um, a cada 8s de checagem de
+           upload etc.) — um aviso da Bee inserido lá dentro sumia sozinho
+           1s depois, assim que a primeira recarga acontecesse, sem dar
+           tempo de clicar em nada. Aqui ele fica parado, imune a isso. -->
+      <div class="bee-inline-avisos" id="beeInlineAvisos"></div>
       <div class="comment-input">
         <div class="comment-mention-list" id="mentionList" hidden></div>
         <button type="button" class="comment-tool-btn" id="emojiBtn" title="Emoji" aria-label="Emoji">😊</button>
@@ -1181,7 +1188,14 @@ function renderDetail() {
 
   if (commentInput) {
     commentInput.addEventListener("keydown", e => {
-      if (e.key === "Enter" && !mentionListAberta()) enviarComentarioAtual();
+      if (e.key !== "Enter") return;
+      // A lista de sugestões de @nome é só uma ajuda pra digitar certo —
+      // igual no Runrun.it de verdade, "@fulano" não vira uma menção
+      // especial nenhuma, é só texto normal do comentário. Antes, com a
+      // lista aberta, apertar Enter não fazia NADA (nem enviava, nem
+      // escolhia ninguém) — parecia que o comentário tinha travado.
+      if (mentionListAberta()) mentionList.hidden = true;
+      enviarComentarioAtual();
     });
   }
 

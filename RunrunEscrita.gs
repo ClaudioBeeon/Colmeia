@@ -69,6 +69,15 @@ function excluirComentario(commentId) {
   return { ok: true };
 }
 
+function editarComentario(commentId, texto) {
+  if (!commentId || !texto) return { ok: false, error: 'commentId ou texto ausente.' };
+  var resultado = runrunRequest('/comments/' + commentId, 'put', { text: texto });
+  if (!resultado.ok) {
+    return { ok: false, error: 'Runrun.it recusou editar o comentário (status ' + resultado.status + ').' };
+  }
+  return { ok: true };
+}
+
 function reagirComentario(commentId, emoji) {
   if (!commentId || !emoji) return { ok: false, error: 'commentId ou emoji ausente.' };
   var resultado = runrunPost('/comments/' + commentId + '/reaction', { emoji: emoji });

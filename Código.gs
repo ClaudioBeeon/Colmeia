@@ -149,6 +149,8 @@ function handleRequest(e, method) {
         output = adicionarComentario(body.taskId, body.texto);
       } else if (body.acao === 'excluirComentario') {
         output = excluirComentario(body.commentId);
+      } else if (body.acao === 'editarComentario') {
+        output = editarComentario(body.commentId, body.texto);
       } else if (body.acao === 'reagirComentario') {
         output = reagirComentario(body.commentId, body.emoji);
       } else if (body.acao === 'adicionarComentarioComAnexo') {

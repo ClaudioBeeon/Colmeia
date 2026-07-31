@@ -571,20 +571,46 @@
    ------------------------------------------------------------------- */
 .comments-thread { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 
+/* Avisos da Bee (repetir no card mãe, arquivo novo no Drive) — fica
+   FORA da .comments-thread de propósito, ver comentário no HTML de
+   onde isso é impresso (js/detalhe-modal.js). Some sozinho (sem
+   deixar buraco) quando não tem nada dentro. */
+.bee-inline-avisos { flex-shrink: 0; padding: 0 20px; }
+.bee-inline-avisos:empty { padding: 0; }
+.bee-inline-avisos .comment-bubble { margin-bottom: 12px; }
+
 .comment-bubble { display: flex; align-items: flex-start; gap: 8px; max-width: 76%; position: relative; }
 .comment-bubble.mine { align-self: flex-end; flex-direction: row-reverse; max-width: 72%; }
 
-.comment-delete-btn {
-  position: absolute; top: -4px; right: -4px;
+.comment-bubble-acoes {
+  position: absolute; top: -4px; right: -4px; display: flex; gap: 4px;
+  opacity: 0; transition: opacity 0.12s var(--ease-apple);
+}
+.comment-bubble:hover .comment-bubble-acoes { opacity: 1; }
+.comment-edit-btn, .comment-delete-btn {
   width: 18px; height: 18px; border-radius: 50%;
   border: none; background: var(--card-bg); color: var(--text-muted);
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.12s var(--ease-apple); cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
-.comment-bubble:hover .comment-delete-btn { opacity: 1; }
-.comment-delete-btn svg { width: 10px; height: 10px; }
+.comment-edit-btn svg, .comment-delete-btn svg { width: 10px; height: 10px; }
+.comment-edit-btn:hover { background: var(--page-bg); color: var(--text-primary); }
 .comment-delete-btn:hover { background: #FFE3E3; color: #E03131; }
+
+/* Edição de comentário — troca o balão por um campo editável na hora. */
+.comment-edit-form { display: flex; flex-direction: column; gap: 8px; min-width: 190px; }
+.comment-edit-input {
+  border: none; border-radius: 12px; background: var(--page-bg); color: inherit;
+  padding: 8px 10px; font-family: var(--font-body); font-size: 13.5px; outline: none;
+}
+.comment-edit-input:focus { box-shadow: 0 0 0 2px var(--kanban-yellow); }
+.comment-edit-acoes { display: flex; gap: 6px; justify-content: flex-end; }
+.comment-edit-acoes button {
+  border: none; border-radius: 999px; padding: 5px 12px;
+  font-family: var(--font-body); font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+.comment-edit-salvar { background: var(--kanban-yellow); color: #16181D; }
+.comment-edit-cancelar { background: var(--page-bg); color: var(--text-secondary); }
 
 /* O avatar fica sempre FORA do balão, alinhado com o topo dele — nunca
    escala junto com o texto (comprido ou curto). */

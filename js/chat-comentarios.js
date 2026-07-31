@@ -96,6 +96,8 @@ function abrirThreadAqui(task) {
     inserirLinhaDaBeeNaThread(task);
     thread.scrollTop = thread.scrollHeight;
   }
+  const avisos = document.getElementById("beeInlineAvisos");
+  if (avisos) avisos.innerHTML = "";
   marcarChatVisto(task);
   atualizarBadgeChat(task);
 }
@@ -118,6 +120,8 @@ async function abrirThreadDoCardMae(task) {
   if (tabTudoMae) tabTudoMae.classList.remove("active");
   const thread = document.getElementById("commentsThread");
   if (thread) thread.innerHTML = `<p class="comments-empty">Carregando comentários do card mãe...</p>`;
+  const avisosMae = document.getElementById("beeInlineAvisos");
+  if (avisosMae) avisosMae.innerHTML = "";
 
   let cache = chatMaeCache.get(task.id);
   if (!cache) {
@@ -177,6 +181,8 @@ async function abrirThreadLinhaDoTempo(task) {
   });
   const thread = document.getElementById("commentsThread");
   if (thread) thread.innerHTML = `<p class="comments-empty">Montando a linha do tempo...</p>`;
+  const avisosTudo = document.getElementById("beeInlineAvisos");
+  if (avisosTudo) avisosTudo.innerHTML = "";
 
   const taskId = task.id;
   const original = acharTarefaOriginalDaAlteracao(task);
@@ -432,9 +438,16 @@ function renderComentariosHTML(task) {
       </div>
       <button type="button" class="comment-react-btn" data-comment-id="${c.id}" title="Reagir" aria-label="Reagir">🙂</button>
       <div class="comment-react-picker" data-comment-id="${c.id}" hidden></div>
-      <button type="button" class="comment-delete-btn" data-comment-id="${c.id}" title="Excluir comentário" aria-label="Excluir comentário">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      </button>
+      <div class="comment-bubble-acoes">
+        ${minha ? `
+          <button type="button" class="comment-edit-btn" data-comment-id="${c.id}" title="Editar comentário" aria-label="Editar comentário">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        ` : ""}
+        <button type="button" class="comment-delete-btn" data-comment-id="${c.id}" title="Excluir comentário" aria-label="Excluir comentário">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
     </div>
   `;
   }).join("");
@@ -496,14 +509,27 @@ async function carregarDescricao(task) {
   }
 }
 
+// Manda cada chamada com um número de vez — se enviar dois comentários
+// em seguida rápido, duas buscas ficam "no ar" ao mesmo tempo, e nada
+// garante que a de trás (comentário mais antigo) responda ANTES da da
+// frente. Sem isso, a resposta mais lenta (um retrato de antes do
+// segundo comentário existir) sobrescrevia a mais rápida por cima,
+// fazendo o comentário recém-mandado sumir da tela até fechar e reabrir
+// a tarefa — mesmo já tendo sido publicado de verdade no Runrun.it.
+let _cargaComentariosSeq = 0;
+
 async function carregarComentarios(task) {
   if (!task.id) return;
   const taskId = task.id;
+  const minhaVez = ++_cargaComentariosSeq;
   const comentarios = await buscarComentariosDoBackend(taskId);
   // `null` = não deu pra perguntar (ver buscarComentariosDoBackend). NUNCA
   // sobrescreve o que já está carregado nesse caso: era isso que fazia a
   // conversa inteira sumir da tela numa piscada de internet.
   if (comentarios === null) return;
+  // Chegou depois de uma busca mais nova já ter sido disparada? Descarta
+  // — ver comentário acima do porquê.
+  if (minhaVez !== _cargaComentariosSeq) return;
   task.comments = comentarios;
   // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa
   // (compara por ID, não por referência — ver comentário em carregarDescricao).
@@ -1225,6 +1251,10 @@ function wireExcluirComentario() {
     });
   });
 
+  document.querySelectorAll(".comment-edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => iniciarEdicaoComentario(btn.dataset.commentId));
+  });
+
   const EMOJIS_REACAO = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
   document.querySelectorAll(".comment-react-btn").forEach(btn => {
     btn.addEventListener("click", e => {
@@ -1244,6 +1274,56 @@ function wireExcluirComentario() {
       }
       picker.hidden = !picker.hidden;
     });
+  });
+}
+
+/**
+ * Edita um comentário nosso — igual o Runrun.it tem. Troca o balão pra
+ * um campo editável na hora (sem sair da conversa), com Salvar/Cancelar.
+ * Só existe pra comentário nosso (o botão nem aparece nos dos outros).
+ */
+function iniciarEdicaoComentario(commentId) {
+  const bolha = document.querySelector(`.comment-bubble[data-comment-id="${CSS.escape(commentId)}"]`);
+  const task = tasks[detailIdx];
+  const comentario = task && (task.comments || []).find(c => String(c.id) === String(commentId));
+  const textEl = bolha && bolha.querySelector(".comment-text");
+  if (!textEl || !comentario) return;
+
+  const original = textEl.innerHTML;
+  const cancelar = () => { textEl.innerHTML = original; };
+
+  textEl.innerHTML = `
+    <div class="comment-edit-form">
+      <input type="text" class="comment-edit-input" value="${escaparHTML(comentario.texto)}">
+      <div class="comment-edit-acoes">
+        <button type="button" class="comment-edit-cancelar">Cancelar</button>
+        <button type="button" class="comment-edit-salvar">Salvar</button>
+      </div>
+    </div>
+  `;
+  const input = textEl.querySelector(".comment-edit-input");
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+
+  const salvar = async () => {
+    const novoTexto = input.value.trim();
+    if (!novoTexto || novoTexto === comentario.texto) { cancelar(); return; }
+    textEl.innerHTML = `<p class="bee-vazio" style="padding:0;text-align:left;">Salvando...</p>`;
+    const ok = await editarComentarioNoBackend(commentId, novoTexto);
+    if (ok) {
+      comentario.texto = novoTexto;
+      recarregarThreadAtiva();
+    } else {
+      textEl.innerHTML = original;
+      mostrarToast("Não consegui salvar a edição agora. Tenta de novo.", "erro");
+    }
+  };
+
+  textEl.querySelector(".comment-edit-cancelar").addEventListener("click", cancelar);
+  textEl.querySelector(".comment-edit-salvar").addEventListener("click", salvar);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); salvar(); }
+    if (e.key === "Escape") cancelar();
   });
 }
 

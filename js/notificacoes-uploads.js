@@ -107,8 +107,8 @@ document.addEventListener("visibilitychange", () => {
 });
 
 async function renderNotificacoesUpload(task) {
-  const thread = document.getElementById("commentsThread");
-  if (!thread || !task.id) return;
+  const avisos = document.getElementById("beeInlineAvisos");
+  if (!avisos || !task.id) return;
 
   const resultado = await chamarBackend({ acao: "buscarUploadsRecentesDoCard", taskId: task.id, cliente: task.client });
   if (caiuARede(resultado)) return; // não chegou: deixa a tela como está
@@ -179,8 +179,7 @@ async function renderNotificacoesUpload(task) {
     </div>
   `;
   jaMostrando?.remove();
-  thread.insertAdjacentHTML("beforeend", `<div id="beeUploadAviso" data-chave="${escaparHTML(chaveConjunto)}">${bolhaDaBee(corpo, -1)}</div>`);
-  thread.scrollTop = thread.scrollHeight;
+  avisos.insertAdjacentHTML("beforeend", `<div id="beeUploadAviso" data-chave="${escaparHTML(chaveConjunto)}">${bolhaDaBee(corpo, -1)}</div>`);
 
   const wrap = document.getElementById("beeUploadAviso");
   wrap.querySelector('[data-upload-acao="dispensar"]').addEventListener("click", () => {

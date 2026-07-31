@@ -887,6 +887,18 @@ async function excluirComentarioNoBackend(commentId) {
   }
 }
 
+async function editarComentarioNoBackend(commentId, texto) {
+  if (!COLMEIA_API_URL || !commentId || !texto) return false;
+  try {
+    const data = await chamarBackend({ acao: "editarComentario", commentId, texto });
+    if (!data.ok) console.error("Runrun.it recusou editar o comentário:", data.error);
+    return data.ok;
+  } catch (err) {
+    console.error("Falha ao editar comentário no Runrun.it:", err);
+    return false;
+  }
+}
+
 async function enviarComentarioComAnexoNoBackend(taskId, texto, arquivo) {
   if (!COLMEIA_API_URL || !taskId || !arquivo) return false;
   try {
