@@ -1464,6 +1464,14 @@ function mostrarCardEmBranco(mensagem) {
       <p class="workflow-seq-empty">${mensagem || "Carregando..."}</p>
     </div>
   `;
+  // Garante que o pop-up esteja aberto pra essa mensagem ser vista de fato.
+  // Antes essa função só era chamada com um card já aberto e não precisava
+  // disso; hoje ela também aparece vindo do quadro (ex: logo depois de
+  // criar uma tarefa nova), quando o pop-up ainda está fechado — e aí a
+  // mensagem era escrita num painel invisível.
+  panel.classList.add("visible");
+  requestAnimationFrame(() => panel.classList.add("open"));
+  document.body.classList.add("card-aberto");
 }
 
 function closeDetail() {

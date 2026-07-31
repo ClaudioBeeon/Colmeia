@@ -385,13 +385,36 @@ function criarTarefaRunrun(dados) {
   }
   var novoId = resultado.body.id;
 
+  // ALOCAR de verdade, num segundo passo.
+  //
+  // O `user_id` mandado junto na criação acima NÃO aloca ninguém: a tarefa
+  // nascia sem responsável ("Alocados" vazio no Runrun.it), que era
+  // exatamente o problema relatado. Alocar é outra operação — e o Colmeia
+  // já tem uma que funciona todo dia em produção (`reatribuirTarefa`, usada
+  // pelo menu de trocar responsável no card), que ainda por cima tenta os
+  // dois caminhos possíveis da API. Reaproveitar ela aqui é mais seguro do
+  // que apostar num formato novo na criação.
+  var alocou = true;
+  if (responsavelId) {
+    var r = reatribuirTarefa(novoId, responsavelId);
+    alocou = !!r.ok;
+  }
+
   // Prioridade é só do Colmeia (planilha própria) — não é campo do
   // Runrun.it. Descrição vem numa segunda chamada, mesmo padrão de
   // salvarDescricao.
   if (dados.prioridade) definirPrioridade(novoId, dados.prioridade);
   if (descricaoFinal) runrunRequest('/tasks/' + novoId, 'put', { description: descricaoFinal });
 
-  return { ok: true, taskId: novoId, link: 'https://runrun.it/tasks/' + novoId };
+  // A tarefa foi criada de qualquer jeito — `alocou: false` só avisa o
+  // front-end pra ele dizer que ficou faltando escolher o responsável, em
+  // vez de deixar a pessoa descobrir isso sozinha depois.
+  return {
+    ok: true,
+    taskId: novoId,
+    alocou: alocou,
+    link: 'https://runrun.it/tasks/' + novoId
+  };
 }
 
 /**

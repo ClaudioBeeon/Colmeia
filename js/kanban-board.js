@@ -535,10 +535,40 @@ async function abrirModalNovaTarefa() {
   if (!overlay.hidden) preencherClientesNovaTarefa(clienteSelect, _projetosRunrunCache);
 }
 
+/**
+ * Monta a lista de projetos agrupada POR CLIENTE.
+ *
+ * Antes mostrava só o nome do projeto — e no Runrun.it esse nome é o do
+ * período/frente ("[AGO2026] PERFORMANCE"), que se repete igualzinho entre
+ * clientes diferentes. Na prática dava uma lista de nomes repetidos sem
+ * dizer de quem era nenhum. Agora cada cliente vira um grupo (<optgroup>,
+ * o cabeçalho cinza que o navegador desenha sozinho) com os projetos dele
+ * embaixo, e a ordem é alfabética por cliente.
+ */
 function preencherClientesNovaTarefa(select, projetos) {
-  const ordenados = projetos.slice().sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-  select.innerHTML = `<option value="">Escolha o cliente...</option>` +
-    ordenados.map(p => `<option value="${p.id}">${escaparHTML(p.nome)}</option>`).join("");
+  const porCliente = new Map();
+  projetos.forEach(p => {
+    const cliente = p.cliente || "Sem cliente";
+    if (!porCliente.has(cliente)) porCliente.set(cliente, []);
+    porCliente.get(cliente).push(p);
+  });
+
+  const clientesOrdenados = [...porCliente.keys()].sort((a, b) => {
+    // "Sem cliente" sempre por último, o resto em ordem alfabética.
+    if (a === "Sem cliente") return 1;
+    if (b === "Sem cliente") return -1;
+    return a.localeCompare(b, "pt-BR");
+  });
+
+  select.innerHTML = `<option value="">Escolha o cliente e o projeto...</option>` +
+    clientesOrdenados.map(cliente => {
+      const opcoes = porCliente.get(cliente)
+        .slice()
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+        .map(p => `<option value="${p.id}">${escaparHTML(p.nome)}</option>`)
+        .join("");
+      return `<optgroup label="${escaparHTML(cliente)}">${opcoes}</optgroup>`;
+    }).join("");
 }
 
 function fecharModalNovaTarefa() {
@@ -586,8 +616,23 @@ async function criarTarefaViaModal() {
   }
 
   fecharModalNovaTarefa();
-  mostrarToast("Tarefa criada! Já deve aparecer no quadro em instantes.", "sucesso");
   agendarAtualizacaoKanban();
+
+  // `alocou: false` = a tarefa foi criada, mas o Runrun.it não aceitou pôr
+  // o responsável (ver criarTarefaRunrun, RunrunEscrita.gs). Avisa em vez
+  // de deixar a pessoa descobrir depois que a tarefa está sem dono.
+  if (data.alocou === false) {
+    mostrarToast("Tarefa criada, mas não consegui alocar o responsável — escolhe direto no card.", "erro");
+  } else {
+    mostrarToast("Tarefa criada!", "sucesso");
+  }
+
+  // Abre a tarefa nova na hora, pra terminar de preencher o que faltar sem
+  // ter que caçar ela no quadro. Ela ainda não está em `tasks` (o quadro só
+  // vai atualizar daqui a pouco), então abrirTarefaPorId busca ela direto no
+  // Runrun.it — é o mesmo caminho já usado pelo "Abrir essa tarefa" da aba
+  // Tarefa original.
+  if (data.taskId) abrirTarefaPorId(Number(data.taskId));
 }
 
 const novaTarefaBtnEl = document.getElementById("novaTarefaBtn");

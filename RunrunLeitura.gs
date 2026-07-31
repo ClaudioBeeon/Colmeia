@@ -196,24 +196,66 @@ function buscarUsuariosRunrunComCache() {
 
 /**
  * Lista de projetos do Runrun.it (é DENTRO de um projeto que uma tarefa
- * nova é criada — ver criarTarefaRunrun, RunrunEscrita.gs). Cada projeto
- * normalmente é um cliente. Fica em cache 20 min: muda pouco (só quando
- * cadastra cliente novo no Runrun.it), e sem cache seria buscado de novo
- * toda vez que o coordenador abrisse "Nova tarefa".
+ * nova é criada — ver criarTarefaRunrun, RunrunEscrita.gs). Fica em cache
+ * 20 min: muda pouco (só quando cadastra projeto novo no Runrun.it), e sem
+ * cache seria buscado de novo toda vez que o coordenador abrisse
+ * "Nova tarefa".
+ *
+ * IMPORTANTE — projeto NÃO é cliente. O nome de um projeto no Runrun.it é
+ * o do período/frente de trabalho ("[AGO2026] PERFORMANCE"), e vários
+ * clientes diferentes têm projetos com nomes IGUAIS. A lista sozinha era
+ * impossível de usar: aparecia só "[AGO2026] PERFORMANCE" repetido, sem
+ * dizer de quem era. Por isso cada projeto sai daqui com o `cliente` junto
+ * (`nome` continua sendo só o do projeto, `rotulo` é o texto pronto pra
+ * mostrar na tela: "Cliente · Projeto").
  */
 function buscarProjetosRunrun() {
   var cache = CacheService.getScriptCache();
-  var cacheado = cache.get('projetosRunrun');
+  var cacheado = cache.get('projetosRunrunV2'); // V2: formato novo, com cliente
   if (cacheado) {
     try { return JSON.parse(cacheado); } catch (e) { /* busca de novo abaixo */ }
   }
   var projetos = runrunFetch('/projects?limit=200');
   if (!Array.isArray(projetos)) return null; // não guarda erro em cache
+
+  var nomesDeClientes = buscarClientesRunrunPorId();
   var lista = projetos.map(function (p) {
-    return { id: p.id, nome: p.name || p.title || ('Projeto ' + p.id) };
+    var nomeProjeto = p.name || p.title || ('Projeto ' + p.id);
+    // O nome do cliente pode vir junto no próprio projeto (depende da
+    // versão da API); quando não vem, procura pelo id na lista de clientes.
+    var cliente = p.client_name || (p.client && p.client.name) || nomesDeClientes[p.client_id] || '';
+    return {
+      id: p.id,
+      nome: nomeProjeto,
+      cliente: cliente,
+      rotulo: cliente ? (cliente + ' · ' + nomeProjeto) : nomeProjeto
+    };
   }).filter(function (p) { return p.id && p.nome; });
-  try { cache.put('projetosRunrun', JSON.stringify(lista), 20 * 60); } catch (e) { /* segue sem guardar */ }
+
+  try { cache.put('projetosRunrunV2', JSON.stringify(lista), 20 * 60); } catch (e) { /* segue sem guardar */ }
   return lista;
+}
+
+/**
+ * Mapa id -> nome dos clientes do Runrun.it. Serve pra dizer de QUEM é cada
+ * projeto na hora de criar uma tarefa (ver buscarProjetosRunrun). Cliente
+ * cadastrado muda raramente, então fica 6h em cache, igual à lista de
+ * usuários.
+ */
+function buscarClientesRunrunPorId() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get('clientesRunrunPorId');
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* busca de novo abaixo */ }
+  }
+  var clientes = runrunFetch('/clients?limit=200');
+  var mapa = {};
+  if (!Array.isArray(clientes)) return mapa; // não guarda erro em cache
+  clientes.forEach(function (c) {
+    if (c && c.id) mapa[c.id] = c.name || c.title || '';
+  });
+  try { cache.put('clientesRunrunPorId', JSON.stringify(mapa), 6 * 60 * 60); } catch (e) { /* segue */ }
+  return mapa;
 }
 
 /**
