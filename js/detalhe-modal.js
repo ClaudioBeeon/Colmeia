@@ -807,20 +807,19 @@ function renderDetail() {
 
     <div class="chat-panel" id="chatPanel" hidden>
       <div class="chat-panel-header">
+        <!-- Os dois chats ficam AQUI em cima, na linha do nome da tarefa,
+             e em tamanho de gente: escondidos junto das abas eles eram
+             pequenos demais pra alguém perceber que a Bee existe. -->
+        <div class="chat-troca">
+          <button type="button" class="chat-troca-btn active" id="chatIconeComentarios" title="Comentários da tarefa (vão pro Runrun.it)">${chatIcon}</button>
+          ${task.id ? `<button type="button" class="chat-troca-btn" id="chatIconeBee" title="Falar com a Bee (fica só no Colmeia)">${beeIcon}</button>` : ""}
+        </div>
         <div class="chat-panel-title" id="chatPanelTitle">${escaparHTML(task.title)}</div>
         <button type="button" class="chat-panel-close" id="chatPanelClose" aria-label="Fechar chat">
           <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
       <div class="chat-panel-tabs">
-        <!-- Dois chats separados de propósito: o de comentários vai pro
-             Runrun.it, o da Bee fica só no Colmeia. Juntar os dois num
-             campo só é o caminho mais curto pra alguém mandar pro cliente
-             uma pergunta que era pra ela (ver js/bee.js). -->
-        <div class="chat-troca">
-          <button type="button" class="chat-troca-btn active" id="chatIconeComentarios" title="Comentários da tarefa (vão pro Runrun.it)">${chatIcon}</button>
-          ${task.id ? `<button type="button" class="chat-troca-btn" id="chatIconeBee" title="Falar com a Bee (fica só no Colmeia)">${beeIcon}</button>` : ""}
-        </div>
         <div class="chat-grupo-comentarios" id="chatGrupoComentarios">
           <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
           <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>

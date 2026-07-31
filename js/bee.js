@@ -382,6 +382,352 @@ function inserirLinhaDaBeeNaThread(task) {
   if (btn) btn.addEventListener("click", () => abrirThreadBee(tasks[detailIdx] || task));
 }
 
+// ===== A BEE SOLTA: a bolinha no canto e o painel dela =====
+//
+// Aqui ela não lê tarefa, não sabe de cliente, não tem contexto nenhum do
+// Runrun.it — é só uma especialista em design com quem dá pra pensar em
+// voz alta. A Bee que CONHECE a tarefa é a de dentro do card; essa
+// diferença está escrita na tela inicial pra não confundir.
+//
+// O painel tem DUAS telas: a inicial (atalhos + conversas recentes) e a
+// conversa. Diferente de um pop-up, ele é um item flex do .page — por
+// isso empurra o quadro pra esquerda em vez de cobrir.
+
+let beeConversaAtual = null;   // {chave, titulo, mensagens} da conversa aberta
+let beeRecentesLista = null;   // null = ainda não buscou
+let beePensandoLivre = false;
+
+// Atalhos da tela inicial. Cada um é só uma pergunta pronta — nenhum
+// deles precisa de nada novo no backend, então nenhum é um botão morto.
+const BEE_ATALHOS = [
+  {
+    icone: "✏️",
+    titulo: "Gerar prompt<br>de imagem",
+    pergunta: "Quero um prompt de imagem pro Firefly. Me pergunta o que você precisa saber (peça, clima, formato) e depois monta o prompt.",
+  },
+  {
+    icone: "🎲",
+    titulo: "Me inspirar",
+    pergunta: "Preciso de referência visual. Me pergunta sobre o que é a peça e depois me dá caminhos de busca prontos no Behance, Pinterest, Mobbin e Awwwards, com os termos certos em inglês.",
+  },
+  {
+    icone: "📐",
+    titulo: "Formatos<br>e medidas",
+    pergunta: "Me lembra os formatos e medidas certos pra essa peça. Me pergunta onde ela vai ser publicada.",
+  },
+  {
+    icone: "✍️",
+    titulo: "Revisar<br>meu texto",
+    pergunta: "Vou colar um texto de peça e quero que você revise: clareza, tamanho, e se a chamada funciona. Pode pedir o texto.",
+  },
+];
+
+function beeAbrirPainel() {
+  document.body.classList.add("bee-aberta");
+  const painel = document.getElementById("beePainel");
+  if (painel) painel.setAttribute("aria-hidden", "false");
+  if (beeRecentesLista === null) carregarRecentesDaBee();
+  beeMostrarTela("inicio");
+}
+
+function beeFecharPainel() {
+  document.body.classList.remove("bee-aberta");
+  const painel = document.getElementById("beePainel");
+  if (painel) painel.setAttribute("aria-hidden", "true");
+}
+
+function beeAlternarPainel() {
+  if (document.body.classList.contains("bee-aberta")) beeFecharPainel();
+  else beeAbrirPainel();
+}
+
+function beeMostrarTela(qual) {
+  const inicio = document.getElementById("beeTelaInicio");
+  const chat = document.getElementById("beeTelaChat");
+  if (!inicio || !chat) return;
+  inicio.hidden = qual !== "inicio";
+  chat.hidden = qual !== "chat";
+  const campo = document.getElementById(qual === "chat" ? "beeInputChat" : "beeInputInicio");
+  if (campo) campo.focus();
+}
+
+// ===== Tela inicial =====
+
+function desenharAtalhosDaBee() {
+  const grid = document.getElementById("beeGrid");
+  if (!grid) return;
+  grid.innerHTML = BEE_ATALHOS.map((a, i) => `
+    <button type="button" class="bee-card" data-atalho="${i}">
+      <span class="bee-card-ico">${a.icone}</span>
+      <span class="bee-card-nome">${a.titulo} <span class="bee-card-seta">→</span></span>
+    </button>
+  `).join("");
+  grid.querySelectorAll("[data-atalho]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const atalho = BEE_ATALHOS[Number(btn.dataset.atalho)];
+      if (atalho) beeNovaConversaCom(atalho.pergunta);
+    });
+  });
+}
+
+async function carregarRecentesDaBee() {
+  const alvo = document.getElementById("beeRecentes");
+  if (alvo) alvo.innerHTML = `<p class="bee-vazio">Carregando conversas...</p>`;
+  const data = await chamarBackend({ acao: "beeConversasLivres", designer: DESIGNER_LOGADO });
+  beeRecentesLista = (data && data.ok && data.conversas) ? data.conversas : [];
+  desenharRecentesDaBee();
+}
+
+function desenharRecentesDaBee(filtro) {
+  const alvo = document.getElementById("beeRecentes");
+  if (!alvo) return;
+  const termo = (filtro || "").trim().toLowerCase();
+  const lista = (beeRecentesLista || []).filter(c =>
+    !termo || (c.titulo + " " + c.previa).toLowerCase().indexOf(termo) !== -1
+  );
+  if (!lista.length) {
+    alvo.innerHTML = `<p class="bee-vazio">${beeRecentesLista && beeRecentesLista.length
+      ? "Nenhuma conversa com esse termo."
+      : "Nenhuma conversa ainda. Escreve aí embaixo ou escolhe um atalho."}</p>`;
+    return;
+  }
+  alvo.innerHTML = lista.map(c => `
+    <button type="button" class="bee-recente" data-chave="${escaparHTML(c.chave)}">
+      <span class="bee-avatar">${beeIcon}</span>
+      <span class="bee-recente-txt">
+        <span class="bee-recente-t">${escaparHTML(c.titulo)}</span>
+        <span class="bee-recente-s">${escaparHTML(c.previa)}</span>
+      </span>
+      <span class="bee-recente-h">${tempoRelativoCurto(c.quando)}</span>
+    </button>
+  `).join("");
+  alvo.querySelectorAll("[data-chave]").forEach(btn => {
+    btn.addEventListener("click", () => beeAbrirConversa(btn.dataset.chave));
+  });
+}
+
+// "2 h", "ontem", "3 d" — o suficiente pra situar sem ocupar espaço.
+function tempoRelativoCurto(quando) {
+  if (!quando) return "";
+  const min = Math.floor((Date.now() - Number(quando)) / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return min + " min";
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return horas + " h";
+  const dias = Math.floor(horas / 24);
+  return dias === 1 ? "ontem" : dias + " d";
+}
+
+// ===== Tela de conversa =====
+
+async function beeAbrirConversa(chave) {
+  const info = (beeRecentesLista || []).find(c => c.chave === chave);
+  beeConversaAtual = { chave, titulo: (info && info.titulo) || "Conversa", mensagens: [] };
+  beeMostrarTela("chat");
+  desenharTituloDaConversa();
+  const thread = document.getElementById("beeThread");
+  if (thread) thread.innerHTML = `<p class="bee-vazio">Abrindo...</p>`;
+
+  const data = await chamarBackend({ acao: "beeHistoricoLivre", chave, designer: DESIGNER_LOGADO });
+  // Trocou de conversa enquanto carregava? Compara pela chave.
+  if (!beeConversaAtual || beeConversaAtual.chave !== chave) return;
+  beeConversaAtual.mensagens = (data && data.ok && data.conversa) ? data.conversa : [];
+  desenharConversaDaBee();
+}
+
+function beeNovaConversaCom(perguntaInicial) {
+  beeConversaAtual = { chave: null, titulo: "Nova conversa", mensagens: [] };
+  beeMostrarTela("chat");
+  desenharTituloDaConversa();
+  desenharConversaDaBee();
+  if (perguntaInicial) enviarParaBeeLivre(perguntaInicial);
+}
+
+function desenharTituloDaConversa() {
+  const el = document.getElementById("beeChatTitulo");
+  if (el) el.textContent = (beeConversaAtual && beeConversaAtual.titulo) || "Conversa";
+}
+
+function desenharConversaDaBee() {
+  const thread = document.getElementById("beeThread");
+  if (!thread) return;
+  const mensagens = (beeConversaAtual && beeConversaAtual.mensagens) || [];
+
+  if (!mensagens.length && !beePensandoLivre) {
+    const primeiroNome = (DESIGNER_LOGADO || "").split(" ")[0];
+    thread.innerHTML = `
+      <div class="comment-bubble bee-bubble">
+        <span class="bee-avatar">${beeIcon}</span>
+        <div class="comment-body">
+          <div class="comment-meta"><span class="comment-author">Bee</span></div>
+          <div class="comment-text">Oi${primeiroNome ? ", " + escaparHTML(primeiroNome) : ""}. Manda a pergunta.</div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  thread.innerHTML = mensagens.map(m => m.autor === "bee"
+    ? `<div class="comment-bubble bee-bubble">
+         <span class="bee-avatar">${beeIcon}</span>
+         <div class="comment-body">
+           <div class="comment-meta"><span class="comment-author">Bee</span></div>
+           <div class="comment-text">${formatarFalaDaBee(m.texto)}</div>
+         </div>
+       </div>`
+    : `<div class="comment-bubble mine">
+         <div class="comment-body">
+           <div class="comment-meta"><span class="comment-author">Você</span></div>
+           <div class="comment-text">${linkifyTexto(escaparHTML(m.texto))}</div>
+         </div>
+       </div>`
+  ).join("");
+
+  if (beePensandoLivre) {
+    thread.insertAdjacentHTML("beforeend", `<p class="bee-vazio">A Bee está pensando...</p>`);
+  }
+  // Os botões de copiar do bloco do Firefly são recriados a cada
+  // redesenho (o innerHTML acima troca todos os elementos), então
+  // precisam ser religados aqui.
+  thread.querySelectorAll("[data-copiar]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(btn.dataset.copiar)
+        .then(() => mostrarToast("Prompt copiado."))
+        .catch(() => mostrarToast("Não consegui copiar. Selecione o texto e copie na mão.", "erro"));
+    });
+  });
+  thread.scrollTop = thread.scrollHeight;
+}
+
+async function enviarParaBeeLivre(textoDireto) {
+  const campoChat = document.getElementById("beeInputChat");
+  const campoInicio = document.getElementById("beeInputInicio");
+  const texto = (textoDireto || (campoChat && !document.getElementById("beeTelaChat").hidden
+    ? campoChat.value
+    : (campoInicio ? campoInicio.value : ""))).trim();
+  if (!texto || beePensandoLivre) return;
+  if (campoChat) campoChat.value = "";
+  if (campoInicio) campoInicio.value = "";
+
+  // Escreveu direto na tela inicial: começa uma conversa nova.
+  if (!beeConversaAtual) {
+    beeConversaAtual = { chave: null, titulo: "Nova conversa", mensagens: [] };
+    beeMostrarTela("chat");
+    desenharTituloDaConversa();
+  }
+
+  beeConversaAtual.mensagens.push({ autor: "designer", texto, quando: Date.now() });
+  beePensandoLivre = true;
+  desenharConversaDaBee();
+
+  const chaveNaHoraDoEnvio = beeConversaAtual.chave;
+  const data = await chamarBackend({
+    acao: "beeConversarLivre",
+    pergunta: texto,
+    designer: DESIGNER_LOGADO,
+    chave: chaveNaHoraDoEnvio,
+  });
+  beePensandoLivre = false;
+
+  // Trocou de conversa enquanto ela pensava? A resposta já foi salva no
+  // backend, então não se perde — só não redesenha por cima da outra.
+  const aindaNaMesma = beeConversaAtual && beeConversaAtual.chave === chaveNaHoraDoEnvio;
+
+  if (!data || !data.ok) {
+    if (aindaNaMesma) {
+      // Tira a pergunta da lista: ela não virou conversa de verdade, e
+      // deixar ali daria a impressão de que a Bee ignorou.
+      const lista = beeConversaAtual.mensagens;
+      if (lista.length && lista[lista.length - 1].autor === "designer") lista.pop();
+      desenharConversaDaBee();
+      const campo = document.getElementById("beeInputChat");
+      if (campo && !campo.value.trim()) campo.value = texto; // devolve o que foi escrito
+    }
+    mostrarToast((data && data.error) || "A Bee não conseguiu responder agora.", "erro");
+    return;
+  }
+
+  if (!aindaNaMesma) return;
+  beeConversaAtual.chave = data.chave || beeConversaAtual.chave;
+  beeConversaAtual.titulo = data.titulo || beeConversaAtual.titulo;
+  beeConversaAtual.mensagens = data.conversa || beeConversaAtual.mensagens;
+  desenharTituloDaConversa();
+  desenharConversaDaBee();
+  carregarRecentesDaBee(); // a lista de recentes mudou (conversa nova ou hora nova)
+}
+
+function ligarJanelaDaBee() {
+  const fab = document.getElementById("beeFabBtn");
+  if (fab) {
+    fab.innerHTML = beeIcon;
+    fab.addEventListener("click", beeAlternarPainel);
+  }
+  const avatar = document.getElementById("beeAvatarGrande");
+  if (avatar) avatar.innerHTML = beeIcon;
+
+  ["beeFechar", "beeFecharChat"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("click", beeFecharPainel);
+  });
+
+  const voltar = document.getElementById("beeVoltar");
+  if (voltar) voltar.addEventListener("click", () => { beeConversaAtual = null; beeMostrarTela("inicio"); });
+
+  const novo = document.getElementById("beeNovoChat");
+  if (novo) novo.addEventListener("click", () => beeNovaConversaCom(null));
+
+  [["beeEnviarInicio", "beeInputInicio"], ["beeEnviarChat", "beeInputChat"]].forEach(([botao, campo]) => {
+    const b = document.getElementById(botao);
+    if (b) b.addEventListener("click", () => enviarParaBeeLivre());
+    const c = document.getElementById(campo);
+    if (c) c.addEventListener("keydown", e => { if (e.key === "Enter") enviarParaBeeLivre(); });
+  });
+
+  const busca = document.getElementById("beeBusca");
+  if (busca) busca.addEventListener("input", () => desenharRecentesDaBee(busca.value));
+
+  desenharAtalhosDaBee();
+}
+
+/**
+ * Manda a Bee ler a tarefa em segundo plano, sem trocar de chat. O
+ * resultado fica guardado aqui e no cache do backend (por conteúdo:
+ * enquanto ninguém escrever nada novo, não gera outro pedido à IA).
+ */
+async function precarregarBee(task) {
+  if (!task || !task.id) return;
+  if (beeResumos.has(task.id) || beeCarregando.has(task.id)) return;
+  await carregarBeeDaTarefa(task);
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return;
+  if (chatThreadAtivo === "bee") desenharThreadBee(task);
+  else inserirLinhaDaBeeNaThread(task);
+}
+
+/**
+ * A linha fininha que aparece no FIM da conversa de comentários,
+ * apontando pro chat da Bee. Ela existe pra não perder o "está tudo
+ * ali": o resumo mora no chat dela, mas quem está lendo os comentários
+ * vê que ele existe e chega lá num clique — sem repetir o texto em dois
+ * lugares. Só aparece quando ela realmente tem algo resumido.
+ */
+function inserirLinhaDaBeeNaThread(task) {
+  const thread = document.getElementById("commentsThread");
+  if (!thread || !task || !task.id) return;
+  const resumo = beeResumos.get(task.id);
+  const itens = resumo && resumo.itens;
+  if (!itens || !itens.length) return;
+  if (thread.querySelector(".bee-linha")) return;
+
+  thread.insertAdjacentHTML("beforeend", `
+    <button type="button" class="bee-linha" id="beeLinhaAtalho">
+      <span class="bee-linha-icone">${beeIcon}</span>
+      <span>Bee resumiu o que foi pedido — ${itens.length} ${itens.length === 1 ? "item" : "itens"}</span>
+      <span class="bee-linha-abrir">abrir</span>
+    </button>
+  `);
+  const btn = document.getElementById("beeLinhaAtalho");
+  if (btn) btn.addEventListener("click", () => abrirThreadBee(tasks[detailIdx] || task));
+}
+
 // ===== A BEE SOLTA: a bolinha no canto da tela =====
 //
 // Aqui ela não lê tarefa, não sabe de cliente, não tem contexto nenhum do

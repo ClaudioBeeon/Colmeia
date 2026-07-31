@@ -178,9 +178,11 @@ function handleRequest(e, method) {
       } else if (body.acao === 'beeConversar') {
         output = beeConversar(body.taskId, body.pergunta, body.idOriginal, body.designer);
       } else if (body.acao === 'beeConversarLivre') {
-        output = beeConversarLivre(body.pergunta, body.designer);
+        output = beeConversarLivre(body.pergunta, body.designer, body.chave);
+      } else if (body.acao === 'beeConversasLivres') {
+        output = beeListarConversasLivres(body.designer);
       } else if (body.acao === 'beeHistoricoLivre') {
-        output = { ok: true, conversa: lerConversaBee(beeChaveLivre(body.designer)) };
+        output = { ok: true, conversa: lerConversaBee(body.chave || beeChaveLivre(body.designer)) };
       } else if (body.acao === 'beeMemoriaCliente') {
         output = beeMemoriaDoCliente(body.cliente, body.taskIds, body.forcar);
       } else if (body.acao === 'beeConferirEntrega') {

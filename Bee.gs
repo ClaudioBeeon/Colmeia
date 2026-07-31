@@ -321,13 +321,63 @@ var BEE_INSTRUCOES_LIVRE =
   '- Nunca use nome de marca, nome de artista vivo, nem pessoa real.\n' +
   '- Entregue o prompt sozinho, numa linha que começa com "FIREFLY:" e nada mais nessa linha.\n';
 
+function beePrefixoLivre(designer) {
+  return 'livre-' + String(designer || 'sem-nome').trim().toLowerCase() + '-';
+}
+
+// A chave antiga, de quando existia UMA conversa livre por pessoa. Fica
+// aqui pra conversa de antes dessa mudança não sumir da lista.
 function beeChaveLivre(designer) {
   return 'livre-' + String(designer || 'sem-nome').trim().toLowerCase();
 }
 
-function beeConversarLivre(pergunta, designer) {
+/**
+ * O título de uma conversa é a primeira coisa que a pessoa perguntou,
+ * cortada. Sai de graça e é sempre mais útil que "Conversa 3".
+ */
+function beeTituloDaConversa(mensagens) {
+  for (var i = 0; i < mensagens.length; i++) {
+    if (mensagens[i].autor === 'designer' && mensagens[i].texto) {
+      var t = String(mensagens[i].texto).trim();
+      return t.length > 48 ? t.substring(0, 47) + '…' : t;
+    }
+  }
+  return 'Conversa';
+}
+
+/**
+ * Lista as conversas livres de uma pessoa, da mais recente pra mais
+ * antiga — é o que alimenta "Conversas recentes" na tela inicial da Bee.
+ */
+function beeListarConversasLivres(designer) {
+  var sheet = getBeeChatSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var prefixo = beePrefixoLivre(designer);
+  var antiga = beeChaveLivre(designer);
+  var lista = [];
+  for (var i = 1; i < linhas.length; i++) {
+    var chave = String(linhas[i][0]);
+    if (chave.indexOf(prefixo) !== 0 && chave !== antiga) continue;
+    var mensagens = [];
+    try { mensagens = JSON.parse(linhas[i][1] || '[]'); } catch (e) { mensagens = []; }
+    if (!mensagens.length) continue;
+    var ultima = mensagens[mensagens.length - 1];
+    lista.push({
+      chave: chave,
+      titulo: linhas[i][4] || beeTituloDaConversa(mensagens),
+      previa: String((ultima && ultima.texto) || '').substring(0, 70),
+      quando: Number(linhas[i][3]) || 0
+    });
+  }
+  lista.sort(function (a, b) { return b.quando - a.quando; });
+  return { ok: true, conversas: lista };
+}
+
+function beeConversarLivre(pergunta, designer, chaveConversa) {
   if (!pergunta || !String(pergunta).trim()) return { ok: false, error: 'Escreve a pergunta.' };
-  var chave = beeChaveLivre(designer);
+  // Sem chave = conversa nova. O carimbo de hora no nome garante que
+  // cada "novo chat" vira uma linha própria na planilha.
+  var chave = chaveConversa || (beePrefixoLivre(designer) + new Date().getTime());
   var conversa = lerConversaBee(chave);
   var recentes = conversa.slice(-BEE_MAX_MENSAGENS_CONTEXTO);
   var historico = recentes.map(function (m) {
@@ -345,9 +395,9 @@ function beeConversarLivre(pergunta, designer) {
   var agora = new Date().getTime();
   conversa.push({ autor: 'designer', quem: designer || '', texto: String(pergunta).trim(), quando: agora });
   conversa.push({ autor: 'bee', texto: resultado.texto.trim(), quando: agora + 1 });
-  salvarConversaBee(chave, conversa);
+  salvarConversaBee(chave, conversa, beeTituloDaConversa(conversa));
 
-  return { ok: true, resposta: resultado.texto.trim(), conversa: conversa };
+  return { ok: true, resposta: resultado.texto.trim(), conversa: conversa, chave: chave, titulo: beeTituloDaConversa(conversa) };
 }
 
 // ============ 4) A MEMÓRIA DO CLIENTE ============
@@ -547,7 +597,7 @@ function getBeeChatSheet() {
   var sheet = ss.getSheetByName('BeeChat');
   if (!sheet) {
     sheet = ss.insertSheet('BeeChat');
-    sheet.getRange('A1:D1').setValues([['task_id', 'conversa_json', 'entregue_em', 'atualizado_em']]);
+    sheet.getRange('A1:E1').setValues([['task_id', 'conversa_json', 'entregue_em', 'atualizado_em', 'titulo']]);
   }
   return sheet;
 }
@@ -572,7 +622,7 @@ function lerConversaBee(taskId) {
   }
 }
 
-function salvarConversaBee(taskId, mensagens) {
+function salvarConversaBee(taskId, mensagens, titulo) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
@@ -591,8 +641,9 @@ function salvarConversaBee(taskId, mensagens) {
     if (linha) {
       sheet.getRange(linha.indice, 2).setValue(texto);
       sheet.getRange(linha.indice, 4).setValue(agora);
+      if (titulo) sheet.getRange(linha.indice, 5).setValue(titulo);
     } else {
-      sheet.appendRow([String(taskId), texto, '', agora]);
+      sheet.appendRow([String(taskId), texto, '', agora, titulo || '']);
     }
     return { ok: true };
   } finally {

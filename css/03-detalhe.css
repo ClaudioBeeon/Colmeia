@@ -696,7 +696,7 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
-.chat-panel-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-panel-title { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-panel-close {
   width: 28px; height: 28px; border-radius: 8px; border: none;
   background: var(--page-bg); color: var(--text-secondary);

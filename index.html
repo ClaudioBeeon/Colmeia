@@ -13,11 +13,11 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-07-30c">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-30c">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-30c">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-30c">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-30c">
+<link rel="stylesheet" href="css/01-base.css?v=2026-07-31a">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31a">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31a">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31a">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31a">
 </head>
 <body>
 
@@ -417,45 +417,84 @@
        tarefa é a do painel de comentários, dentro do card. -->
   <button type="button" class="bee-fab" id="beeFabBtn" aria-label="Falar com a Bee" title="Falar com a Bee"></button>
 
-  <div class="bee-janela" id="beeJanela" hidden>
-    <div class="bee-janela-topo">
-      <span class="bee-janela-titulo"><span class="bee-janela-icone" id="beeJanelaIcone"></span> Bee</span>
-      <span class="bee-janela-sub">especialista em design · não lê suas tarefas</span>
-      <button type="button" class="bee-janela-fechar" id="beeJanelaFechar" aria-label="Fechar">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      </button>
-    </div>
-    <div class="bee-janela-thread" id="beeJanelaThread"></div>
-    <div class="bee-janela-campo">
-      <input type="text" id="beeJanelaInput" placeholder="Pergunta qualquer coisa de design...">
-      <button type="button" class="comment-send-btn" id="beeJanelaEnviar" aria-label="Enviar">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-    </div>
-  </div>
+  <!-- O painel é um item flex do .page (irmão da sidebar e do .main), não
+       um pop-up flutuante: é isso que faz ele EMPURRAR o quadro pra
+       esquerda em vez de cobrir. Fechado, ele fica com margem negativa
+       do próprio tamanho e some sem ocupar espaço nenhum. -->
+  <aside class="bee-painel" id="beePainel" aria-hidden="true">
+
+    <section class="bee-tela" id="beeTelaInicio">
+      <div class="bee-inicio-rolar">
+        <div class="bee-inicio-topo">
+          <span class="bee-avatar-grande" id="beeAvatarGrande"></span>
+          <button type="button" class="bee-x" id="beeFechar" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <h2 class="bee-h">Pergunta<br>o que quiser</h2>
+        <p class="bee-h-sub">Aqui eu não vejo suas tarefas — pra isso, abre o card e fala comigo por lá.</p>
+        <div class="bee-busca">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="text" id="beeBusca" placeholder="Buscar nas suas conversas...">
+        </div>
+        <div class="bee-grid" id="beeGrid"></div>
+        <div class="bee-rec-topo">
+          <b>Conversas recentes</b>
+          <button type="button" id="beeNovoChat">+ Novo chat</button>
+        </div>
+        <div class="bee-recentes" id="beeRecentes"></div>
+      </div>
+      <div class="bee-campo">
+        <input type="text" id="beeInputInicio" placeholder="Escreva sua mensagem...">
+        <button type="button" class="bee-enviar" id="beeEnviarInicio" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <section class="bee-tela" id="beeTelaChat" hidden>
+      <div class="bee-chat-topo">
+        <button type="button" class="bee-x" id="beeVoltar" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="bee-chat-titulo" id="beeChatTitulo">Conversa</span>
+        <button type="button" class="bee-x" id="beeFecharChat" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="bee-thread" id="beeThread"></div>
+      <div class="bee-campo">
+        <input type="text" id="beeInputChat" placeholder="Escreva sua mensagem...">
+        <button type="button" class="bee-enviar" id="beeEnviarChat" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </section>
+
+  </aside>
 </div>
 
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-07-30c"></script>
-<script src="js/fila-offline.js?v=2026-07-30c"></script>
-<script src="js/notificacoes-uploads.js?v=2026-07-30c"></script>
-<script src="js/pessoas-fotos.js?v=2026-07-30c"></script>
-<script src="js/kanban-polling.js?v=2026-07-30c"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-07-30c"></script>
-<script src="js/regras-briefing.js?v=2026-07-30c"></script>
-<script src="js/kanban-board.js?v=2026-07-30c"></script>
-<script src="js/clientes-hub.js?v=2026-07-30c"></script>
-<script src="js/chat-comentarios.js?v=2026-07-30c"></script>
-<script src="js/detalhe-modal.js?v=2026-07-30c"></script>
-<script src="js/detalhe-cardmae.js?v=2026-07-30c"></script>
-<script src="js/detalhe-alteracao.js?v=2026-07-30c"></script>
-<script src="js/bee.js?v=2026-07-30c"></script>
-<script src="js/paginas-designers.js?v=2026-07-30c"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-07-30c"></script>
-<script src="js/pagina-repasse.js?v=2026-07-30c"></script>
-<script src="js/notificacoes-avisos.js?v=2026-07-30c"></script>
-<script src="js/login-boot.js?v=2026-07-30c"></script>
+<script src="js/config.js?v=2026-07-31a"></script>
+<script src="js/fila-offline.js?v=2026-07-31a"></script>
+<script src="js/notificacoes-uploads.js?v=2026-07-31a"></script>
+<script src="js/pessoas-fotos.js?v=2026-07-31a"></script>
+<script src="js/kanban-polling.js?v=2026-07-31a"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-07-31a"></script>
+<script src="js/regras-briefing.js?v=2026-07-31a"></script>
+<script src="js/kanban-board.js?v=2026-07-31a"></script>
+<script src="js/clientes-hub.js?v=2026-07-31a"></script>
+<script src="js/chat-comentarios.js?v=2026-07-31a"></script>
+<script src="js/detalhe-modal.js?v=2026-07-31a"></script>
+<script src="js/detalhe-cardmae.js?v=2026-07-31a"></script>
+<script src="js/detalhe-alteracao.js?v=2026-07-31a"></script>
+<script src="js/bee.js?v=2026-07-31a"></script>
+<script src="js/paginas-designers.js?v=2026-07-31a"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-07-31a"></script>
+<script src="js/pagina-repasse.js?v=2026-07-31a"></script>
+<script src="js/notificacoes-avisos.js?v=2026-07-31a"></script>
+<script src="js/login-boot.js?v=2026-07-31a"></script>
 </body>
 </html>
