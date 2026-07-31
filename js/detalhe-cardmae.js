@@ -270,8 +270,8 @@ function mostrarPerguntaTransferirNoPill(cardMaeRaw, taskAtualId) {
   face.hidden = false;
   face.innerHTML = `
     <span class="pill-cardmae-conteudo centralizado pill-cardmae-pop">
-      <span class="pill-cardmae-icone">${reopenIcon}</span>
-      <span class="pill-cardmae-texto"><span class="bee-selo-mini" title="Sugestão da Bee">${beeIcon}</span>Transferir o card mãe também?</span>
+      <span class="pill-cardmae-icone bee-modo" title="Sugestão da Bee">${beeIcon}</span>
+      <span class="pill-cardmae-texto">Transferir o card mãe também?</span>
       <span class="pill-cardmae-acoes">
         <button type="button" id="pillCardMaeNao">Não</button>
         <button type="button" class="principal" id="pillCardMaeSim">Sim</button>

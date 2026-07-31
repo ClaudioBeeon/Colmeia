@@ -556,7 +556,12 @@
 .chat-troca-btn:hover { background: var(--page-bg); color: var(--text-primary); }
 .chat-troca-btn.active { background: var(--kanban-yellow); color: #16181D; border-color: transparent; }
 
-.chat-grupo-comentarios { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
+/* Antes tinha overflow:hidden — com 3 abas (tarefa de alteração, "Linha
+   do tempo" extra) mais o botão de "Verificar upload" na mesma linha,
+   isso cortava/empurrava a última aba por cima do botão. Com flex-wrap,
+   quando não cabe tudo numa linha só, o que sobra desce pra segunda
+   linha certinho, sem sobrepor nada. */
+.chat-grupo-comentarios { display: flex; flex-wrap: wrap; gap: 6px; row-gap: 6px; min-width: 0; }
 .chat-grupo-comentarios.escondido { display: none; }
 
 /* O campo de escrever muda de cara no chat da Bee — é o aviso mais
@@ -603,7 +608,8 @@
 
 .bee-acao {
   font-family: var(--font-body); font-size: 11.5px; font-weight: 700;
-  border: 1px solid var(--border); background: var(--card-bg); color: var(--text-primary);
+  border: none; background: var(--card-bg); color: var(--text-primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
   border-radius: 999px; padding: 5px 11px; cursor: pointer; margin-top: 8px;
   text-decoration: none; display: inline-block;
 }
@@ -683,7 +689,7 @@ body.bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
 
 .bee-painel {
   width: 500px; max-width: 60vw; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden;
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px;
+  background: var(--card-bg); border-radius: 18px;
   box-shadow: 0 18px 50px rgba(10,10,20,0.16);
   /* -520px = a largura + o gap de 18px do .page (+ folga): fechado ele
      ocupa espaço zero, sem "empurrar" nada. */
@@ -783,7 +789,7 @@ body.card-aberto .bee-painel { display: none; }
 }
 .bee-chat-topo {
   display: flex; align-items: center; gap: 10px; padding: 14px 16px;
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  flex-shrink: 0;
 }
 .bee-chat-titulo-wrap { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .bee-chat-avatar {
@@ -804,18 +810,19 @@ body.card-aberto .bee-painel { display: none; }
 
 .bee-campo {
   display: flex; align-items: center; gap: 8px; padding: 12px 16px;
-  border-top: 1px solid var(--border); flex-shrink: 0;
+  flex-shrink: 0;
   background: linear-gradient(180deg, rgba(255,214,110,0.05), transparent 60%);
 }
 .bee-campo input {
-  flex: 1; min-width: 0; height: 54px; border-radius: 999px; border: 1px solid #E9E9EC;
+  flex: 1; min-width: 0; height: 54px; border-radius: 999px; border: none;
   background: #FFFFFF; outline: none; padding: 0 20px;
   font-family: var(--font-body); font-size: 13.5px; color: #111111;
-  transition: border-color .18s ease-out, box-shadow .18s ease-out;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  transition: box-shadow .18s ease-out;
 }
 .bee-campo input::placeholder { color: #7A7A7A; }
-.bee-campo input:focus { border-color: #C9C9CE; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
-[data-theme="dark"] .bee-campo input { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); color: var(--text-primary); }
+.bee-campo input:focus { box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+[data-theme="dark"] .bee-campo input { background: rgba(255,255,255,0.06); color: var(--text-primary); box-shadow: none; }
 .bee-enviar {
   width: 44px; height: 44px; border-radius: 50%; border: none; flex-shrink: 0; cursor: pointer;
   background: #111111; color: #fff;
@@ -927,7 +934,7 @@ a.bee-recente { text-decoration: none; }
    termo de busca; os botões abrem esse termo já pesquisado em cada site. */
 .bee-inspirar { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .bee-inspirar-linha {
-  background: var(--card-bg); border: 1px solid var(--border);
+  background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,.05);
   border-radius: 10px; padding: 8px 10px;
 }
 .bee-inspirar-termo {
@@ -946,14 +953,14 @@ a.bee-recente { text-decoration: none; }
    espírito visual dos resultados da Busca Universal (.bee-recente). */
 .bee-cards { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .bee-card-resultado {
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--card-bg); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.05);
   padding: 10px 12px; text-align: left; font-family: var(--font-body);
 }
 button.bee-card-resultado-clicavel {
   width: 100%; cursor: pointer; color: var(--text-primary);
-  transition: border-color .12s var(--ease-apple), transform .12s var(--ease-apple);
+  transition: box-shadow .12s var(--ease-apple), transform .12s var(--ease-apple);
 }
-button.bee-card-resultado-clicavel:hover { border-color: var(--text-muted); transform: translateY(-1px); }
+button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09); transform: translateY(-1px); }
 .bee-card-resultado-topo { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .bee-card-resultado-titulo { font-size: 12.5px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bee-card-resultado-tag {

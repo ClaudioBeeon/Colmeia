@@ -830,11 +830,9 @@ function renderDetail() {
         </div>
         ${task.id ? `<button type="button" class="upload-check-btn" id="uploadCheckBtn" title="Verificar se subiu algum arquivo novo na pasta do card">↻ Verificar upload</button>` : ""}
       </div>
-      <div class="upload-notifs" id="uploadNotifs"></div>
       <div class="comments-thread" id="commentsThread">
         ${renderComentariosHTML(task)}
       </div>
-      <div class="repetir-comentario-prompt" id="repetirComentarioPrompt" hidden></div>
       <div class="comment-input">
         <div class="comment-mention-list" id="mentionList" hidden></div>
         <button type="button" class="comment-tool-btn" id="emojiBtn" title="Emoji" aria-label="Emoji">😊</button>

@@ -161,6 +161,11 @@
 }
 .pill-cardmae-icone.entregue { background: #2F9E44; color: #fff; }
 .pill-cardmae-icone svg { width: 12px; height: 12px; }
+/* A pergunta "Transferir o card mãe também?" é sugestão da Bee — o
+   ícone dela ocupa o lugar inteiro (não um ícone genérico + selo
+   pequeno do lado, como estava antes). */
+.pill-cardmae-icone.bee-modo { width: 30px; height: 30px; }
+.pill-cardmae-icone.bee-modo svg { width: 16px; height: 16px; }
 .pill-cardmae-texto { color: #fff; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill-cardmae-conteudo.centralizado { justify-content: center; }
 
@@ -604,11 +609,11 @@
 .comment-bubble.mine .comment-time { display: none; }
 
 .comment-text {
-  background: #FFFFFF; border: 1px solid #E9E9EC; border-radius: 20px;
+  background: #FFFFFF; border-radius: 20px;
   padding: 11px 16px; font-size: 13.5px; line-height: 1.5; color: #111111;
   text-align: left; box-shadow: 0 2px 10px rgba(0,0,0,.04);
 }
-[data-theme="dark"] .comment-text { background: #1B1A22; border-color: rgba(255,255,255,0.09); color: var(--text-primary); }
+[data-theme="dark"] .comment-text { background: #1B1A22; color: var(--text-primary); box-shadow: 0 2px 10px rgba(0,0,0,.2); }
 .comment-text a { color: var(--accent); text-decoration: underline; word-break: break-word; }
 .comment-text a:hover { text-decoration: none; }
 .mention-tag { color: var(--accent); font-weight: 700; }
@@ -626,31 +631,31 @@
 /* ===== Campo de escrever: pill + botão de enviar circular separado ===== */
 .comment-input {
   position: relative;
-  padding: 12px 18px; border-top: 1px solid var(--border);
+  padding: 12px 18px;
   display: flex; align-items: center; gap: 8px;
   background: linear-gradient(180deg, rgba(255,214,110,0.05), transparent 60%);
 }
 .comment-input input {
-  flex: 1; min-width: 0; height: 54px; border-radius: 999px; border: 1px solid #E9E9EC;
+  flex: 1; min-width: 0; height: 54px; border-radius: 999px; border: none;
   background: #FFFFFF; padding: 0 20px; font-family: var(--font-body); font-size: 13.5px;
-  color: #111111;
-  transition: border-color .18s ease-out, box-shadow .18s ease-out;
+  color: #111111; box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  transition: box-shadow .18s ease-out;
 }
 .comment-input input::placeholder { color: #7A7A7A; }
-.comment-input input:focus { outline: none; border-color: #C9C9CE; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
-[data-theme="dark"] .comment-input input { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); color: var(--text-primary); }
+.comment-input input:focus { outline: none; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+[data-theme="dark"] .comment-input input { background: rgba(255,255,255,0.06); color: var(--text-primary); box-shadow: none; }
 
 .comment-tool-btn {
   flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
-  border: 1px solid #E9E9EC; background: #FFFFFF; color: #7A7A7A;
+  border: none; background: #FFFFFF; color: #7A7A7A;
   display: flex; align-items: center; justify-content: center;
-  font-size: 17px; cursor: pointer;
+  font-size: 17px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.04);
   transition: background .18s ease-out, transform .18s ease-out;
 }
 .comment-tool-btn:hover { background: #F5F5F7; }
 .comment-tool-btn:active { transform: scale(0.92); }
 .comment-tool-btn svg { width: 18px; height: 18px; }
-[data-theme="dark"] .comment-tool-btn { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); color: var(--text-secondary); }
+[data-theme="dark"] .comment-tool-btn { background: rgba(255,255,255,0.06); color: var(--text-secondary); box-shadow: none; }
 
 .comment-send-btn {
   flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
@@ -724,7 +729,6 @@
 .chat-panel {
   display: none; flex-direction: column; flex: 0 0 30%; min-width: 280px;
   background: var(--card-bg);
-  border: 1px solid var(--border);
   border-radius: 18px;
   box-shadow: 0 20px 60px rgba(10,10,20,0.28);
   overflow: hidden;
@@ -733,7 +737,7 @@
 
 .chat-panel-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: 16px 20px; flex-shrink: 0;
 }
 .chat-panel-title { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-panel-close {
@@ -743,7 +747,7 @@
 }
 .chat-panel-close svg { width: 14px; height: 14px; }
 
-.chat-panel-tabs { display: flex; gap: 8px; padding: 14px 20px 0; flex-shrink: 0; }
+.chat-panel-tabs { display: flex; flex-wrap: wrap; row-gap: 8px; gap: 8px; padding: 14px 20px 0; flex-shrink: 0; }
 .chat-panel-tab {
   border: none; background: var(--page-bg); color: var(--text-secondary);
   font-family: var(--font-body); font-size: 12.5px; font-weight: 600;

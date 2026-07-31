@@ -371,6 +371,15 @@ async function beeReconhecerPerguntaFuncional(pergunta, contexto) {
     return { tipo: "cardmae", pergunta, cliente, resultados: (data && data.ok) ? data.resultados : [] };
   }
 
+  // "Localizar tal arte no drive", "cadê o brandbook no drive" — sem essa
+  // entrada, isso caía direto na conversa livre, que genuinamente NÃO tem
+  // acesso ao Drive (só a busca funcional tem) e só respondia "não tenho
+  // acesso" — o mesmo bug do "achar a tarefa de X" de baixo, mas pro Drive.
+  if (/\bdrive\b/.test(texto) && /\b(cad[eê]|onde|achar|acha|procura|procurar|tem|alguma|manda|link)\b/.test(texto)) {
+    const data = await chamarBackend({ acao: "beeBuscarDrive", termo: pergunta, cliente });
+    return { tipo: "arquivo", pergunta, cliente, resultados: (data && data.ok) ? data.resultados : [] };
+  }
+
   // Caso mais comum de todos, e o que faltava: "achar a tarefa de X",
   // "onde está o card de Y", "qual é a tarefa do Z" — sem essa entrada
   // genérica, qualquer pergunta assim caía direto na conversa livre, que
@@ -436,6 +445,25 @@ function renderRespostaFuncional(f) {
           <div class="bee-card-resultado-acoes">
             <a class="bee-acao principal" href="${escaparHTML(r.url)}" target="_blank" rel="noopener">Abrir link</a>
             <button type="button" class="bee-acao" data-abrir-tarefa="${Number(r.taskId)}">Abrir tarefa</button>
+          </div>
+        </div>
+      `).join("") + `</div>`;
+  }
+
+  if (f.tipo === "arquivo") {
+    if (!f.resultados.length) {
+      return `<p>Não achei nada no Drive ${f.cliente ? "do cliente " + escaparHTML(f.cliente) : ""} batendo com isso.</p>`;
+    }
+    return `<p class="bee-titulo">Achei ${f.resultados.length === 1 ? "isto" : "estes"} no Drive</p>` +
+      `<div class="bee-cards">` + f.resultados.map(a => `
+        <div class="bee-card-resultado">
+          <div class="bee-card-resultado-topo">
+            <span class="bee-card-resultado-titulo">${escaparHTML(a.nome)}</span>
+            ${a.tipo === "pasta" ? `<span class="bee-card-resultado-tag">pasta</span>` : ""}
+          </div>
+          ${a.caminho ? `<p class="bee-card-resultado-trecho">${escaparHTML(a.caminho)}</p>` : ""}
+          <div class="bee-card-resultado-acoes">
+            <a class="bee-acao principal" href="${escaparHTML(a.url)}" target="_blank" rel="noopener">Abrir</a>
           </div>
         </div>
       `).join("") + `</div>`;

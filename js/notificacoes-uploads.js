@@ -107,15 +107,15 @@ document.addEventListener("visibilitychange", () => {
 });
 
 async function renderNotificacoesUpload(task) {
-  const container = document.getElementById("uploadNotifs");
-  if (!container || !task.id) return;
+  const thread = document.getElementById("commentsThread");
+  if (!thread || !task.id) return;
 
   const resultado = await chamarBackend({ acao: "buscarUploadsRecentesDoCard", taskId: task.id, cliente: task.client });
   if (caiuARede(resultado)) return; // não chegou: deixa a tela como está
   // Compara por id, não por referência (mesmo motivo do comentário acima).
   if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return; // trocou de tarefa enquanto carregava
   if (!resultado.ok || !resultado.uploads || !resultado.pastaUrl) {
-    container.innerHTML = "";
+    document.getElementById("beeUploadAviso")?.remove();
     return;
   }
 
@@ -133,7 +133,7 @@ async function renderNotificacoesUpload(task) {
     );
 
   if (arquivosRelevantes.length === 0) {
-    container.innerHTML = "";
+    document.getElementById("beeUploadAviso")?.remove();
     return;
   }
 
@@ -148,44 +148,47 @@ async function renderNotificacoesUpload(task) {
     .join("|");
 
   if (uploadJaVisto(chaveConjunto)) {
-    container.innerHTML = "";
+    document.getElementById("beeUploadAviso")?.remove();
     return;
   }
 
-  const nomesArquivos = arquivosRelevantes.map(u => u.arquivo);
+  // Já mostrando esse MESMO conjunto de arquivos? Não redesenha de novo
+  // a cada checagem de 8s — só piscaria a tela à toa.
+  const jaMostrando = document.getElementById("beeUploadAviso");
+  if (jaMostrando && jaMostrando.dataset.chave === chaveConjunto) return;
+
+  const qtd = arquivosRelevantes.length;
   // Nome de verdade da pasta (normalmente o título da tarefa) — o
   // backend não manda mais o texto fixo "pasta do card"; se por algum
   // motivo vier vazio, cai no título da própria tarefa como último recurso.
   const nomeDaPasta = resultado.pastaNome || task.title || "a pasta do card";
-  const grupos = [{ pasta: nomeDaPasta, cliente: task.client || "", link: resultado.pastaUrl, arquivos: nomesArquivos, chave: chaveConjunto }];
+  const link = resultado.pastaUrl;
 
-  // Upload não interrompe mais com pop-up (pílula/ilha) — só aparece
-  // como aviso dentro da própria aba Comentários da tarefa
-  // (container.innerHTML abaixo). Pop-up ficou reservado só pra menção
-  // em comentário e tarefa recebida, ver pedido do Cláudio em
+  // A notificação de upload não interrompe mais com pop-up nem com uma
+  // caixinha separada — aparece como uma fala da própria Bee, dentro da
+  // conversa (mesmo balão branco dos comentários), com "Adicionar ao
+  // comentário"/"Ver" como ações dela. Pop-up (ilha) ficou reservado só
+  // pra menção em comentário e tarefa recebida, ver pedido do Cláudio em
   // 2026-07-29 na memória "barra_amarela_dynamic_island".
-  container.innerHTML = grupos.map(g => `
-    <div class="upload-notif" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}">
-      <button type="button" class="upload-notif-dismiss" data-chave="${escaparHTML(g.chave)}" aria-label="Dispensar">×</button>
-      <p class="upload-notif-text"><span class="bee-selo-mini" title="A Bee percebeu">${beeIcon}</span>Você adicionou ${g.arquivos.length} arquivo${g.arquivos.length > 1 ? "s" : ""} em <strong>${escaparHTML(g.pasta)}</strong>${g.cliente ? ` <span class="upload-notif-cliente">(${escaparHTML(g.cliente)})</span>` : ""}</p>
-      <div class="upload-notif-actions">
-        <button type="button" class="upload-notif-copy" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}" data-qtd="${g.arquivos.length}">Adicionar ao comentário</button>
-        <a href="${g.link}" target="_blank" rel="noopener" class="upload-notif-ver">Ver</a>
-      </div>
+  const corpo = `
+    <p>Você adicionou ${qtd} arquivo${qtd > 1 ? "s" : ""} em <strong>${escaparHTML(nomeDaPasta)}</strong>${task.client ? ` <span class="upload-notif-cliente">(${escaparHTML(task.client)})</span>` : ""}</p>
+    <div class="bee-pastilhas">
+      <button type="button" class="bee-acao principal" data-upload-acao="copiar">Adicionar ao comentário</button>
+      <a class="bee-acao" href="${escaparHTML(link)}" target="_blank" rel="noopener">Ver</a>
+      <button type="button" class="bee-acao" data-upload-acao="dispensar">Dispensar</button>
     </div>
-  `).join("");
+  `;
+  jaMostrando?.remove();
+  thread.insertAdjacentHTML("beforeend", `<div id="beeUploadAviso" data-chave="${escaparHTML(chaveConjunto)}">${bolhaDaBee(corpo, -1)}</div>`);
+  thread.scrollTop = thread.scrollHeight;
 
-  container.querySelectorAll(".upload-notif-copy").forEach(btn => {
-    btn.addEventListener("click", () => {
-      adicionarComentarioDeUpload(task, container, btn.dataset.link, Number(btn.dataset.qtd) || 1, btn.dataset.chave, btn);
-    });
+  const wrap = document.getElementById("beeUploadAviso");
+  wrap.querySelector('[data-upload-acao="dispensar"]').addEventListener("click", () => {
+    marcarUploadVisto(chaveConjunto);
+    wrap.remove();
   });
-  container.querySelectorAll(".upload-notif-dismiss").forEach(btn => {
-    btn.addEventListener("click", () => {
-      marcarUploadVisto(btn.dataset.chave);
-      const el = container.querySelector(`.upload-notif[data-chave="${CSS.escape(btn.dataset.chave)}"]`);
-      if (el) el.remove();
-    });
+  wrap.querySelector('[data-upload-acao="copiar"]').addEventListener("click", e => {
+    adicionarComentarioDeUpload(task, wrap, link, qtd, chaveConjunto, e.currentTarget);
   });
 }
 
@@ -196,7 +199,7 @@ async function renderNotificacoesUpload(task) {
 // tela — por isso essa função nunca depende de um elemento de botão
 // específico pra funcionar, só usa `btn` (opcional) pra dar feedback
 // visual quando ele existe.
-async function adicionarComentarioDeUpload(task, container, link, qtd, chave, btn) {
+async function adicionarComentarioDeUpload(task, wrap, link, qtd, chave, btn) {
   if (!task.id) return;
   const original = btn ? btn.textContent : null;
   // Feedback NA HORA do clique — texto "Adicionado ✓" e o sumiço da
@@ -204,10 +207,7 @@ async function adicionarComentarioDeUpload(task, container, link, qtd, chave, bt
   // esperar a ida e volta (mesmo padrão otimista do resto do app). Só
   // desfaz tudo (e avisa por toast) se o Runrun.it recusar de verdade.
   if (btn) { btn.disabled = true; btn.textContent = "Adicionado ✓"; }
-  const removerTimeout = setTimeout(() => {
-    const el = container.querySelector(`.upload-notif[data-chave="${CSS.escape(chave)}"]`);
-    if (el) el.remove();
-  }, 900);
+  const removerTimeout = setTimeout(() => { wrap?.remove(); }, 900);
 
   const texto = `${qtd > 1 ? "Arquivos adicionados" : "Arquivo adicionado"} na pasta: ${link}`;
   const ok = await enviarComentarioNoBackend(task.id, texto);
@@ -231,17 +231,26 @@ async function adicionarComentarioDeUpload(task, container, link, qtd, chave, bt
  * mesma coisa pro atendimento acompanhar).
  */
 function mostrarPromptRepetirComentario(task, texto) {
-  const el = document.getElementById("repetirComentarioPrompt");
-  if (!el) return;
-  el.hidden = false;
-  el.innerHTML = `
-    <span><span class="bee-selo-mini" title="Sugestão da Bee">${beeIcon}</span>Repetir esse comentário no card mãe?</span>
-    <button type="button" class="repetir-sim">Sim</button>
-    <button type="button" class="repetir-nao">Não</button>
-  `;
-  el.querySelector(".repetir-nao").addEventListener("click", () => { el.hidden = true; });
-  el.querySelector(".repetir-sim").addEventListener("click", async () => {
-    el.innerHTML = `<span>Enviando pro card mãe...</span>`;
+  const thread = document.getElementById("commentsThread");
+  if (!thread) return;
+
+  const redesenhar = corpoHTML => {
+    document.getElementById("beeRepetirPrompt")?.remove();
+    thread.insertAdjacentHTML("beforeend", `<div id="beeRepetirPrompt">${bolhaDaBee(corpoHTML, -1)}</div>`);
+    thread.scrollTop = thread.scrollHeight;
+    return document.getElementById("beeRepetirPrompt");
+  };
+
+  const wrap = redesenhar(`
+    <p>Repetir esse comentário no card mãe também?</p>
+    <div class="bee-pastilhas">
+      <button type="button" class="bee-acao principal" data-repetir="sim">Sim</button>
+      <button type="button" class="bee-acao" data-repetir="nao">Não</button>
+    </div>
+  `);
+  wrap.querySelector('[data-repetir="nao"]').addEventListener("click", () => wrap.remove());
+  wrap.querySelector('[data-repetir="sim"]').addEventListener("click", async () => {
+    redesenhar(`<p>Enviando pro card mãe...</p>`);
     const ok = await enviarComentarioNoBackend(task.parentTaskId, texto);
     if (ok) {
       // O comentário já foi pro Runrun.it certinho, mas a aba "Card mãe" do
@@ -254,8 +263,8 @@ function mostrarPromptRepetirComentario(task, texto) {
         recarregarThreadAtiva();
       }
     }
-    el.innerHTML = ok ? `<span>✓ Repetido no card mãe.</span>` : `<span>Não consegui enviar pro card mãe.</span>`;
-    setTimeout(() => { el.hidden = true; }, 2000);
+    redesenhar(ok ? `<p>✓ Repetido no card mãe.</p>` : `<p>Não consegui enviar pro card mãe.</p>`);
+    setTimeout(() => { document.getElementById("beeRepetirPrompt")?.remove(); }, 2200);
   });
 }
 
