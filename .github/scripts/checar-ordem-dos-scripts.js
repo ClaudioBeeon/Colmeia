@@ -40,6 +40,7 @@ const ORDEM_ESPERADA = [
   "js/paginas-designers.js",
   "js/pagina-tipos-runrun.js",
   "js/pagina-repasse.js",
+  "js/pagina-horas.js",
   "js/notificacoes-avisos.js",
   "js/login-boot.js",
 ];

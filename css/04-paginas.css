@@ -1279,3 +1279,281 @@ body.card-aberto .quick-access-panel { display: none; }
   display: none !important;
 }
 
+
+/* -------------------------------------------------------------------
+   PÁGINA "MINHAS HORAS"
+
+   Reconstrução do painel de referência aprovado pelo Cláudio. As
+   proporções vieram medidas da referência: 4 colunas (1 / 1.12 / 1.02 /
+   1.13), linha de cima com 282px e a de baixo com 251px, gap de 16px,
+   radius de 24px nos cards. A coluna 4 ocupa as duas linhas e tem o
+   próprio ritmo (card claro curto em cima, card escuro alto embaixo).
+   ------------------------------------------------------------------- */
+
+#page-horas { overflow-y: auto; }
+.hr-conteudo { padding-bottom: 24px; }
+
+/* ---- Título + barra de hoje + métricas ---- */
+.hr-titulo-linha {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 40px; margin-bottom: 22px; flex-wrap: wrap;
+}
+.hr-titulo-esq { flex: 1; min-width: 320px; }
+.hr-h1 {
+  font-family: var(--font-display); font-size: 32px; font-weight: 400;
+  letter-spacing: -.02em; margin: 0 0 18px; line-height: 1.1; color: var(--text-primary);
+}
+
+.hr-barra-wrap { display: flex; align-items: flex-end; gap: 22px; max-width: 560px; }
+.hr-barra-col { display: flex; flex-direction: column; gap: 7px; }
+.hr-barra-col.principal { flex: 1; min-width: 0; }
+.hr-barra-labels { display: flex; gap: 2px; }
+.hr-barra-labels span {
+  font-size: 10.5px; color: var(--text-secondary); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.hr-barra { display: flex; gap: 2px; height: 26px; }
+.hr-seg {
+  border-radius: 999px; display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 600; min-width: 0; overflow: hidden; white-space: nowrap;
+}
+.hr-seg.escuro { background: var(--text-primary); color: var(--card-bg); }
+.hr-seg.amarelo { background: var(--kanban-yellow); color: #16181D; }
+.hr-seg.hachura {
+  color: var(--text-secondary); justify-content: flex-start; padding-left: 12px;
+  background: repeating-linear-gradient(114deg, var(--border) 0 1.5px, var(--card-bg) 1.5px 7px);
+}
+.hr-seg.branca { background: var(--card-bg); color: var(--text-primary); box-shadow: var(--shadow-card); padding: 0 20px; }
+
+.hr-metricas { display: flex; gap: 32px; align-items: flex-start; flex-shrink: 0; }
+.hr-metrica b {
+  display: block; font-family: var(--font-display); font-size: 38px; font-weight: 400;
+  letter-spacing: -.03em; line-height: 1; margin-bottom: 6px; color: var(--text-primary);
+}
+.hr-metrica span { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-secondary); }
+.hr-metrica svg { width: 13px; height: 13px; opacity: .55; }
+
+/* ---- Grade ---- */
+.hr-grade {
+  display: grid;
+  grid-template-columns: 1fr 1.12fr 1.02fr 1.13fr;
+  grid-template-rows: 282px 251px;
+  gap: 16px;
+}
+.hr-card {
+  background: var(--card-bg); border-radius: 24px; box-shadow: var(--shadow-card);
+  padding: 20px; min-width: 0; overflow: hidden;
+}
+.hr-card-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.hr-card-titulo { font-size: 16px; font-weight: 500; letter-spacing: -.01em; color: var(--text-primary); }
+.hr-btn-canto {
+  width: 30px; height: 30px; border-radius: 50%; border: none; flex-shrink: 0;
+  background: var(--page-bg); display: grid; place-items: center;
+  cursor: pointer; color: var(--text-primary);
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.hr-btn-canto:hover { background: var(--border); }
+.hr-btn-canto svg { width: 14px; height: 14px; }
+.hr-vazio { font-size: 12px; color: var(--text-muted); margin: 0; }
+
+/* Card 1 — foto */
+.hr-foto { grid-column: 1; grid-row: 1; padding: 0; position: relative; background: var(--page-bg); }
+.hr-foto-img {
+  position: absolute; inset: 0; background-size: cover; background-position: center top;
+  display: grid; place-items: center;
+}
+.hr-foto-img.sem-foto {
+  font-family: var(--font-display); font-size: 42px; font-weight: 600; color: var(--text-muted);
+}
+.hr-foto-sombra {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 55%;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.45) 100%);
+}
+.hr-foto-info { position: absolute; left: 20px; bottom: 18px; color: #FFFFFF; }
+.hr-foto-info b { display: block; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+.hr-foto-info span { font-size: 11.5px; opacity: .85; }
+.hr-foto-valor {
+  position: absolute; right: 16px; bottom: 18px;
+  background: var(--card-bg); color: var(--text-primary); border-radius: 999px;
+  padding: 7px 15px; font-size: 12.5px; font-weight: 600;
+}
+
+/* Card 2 — progresso (timesheet da semana) */
+.hr-prog { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; }
+.hr-prog-num { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.hr-prog-num b { font-family: var(--font-display); font-size: 26px; font-weight: 500; letter-spacing: -.02em; }
+.hr-prog-num span { font-size: 11px; color: var(--text-secondary); line-height: 1.25; max-width: 90px; }
+.hr-prog-graf { display: flex; align-items: flex-end; flex: 1; margin-top: 10px; min-height: 0; }
+.hr-prog-dia {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  height: 100%; gap: 9px; position: relative; border: none; background: none;
+  cursor: pointer; font-family: inherit; padding: 0;
+}
+.hr-prog-trilho { width: 5px; flex: 1; display: flex; align-items: flex-end; min-height: 0; }
+.hr-prog-barra { width: 100%; border-radius: 999px; background: var(--text-primary); }
+.hr-prog-barra.hoje { background: var(--kanban-yellow); width: 9px; margin-left: -2px; }
+.hr-prog-barra.travado {
+  background: repeating-linear-gradient(135deg, var(--danger-soft) 0 3px, transparent 3px 6px);
+  outline: 1.5px dashed var(--danger); outline-offset: -1px;
+}
+.hr-prog-rot { font-size: 10.5px; color: var(--text-muted); }
+.hr-prog-rot.hoje { color: var(--text-primary); font-weight: 700; }
+.hr-prog-tip {
+  position: absolute; bottom: calc(100% - 14px); left: 50%; transform: translateX(-50%);
+  background: var(--text-primary); color: var(--card-bg); font-size: 10px; font-weight: 600;
+  padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+  opacity: 0; transition: opacity var(--dur-fast) var(--ease-apple); pointer-events: none;
+}
+.hr-prog-dia:hover .hr-prog-tip { opacity: 1; }
+
+/* Card 3 — cronômetro */
+.hr-track { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; }
+.hr-anel { position: relative; width: 132px; height: 132px; margin: 2px auto 0; }
+.hr-anel-txt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.hr-anel-horas { font-family: var(--font-display); font-size: 28px; font-weight: 500; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.hr-anel-label { font-size: 10.5px; color: var(--text-secondary); margin-top: 5px; text-align: center; line-height: 1.3; }
+.hr-track-btns { display: flex; align-items: center; justify-content: center; margin-top: auto; padding-top: 12px; position: relative; }
+.hr-track-btn {
+  width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent;
+  display: grid; place-items: center; cursor: pointer; color: var(--text-primary);
+}
+.hr-track-btn:disabled { opacity: .3; cursor: default; }
+.hr-track-btn svg { width: 15px; height: 15px; }
+.hr-track-btn-escuro {
+  position: absolute; right: 0; bottom: 0;
+  width: 38px; height: 38px; border-radius: 13px; border: none;
+  background: var(--text-primary); color: var(--card-bg);
+  display: grid; place-items: center; cursor: pointer;
+}
+.hr-track-btn-escuro svg { width: 16px; height: 16px; }
+
+/* Coluna 4 — card claro curto + card escuro alto */
+.hr-col4 { grid-column: 4; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.hr-semana { flex-shrink: 0; }
+.hr-semana-pct { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hr-semana-rots { display: flex; gap: 3px; margin-bottom: 6px; }
+.hr-semana-rots span { flex: 1; font-size: 9.5px; color: var(--text-muted); text-align: center; }
+.hr-semana-rots span.hoje { color: var(--text-primary); font-weight: 700; }
+.hr-semana-barra { display: flex; gap: 3px; height: 30px; }
+.hr-semana-seg {
+  flex: 1; border-radius: 999px; background: var(--page-bg);
+  display: grid; place-items: center; font-size: 9.5px; font-weight: 600;
+  color: var(--text-muted); overflow: hidden;
+}
+.hr-semana-seg.cheia { background: var(--text-primary); color: var(--card-bg); }
+.hr-semana-seg.hoje { background: var(--kanban-yellow); color: #16181D; }
+
+/* Card escuro — histórico de tarefas entregues (sem checklist, sem contador) */
+.hr-escuro {
+  flex: 1; background: #16181D; color: #FFFFFF; border-radius: 24px;
+  padding: 20px 18px; box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; min-height: 0;
+}
+[data-theme="dark"] .hr-escuro { background: #0E0C14; }
+.hr-esc-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-shrink: 0; }
+.hr-esc-titulo { font-size: 15px; font-weight: 500; }
+.hr-esc-lista { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
+.hr-esc-lista::-webkit-scrollbar { width: 4px; }
+.hr-esc-lista::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 999px; }
+.hr-esc-vazio { font-size: 12px; color: rgba(255,255,255,.45); margin: 0; }
+.hr-esc-item {
+  display: flex; align-items: center; gap: 11px; padding: 8px 6px;
+  border: none; background: none; width: 100%; text-align: left;
+  cursor: pointer; font-family: inherit; border-radius: 10px;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.hr-esc-item:hover { background: rgba(255,255,255,.06); }
+.hr-esc-ic {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  background: rgba(255,255,255,.08); display: grid; place-items: center; color: rgba(255,255,255,.75);
+}
+.hr-esc-ic svg { width: 14px; height: 14px; }
+.hr-esc-txt { flex: 1; min-width: 0; }
+.hr-esc-nome { display: block; font-size: 12px; color: #FFFFFF; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hr-esc-sub { display: block; font-size: 10px; color: rgba(255,255,255,.42); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Card 5 — lista sanfona (comparativo) */
+.hr-lista { grid-column: 1; grid-row: 2; padding: 6px 20px; display: flex; flex-direction: column; }
+.hr-lis-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 0; cursor: pointer; }
+.hr-lis-linha + .hr-lis-linha, .hr-lis-corpo + .hr-lis-linha { border-top: 1px solid var(--border); }
+.hr-lis-nome { font-size: 12.5px; color: var(--text-primary); }
+.hr-lis-seta { color: var(--text-muted); flex-shrink: 0; display: grid; place-items: center; }
+.hr-lis-seta svg { width: 13px; height: 13px; }
+.hr-lis-corpo { display: flex; align-items: center; gap: 11px; padding: 2px 0 13px; }
+.hr-lis-thumb { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; background: var(--page-bg); display: grid; place-items: center; }
+.hr-lis-thumb svg { width: 17px; height: 17px; color: var(--text-secondary); }
+.hr-lis-corpo-txt { flex: 1; min-width: 0; }
+.hr-lis-corpo-nome { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+.hr-lis-corpo-sub { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 1px; }
+
+/* Card 6 — calendário da semana */
+.hr-cal { grid-column: 2 / span 2; grid-row: 2; padding: 18px 20px 14px; display: flex; flex-direction: column; }
+.hr-cal-meses { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-shrink: 0; }
+.hr-cal-mes-lado { font-size: 12px; color: var(--text-muted); }
+.hr-cal-mes-atual { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.hr-cal-grade { flex: 1; display: grid; grid-template-columns: 52px repeat(7, 1fr); min-height: 0; overflow-y: auto; }
+.hr-cal-dia-cab { text-align: center; padding-bottom: 12px; }
+.hr-cal-dia-nome { font-size: 10px; color: var(--text-muted); }
+.hr-cal-dia-num { font-size: 13px; margin-top: 2px; color: var(--text-primary); }
+.hr-cal-dia-cab.hoje .hr-cal-dia-num {
+  background: var(--text-primary); color: var(--card-bg); border-radius: 999px;
+  display: inline-block; padding: 2px 9px;
+}
+.hr-cal-corpo { grid-column: 1 / -1; display: grid; grid-template-columns: 52px repeat(7, 1fr); position: relative; }
+.hr-cal-hora { font-size: 10px; color: var(--text-muted); padding-right: 10px; text-align: right; height: 38px; transform: translateY(-6px); }
+.hr-cal-cel { border-top: 1px solid var(--border); height: 38px; }
+.hr-cal-evento {
+  position: absolute; border-radius: 12px; padding: 7px 10px; overflow: hidden;
+  cursor: pointer; display: flex; flex-direction: column; justify-content: center;
+}
+.hr-cal-evento.escuro { background: #16181D; color: #FFFFFF; box-shadow: var(--shadow-card); }
+[data-theme="dark"] .hr-cal-evento.escuro { background: #0E0C14; }
+.hr-cal-evento.claro { background: var(--kanban-yellow); color: #16181D; }
+.hr-cal-ev-nome { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hr-cal-ev-sub { font-size: 9.5px; opacity: .6; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Modal "Ajustar horas" ---- */
+.horas-modal { width: 440px; max-width: calc(100vw - 32px); }
+.horas-abas { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--border); }
+.horas-aba {
+  padding: 11px 14px; font-size: 13px; font-weight: 600; color: var(--text-muted);
+  border: none; background: none; cursor: pointer; font-family: inherit;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.horas-aba.active { color: var(--text-primary); border-bottom-color: var(--kanban-yellow); }
+.hr-modal-hint { font-size: 12px; color: var(--text-secondary); margin: 0 0 12px; line-height: 1.45; }
+.hr-modal-campo {
+  width: 100%; border: 1px solid var(--border); background: var(--card-bg);
+  border-radius: 10px; padding: 10px 12px; font-family: inherit; font-size: 13px;
+  color: var(--text-primary); margin-bottom: 10px;
+}
+.hr-modal-dupla { display: flex; gap: 10px; }
+.hr-modal-botao {
+  width: 100%; border: none; background: var(--kanban-yellow); color: #16181D;
+  border-radius: 10px; padding: 11px; font-family: inherit; font-size: 13px;
+  font-weight: 600; cursor: pointer; margin-top: 4px;
+}
+.hr-modal-aviso {
+  font-size: 12px; color: var(--danger); background: var(--danger-soft);
+  border-radius: 10px; padding: 10px 12px; margin: 10px 0 0; line-height: 1.45;
+}
+.hr-modal-aviso[hidden] { display: none; }
+
+/* ---- Responsivo: mesma composição, empilhada ---- */
+@media (max-width: 1180px) {
+  .hr-grade { grid-template-columns: 1fr 1fr; grid-template-rows: auto; }
+  .hr-foto { grid-column: 1; grid-row: 1; min-height: 282px; }
+  .hr-prog { grid-column: 2; grid-row: 1; min-height: 282px; }
+  .hr-track { grid-column: 1; grid-row: 2; min-height: 282px; }
+  .hr-col4 { grid-column: 2; grid-row: 2; min-height: 282px; }
+  .hr-lista { grid-column: 1; grid-row: 3; }
+  .hr-cal { grid-column: 2; grid-row: 3; min-height: 251px; }
+}
+@media (max-width: 760px) {
+  .hr-grade { grid-template-columns: 1fr; }
+  .hr-foto, .hr-prog, .hr-track, .hr-col4, .hr-lista, .hr-cal { grid-column: 1; grid-row: auto; }
+  .hr-h1 { font-size: 25px; }
+  .hr-metricas { gap: 22px; }
+  .hr-metrica b { font-size: 30px; }
+  .hr-cal-grade, .hr-cal-corpo { grid-template-columns: 42px repeat(7, 1fr); }
+}

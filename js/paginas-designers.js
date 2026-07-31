@@ -4,6 +4,7 @@ const pageTitles = {
   atendimento: ["Clientes por atendimento", "Agrupados por atendimento responsável"],
   tipos: ["Tipos de tarefas", "Visão por categoria"],
   runrun: ["Runrun completo", "Todas as abas e tarefas do time"],
+  horas: ["Minhas horas", "Horas trabalhadas e agenda da semana"],
   hoje: ["Histórico", "O que você fez hoje"],
   repasse: ["Fila de repasse", "Tarefas esperando com o atendimento"],
 };

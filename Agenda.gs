@@ -99,3 +99,212 @@ function extrairLinkDaReuniao(ev) {
     || texto.match(/https:\/\/[a-z0-9.-]*zoom\.us\/\S+/i);
   return match ? match[0] : '';
 }
+
+// ============ TIMESHEET (horas trabalhadas por dia) ============
+//
+// A tela "Tempo" do Runrun.it (runrun.it/pt-BR/me/timesheet) mostra as
+// horas trabalhadas DIA A DIA e trava o lançamento quando alguém esquece
+// o play ou não trabalha. O Colmeia já sabia o tempo trabalhado TOTAL de
+// cada tarefa, mas nunca a quebra por dia — que é justamente o que essa
+// tela usa.
+//
+// IMPORTANTE: qual endereço da API entrega esse dado ainda NÃO está
+// confirmado. Rode diagnosticoTimesheet() uma vez pelo editor do Apps
+// Script e mande o log — é só LEITURA, não altera nada. Enquanto isso não
+// for confirmado, buscarHorasDaSemana devolve `semFonte: true` e o
+// front-end mostra "conectando" em vez de inventar número.
+
+/**
+ * Testa, um por um, os endereços mais prováveis da API do Runrun.it pro
+ * timesheet. SÓ LEITURA — nenhum deles altera nada.
+ *
+ * Como rodar: no editor do Apps Script, escolha "diagnosticoTimesheet" no
+ * seletor ao lado de "Executar", clique em Executar, e depois copie tudo
+ * que aparecer em "Registro de execução".
+ */
+function diagnosticoTimesheet() {
+  var meuId = idDoUsuarioRunrunPorNome('Cláudio');
+  var hoje = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  var seteDiasAtras = Utilities.formatDate(
+    new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000),
+    'America/Sao_Paulo', 'yyyy-MM-dd');
+
+  Logger.log('=== DIAGNÓSTICO TIMESHEET ===');
+  Logger.log('meu user_id no Runrun.it: ' + meuId);
+  Logger.log('janela testada: ' + seteDiasAtras + ' até ' + hoje);
+  Logger.log('');
+
+  var candidatos = [
+    '/time_entries?user_id=' + meuId + '&start_date=' + seteDiasAtras + '&end_date=' + hoje,
+    '/time_entries?user_id=' + meuId,
+    '/time_entries',
+    '/timesheets?user_id=' + meuId + '&start_date=' + seteDiasAtras + '&end_date=' + hoje,
+    '/timesheets',
+    '/users/' + meuId + '/time_entries?start_date=' + seteDiasAtras + '&end_date=' + hoje,
+    '/users/' + meuId + '/timesheet',
+    '/users/' + meuId + '/worked_times',
+    '/worked_times?user_id=' + meuId,
+    '/work_hours?user_id=' + meuId,
+    '/task_periods?user_id=' + meuId,
+    '/time_worked?user_id=' + meuId
+  ];
+
+  for (var i = 0; i < candidatos.length; i++) {
+    var caminho = candidatos[i];
+    try {
+      var r = runrunRequest(caminho, 'get');
+      var amostra = '';
+      if (r.body) {
+        try { amostra = JSON.stringify(r.body).substring(0, 400); }
+        catch (e) { amostra = '(não deu pra ler o corpo)'; }
+      }
+      Logger.log((r.ok ? '✅ FUNCIONOU' : '❌ status ' + r.status) + '  ' + caminho);
+      if (r.ok) Logger.log('     amostra: ' + amostra);
+    } catch (err) {
+      Logger.log('💥 erro   ' + caminho + ' — ' + err.message);
+    }
+  }
+
+  Logger.log('');
+  Logger.log('=== FIM. Copie tudo acima e mande pro Claude. ===');
+}
+
+/**
+ * Horas trabalhadas por dia, na semana pedida.
+ *
+ * `inicioISO` é a segunda-feira da semana (AAAA-MM-DD). Devolve sempre os
+ * 7 dias, de segunda a domingo, mesmo os sem trabalho — a tela desenha
+ * uma coluna por dia e precisa que a lista tenha tamanho fixo.
+ *
+ * Enquanto a fonte real não estiver confirmada (ver diagnosticoTimesheet),
+ * devolve `semFonte: true`: é o jeito honesto de dizer "ainda não sei",
+ * diferente de dizer "trabalhou 0h" — que seria mentira e apareceria como
+ * dia travado na tela.
+ */
+var TIMESHEET_ENDPOINT_CONFIRMADO = null; // preencher depois do diagnóstico
+
+function buscarHorasDaSemana(designer, inicioISO) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  var dias = montarSemanaVazia(inicioISO);
+
+  if (!TIMESHEET_ENDPOINT_CONFIRMADO) {
+    return {
+      ok: true,
+      semFonte: true,
+      dias: dias,
+      aviso: 'A fonte das horas por dia ainda não foi confirmada. Rode diagnosticoTimesheet() no editor do Apps Script.'
+    };
+  }
+
+  // Quando o endpoint for confirmado, a leitura entra aqui e preenche
+  // `segundos` de cada dia. Deixado explícito de propósito pra ficar
+  // óbvio onde mexer.
+  return { ok: true, semFonte: true, dias: dias };
+}
+
+/**
+ * Monta os 7 dias da semana (segunda a domingo) a partir da segunda-feira
+ * informada. Se não vier nada, usa a semana de hoje.
+ */
+function montarSemanaVazia(inicioISO) {
+  var base;
+  if (inicioISO && /^\d{4}-\d{2}-\d{2}$/.test(inicioISO)) {
+    base = new Date(inicioISO + 'T12:00:00-03:00');
+  } else {
+    base = segundaFeiraDaSemana(new Date());
+  }
+
+  var dias = [];
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(base.getTime() + i * 24 * 60 * 60 * 1000);
+    dias.push({
+      data: Utilities.formatDate(d, 'America/Sao_Paulo', 'yyyy-MM-dd'),
+      segundos: null,      // null = não sabemos ainda (≠ 0 = não trabalhou)
+      travado: false,
+      justificativa: ''
+    });
+  }
+  return dias;
+}
+
+function segundaFeiraDaSemana(data) {
+  var d = new Date(data.getTime());
+  // getDay(): 0 = domingo. Queremos voltar até a segunda-feira.
+  var diaDaSemana = d.getDay();
+  var recuo = diaDaSemana === 0 ? 6 : diaDaSemana - 1;
+  d.setDate(d.getDate() - recuo);
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Lança horas numa tarefa, num dia específico — o "Ajustar" do Runrun.it.
+ *
+ * Ainda NÃO está ligado: escrever tempo de trabalho no Runrun.it mexe em
+ * dado real de horas do time, e o formato certo dessa chamada depende do
+ * mesmo endpoint que o diagnóstico vai confirmar. Até lá essa função
+ * recusa de forma explícita, em vez de tentar um formato adivinhado e
+ * gravar algo errado no histórico de horas de alguém.
+ */
+function lancarHorasNaTarefa(dados) {
+  return {
+    ok: false,
+    naoConfigurado: true,
+    error: 'O lançamento de horas ainda não está ligado — falta confirmar o endereço certo da API (rode diagnosticoTimesheet no editor do Apps Script).'
+  };
+}
+
+function justificarDiaTimesheet(dados) {
+  return {
+    ok: false,
+    naoConfigurado: true,
+    error: 'A justificativa de dia ainda não está ligada — falta confirmar o endereço certo da API (rode diagnosticoTimesheet no editor do Apps Script).'
+  };
+}
+
+// ============ AGENDA DA SEMANA ============
+
+/**
+ * Igual buscarReunioesDeHoje, mas pra SEMANA inteira — é o que alimenta a
+ * grade de agenda da página "Minhas horas". Devolve cada reunião com o
+ * dia (AAAA-MM-DD) já separado, pra tela não precisar fazer conta de fuso.
+ */
+function buscarAgendaDaSemana(designer, inicioISO) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  var email = null;
+  for (var e in RUNRUN_USUARIOS) {
+    if (RUNRUN_USUARIOS[e].toLowerCase().trim() === designer.toLowerCase().trim()) { email = e; break; }
+  }
+  if (!email) return { ok: false, error: 'E-mail desse designer não configurado em RUNRUN_USUARIOS.' };
+
+  try {
+    var agenda = CalendarApp.getCalendarById(email);
+    if (!agenda) return { ok: false, error: 'Não consegui acessar a agenda de ' + designer + '.' };
+
+    var inicio = (inicioISO && /^\d{4}-\d{2}-\d{2}$/.test(inicioISO))
+      ? new Date(inicioISO + 'T00:00:00-03:00')
+      : segundaFeiraDaSemana(new Date());
+    inicio.setHours(0, 0, 0, 0);
+    var fim = new Date(inicio.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    var eventos = agenda.getEvents(inicio, fim)
+      .filter(function (ev) { return !ev.isAllDayEvent(); })
+      .map(function (ev) {
+        var inicioEv = ev.getStartTime();
+        return {
+          id: ev.getId(),
+          titulo: ev.getTitle(),
+          dia: Utilities.formatDate(inicioEv, 'America/Sao_Paulo', 'yyyy-MM-dd'),
+          horaInicio: Utilities.formatDate(inicioEv, 'America/Sao_Paulo', 'HH:mm'),
+          horaFim: Utilities.formatDate(ev.getEndTime(), 'America/Sao_Paulo', 'HH:mm'),
+          inicio: inicioEv.getTime(),
+          fim: ev.getEndTime().getTime(),
+          link: extrairLinkDaReuniao(ev)
+        };
+      });
+
+    return { ok: true, reunioes: eventos };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao ler a agenda da semana: ' + err.message };
+  }
+}
