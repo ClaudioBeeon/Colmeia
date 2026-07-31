@@ -204,10 +204,45 @@ function formatarDataCurtaSemAno(iso) {
 // mostrarClientePill: liga a tagzinha com o nome do cliente no topo do
 // card — só faz sentido na aba "Prioridades" (lista corrida, não tem
 // coluna por cliente igual as outras abas pra já deixar isso óbvio).
+/**
+ * Sugestão de pra quem repassar — SEM IA de propósito: tudo aqui já é
+ * número que o Colmeia tem em mãos (quem fez a peça original, quem tem
+ * menos tarefas agora), então uma conta simples é mais rápida e mais
+ * confiável que perguntar pra um modelo. O ícone da Bee aparece porque é
+ * ela quem "assina" a sugestão, não porque ela calculou.
+ *
+ * "Quem fez a peça original" só funciona se aquela subtarefa já foi
+ * aberta nesta sessão (é quando o card mãe entra no cache) — quando não
+ * dá, cai direto no critério de carga.
+ */
+function sugerirDesignerParaRepasse(t) {
+  const candidatos = DESIGNERS_EQUIPE.filter(n => !nomesCorrespondem(n, t.assignee));
+  if (!candidatos.length) return null;
+
+  if (typeof ehTarefaDeAlteracao === "function" && ehTarefaDeAlteracao(t)) {
+    const original = typeof acharTarefaOriginalDaAlteracao === "function" ? acharTarefaOriginalDaAlteracao(t) : null;
+    const nomeOriginal = original && original.responsavel;
+    if (nomeOriginal && candidatos.some(n => nomesCorrespondem(n, nomeOriginal))) {
+      return { nome: nomeOriginal, motivo: "fez a peça original" };
+    }
+  }
+
+  const lista = (typeof tasksTodas !== "undefined" && tasksTodas.length) ? tasksTodas : tasks;
+  const contagem = {};
+  candidatos.forEach(n => { contagem[n] = 0; });
+  lista.forEach(x => {
+    const nome = candidatos.find(n => nomesCorrespondem(n, x.assignee));
+    if (nome) contagem[nome]++;
+  });
+  const maisLivre = candidatos.reduce((a, b) => (contagem[a] <= contagem[b] ? a : b));
+  return { nome: maisLivre, motivo: "está com menos tarefas agora" };
+}
+
 function repasseCardHTML(t, mostrarClientePill) {
   const type = typeLabels[t.type] || { label: t.type, class: "" };
   const tempoParado = formatarTempoParado(t.lastActivityAt);
   const atrasada = t.dueISO && t.dueISO < hojeISO();
+  const sugestao = sugerirDesignerParaRepasse(t);
   return `
     <div class="repasse-card" data-id="${t.id}">
       <div class="repasse-card-top">
@@ -229,6 +264,7 @@ function repasseCardHTML(t, mostrarClientePill) {
         <span class="repasse-seq-loading">Carregando sequência...</span>
       </div>
       ${tempoParado ? `<div class="repasse-card-tempo">${tempoParado}</div>` : ""}
+      ${sugestao ? `<div class="repasse-sugestao" title="${escaparHTML(sugestao.motivo)}"><span class="bee-selo-mini">${beeIcon}</span>sugere: ${escaparHTML(sugestao.nome)}</div>` : ""}
       <div class="repasse-card-actions">
         <button type="button" class="repasse-btn repasse-btn-ficar" data-id="${t.id}">Ficar comigo</button>
       </div>

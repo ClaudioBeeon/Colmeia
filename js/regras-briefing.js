@@ -737,6 +737,7 @@ async function gerarBriefingComIA(task) {
     const camposSecundarios = campos.filter((c, i) => i !== idxDestaque);
 
     resultEl.innerHTML = `
+      <span class="bee-selo-mini" title="Organizado pela Bee">${beeIcon}</span>
       ${(plataformas.length || formatos.length) ? `
         <div class="ai-briefing-tags">
           ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${escaparHTML(p)}</span>`).join("")}

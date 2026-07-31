@@ -553,7 +553,7 @@ function desenharListaDeMemorias() {
           ${i.id
             ? `<button type="button" class="memoria-x" data-id="${escaparHTML(i.id)}" title="Apagar essa memória">✕</button>`
             : `<span class="memoria-sugestao">
-                 <span class="memoria-tag" title="A Bee viu isso repetir em pelo menos 3 tarefas desse cliente">sugestão</span>
+                 <span class="memoria-tag" title="A Bee viu isso repetir em pelo menos 3 tarefas desse cliente"><span class="bee-selo-mini">${beeIcon}</span>sugestão</span>
                  <button type="button" class="memoria-ok" data-fixar="${escaparHTML(i.texto)}" title="Guardar como memória fixa">✓</button>
                  <button type="button" class="memoria-x" data-descartar="${escaparHTML(i.texto)}" title="Descartar — ela não sugere isso de novo">✕</button>
                </span>`}

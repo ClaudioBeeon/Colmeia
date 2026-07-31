@@ -50,7 +50,7 @@ async function carregarResumoDaAlteracao(task, idOriginal) {
     html = `
       <div class="alteracao-resumo-box">
         <div class="alteracao-resumo-head">
-          <span class="alteracao-resumo-titulo">O que foi pedido pra mudar</span>
+          <span class="alteracao-resumo-titulo"><span class="bee-selo-mini" title="Resumo da Bee">${beeIcon}</span>O que foi pedido pra mudar</span>
           ${r.quemPediu ? `<span class="alteracao-resumo-quem">pedido de ${escaparHTML(r.quemPediu)}</span>` : ""}
         </div>
         ${mudancas.length

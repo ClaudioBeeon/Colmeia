@@ -167,7 +167,7 @@ async function renderNotificacoesUpload(task) {
   container.innerHTML = grupos.map(g => `
     <div class="upload-notif" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}">
       <button type="button" class="upload-notif-dismiss" data-chave="${escaparHTML(g.chave)}" aria-label="Dispensar">×</button>
-      <p class="upload-notif-text">Você adicionou ${g.arquivos.length} arquivo${g.arquivos.length > 1 ? "s" : ""} em <strong>${escaparHTML(g.pasta)}</strong>${g.cliente ? ` <span class="upload-notif-cliente">(${escaparHTML(g.cliente)})</span>` : ""}</p>
+      <p class="upload-notif-text"><span class="bee-selo-mini" title="A Bee percebeu">${beeIcon}</span>Você adicionou ${g.arquivos.length} arquivo${g.arquivos.length > 1 ? "s" : ""} em <strong>${escaparHTML(g.pasta)}</strong>${g.cliente ? ` <span class="upload-notif-cliente">(${escaparHTML(g.cliente)})</span>` : ""}</p>
       <div class="upload-notif-actions">
         <button type="button" class="upload-notif-copy" data-link="${g.link}" data-chave="${escaparHTML(g.chave)}" data-qtd="${g.arquivos.length}">Adicionar ao comentário</button>
         <a href="${g.link}" target="_blank" rel="noopener" class="upload-notif-ver">Ver</a>
@@ -235,7 +235,7 @@ function mostrarPromptRepetirComentario(task, texto) {
   if (!el) return;
   el.hidden = false;
   el.innerHTML = `
-    <span>Repetir esse comentário no card mãe?</span>
+    <span><span class="bee-selo-mini" title="Sugestão da Bee">${beeIcon}</span>Repetir esse comentário no card mãe?</span>
     <button type="button" class="repetir-sim">Sim</button>
     <button type="button" class="repetir-nao">Não</button>
   `;

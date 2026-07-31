@@ -934,3 +934,21 @@ button.bee-card-resultado-clicavel:hover { border-color: var(--text-muted); tran
 .bee-pessoa-resultado { display: flex; align-items: center; gap: 9px; margin: 8px 0; }
 .bee-pessoa-resultado-nome { font-size: 13px; font-weight: 700; }
 .bee-acao.principal svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
+
+/* Selo discreto da Bee: aparece do lado de qualquer sugestão/conteúdo
+   automático que já existia antes dela (repetir comentário, transferir
+   card mãe, briefing por IA etc) — pra deixar claro que é a mesma Bee
+   por trás, sem competir visualmente com o texto (por escolha do
+   Cláudio: só o iconezinho, sem etiqueta, sem virar bolha). */
+.bee-selo-mini {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  background: var(--kanban-yellow); color: #16181D; margin-right: 5px;
+  vertical-align: -3px;
+}
+.bee-selo-mini svg { width: 10px; height: 10px; }
+
+.repasse-sugestao {
+  display: flex; align-items: center; font-size: 11px; color: var(--text-muted);
+  margin-bottom: 8px;
+}
