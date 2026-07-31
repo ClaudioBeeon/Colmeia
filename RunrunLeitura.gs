@@ -833,32 +833,58 @@ function buscarAnexosTarefa(taskId) {
  */
 var LIMITE_IMAGEM_DESCRICAO_BYTES = 8 * 1024 * 1024;
 
+function hostDaUrl(url) {
+  var m = String(url || '').match(/^https:\/\/([^\/:?#]+)/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
 function urlEhDoRunrun(url) {
-  if (!url) return false;
-  var m = String(url).match(/^https:\/\/([^\/:?#]+)/i);
-  if (!m) return false;
-  var host = m[1].toLowerCase();
+  var host = hostDaUrl(url);
+  if (!host) return false;
   // ".runrun.it" tem 10 caracteres — pegar o tamanho errado aqui faria o
   // backend recusar justamente "secure.runrun.it", que é o endereço que o
   // Runrun.it usa de verdade.
   return host === 'runrun.it' || host.slice(-10) === '.runrun.it';
 }
 
+/**
+ * Endereço que NÃO pode ser buscado de jeito nenhum: coisas de rede
+ * interna. Buscar imagem em servidor de fora é o normal aqui (o print
+ * colado fica no armazenamento do Runrun.it, que é outro domínio) — o
+ * que não pode é usar essa ação pra espiar endereço interno.
+ */
+function urlEhEnderecoInterno(url) {
+  var host = hostDaUrl(url);
+  if (!host) return true;
+  if (host === 'localhost' || host.slice(-6) === '.local') return true;
+  if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(host)) return true;
+  if (host.indexOf('metadata') === 0 || host === '169.254.169.254') return true;
+  return false;
+}
+
 function baixarImagemDaDescricao(url) {
   if (!url) return { ok: false, error: 'URL não informada.' };
-  if (!urlEhDoRunrun(url)) {
-    return { ok: false, error: 'Só imagens hospedadas no Runrun.it podem ser buscadas por aqui.' };
-  }
+  if (!hostDaUrl(url)) return { ok: false, error: 'Endereço inválido (só https é aceito).' };
+  if (urlEhEnderecoInterno(url)) return { ok: false, error: 'Endereço não permitido.' };
+
   try {
-    var res = UrlFetchApp.fetch(url, {
+    // As CHAVES da conta só vão pro próprio Runrun.it. Pra qualquer outro
+    // servidor a busca é anônima, igual à que o navegador faria — assim
+    // essa ação nunca vira um jeito de usar as chaves da Beeon em
+    // endereço de terceiro.
+    var opcoes = {
       method: 'get',
-      headers: {
-        'App-Key': RUNRUN_APP_KEY,
-        'User-Token': RUNRUN_USER_TOKEN
-      },
       muteHttpExceptions: true,
       followRedirects: true
-    });
+    };
+    if (urlEhDoRunrun(url)) {
+      opcoes.headers = {
+        'App-Key': RUNRUN_APP_KEY,
+        'User-Token': RUNRUN_USER_TOKEN
+      };
+    }
+    var res = UrlFetchApp.fetch(url, opcoes);
     var codigo = res.getResponseCode();
     if (codigo < 200 || codigo >= 300) {
       return { ok: false, error: 'Runrun.it recusou entregar a imagem (status ' + codigo + ').' };

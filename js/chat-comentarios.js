@@ -530,10 +530,11 @@ function peneirarHTMLDeComentario(html) {
       Array.from(filho.attributes).forEach(attr => filho.removeAttribute(attr.name));
 
       if (filho.tagName === "IMG") {
-        // Só endereço do Runrun.it (que o backend sabe buscar) ou imagem
-        // já embutida. Qualquer outro vira nada — inclusive os que servem
-        // pra rastrear quem abriu a mensagem.
-        const aceito = srcImagem && (ehImagemProtegidaDoRunrun(srcImagem) || srcImagem.startsWith("data:image/"));
+        // Endereço de internet (o print colado fica no armazenamento do
+        // Runrun.it, que é outro domínio — por isso não dá pra exigir
+        // runrun.it aqui) ou imagem já embutida. Qualquer outra coisa
+        // vira nada.
+        const aceito = srcImagem && (ehEnderecoDeImagemNaInternet(srcImagem) || srcImagem.startsWith("data:image/"));
         if (!aceito) { filho.remove(); return; }
         if (srcImagem.startsWith("data:image/")) {
           // Já vem embutida — mostra direto, não tem o que buscar.
@@ -672,15 +673,38 @@ function ehImagemProtegidaDoRunrun(src) {
   return !!src && /^https:\/\/([^\/:?#]*\.)?runrun\.it\//i.test(src);
 }
 
+// Qualquer endereço de internet serve pra ser tratado aqui. A primeira
+// versão só cuidava de endereço do próprio runrun.it — e o print colado
+// na descrição NÃO fica lá: o Runrun.it guarda o arquivo em outro
+// servidor (armazenamento deles), então a imagem continuava passando
+// direto e quebrando igual antes.
+function ehEnderecoDeImagemNaInternet(src) {
+  return !!src && /^https?:\/\//i.test(src);
+}
+
 /**
- * Deixa um <img> pronto pra ser preenchido pelo backend: tira o endereço
- * que o navegador não consegue buscar e guarda ele de lado.
+ * Deixa um <img> pronto pra ser carregado: tira o endereço original e
+ * guarda ele de lado, pra decidir com calma como buscar a imagem.
  */
 function prepararImagemProBackend(img, url) {
-  if (!ehImagemProtegidaDoRunrun(url)) return;
+  if (!ehEnderecoDeImagemNaInternet(url)) return;
   img.setAttribute("data-url-original", url);
   img.setAttribute("src", PIXEL_TRANSPARENTE);
   img.setAttribute("class", "desc-imagem carregando");
+}
+
+/**
+ * Tenta carregar a imagem direto no navegador, do jeito normal.
+ * Devolve true se deu certo. Serve pra não gastar uma ida ao backend com
+ * imagem que o navegador já consegue buscar sozinho (link público).
+ */
+function tentarCarregarImagemDireto(url) {
+  return new Promise(resolve => {
+    const teste = new Image();
+    teste.onload = () => resolve(true);
+    teste.onerror = () => resolve(false);
+    teste.src = url;
+  });
 }
 
 async function carregarImagensDaDescricao(container) {
@@ -699,6 +723,18 @@ async function carregarImagensDaDescricao(container) {
       return;
     }
 
+    // 1º) o caminho barato: o navegador consegue sozinho? Muita imagem
+    // colada é link público e carrega normal — nesses casos não custa
+    // nada e não passa pelo backend.
+    if (await tentarCarregarImagemDireto(url)) {
+      cacheImagensDescricao.set(url, url);
+      podarCacheMap(cacheImagensDescricao, MAX_IMAGENS_DESCRICAO_CACHE);
+      img.classList.remove("carregando");
+      if (img.isConnected) img.src = url;
+      return;
+    }
+
+    // 2º) não conseguiu: aí sim o backend busca por ele.
     const data = await chamarBackend({ acao: "baixarImagemDaDescricao", url });
     // Sem rede não é "a imagem não existe" — não grava nada no cache
     // (senão a falha grudava) e deixa pra próxima vez.
@@ -725,12 +761,18 @@ async function carregarImagensDaDescricao(container) {
 // pessoa dá conta de mostrar.
 function marcarImagemQuebrada(img, url) {
   if (!img.isConnected) return;
+  let onde = "";
+  try { onde = new URL(url).hostname; } catch (err) { /* endereço estranho, segue sem */ }
   const aviso = document.createElement("a");
   aviso.className = "desc-imagem-falhou";
   aviso.href = url;
   aviso.target = "_blank";
   aviso.rel = "noopener";
-  aviso.textContent = "🖼 Imagem da descrição — abrir no Runrun.it";
+  // Mostra ONDE a imagem está hospedada: se um dia parar de funcionar de
+  // novo, é esse nome que diz o motivo sem precisar abrir o console.
+  aviso.textContent = onde
+    ? `🖼 Não consegui mostrar essa imagem (${onde}) — abrir no Runrun.it`
+    : "🖼 Não consegui mostrar essa imagem — abrir no Runrun.it";
   img.replaceWith(aviso);
 }
 
