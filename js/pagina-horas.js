@@ -12,13 +12,15 @@
 //   - a agenda da semana (Google Agenda + entregas desejadas do Runrun.it);
 //   - as métricas de tarefas concluídas e clientes.
 //
-// O QUE AINDA NÃO É:
-//   - as HORAS POR DIA (as barras, a barra da semana, o comparativo).
-//     A tela "Tempo" do Runrun.it tem esse número, mas qual endereço da
-//     API entrega ele ainda não foi confirmado — enquanto isso o backend
-//     responde `semFonte: true` e a tela mostra "conectando", em vez de
-//     desenhar zero e fazer parecer que ninguém trabalhou. Ver
-//     diagnosticoTimesheet() em Agenda.gs.
+//   - as HORAS POR DIA, somadas dos blocos de trabalho do Runrun.it
+//     (/work_periods) — a mesma fonte que a aba "Tempo" deles usa;
+//   - lançar horas numa tarefa (o "Ajustar" do Runrun.it).
+//
+// O QUE NÃO DÁ:
+//   - JUSTIFICAR O DIA (folga, feriado, atestado). A API do Runrun.it não
+//     oferece isso — o diagnóstico varreu 40+ endereços e só existem os
+//     blocos de trabalho. Essa aba então explica a situação e leva direto
+//     pra tela do Runrun.it, em vez de ter um botão que não faz nada.
 // ============================================
 
 const HORAS_DIAS_CURTOS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -31,6 +33,7 @@ let horasSemanaAtual = null;
 let horasDadosSemana = null;   // resposta de buscarHorasDaSemana
 let horasAgendaSemana = null;  // resposta de buscarAgendaDaSemana
 let horasEntregues = null;     // resposta de buscarEntreguesDoDesigner
+let horasSemanaPassada = null; // total em segundos da semana anterior (pro comparativo)
 let _relogioDaPaginaHoras = null;
 
 /**
@@ -104,6 +107,21 @@ async function carregarDadosDaPaginaHoras() {
   if (!caiuARede(entregues)) horasEntregues = entregues;
 
   renderPaginaHoras();
+
+  // A semana anterior vem DEPOIS, em segundo plano: ela só alimenta o
+  // comparativo, e esperar por ela atrasaria a tela inteira à toa.
+  const anterior = new Date(horasSemanaAtual.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const respostaAnterior = await chamarBackend({
+    acao: "buscarHorasDaSemana", designer: DESIGNER_LOGADO, inicio: dataISOLocal(anterior),
+  });
+  if (dataISOLocal(horasSemanaAtual) !== inicio) return; // trocou de semana enquanto isso
+  if (!caiuARede(respostaAnterior) && respostaAnterior.ok) {
+    horasSemanaPassada = (respostaAnterior.dias || [])
+      .filter(d => d.segundos !== null)
+      .reduce((s, d) => s + d.segundos, 0);
+    renderComparativo();
+    renderMetricas();
+  }
 }
 
 // ===== Desenho =====
@@ -164,7 +182,7 @@ function renderBarraDeHoje() {
   const hoje = diaDeHojeNaSemana();
   if (!hoje || hoje.segundos === null) {
     labels.innerHTML = `<span style="flex:1">Horas de hoje</span>`;
-    segs.innerHTML = `<div class="hr-seg hachura" style="flex:1">conectando com o Runrun.it...</div>`;
+    segs.innerHTML = `<div class="hr-seg hachura" style="flex:1">carregando...</div>`;
     return;
   }
 
@@ -196,14 +214,24 @@ function renderMetricas() {
 
   const entregues = (horasEntregues && horasEntregues.ok) ? horasEntregues.entregues.length : null;
   const clientes = (typeof nomesDosMeusClientes === "function") ? nomesDosMeusClientes().length : 0;
-  const horasMes = (horasDadosSemana && !horasDadosSemana.semFonte) ? "—" : "—";
+
+  // "Horas no mês" ainda não é o mês inteiro: é o que sabemos com certeza
+  // (esta semana + a anterior). Chamar de "mês" um número parcial seria
+  // enganoso, então o rótulo diz exatamente o que é.
+  const dias = (horasDadosSemana && horasDadosSemana.dias) || [];
+  const conhecidos = dias.filter(d => d.segundos !== null);
+  const somaAtual = conhecidos.reduce((s, d) => s + d.segundos, 0);
+  const temTotal = conhecidos.length > 0;
+  const total = somaAtual + (horasSemanaPassada || 0);
+  const rotuloTotal = horasSemanaPassada !== null ? "Últimas 2 semanas" : "Nesta semana";
+  const horasMostradas = temTotal ? formatarHoras(horasSemanaPassada !== null ? total : somaAtual) : "—";
 
   const icRelogio = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
   const icCheck = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5L20 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const icPessoas = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
 
   alvo.innerHTML = `
-    <div class="hr-metrica"><b>${horasMes}</b><span>${icRelogio} Horas no mês</span></div>
+    <div class="hr-metrica"><b>${horasMostradas}</b><span>${icRelogio} ${rotuloTotal}</span></div>
     <div class="hr-metrica"><b>${entregues === null ? "—" : entregues}</b><span>${icCheck} Tarefas entregues</span></div>
     <div class="hr-metrica"><b>${clientes || "—"}</b><span>${icPessoas} Clientes</span></div>
   `;
@@ -366,24 +394,56 @@ function renderComparativo() {
   const alvo = document.getElementById("hrComparativo");
   if (!alvo) return;
 
-  const semFonte = !horasDadosSemana || horasDadosSemana.semFonte;
+  const dias = (horasDadosSemana && horasDadosSemana.dias) || [];
+  const conhecidos = dias.filter(d => d.segundos !== null);
+  const somaSemana = conhecidos.reduce((s, d) => s + d.segundos, 0);
+  const travados = dias.filter(d => d.travado).length;
+  const previstas = 40 * 3600;
+
   const seta = `<svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const setaCima = `<svg viewBox="0 0 24 24" fill="none"><path d="M18 15l-6-6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+  // Comparativo com a semana passada. Só aparece quando a semana anterior
+  // já foi buscada — não vale inventar uma variação sem ter com o que
+  // comparar de verdade.
+  let comparativoNome = "Carregando...";
+  let comparativoSub = "";
+  if (horasSemanaPassada !== null && conhecidos.length) {
+    const diferenca = somaSemana - horasSemanaPassada;
+    if (horasSemanaPassada === 0) {
+      comparativoNome = "Primeira semana com horas lançadas";
+      comparativoSub = formatarHoras(somaSemana) + " nesta semana";
+    } else {
+      const pct = Math.round((diferenca / horasSemanaPassada) * 100);
+      const subiu = diferenca >= 0;
+      comparativoNome = `<span class="${subiu ? "hr-sobe" : "hr-desce"}">${subiu ? "↑" : "↓"} ${subiu ? "+" : ""}${pct}%</span> vs. semana passada`;
+      comparativoSub = `${formatarHoras(somaSemana)} agora · ${formatarHoras(horasSemanaPassada)} antes`;
+    }
+  }
+
   alvo.innerHTML = `
-    <div class="hr-lis-linha"><span class="hr-lis-nome">Horas realizadas</span><span class="hr-lis-seta">${seta}</span></div>
+    <div class="hr-lis-linha">
+      <span class="hr-lis-nome">Horas realizadas</span>
+      <span class="hr-lis-valor">${conhecidos.length ? formatarHoras(somaSemana) : "—"}</span>
+    </div>
     <div class="hr-lis-linha"><span class="hr-lis-nome">Comparativo semanal</span><span class="hr-lis-seta">${setaCima}</span></div>
     <div class="hr-lis-corpo">
       <span class="hr-lis-thumb">
         <svg viewBox="0 0 24 24" fill="none"><path d="M4 17l5-5 4 3 7-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h5v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </span>
       <span class="hr-lis-corpo-txt">
-        <span class="hr-lis-corpo-nome">${semFonte ? "Aguardando as horas do Runrun.it" : "—"}</span>
-        <span class="hr-lis-corpo-sub">${semFonte ? "Falta confirmar de onde vem esse número" : ""}</span>
+        <span class="hr-lis-corpo-nome">${comparativoNome}</span>
+        <span class="hr-lis-corpo-sub">${comparativoSub}</span>
       </span>
     </div>
-    <div class="hr-lis-linha"><span class="hr-lis-nome">Horas previstas</span><span class="hr-lis-seta">${seta}</span></div>
-    <div class="hr-lis-linha"><span class="hr-lis-nome">Dias travados</span><span class="hr-lis-seta">${seta}</span></div>
+    <div class="hr-lis-linha">
+      <span class="hr-lis-nome">Horas previstas</span>
+      <span class="hr-lis-valor">${formatarHoras(previstas)}</span>
+    </div>
+    <div class="hr-lis-linha">
+      <span class="hr-lis-nome">Dias travados</span>
+      <span class="hr-lis-valor ${travados ? "alerta" : ""}">${conhecidos.length ? travados : "—"}</span>
+    </div>
   `;
 }
 
@@ -528,20 +588,19 @@ function renderModalDeHoras() {
   document.getElementById("horasAbaJustificar")?.classList.toggle("active", horasAbaAtiva === "justificar");
 
   if (horasAbaAtiva === "justificar") {
+    // Sem rodeio: a API do Runrun.it não tem como justificar o dia (ver
+    // justificarDiaTimesheet, Agenda.gs). Melhor dizer isso e levar pro
+    // lugar certo do que ter um botão que não faz nada.
     body.innerHTML = `
-      <p class="hr-modal-hint">Marque o motivo de não ter lançado horas nesse dia. É o que destrava o dia no Runrun.it.</p>
-      <select id="horasMotivo" class="hr-modal-campo">
-        <option value="folga">Folga</option>
-        <option value="feriado">Feriado</option>
-        <option value="atestado">Atestado</option>
-        <option value="esqueci">Esqueci de dar play</option>
-        <option value="outro">Outro</option>
-      </select>
-      <input type="text" id="horasObs" class="hr-modal-campo" placeholder="Observação (opcional)">
-      <button type="button" id="horasSalvarJustificativa" class="hr-modal-botao">Justificar o dia</button>
-      <p class="hr-modal-aviso" id="horasAviso" hidden></p>
+      <p class="hr-modal-hint">
+        Justificar o dia (folga, feriado, atestado) só existe na tela do próprio Runrun.it —
+        a API deles não abre isso pra fora, então o Colmeia não consegue fazer por você.
+      </p>
+      <button type="button" id="horasAbrirRunrun" class="hr-modal-botao">Abrir a aba Tempo no Runrun.it</button>
     `;
-    document.getElementById("horasSalvarJustificativa").addEventListener("click", salvarJustificativaDoDia);
+    document.getElementById("horasAbrirRunrun").addEventListener("click", () => {
+      window.open("https://runrun.it/pt-BR/me/timesheet", "_blank", "noopener");
+    });
     return;
   }
 
@@ -593,26 +652,6 @@ async function salvarLancamentoDeHoras() {
   mostrarAvisoDoModalDeHoras(resposta.semRede
     ? "Sem internet agora — tenta de novo em alguns segundos."
     : (resposta.error || "Não consegui lançar as horas agora."));
-}
-
-async function salvarJustificativaDoDia() {
-  const motivo = document.getElementById("horasMotivo")?.value;
-  const obs = document.getElementById("horasObs")?.value.trim();
-
-  const resposta = await chamarBackend({
-    acao: "justificarDia",
-    dados: { dia: horasDiaEmAjuste, motivo, observacao: obs, designer: DESIGNER_LOGADO },
-  });
-
-  if (resposta.ok) {
-    fecharAjusteDeHoras();
-    mostrarToast("Dia justificado.", "sucesso");
-    carregarDadosDaPaginaHoras();
-    return;
-  }
-  mostrarAvisoDoModalDeHoras(resposta.semRede
-    ? "Sem internet agora — tenta de novo em alguns segundos."
-    : (resposta.error || "Não consegui justificar o dia agora."));
 }
 
 // ===== Ligações =====

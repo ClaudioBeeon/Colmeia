@@ -271,34 +271,109 @@ function testarEndereco(caminhoDaApi, urlCompleta) {
 /**
  * Horas trabalhadas por dia, na semana pedida.
  *
+ * FONTE CONFIRMADA (diagnóstico de 2026-08-01): /work_periods. Cada item
+ * é um bloco de trabalho:
+ *   {id, task_id, start, end, user_id, worked_time}
+ * — exatamente o que a aba "Tempo" do Runrun.it soma pra montar o gráfico
+ * dela. Somando os blocos por dia, chegamos no mesmo número.
+ *
  * `inicioISO` é a segunda-feira da semana (AAAA-MM-DD). Devolve sempre os
  * 7 dias, de segunda a domingo, mesmo os sem trabalho — a tela desenha
  * uma coluna por dia e precisa que a lista tenha tamanho fixo.
- *
- * Enquanto a fonte real não estiver confirmada (ver diagnosticoTimesheet),
- * devolve `semFonte: true`: é o jeito honesto de dizer "ainda não sei",
- * diferente de dizer "trabalhou 0h" — que seria mentira e apareceria como
- * dia travado na tela.
  */
-var TIMESHEET_ENDPOINT_CONFIRMADO = null; // preencher depois do diagnóstico
-
 function buscarHorasDaSemana(designer, inicioISO) {
   if (!designer) return { ok: false, error: 'designer não informado.' };
-  var dias = montarSemanaVazia(inicioISO);
 
-  if (!TIMESHEET_ENDPOINT_CONFIRMADO) {
-    return {
-      ok: true,
-      semFonte: true,
-      dias: dias,
-      aviso: 'A fonte das horas por dia ainda não foi confirmada. Rode diagnosticoTimesheet() no editor do Apps Script.'
-    };
+  var userId = idDoUsuarioRunrunPorNome(designer);
+  if (!userId) return { ok: false, error: 'Não achei o id de ' + designer + ' no Runrun.it.' };
+
+  var dias = montarSemanaVazia(inicioISO);
+  var primeiroDia = dias[0].data;
+  var ultimoDia = dias[dias.length - 1].data;
+
+  var chaveCache = 'workPeriods_' + userId + '_' + primeiroDia;
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get(chaveCache);
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* busca de novo abaixo */ }
   }
 
-  // Quando o endpoint for confirmado, a leitura entra aqui e preenche
-  // `segundos` de cada dia. Deixado explícito de propósito pra ficar
-  // óbvio onde mexer.
-  return { ok: true, semFonte: true, dias: dias };
+  var blocos = buscarBlocosDeTrabalho(userId, primeiroDia, ultimoDia);
+  if (blocos === null) {
+    return { ok: false, error: 'Não consegui ler as horas no Runrun.it agora.' };
+  }
+
+  // Soma por dia. O `start` já vem com o fuso (-03:00), então formatar por
+  // America/Sao_Paulo devolve o dia certo sem conta de fuso na mão.
+  var porDia = {};
+  blocos.forEach(function (b) {
+    if (!b.start) return;
+    var diaDoBloco = Utilities.formatDate(new Date(b.start), 'America/Sao_Paulo', 'yyyy-MM-dd');
+    porDia[diaDoBloco] = (porDia[diaDoBloco] || 0) + (Number(b.worked_time) || 0);
+  });
+
+  var hojeISO = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  dias.forEach(function (d) {
+    d.segundos = porDia[d.data] || 0;
+    // "Travado" aqui é uma LEITURA NOSSA, não algo que a API diga: dia de
+    // semana já passado e sem nenhuma hora lançada é exatamente o caso que
+    // o Runrun.it bloqueia até ser justificado. Fim de semana não conta.
+    var diaDaSemana = new Date(d.data + 'T12:00:00-03:00').getDay();
+    var ehFimDeSemana = (diaDaSemana === 0 || diaDaSemana === 6);
+    d.travado = (!ehFimDeSemana && d.data < hojeISO && d.segundos === 0);
+  });
+
+  var resposta = { ok: true, dias: dias, blocos: blocos };
+  // 5 minutos: curto o bastante pra um lançamento novo aparecer logo, longo
+  // o bastante pra trocar de semana e voltar não custar outra varredura.
+  try { cache.put(chaveCache, JSON.stringify(resposta), 300); } catch (e) { /* segue sem guardar */ }
+  return resposta;
+}
+
+/**
+ * Busca os blocos de trabalho de alguém numa janela de datas.
+ *
+ * Manda os parâmetros de data (caso a API os aceite) MAS peneira de novo
+ * aqui dentro de qualquer jeito — na amostra do diagnóstico vieram blocos
+ * de fora da janela pedida, sinal de que ela pode ignorar esses
+ * parâmetros. Peneirar dos dois lados dá o resultado certo nos dois casos.
+ *
+ * Vira página até sair da janela, ordenando do mais novo pro mais velho —
+ * mesmo padrão já usado pras tarefas (o Runrun.it não tem filtro de data
+ * confiável, então pede-se ordenado e para assim que passa do corte).
+ */
+function buscarBlocosDeTrabalho(userId, primeiroDia, ultimoDia) {
+  var corteInicio = new Date(primeiroDia + 'T00:00:00-03:00').getTime();
+  var corteFim = new Date(ultimoDia + 'T23:59:59-03:00').getTime();
+
+  var encontrados = [];
+  var pagina = 1;
+  var TETO_PAGINAS = 8; // rede de segurança: nunca varre a conta inteira
+
+  while (pagina <= TETO_PAGINAS) {
+    var caminho = '/work_periods?user_id=' + encodeURIComponent(userId) +
+      '&start_date=' + primeiroDia + '&end_date=' + ultimoDia +
+      '&sort=start&sortDir=desc&limit=100&page=' + pagina;
+
+    var lote = runrunFetch(caminho);
+    if (!Array.isArray(lote)) return pagina === 1 ? null : encontrados;
+    if (lote.length === 0) break;
+
+    var passouDoCorte = false;
+    for (var i = 0; i < lote.length; i++) {
+      var b = lote[i];
+      if (!b || !b.start) continue;
+      var quando = new Date(b.start).getTime();
+      if (quando > corteFim) continue;        // mais novo que a janela: ainda não chegou
+      if (quando < corteInicio) { passouDoCorte = true; break; } // passou: pode parar
+      encontrados.push(b);
+    }
+
+    if (passouDoCorte || lote.length < 100) break;
+    pagina++;
+  }
+
+  return encontrados;
 }
 
 /**
@@ -336,28 +411,104 @@ function segundaFeiraDaSemana(data) {
   return d;
 }
 
+function invalidarCacheDeHoras(userId, primeiroDia) {
+  try { CacheService.getScriptCache().remove('workPeriods_' + userId + '_' + primeiroDia); }
+  catch (e) { /* segue */ }
+}
+
 /**
  * Lança horas numa tarefa, num dia específico — o "Ajustar" do Runrun.it.
  *
- * Ainda NÃO está ligado: escrever tempo de trabalho no Runrun.it mexe em
- * dado real de horas do time, e o formato certo dessa chamada depende do
- * mesmo endpoint que o diagnóstico vai confirmar. Até lá essa função
- * recusa de forma explícita, em vez de tentar um formato adivinhado e
- * gravar algo errado no histórico de horas de alguém.
+ * Um bloco de trabalho tem INÍCIO e FIM (não só uma quantidade), então a
+ * gente calcula: começa depois do último bloco daquele dia (ou às 9h, se
+ * o dia estiver vazio) e termina na duração pedida. Isso evita encavalar
+ * com tempo que já existe, que é o motivo mais provável de o Runrun.it
+ * recusar um lançamento.
+ *
+ * CONFERE DEPOIS DE GRAVAR: lê os blocos do dia de volta e só dá por
+ * lançado se o bloco novo estiver mesmo lá. O Runrun.it já respondeu "200"
+ * pra coisa que ignorou antes (foi assim com a Entrega Desejada e com a
+ * alocação de responsável) — e aqui o estrago seria em hora trabalhada de
+ * verdade, então dá pra confiar menos ainda.
  */
 function lancarHorasNaTarefa(dados) {
+  if (!dados || !dados.taskId || !dados.dia || !dados.segundos) {
+    return { ok: false, error: 'Faltam dados (tarefa, dia ou quantidade).' };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dados.dia)) {
+    return { ok: false, error: 'Data inválida.' };
+  }
+  var segundos = Math.round(Number(dados.segundos));
+  if (!segundos || segundos <= 0) return { ok: false, error: 'Quantidade de horas inválida.' };
+  if (segundos > 12 * 3600) return { ok: false, error: 'Mais de 12 horas num dia só — confere o valor.' };
+
+  var userId = idDoUsuarioRunrunPorNome(dados.designer);
+  if (!userId) return { ok: false, error: 'Não achei o id de ' + dados.designer + ' no Runrun.it.' };
+
+  // Onde encaixar: logo depois do último bloco já existente nesse dia.
+  var doDia = buscarBlocosDeTrabalho(userId, dados.dia, dados.dia) || [];
+  var comecoEmMs;
+  if (doDia.length) {
+    var ultimoFim = 0;
+    doDia.forEach(function (b) {
+      var fim = b.end ? new Date(b.end).getTime() : 0;
+      if (fim > ultimoFim) ultimoFim = fim;
+    });
+    comecoEmMs = ultimoFim || new Date(dados.dia + 'T09:00:00-03:00').getTime();
+  } else {
+    comecoEmMs = new Date(dados.dia + 'T09:00:00-03:00').getTime();
+  }
+  var fimEmMs = comecoEmMs + segundos * 1000;
+
+  var corpo = {
+    task_id: Number(dados.taskId),
+    user_id: userId,
+    start: formatarParaRunrun(comecoEmMs),
+    end: formatarParaRunrun(fimEmMs)
+  };
+
+  var quantosAntes = doDia.length;
+  var r = runrunRequest('/work_periods', 'post', corpo, tokenRunrunDoAutor(dados.designer));
+
+  // Confere lendo de volta, em vez de acreditar no status.
+  invalidarCacheDeHoras(userId, dados.dia);
+  var depois = buscarBlocosDeTrabalho(userId, dados.dia, dados.dia) || [];
+  if (depois.length > quantosAntes) {
+    // Limpa também o cache da SEMANA, senão a tela continuaria mostrando
+    // o total antigo por até 5 minutos.
+    invalidarCacheDeHoras(userId, Utilities.formatDate(
+      segundaFeiraDaSemana(new Date(dados.dia + 'T12:00:00-03:00')),
+      'America/Sao_Paulo', 'yyyy-MM-dd'));
+    return { ok: true };
+  }
+
   return {
     ok: false,
-    naoConfigurado: true,
-    error: 'O lançamento de horas ainda não está ligado — falta confirmar o endereço certo da API (rode diagnosticoTimesheet no editor do Apps Script).'
+    error: 'O Runrun.it não registrou o lançamento (status ' + r.status + '). ' +
+           'Pode ser que o horário escolhido encavale com tempo que já existe nesse dia.',
+    bodyBruto: r.body
   };
 }
 
+function formatarParaRunrun(ms) {
+  return Utilities.formatDate(new Date(ms), 'America/Sao_Paulo', "yyyy-MM-dd'T'HH:mm:ssXXX");
+}
+
+/**
+ * Justificar o dia (folga, feriado, atestado...).
+ *
+ * NÃO EXISTE endpoint pra isso na API — o diagnóstico varreu 40+ endereços
+ * e só apareceram os blocos de trabalho (/work_periods). A justificativa
+ * parece viver só na tela do Runrun.it. Em vez de fingir que dá, o Colmeia
+ * diz isso e manda direto pro lugar certo — melhor que um botão que some
+ * sem fazer nada.
+ */
 function justificarDiaTimesheet(dados) {
   return {
     ok: false,
-    naoConfigurado: true,
-    error: 'A justificativa de dia ainda não está ligada — falta confirmar o endereço certo da API (rode diagnosticoTimesheet no editor do Apps Script).'
+    abrirNoRunrun: true,
+    url: 'https://runrun.it/pt-BR/me/timesheet',
+    error: 'A API do Runrun.it não oferece um jeito de justificar o dia — isso só existe na tela deles. Abre o Runrun.it que eu te levo direto no lugar.'
   };
 }
 

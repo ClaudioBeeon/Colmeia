@@ -1557,3 +1557,10 @@ body.card-aberto .quick-access-panel { display: none; }
   .hr-metrica b { font-size: 30px; }
   .hr-cal-grade, .hr-cal-corpo { grid-template-columns: 42px repeat(7, 1fr); }
 }
+
+/* Valores à direita da lista sanfona (horas realizadas, previstas, dias
+   travados) e as setinhas de subiu/desceu do comparativo. */
+.hr-lis-valor { font-size: 12.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.hr-lis-valor.alerta { color: var(--danger); }
+.hr-sobe { color: var(--success); }
+.hr-desce { color: var(--danger); }
