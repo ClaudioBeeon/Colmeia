@@ -234,7 +234,12 @@ var BEE_INSTRUCOES_CONVERSA =
   '- Descreva nesta ordem: o que é a imagem, estilo, iluminação, enquadramento, proporção.\n' +
   '- Nunca use nome de marca, nome de artista vivo, nem pessoa real.\n' +
   '- Entregue o prompt sozinho, numa linha que começa com "FIREFLY:" e nada mais nessa linha. ' +
-  'O Colmeia transforma essa linha num botão que abre o Firefly.\n';
+  'O Colmeia transforma essa linha num botão que abre o Firefly.\n\n' +
+  'CHECKLIST:\n' +
+  '- Quando pedirem um checklist (ex: "faz uma lista pra eu conferir se fiz tudo"), escreva CADA item ' +
+  'numa linha própria, começando exatamente com "- [ ] " (hífen, espaço, colchete, espaço, colchete, ' +
+  'espaço) seguido do texto do item. O Colmeia transforma cada uma dessas linhas numa caixinha de ' +
+  'marcar de verdade — por isso o formato tem que ser exato, sem enfeite antes do hífen.\n';
 
 var BEE_MAX_MENSAGENS_CONTEXTO = 12;
 
@@ -320,7 +325,11 @@ var BEE_INSTRUCOES_LIVRE =
   '- Escreva em inglês, no máximo 40 palavras.\n' +
   '- Descreva nesta ordem: o que é a imagem, estilo, iluminação, enquadramento, proporção.\n' +
   '- Nunca use nome de marca, nome de artista vivo, nem pessoa real.\n' +
-  '- Entregue o prompt sozinho, numa linha que começa com "FIREFLY:" e nada mais nessa linha.\n';
+  '- Entregue o prompt sozinho, numa linha que começa com "FIREFLY:" e nada mais nessa linha.\n\n' +
+  'CHECKLIST:\n' +
+  '- Quando pedirem um checklist, escreva CADA item numa linha própria, começando exatamente com ' +
+  '"- [ ] " (hífen, espaço, colchete, espaço, colchete, espaço) seguido do texto do item. O Colmeia ' +
+  'transforma cada uma dessas linhas numa caixinha de marcar de verdade.\n';
 
 function beePrefixoLivre(designer) {
   return 'livre-' + String(designer || 'sem-nome').trim().toLowerCase() + '-';
@@ -1209,6 +1218,40 @@ function beeLinhaDaTarefa(sheet, taskId) {
     if (String(linhas[i][0]) === String(taskId)) return { indice: i + 1, valores: linhas[i] };
   }
   return null;
+}
+
+/**
+ * Apaga uma conversa da aba BeeChat pela chave (usado hoje só nas
+ * conversas livres — apagar a conversa DE UMA TAREFA não faz sentido,
+ * ela é o registro do que já foi discutido sobre aquele card).
+ */
+function excluirConversaBee(chave) {
+  if (!chave) return { ok: false, error: 'chave não informada.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getBeeChatSheet();
+    var linha = beeLinhaDaTarefa(sheet, chave);
+    if (linha) sheet.deleteRow(linha.indice);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Reescreve UMA mensagem dentro de uma conversa já salva — usado hoje só
+ * pra marcar/desmarcar item de checklist (o front já manda o texto certo
+ * da linha, com "[ ]" ou "[x]" trocado). Não mexe em mais nada da
+ * conversa, só naquele índice.
+ */
+function atualizarMensagemBee(chave, indice, texto) {
+  if (!chave) return { ok: false, error: 'chave não informada.' };
+  var conversa = lerConversaBee(chave);
+  if (!conversa[indice]) return { ok: false, error: 'Mensagem não encontrada.' };
+  conversa[indice].texto = String(texto || '');
+  salvarConversaBee(chave, conversa);
+  return { ok: true };
 }
 
 function lerConversaBee(taskId) {

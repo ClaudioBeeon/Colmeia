@@ -146,10 +146,11 @@ function desenharThreadBee(task) {
   const resumo = beeResumos.get(taskId);
   const conversa = beeConversas.get(taskId) || [];
   thread.innerHTML = renderPrimeiraFalaDaBee(task, resumo)
-    + conversa.map((m, i) => renderMensagemDaConversa(m, i)).join("")
+    + conversa.map((m, i) => renderMensagemDaConversa(m, i, taskId)).join("")
     + `<div class="bee-pastilhas"><button type="button" class="bee-acao" id="beeInspirarBtn">🎲 Me inspirar nessa peça</button></div>`;
   wireThreadBee(task);
   ligarCliquesDeResultadoFuncional(thread);
+  ligarChecklistsDaBee(thread);
   thread.scrollTop = thread.scrollHeight;
 }
 
@@ -210,17 +211,17 @@ function bolhaDaBee(corpoHTML, indice) {
 
 const iconeMandarProRunrun = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-function renderMensagemDaConversa(m, indice) {
+function renderMensagemDaConversa(m, indice, chaveConversa) {
   if (m.autor === "bee") {
     if (m._funcional) return bolhaDaBee(renderRespostaFuncional(m._funcional), indice);
     const extra = m._inspiracao ? renderLinksDeInspiracao(m._inspiracao.termos) : "";
-    return bolhaDaBee(formatarFalaDaBee(m.texto) + extra, indice);
+    return bolhaDaBee(formatarFalaDaBee(m.texto, chaveConversa, indice) + extra, indice);
   }
   return `
     <div class="comment-bubble mine" data-bee-indice="${indice}">
+      ${avatarHTML(DESIGNER_LOGADO, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-meta">
-          <span class="comment-author">Você</span>
           <button type="button" class="bee-mandar" data-indice="${indice}" title="Mandar isso pro Runrun.it">${iconeMandarProRunrun}</button>
         </div>
         <div class="comment-text">${linkifyTexto(escaparHTML(m.texto))}</div>
@@ -235,10 +236,35 @@ function renderMensagemDaConversa(m, indice) {
  * existe de propósito mesmo quando o link funciona: se o Firefly um dia
  * parar de aceitar o texto pelo endereço, o caminho manual continua ali.
  */
-function formatarFalaDaBee(texto) {
+// "- [ ] item" ou "- [x] item" — a Bee escreve nesse formato quando
+// pedem um checklist (ver BEE_INSTRUCOES_CONVERSA/LIVRE em Bee.gs).
+const REGEX_CHECKLIST_ITEM = /^\s*-\s*\[( |x|X)\]\s*(.+)$/;
+
+/**
+ * @param {string} texto
+ * @param {string|number} [chaveConversa]  taskId (chat da tarefa) ou a
+ *        chave da conversa livre — sem isso os itens de checklist
+ *        aparecem só como texto (não dá pra marcar sem saber ONDE salvar).
+ * @param {number} [indiceMensagem]  posição dessa mensagem no array da
+ *        conversa — junto com o índice da LINHA, é o endereço completo
+ *        de um item, usado pra reescrever só aquela linha ao marcar.
+ */
+function formatarFalaDaBee(texto, chaveConversa, indiceMensagem) {
   return escaparHTML(texto)
     .split("\n")
-    .map(linha => {
+    .map((linha, i) => {
+      const itemChecklist = linha.match(REGEX_CHECKLIST_ITEM);
+      if (itemChecklist && chaveConversa != null && indiceMensagem != null) {
+        const marcado = /x/i.test(itemChecklist[1]);
+        return `
+          <label class="bee-checklist-item">
+            <input type="checkbox" ${marcado ? "checked" : ""}
+              data-checklist-chave="${escaparHTML(String(chaveConversa))}"
+              data-checklist-msg="${indiceMensagem}" data-checklist-linha="${i}">
+            <span>${itemChecklist[2]}</span>
+          </label>
+        `;
+      }
       const match = linha.match(/^\s*FIREFLY:\s*(.+)$/i);
       if (!match) return linha;
       const prompt = match[1].trim();
@@ -253,7 +279,53 @@ function formatarFalaDaBee(texto) {
       `;
     })
     .join("<br>")
-    .replace(/<br>(\s*<div class="bee-firefly")/g, "$1");
+    .replace(/<br>(\s*<div class="bee-firefly")/g, "$1")
+    .replace(/<br>(\s*<label class="bee-checklist-item")/g, "$1")
+    .replace(/(<\/label>\s*)<br>/g, "$1");
+}
+
+/**
+ * Marca/desmarca um item de checklist DENTRO do texto da mensagem —
+ * reescreve só a linha certa ("- [ ]" vira "- [x]" ou o contrário) e
+ * salva no backend. Otimista: o checkbox já mudou na tela pelo próprio
+ * clique nativo do navegador, então aqui só persiste.
+ */
+async function alternarItemDeChecklist(input) {
+  const chave = input.dataset.checklistChave;
+  const indiceMsg = Number(input.dataset.checklistMsg);
+  const indiceLinha = Number(input.dataset.checklistLinha);
+  if (!chave) return;
+
+  // A mesma chave serve tanto pra conversa de uma tarefa (beeConversas,
+  // chave = taskId) quanto pra livre (beeConversaAtual) — descobre qual
+  // é olhando onde essa chave está guardada.
+  let mensagens = beeConversas.get(chave) || beeConversas.get(Number(chave));
+  let ehLivre = false;
+  if (!mensagens && beeConversaAtual && String(beeConversaAtual.chave) === String(chave)) {
+    mensagens = beeConversaAtual.mensagens;
+    ehLivre = true;
+  }
+  const msg = mensagens && mensagens[indiceMsg];
+  if (!msg) return;
+
+  const linhas = msg.texto.split("\n");
+  const linha = linhas[indiceLinha];
+  const item = linha && linha.match(REGEX_CHECKLIST_ITEM);
+  if (!item) return;
+  linhas[indiceLinha] = linha.replace(REGEX_CHECKLIST_ITEM, `- [${input.checked ? "x" : " "}] ${item[2]}`);
+  msg.texto = linhas.join("\n");
+
+  const data = await chamarBackend({ acao: "beeAtualizarMensagem", chave, indice: indiceMsg, texto: msg.texto });
+  if (!data || !data.ok) {
+    input.checked = !input.checked; // não salvou — desfaz o clique
+    mostrarToast("Não consegui salvar essa marcação agora.", "erro");
+  }
+}
+
+function ligarChecklistsDaBee(escopo) {
+  escopo.querySelectorAll("[data-checklist-chave]").forEach(input => {
+    input.addEventListener("change", () => alternarItemDeChecklist(input));
+  });
 }
 
 // ===== Perguntas FUNCIONAIS =====
@@ -294,12 +366,50 @@ async function beeReconhecerPerguntaFuncional(pergunta, contexto) {
     if (alvo) return { tipo: "responsavel", pergunta, cliente: alvo };
   }
 
-  if (/campanha|card m[aã]e|qual.*(tarefa|card)/.test(texto)) {
+  if (/campanha|card m[aã]e/.test(texto)) {
     const data = await chamarBackend({ acao: "beeAcharCardMae", termo: pergunta, cliente });
     return { tipo: "cardmae", pergunta, cliente, resultados: (data && data.ok) ? data.resultados : [] };
   }
 
+  // Caso mais comum de todos, e o que faltava: "achar a tarefa de X",
+  // "onde está o card de Y", "qual é a tarefa do Z" — sem essa entrada
+  // genérica, qualquer pergunta assim caía direto na conversa livre, que
+  // NÃO tem acesso a tarefa nenhuma (de propósito) e só respondia "não
+  // tenho acesso" — verdade, mas inútil, já que o Colmeia TEM esse dado.
+  if (/\b(cad[eê]|onde|achar|acha|procura|procurar|qual)\b/.test(texto)) {
+    const achadas = buscarTarefasPorAssunto(pergunta);
+    if (achadas.length) return { tipo: "tarefa", pergunta, resultados: achadas };
+  }
+
   return null;
+}
+
+// Palavras que não ajudam a achar nada (a pergunta inteira vira "achar
+// a tarefa de comunicação de vagas" → o que importa é "comunicação" e
+// "vagas", não "achar"/"a"/"tarefa"/"de"). Comparar a FRASE inteira
+// contra o título nunca bateria; comparar palavra por palavra, sim.
+const BEE_PALAVRAS_VAZIAS = new Set([
+  "achar", "acha", "procurar", "procura", "cade", "cadê", "onde", "fica", "ficou",
+  "qual", "quais", "tem", "alguma", "algum", "alguem", "alguém", "a", "o", "as", "os",
+  "de", "da", "do", "das", "dos", "em", "no", "na", "pra", "pro", "para", "por",
+  "sobre", "que", "foi", "e", "é", "esta", "está", "tarefa", "card", "favor",
+  "voce", "você", "me", "consegue", "preciso", "gostaria", "queria", "quero",
+]);
+
+function buscarTarefasPorAssunto(pergunta) {
+  const chaves = normalizarParaComparar(pergunta).split(/\s+/).filter(p => p.length > 2 && !BEE_PALAVRAS_VAZIAS.has(p));
+  if (!chaves.length) return [];
+  const lista = (typeof tasksTodas !== "undefined" && tasksTodas.length) ? tasksTodas : tasks;
+  return lista
+    .map(t => {
+      const alvo = normalizarParaComparar(t.title + " " + (t.client || ""));
+      const pontos = chaves.reduce((acc, p) => acc + (alvo.includes(p) ? 1 : 0), 0);
+      return { t, pontos };
+    })
+    .filter(x => x.pontos > 0)
+    .sort((a, b) => b.pontos - a.pontos)
+    .slice(0, 8)
+    .map(x => x.t);
 }
 
 // Vira uma "fala da Bee" comum (mesmo formato das outras), só que com
@@ -343,6 +453,20 @@ function renderRespostaFuncional(f) {
             ${r.cliente ? `<span class="bee-card-resultado-tag">${escaparHTML(r.cliente)}</span>` : ""}
           </div>
           <div class="bee-card-resultado-meta">${escaparHTML(r.etapa || "Card mãe")}</div>
+        </button>
+      `).join("") + `</div>`;
+  }
+
+  if (f.tipo === "tarefa") {
+    if (!f.resultados.length) return `<p>Não achei nenhuma tarefa batendo com isso.</p>`;
+    return `<p class="bee-titulo">Achei ${f.resultados.length === 1 ? "esta tarefa" : "estas tarefas"}</p>` +
+      `<div class="bee-cards">` + f.resultados.map(t => `
+        <button type="button" class="bee-card-resultado bee-card-resultado-clicavel" data-abrir-tarefa="${Number(t.id)}">
+          <div class="bee-card-resultado-topo">
+            <span class="bee-card-resultado-titulo">${escaparHTML(t.title)}</span>
+            ${t.client ? `<span class="bee-card-resultado-tag">${escaparHTML(t.client)}</span>` : ""}
+          </div>
+          ${t.runrunStage ? `<div class="bee-card-resultado-meta">${escaparHTML(t.runrunStage)}</div>` : ""}
         </button>
       `).join("") + `</div>`;
   }
@@ -679,8 +803,16 @@ function beeAbrirPainel() {
   document.body.classList.add("bee-aberta");
   const painel = document.getElementById("beePainel");
   if (painel) painel.setAttribute("aria-hidden", "false");
-  if (beeRecentesLista === null) carregarRecentesDaBee();
   beeMostrarTela("inicio");
+  // Busca as recentes só DEPOIS do primeiro quadro da animação — antes,
+  // o innerHTML "Carregando conversas..." era escrito no mesmíssimo
+  // instante em que a classe .bee-aberta entrava, competindo pela
+  // thread com o primeiro frame da transição (que mexe em margin-right,
+  // uma propriedade de layout) e deixando a ABERTURA travada. O fechar
+  // nunca teve esse problema por não disparar nenhum trabalho extra.
+  requestAnimationFrame(() => {
+    if (beeRecentesLista === null) carregarRecentesDaBee();
+  });
 }
 
 function beeFecharPainel() {
@@ -752,10 +884,19 @@ function desenharRecentesDaBee(filtro) {
         <span class="bee-recente-s">${escaparHTML(c.previa)}</span>
       </span>
       <span class="bee-recente-h">${tempoRelativoCurto(c.quando)}</span>
+      <span class="bee-recente-excluir" data-excluir="${escaparHTML(c.chave)}" title="Excluir">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0-1 13a1 1 0 01-1 1H8a1 1 0 01-1-1L6 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
     </button>
   `).join("");
   alvo.querySelectorAll("[data-chave]").forEach(btn => {
     btn.addEventListener("click", () => beeAbrirConversa(btn.dataset.chave));
+  });
+  alvo.querySelectorAll("[data-excluir]").forEach(el => {
+    el.addEventListener("click", ev => {
+      ev.stopPropagation();
+      excluirConversaLivre(el.dataset.excluir);
+    });
   });
 }
 
@@ -772,6 +913,38 @@ function tempoRelativoCurto(quando) {
 }
 
 // ===== Tela de conversa =====
+
+/**
+ * Apaga uma conversa livre — chamado tanto pelo "x" na lista de
+ * recentes quanto pelo ícone de lixeira dentro do próprio chat.
+ * Otimista: some da lista na hora, sem esperar o backend confirmar.
+ */
+async function excluirConversaLivre(chave) {
+  if (!chave) return;
+  const antes = beeRecentesLista;
+  beeRecentesLista = (beeRecentesLista || []).filter(c => c.chave !== chave);
+  desenharRecentesDaBee();
+  const data = await chamarBackend({ acao: "beeExcluirConversaLivre", chave });
+  if (!data || !data.ok) {
+    beeRecentesLista = antes; // Runrun.it recusou (não deveria acontecer aqui) — volta como estava
+    desenharRecentesDaBee();
+    mostrarToast((data && data.error) || "Não consegui excluir essa conversa agora.", "erro");
+  }
+}
+
+function excluirConversaAtual() {
+  if (!beeConversaAtual || !beeConversaAtual.chave) {
+    // Conversa nova, ainda sem nada salvo no backend — só fecha.
+    beeConversaAtual = null;
+    beeMostrarTela("inicio");
+    return;
+  }
+  if (!confirm("Excluir essa conversa com a Bee?")) return;
+  const chave = beeConversaAtual.chave;
+  beeConversaAtual = null;
+  beeMostrarTela("inicio");
+  excluirConversaLivre(chave);
+}
 
 async function beeAbrirConversa(chave) {
   const info = (beeRecentesLista || []).find(c => c.chave === chave);
@@ -819,15 +992,17 @@ function desenharConversaDaBee() {
     return;
   }
 
-  thread.innerHTML = mensagens.map(m => m.autor === "bee"
+  const chaveAtual = beeConversaAtual && beeConversaAtual.chave;
+  thread.innerHTML = mensagens.map((m, i) => m.autor === "bee"
     ? `<div class="comment-bubble bee-bubble">
          <span class="bee-avatar">${beeIcon}</span>
          <div class="comment-body">
            <div class="comment-meta"><span class="comment-author">Bee</span></div>
-           <div class="comment-text">${m._funcional ? renderRespostaFuncional(m._funcional) : formatarFalaDaBee(m.texto)}</div>
+           <div class="comment-text">${m._funcional ? renderRespostaFuncional(m._funcional) : formatarFalaDaBee(m.texto, chaveAtual, i)}</div>
          </div>
        </div>`
     : `<div class="comment-bubble mine">
+         ${avatarHTML(DESIGNER_LOGADO, "avatar-sm comment-avatar")}
          <div class="comment-body">
            <div class="comment-meta"><span class="comment-author">Você</span></div>
            <div class="comment-text">${linkifyTexto(escaparHTML(m.texto))}</div>
@@ -839,6 +1014,7 @@ function desenharConversaDaBee() {
     thread.insertAdjacentHTML("beforeend", `<p class="bee-vazio">A Bee está pensando...</p>`);
   }
   ligarCliquesDeResultadoFuncional(thread);
+  ligarChecklistsDaBee(thread);
   // Os botões de copiar do bloco do Firefly são recriados a cada
   // redesenho (o innerHTML acima troca todos os elementos), então
   // precisam ser religados aqui.
@@ -1100,8 +1276,14 @@ function ligarJanelaDaBee() {
     if (el) el.addEventListener("click", beeFecharPainel);
   });
 
+  const avatarChat = document.getElementById("beeChatAvatar");
+  if (avatarChat) avatarChat.innerHTML = beeIcon;
+
   const voltar = document.getElementById("beeVoltar");
   if (voltar) voltar.addEventListener("click", () => { beeConversaAtual = null; beeMostrarTela("inicio"); });
+
+  const excluir = document.getElementById("beeExcluirConversa");
+  if (excluir) excluir.addEventListener("click", excluirConversaAtual);
 
   const novo = document.getElementById("beeNovoChat");
   if (novo) novo.addEventListener("click", () => beeNovaConversaCom(null));
@@ -1113,8 +1295,22 @@ function ligarJanelaDaBee() {
     if (c) c.addEventListener("keydown", e => { if (e.key === "Enter") enviarParaBeeLivre(); });
   });
 
+  // O campo do topo NUNCA é uma barra de pesquisa (o Cláudio foi claro
+  // sobre isso): digitar filtra as conversas recentes na hora, só pra
+  // ajudar a achar uma conversa antiga — mas apertar Enter sempre abre
+  // uma conversa NOVA com o que foi escrito, e a Bee tenta responder de
+  // verdade (usando achar tarefa/link/campanha por trás quando dá).
   const busca = document.getElementById("beeBusca");
-  if (busca) busca.addEventListener("input", () => agendarBuscaUniversal(busca.value));
+  if (busca) {
+    busca.addEventListener("input", () => agendarBuscaUniversal(busca.value));
+    busca.addEventListener("keydown", e => {
+      if (e.key !== "Enter" || !busca.value.trim()) return;
+      const pergunta = busca.value.trim();
+      busca.value = "";
+      desenharRecentesDaBee();
+      beeNovaConversaCom(pergunta);
+    });
+  }
 
   desenharAtalhosDaBee();
 }

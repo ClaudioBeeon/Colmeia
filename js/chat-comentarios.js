@@ -307,23 +307,21 @@ function linkifyTexto(texto) {
 
 /**
  * Prepara um texto de comentário/notificação pra exibição: troca
- * menções por destaque, escapa HTML (segurança) e linkifica URLs
- * soltas — EXCETO quando o texto já vem com um <a> pronto do
- * Runrun.it, caso em que só troca as menções e mostra o HTML como
- * veio (confiando na fonte), sem escapar nem linkificar de novo.
- * Precisa checar "já tem <a>" no texto CRU, antes de escapar —
- * depois de escapado o <a> vira "&lt;a" e a checagem nunca bate.
+ * menções por destaque e passa pela peneira (ver peneirarHTMLDeComentario),
+ * que deixa só um punhado de marcações inofensivas (negrito, itálico,
+ * link, lista) e escapa/joga fora o resto.
+ *
+ * Antes disso, um comentário só ganhava negrito/itálico de verdade
+ * quando JÁ vinha com um link pronto do Runrun.it (a peneira só rodava
+ * nesse caso) — sem link, tudo era escapado, e `<b>Ajuste:</b>` aparecia
+ * cru na tela em vez de negrito. Agora todo comentário passa pelo MESMO
+ * caminho seguro, com ou sem link — a peneira também cuida de linkificar
+ * URL solta (ver linkificarTextoSolto lá dentro).
  */
 function prepararTextoComentario(textoBruto) {
   if (!textoBruto) return "";
-  const jaTemLinkPronto = /<a\s/i.test(textoBruto);
   const comMencoes = formatarMencoes(textoBruto);
-  // Texto que já vem com link pronto NÃO é mais inserido cru na tela: em
-  // vez de "confiar na fonte", passa por uma peneira que deixa só as
-  // marcações inofensivas de formatação (ver peneirarHTMLDeComentario).
-  // Assim o link continua clicável, mas nada além disso entra.
-  if (jaTemLinkPronto) return aplicarMarcadoresDeMencao(peneirarHTMLDeComentario(comMencoes));
-  return aplicarMarcadoresDeMencao(linkifyTexto(escaparHTML(comMencoes)));
+  return aplicarMarcadoresDeMencao(peneirarHTMLDeComentario(comMencoes));
 }
 
 /**
@@ -342,10 +340,39 @@ const TAGS_PERMITIDAS_COMENTARIO = ["A", "B", "STRONG", "I", "EM", "U", "BR", "P
 
 function peneirarHTMLDeComentario(html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
+  const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/gi;
+
+  // Troca URL solta dentro de um nó de texto puro por um <a> de
+  // verdade — no nível do DOM (não como string), pra nunca correr o
+  // risco de "linkificar" o texto que já está dentro de um <a> gerado
+  // aqui do lado (ver o teto abaixo).
+  function linkificarTextoSolto(noTexto) {
+    if (noTexto.parentElement && noTexto.parentElement.tagName === "A") return;
+    const texto = noTexto.textContent;
+    const casamentos = [...texto.matchAll(urlRegex)];
+    if (!casamentos.length) return;
+    const frag = doc.createDocumentFragment();
+    let ultimo = 0;
+    casamentos.forEach(m => {
+      if (m.index > ultimo) frag.appendChild(doc.createTextNode(texto.slice(ultimo, m.index)));
+      const limpo = m[0].replace(/[.,;:)\]]+$/, ""); // não pega pontuação colada no final
+      const sobra = m[0].slice(limpo.length);
+      const a = doc.createElement("a");
+      a.setAttribute("href", limpo.startsWith("http") ? limpo : "https://" + limpo);
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener");
+      a.textContent = limpo;
+      frag.appendChild(a);
+      if (sobra) frag.appendChild(doc.createTextNode(sobra));
+      ultimo = m.index + m[0].length;
+    });
+    if (ultimo < texto.length) frag.appendChild(doc.createTextNode(texto.slice(ultimo)));
+    noTexto.replaceWith(frag);
+  }
 
   function limpar(no) {
     Array.from(no.childNodes).forEach(filho => {
-      if (filho.nodeType === Node.TEXT_NODE) return; // texto puro sempre pode
+      if (filho.nodeType === Node.TEXT_NODE) { linkificarTextoSolto(filho); return; }
       if (filho.nodeType !== Node.ELEMENT_NODE) { filho.remove(); return; }
 
       if (TAGS_PERMITIDAS_COMENTARIO.indexOf(filho.tagName) === -1) {
@@ -393,7 +420,7 @@ function renderComentariosHTML(task) {
     const minha = nomesCorrespondem(c.autor, DESIGNER_LOGADO);
     return `
     <div class="comment-bubble ${minha ? "mine" : ""}" data-comment-id="${c.id}">
-      ${minha ? "" : avatarHTML(c.autor, "avatar-sm comment-avatar")}
+      ${avatarHTML(minha ? DESIGNER_LOGADO : c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-meta"><span class="comment-author">${minha ? "Você" : escaparHTML(c.autor)}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span>${c._origem ? `<span class="comment-origem">${escaparHTML(c._origem)}</span>` : ""}</div>
         <div class="comment-text">${prepararTextoComentario(c.texto)}</div>

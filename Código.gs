@@ -205,6 +205,10 @@ function handleRequest(e, method) {
         output = beeBuscarLink(body.termo, body.cliente);
       } else if (body.acao === 'beeAcharCardMae') {
         output = beeAcharCardMae(body.termo, body.cliente);
+      } else if (body.acao === 'beeAtualizarMensagem') {
+        output = atualizarMensagemBee(body.chave, body.indice, body.texto);
+      } else if (body.acao === 'beeExcluirConversaLivre') {
+        output = excluirConversaBee(body.chave);
       } else if (body.acao === 'beeHistorico') {
         output = { ok: true, conversa: lerConversaBee(body.taskId) };
       } else if (body.acao === 'reabrirTarefa') {

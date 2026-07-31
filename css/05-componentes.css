@@ -563,19 +563,16 @@
    importante da tela: o que for digitado aqui NÃO vai pro Runrun.it. */
 .comment-input.modo-bee { background: rgba(255,193,7,0.07); }
 [data-theme="dark"] .comment-input.modo-bee { background: rgba(255,193,7,0.10); }
-.comment-input.modo-bee input { font-style: italic; }
 
-/* A bolha dela: mesma forma das outras (pra ler igual), cor diferente
-   (pra nunca confundir com mensagem de gente). */
-.bee-bubble { align-self: flex-start; max-width: 92%; }
-.bee-bubble .comment-body { background: #FFF9E6; border-color: #F2DFA4; }
-[data-theme="dark"] .bee-bubble .comment-body { background: #241F0E; border-color: #4A3F17; }
+/* A bolha dela: mesmo balão branco das outras (pra ler igual — pedido
+   do Cláudio), o que distingue é o avatar amarelo dela do lado de fora. */
+.bee-bubble { align-self: flex-start; max-width: 88%; }
 .bee-avatar {
-  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
   display: flex; align-items: center; justify-content: center;
   background: var(--kanban-yellow); color: #16181D;
 }
-.bee-avatar svg { width: 16px; height: 16px; }
+.bee-avatar svg { width: 19px; height: 19px; }
 .bee-selo {
   font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
   color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 5px;
@@ -599,7 +596,7 @@
 
 /* A mensagem que a etiqueta abriu fica acesa por um instante, senão a
    pessoa cai no meio da conversa sem saber qual linha era. */
-.comment-destacado .comment-body {
+.comment-destacado .comment-text {
   box-shadow: 0 0 0 2px var(--kanban-yellow);
   transition: box-shadow .3s var(--ease-apple);
 }
@@ -685,12 +682,12 @@ body.card-aberto .bee-fab,
 body.bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
 
 .bee-painel {
-  width: 382px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden;
+  width: 500px; max-width: 60vw; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden;
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px;
   box-shadow: 0 18px 50px rgba(10,10,20,0.16);
-  /* -400px = a largura + o gap de 18px do .page: fechado ele ocupa
-     espaço zero, sem "empurrar" nada. */
-  margin-right: -400px; opacity: 0; pointer-events: none;
+  /* -520px = a largura + o gap de 18px do .page (+ folga): fechado ele
+     ocupa espaço zero, sem "empurrar" nada. */
+  margin-right: -520px; opacity: 0; pointer-events: none;
   transition: margin-right var(--dur-slow) var(--ease-apple-spring), opacity var(--dur-base) var(--ease-apple);
 }
 body.bee-aberta .bee-painel { margin-right: 0; opacity: 1; pointer-events: auto; }
@@ -768,38 +765,78 @@ body.card-aberto .bee-painel { display: none; }
 .bee-recente-t { display: block; font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bee-recente-s { display: block; font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 .bee-recente-h { font-size: 10.5px; color: var(--text-muted); flex-shrink: 0; }
+.bee-recente-excluir {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: var(--text-muted);
+  opacity: 0; transition: opacity .15s var(--ease-apple), background .15s var(--ease-apple), color .15s var(--ease-apple);
+}
+.bee-recente-excluir svg { width: 12px; height: 12px; }
+.bee-recente:hover .bee-recente-excluir { opacity: 1; }
+.bee-recente-excluir:hover { background: #FFE3E3; color: #E03131; }
 .bee-vazio { font-size: 12px; color: var(--text-muted); padding: 10px 4px; text-align: center; line-height: 1.5; }
 
+/* Gradiente quente extremamente sutil no topo — mesmo toque em cima do
+   painel inteiro (tela inicial) e do cabeçalho da conversa. */
+.bee-inicio-topo,
+.bee-chat-topo {
+  background: linear-gradient(180deg, rgba(255,214,110,0.10), transparent 90%);
+}
 .bee-chat-topo {
   display: flex; align-items: center; gap: 10px; padding: 14px 16px;
   border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
+.bee-chat-titulo-wrap { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.bee-chat-avatar {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--kanban-yellow); color: #16181D;
+}
+.bee-chat-avatar svg { width: 13px; height: 13px; }
 .bee-chat-titulo {
-  flex: 1; min-width: 0; text-align: center; font-size: 13.5px; font-weight: 700;
+  min-width: 0; text-align: center; font-size: 13.5px; font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .bee-thread {
-  flex: 1; min-height: 0; overflow-y: auto; padding: 16px;
-  display: flex; flex-direction: column; gap: 11px;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 18px;
+  display: flex; flex-direction: column; gap: 14px;
 }
-.bee-thread .comment-bubble { max-width: 92%; }
+.bee-thread .comment-bubble { max-width: 88%; }
 
 .bee-campo {
-  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px;
   border-top: 1px solid var(--border); flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(255,214,110,0.05), transparent 60%);
 }
 .bee-campo input {
-  flex: 1; min-width: 0; border: none; background: transparent; outline: none;
-  font-family: var(--font-body); font-size: 12.5px; color: var(--text-primary);
+  flex: 1; min-width: 0; height: 54px; border-radius: 999px; border: 1px solid #E9E9EC;
+  background: #FFFFFF; outline: none; padding: 0 20px;
+  font-family: var(--font-body); font-size: 13.5px; color: #111111;
+  transition: border-color .18s ease-out, box-shadow .18s ease-out;
 }
+.bee-campo input::placeholder { color: #7A7A7A; }
+.bee-campo input:focus { border-color: #C9C9CE; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+[data-theme="dark"] .bee-campo input { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); color: var(--text-primary); }
 .bee-enviar {
-  width: 34px; height: 34px; border-radius: 50%; border: none; flex-shrink: 0; cursor: pointer;
-  background: var(--kanban-yellow); color: #16181D;
+  width: 44px; height: 44px; border-radius: 50%; border: none; flex-shrink: 0; cursor: pointer;
+  background: #111111; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: transform var(--dur-fast) var(--ease-apple);
+  transition: transform .18s ease-out, opacity .18s ease-out;
 }
-.bee-enviar svg { width: 15px; height: 15px; }
-.bee-enviar:active { transform: scale(0.9); }
+.bee-enviar svg { width: 17px; height: 17px; }
+.bee-enviar:hover { opacity: 0.88; }
+.bee-enviar:active { transform: scale(0.92); }
+
+/* Checklist interativo dentro de uma fala da Bee (ver formatarFalaDaBee,
+   js/bee.js) — cada "- [ ] item" que ela escreve vira uma caixinha de
+   marcar de verdade, que salva sozinha ao clicar. */
+.bee-checklist-item {
+  display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;
+  font-size: 13px; line-height: 1.4; cursor: pointer;
+}
+.bee-checklist-item input[type="checkbox"] {
+  width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0; accent-color: var(--kanban-yellow); cursor: pointer;
+}
+.bee-checklist-item input:checked + span { color: var(--text-muted); text-decoration: line-through; }
 
 /* ===== Memórias da Bee (aba de Configurações) =====
    O que ela SABE sobre cada cliente. O que está escrito aqui entra em

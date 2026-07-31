@@ -1133,6 +1133,7 @@ function renderDetail() {
       if (vazio) vazio.remove();
       thread.insertAdjacentHTML("beforeend", `
         <div class="comment-bubble mine pending" data-comment-id="${idTemporario}">
+          ${avatarHTML(DESIGNER_LOGADO, "avatar-sm comment-avatar")}
           <div class="comment-body">
             <div class="comment-meta"><span class="comment-author">Você</span><span class="comment-time">Enviando...</span></div>
             <div class="comment-text">${linkifyTexto(escaparHTML(texto))}</div>
