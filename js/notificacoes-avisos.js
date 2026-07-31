@@ -925,6 +925,14 @@ if (perfilModalOverlay) {
   perfilModalOverlay.addEventListener("click", e => {
     if (e.target === perfilModalOverlay) fecharPerfilDoDesigner();
   });
+  [["perfilTabClientes", "clientes"], ["perfilTabMemorias", "memorias"], ["perfilTabDiscord", "discord"]]
+    .forEach(([id, chave]) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener("click", () => {
+        perfilAbaAtiva = chave;
+        renderPerfilDoDesigner();
+      });
+    });
 }
 document.getElementById("peopleModalClose").addEventListener("click", () => {
   peopleModalOverlay.hidden = true;

@@ -624,17 +624,34 @@ async function carregarAtividadesDrive() {
   }
 }
 
+/**
+ * Só o NOME da pasta, nunca o caminho inteiro.
+ *
+ * O backend manda o caminho completo ("Ateliê Materno > Publicações >
+ * 2026 > 7 > Julho"). Ele ia inteiro pro rodapé do card, num campo que
+ * foi feito pra mostrar a HORA ("14:32") e por isso está marcado como
+ * "nunca quebrar linha" — o caminho comprido empurrava o conteúdo pra
+ * fora do card. Aqui fica só o último pedaço, que é a pasta de verdade
+ * onde o arquivo está.
+ */
+function nomeDaPastaDoCaminho(breadcrumb) {
+  if (!breadcrumb) return "";
+  const partes = String(breadcrumb).split(/[>›»/]/).map(p => p.trim()).filter(Boolean);
+  return partes.length ? partes[partes.length - 1] : "";
+}
+
 function atividadeCardHTML(a) {
+  const pasta = nomeDaPastaDoCaminho(a.breadcrumb);
   return `
     <a class="task-card atividade-card" href="${a.pastaUrl || "#"}" target="_blank" rel="noopener">
       <div class="card-top">
-        <span class="badge">${a.pastaNome || "Pasta"}</span>
+        <span class="badge">${escaparHTML(a.pastaNome || "Pasta")}</span>
       </div>
-      <div class="card-title">${a.arquivo}</div>
-      <div class="card-client">${a.cliente}</div>
+      <div class="card-title">${escaparHTML(a.arquivo || "")}</div>
+      <div class="card-client">${escaparHTML(a.cliente || "")}</div>
       <div class="card-bottom">
         <div class="assignee-wrap">${avatarClienteHTML(a.cliente, "avatar-sm")}</div>
-        <span class="historico-card-hora">${a.breadcrumb || ""}</span>
+        <span class="historico-card-hora" title="${escaparHTML(a.breadcrumb || "")}">${escaparHTML(pasta)}</span>
       </div>
     </a>
   `;

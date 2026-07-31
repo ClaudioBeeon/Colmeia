@@ -397,7 +397,13 @@
 
 .avatar-cliente { color: #fff; font-family: var(--font-display); font-weight: 700; }
 
-.historico-card-hora { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.historico-card-hora {
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; flex: 1; text-align: right;
+}
+.card-bottom { min-width: 0; }
+.card-bottom .assignee-wrap { flex-shrink: 0; }
 
 .historico-loading {
   display: flex; align-items: center; gap: 10px;
@@ -996,13 +1002,15 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 /* -------------------------------------------------------------------
    PERFIL DO DESIGNER
    O que Gustavo e Erick veem ao clicar na própria foto na barra lateral
-   (o coordenador cai nas Configurações). Vem do protótipo 3 aprovado
-   pelo Cláudio: capa amarela, a linha "agora em" com o cronômetro, os
-   clientes em quadradinhos e as Memórias da Bee no fim.
+   (o coordenador cai nas Configurações). Capa amarela com a linha "agora
+   em" vêm do protótipo 3; o corpo em abas (Clientes / Memórias da Bee /
+   Chamadas Discord) veio do protótipo 2, escolhido pelo Cláudio — é a
+   mesma largura e o mesmo visual de aba que .config-tabs já usa nas
+   Configurações do coordenador (css/04-paginas.css), de propósito, pra
+   não inventar um segundo jeito de fazer aba no mesmo app.
    ------------------------------------------------------------------- */
 
 .perfil-modal {
-  width: 340px; max-width: calc(100vw - 32px);
   max-height: min(84vh, 720px);
   background: var(--card-bg); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-hover);
@@ -1062,32 +1070,70 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
   background: var(--success); box-shadow: 0 0 0 3px rgba(34,176,125,.2);
 }
 
-.perfil-corpo {
-  padding: 14px; overflow-y: auto; min-height: 0;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.perfil-secao {
-  font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--text-muted); font-weight: 600;
-}
-.perfil-secao-bee { margin-top: 8px; }
-.perfil-secao-hint { font-size: 11.5px; color: var(--text-muted); margin: -4px 0 4px; line-height: 1.4; }
+/* .rule-modal-body já dá o padding/overflow padrão (css/04-paginas.css);
+   aqui só o que é específico do conteúdo de cada aba do perfil. */
+#perfilCorpo { gap: 10px; min-height: 220px; }
+
+.perfil-secao-hint { font-size: 12px; color: var(--text-muted); margin: -6px 0 2px; line-height: 1.45; }
 
 .perfil-clientes { display: flex; flex-direction: column; gap: 7px; }
 .perfil-cliente {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
   background: var(--page-bg); border: none; border-radius: var(--radius-md);
-  padding: 9px 11px; cursor: pointer; font-family: inherit;
+  padding: 10px 12px; cursor: pointer; font-family: inherit;
   transition: background var(--dur-fast) var(--ease-apple);
 }
 .perfil-cliente:hover { background: var(--border); }
 .perfil-cliente-txt { flex: 1; min-width: 0; }
 .perfil-cliente-nome {
-  display: block; font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  display: block; font-size: 13px; font-weight: 600; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.perfil-cliente-atend { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.perfil-cliente-atend { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .perfil-cliente-tag {
   flex-shrink: 0; font-size: 9.5px; font-weight: 700; color: #16181D;
   padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .02em;
 }
+
+/* ===== Aba "Chamadas Discord" =====
+   Cada pessoa conhecida vira uma linha com foto, nome e um campo já
+   com o começo do link (discord://discord.com/channels/@me/) escrito —
+   só falta colar o ID do canal. O prefixo é texto fixo, não dá pra
+   apagar por engano; junto com o input ele lê como um campo só. */
+.perfil-discord-hint {
+  font-size: 12px; color: var(--text-secondary); line-height: 1.5;
+  background: var(--page-bg); border-radius: var(--radius-md);
+  padding: 11px 13px; margin-bottom: 2px;
+}
+.perfil-discord-hint b { color: var(--text-primary); }
+.perfil-discord-lista { display: flex; flex-direction: column; gap: 8px; }
+.perfil-discord-linha {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--page-bg); border-radius: var(--radius-md); padding: 10px 12px;
+}
+.perfil-discord-nome {
+  flex: 0 0 auto; font-size: 13px; font-weight: 600; color: var(--text-primary);
+  min-width: 90px;
+}
+.perfil-discord-campo {
+  flex: 1 1 260px; min-width: 200px; display: flex; align-items: center;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 9px;
+  overflow: hidden;
+}
+.perfil-discord-prefixo {
+  flex-shrink: 0; font-size: 11px; color: var(--text-muted);
+  padding: 7px 0 7px 9px; white-space: nowrap; user-select: none;
+}
+.perfil-discord-input {
+  flex: 1; min-width: 60px; border: none; background: transparent;
+  font-family: inherit; font-size: 12.5px; color: var(--text-primary);
+  padding: 7px 9px 7px 2px; outline: none;
+}
+.perfil-discord-salvar {
+  flex-shrink: 0; border: 1px solid var(--border); background: var(--card-bg);
+  border-radius: 9px; padding: 7px 13px; font-family: inherit; font-size: 12px;
+  font-weight: 600; color: var(--text-primary); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.perfil-discord-salvar:hover { background: var(--border); }
+.perfil-discord-salvar:disabled { opacity: .6; cursor: default; }

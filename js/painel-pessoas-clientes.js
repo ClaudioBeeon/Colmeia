@@ -726,10 +726,15 @@ async function atualizarMemoriaDeduzida(btn) {
 // Memórias da Bee no fim — porque eles também alimentam ela, não só o
 // coordenador (mesmo bloco das Configurações, ver montarBlocoMemorias).
 
+// Qual aba do perfil está aberta agora — "clientes", "memorias" ou
+// "discord". Reseta pra "clientes" toda vez que o perfil é aberto de novo.
+let perfilAbaAtiva = "clientes";
+
 function abrirPerfilDoDesigner() {
   const overlay = document.getElementById("perfilModalOverlay");
   if (!overlay) return;
   overlay.hidden = false;
+  perfilAbaAtiva = "clientes";
   renderPerfilDoDesigner();
 }
 
@@ -763,14 +768,34 @@ function renderPerfilDoDesigner() {
   atualizarLinhaAgoraDoPerfil();
   iniciarRelogioDoPerfil();
 
-  // --- Clientes ---
-  const clientesEl = document.getElementById("perfilClientes");
+  // --- Abas ---
+  const abas = { clientes: "perfilTabClientes", memorias: "perfilTabMemorias", discord: "perfilTabDiscord" };
+  Object.entries(abas).forEach(([chave, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle("active", chave === perfilAbaAtiva);
+  });
+
+  const corpo = document.getElementById("perfilCorpo");
+  if (!corpo) return;
+
+  if (perfilAbaAtiva === "clientes") {
+    renderAbaClientesDoPerfil(corpo);
+  } else if (perfilAbaAtiva === "memorias") {
+    montarBlocoMemorias(corpo, nomesDosMeusClientes(), renderPerfilDoDesigner);
+  } else {
+    renderAbaDiscordDoPerfil(corpo);
+  }
+}
+
+function renderAbaClientesDoPerfil(corpo) {
   const meusClientes = nomesDosMeusClientes();
-  if (clientesEl) {
-    if (!meusClientes.length) {
-      clientesEl.innerHTML = `<p class="workflow-seq-empty">Nenhum cliente encontrado pra você no painel-designers-beeon.</p>`;
-    } else {
-      clientesEl.innerHTML = meusClientes.map(cliente => {
+  if (!meusClientes.length) {
+    corpo.innerHTML = `<p class="workflow-seq-empty">Nenhum cliente encontrado pra você no painel-designers-beeon.</p>`;
+    return;
+  }
+  corpo.innerHTML = `
+    <div class="perfil-clientes">
+      ${meusClientes.map(cliente => {
         const atend = getAtendimentoDoCliente(cliente) || "Sem atendimento";
         const servico = servicoDoCliente(cliente);
         return `
@@ -782,23 +807,102 @@ function renderPerfilDoDesigner() {
             ${servico ? `<span class="perfil-cliente-tag" style="background:${mcCorServico(servico)};">${escaparHTML(servico)}</span>` : ""}
           </button>
         `;
-      }).join("");
+      }).join("")}
+    </div>
+  `;
+  corpo.querySelectorAll(".perfil-cliente").forEach(btn => {
+    btn.addEventListener("click", () => {
+      fecharPerfilDoDesigner();
+      abrirHubDoCliente(btn.dataset.cliente, DESIGNER_LOGADO);
+    });
+  });
+}
 
-      clientesEl.querySelectorAll(".perfil-cliente").forEach(btn => {
-        btn.addEventListener("click", () => {
-          fecharPerfilDoDesigner();
-          abrirHubDoCliente(btn.dataset.cliente, DESIGNER_LOGADO);
-        });
-      });
-    }
+// ===== Aba "Chamadas Discord" =====
+//
+// Gustavo e Erick também precisam ligar por voz pra outras pessoas do
+// time — coordenador, atendimento, um pro outro. O Discord identifica
+// cada conversa por um ID de canal; colado depois desse prefixo, o link
+// abre o app direto naquela conversa. Reaproveita o MESMO campo `discord`
+// de cada pessoa que já existe (planilha de Pessoas, usado pelo botão
+// "Chamar no Discord" dentro da tarefa) — não é um cadastro paralelo.
+const PREFIXO_DISCORD_DM = "discord://discord.com/channels/@me/";
+
+function renderAbaDiscordDoPerfil(corpo) {
+  const absorvidos = chavesDeApelidosAbsorvidos();
+  const nomes = Array.from(nomesVistos.entries())
+    .filter(([chave]) => !absorvidos.has(chave))
+    .sort((a, b) => a[1].nomeOriginal.localeCompare(b[1].nomeOriginal));
+
+  corpo.innerHTML = `
+    <p class="perfil-discord-hint">
+      Pra ligar direto pelo Discord: abra o Discord, entre na conversa com a pessoa,
+      clique com o <b>botão direito</b> no nome ou na foto dela na lista à esquerda
+      e escolha <b>"Copiar ID do Canal"</b>. Se essa opção não aparecer, ative o
+      Modo de Desenvolvedor em Configurações → Avançado, no Discord. Cole o ID
+      aqui — o resto do link já está pronto.
+    </p>
+    ${nomes.length ? `
+      <div class="perfil-discord-lista">
+        ${nomes.map(([chave, info]) => {
+          const salvo = pessoasSalvas.find(p => normalizarParaComparar(p.nome) === chave);
+          const idAtual = idDoCanalNoLink(salvo && salvo.discord);
+          return `
+            <div class="perfil-discord-linha" data-chave="${chave}" data-nome-original="${escaparHTML(info.nomeOriginal)}">
+              ${avatarPreviewHTML(info.nomeOriginal, resolverFotoManual(info.nomeOriginal) || info.fotoAtual || "")}
+              <span class="perfil-discord-nome">${escaparHTML(info.nomeOriginal)}</span>
+              <span class="perfil-discord-campo">
+                <span class="perfil-discord-prefixo">${PREFIXO_DISCORD_DM}</span>
+                <input type="text" class="perfil-discord-input" placeholder="ID do canal" value="${escaparHTML(idAtual)}">
+              </span>
+              <button type="button" class="perfil-discord-salvar">Salvar</button>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    ` : `<p class="workflow-seq-empty">Nenhum nome visto ainda nessa sessão — navegue pelo Colmeia e volte aqui.</p>`}
+  `;
+
+  corpo.querySelectorAll(".perfil-discord-linha").forEach(linha => {
+    const btn = linha.querySelector(".perfil-discord-salvar");
+    const input = linha.querySelector(".perfil-discord-input");
+    const salvar = () => salvarDiscordDaPessoa(linha.dataset.nomeOriginal, input.value, btn);
+    btn.addEventListener("click", salvar);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") salvar(); });
+  });
+}
+
+// Se o link salvo usa o prefixo padrão, devolve só o ID (o que o campo
+// mostra). Se foi configurado de outro jeito (ex: link colado direto nas
+// Configurações), devolve vazio — não tenta adivinhar, e salvar aqui sem
+// mexer no campo não perde o que já estava lá (só troca quando a pessoa
+// realmente aperta Salvar).
+function idDoCanalNoLink(link) {
+  if (!link || !link.startsWith(PREFIXO_DISCORD_DM)) return "";
+  return link.slice(PREFIXO_DISCORD_DM.length);
+}
+
+async function salvarDiscordDaPessoa(nomeOriginal, idDigitado, btn) {
+  const idLimpo = (idDigitado || "").trim();
+  const linkFinal = idLimpo ? PREFIXO_DISCORD_DM + idLimpo : "";
+
+  // Preserva foto e apelidos já cadastrados dessa pessoa — essa aba só
+  // mexe no Discord, não pode apagar o resto ao salvar.
+  const existente = pessoasSalvas.find(p => normalizarParaComparar(p.nome) === normalizarParaComparar(nomeOriginal));
+  const foto = existente ? existente.foto : "";
+  const aliases = existente ? existente.aliases : [];
+
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+  const ok = await salvarPessoaNoBackend(nomeOriginal, foto, aliases, linkFinal);
+  if (btn) { btn.disabled = false; btn.textContent = "Salvar"; }
+
+  if (!ok) {
+    mostrarToast("Não consegui salvar agora. Tenta de novo em alguns segundos.", "erro");
+    return;
   }
-
-  // --- Memórias da Bee (só dos clientes dele) ---
-  montarBlocoMemorias(
-    document.getElementById("perfilMemorias"),
-    meusClientes,
-    renderPerfilDoDesigner
-  );
+  if (existente) existente.discord = linkFinal;
+  else pessoasSalvas.push({ nome: nomeOriginal, foto: "", aliases: [], discord: linkFinal });
+  mostrarToast(linkFinal ? "Canal salvo." : "Canal removido.");
 }
 
 // Nomes dos clientes do designer logado, sem repetir e sem os que o

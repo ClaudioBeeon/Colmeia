@@ -177,6 +177,13 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   transition: color 0.15s var(--ease-apple);
 }
 
+/* Sem isso, o "display: flex" acima ganha do [hidden] nativo do HTML e o
+   item continua na tela mesmo escondido pelo JS — foi o que acontecia com
+   a "Fila de repasse", que é só do coordenador (ver iniciarAppPosLogin,
+   js/login-boot.js) e aparecia pro Gustavo e pro Erick assim mesmo.
+   Mesma armadilha já anotada na .now-playing mais abaixo. */
+.nav-ic[hidden] { display: none; }
+
 .nav-icon-circle {
   width: 40px;
   height: 40px;

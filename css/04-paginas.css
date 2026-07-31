@@ -831,13 +831,23 @@ body.card-aberto .quick-access-panel { display: none; }
 }
 .ai-briefing-copy-btn:hover { background: #FAC775; }
 
-/* ===== Logo oficial na barra lateral ===== */
+/* ===== Logo oficial na barra lateral =====
+   Centralizado com a barra lateral (justify-content) e alinhado com o
+   pill do topo. O alinhamento vertical exigia cancelar o padding-top de
+   18px que só a sidebar tem (.sidebar { padding: 18px 10px }) — o topbar
+   começa direto no topo de .main, sem esse respiro, então o logo ficava
+   ~18px mais baixo que o centro do pill. A margem negativa aqui cancela
+   exatamente esse padding, e a altura de 46px casa com a altura real do
+   topbar (dada pelo maior item dele, os botões redondos de 46px em
+   .topbar-outside) — duas medidas, então se um dos dois mudar de novo,
+   os dois têm que ser conferidos juntos. */
 .sidebar-logo {
   position: relative;
-  height: 40px;
-  margin-bottom: 8px;
+  height: 46px;
+  margin: -18px 0 8px;
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 .sidebar-logo-icon {

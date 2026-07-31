@@ -1,5 +1,13 @@
 // Por pessoa também (ver chaveLogNotificacoes, js/notificacoes-avisos.js):
 // "eu já dispensei esse aviso" é de quem está logado, não do computador.
+// Um arquivo é identificado pela pasta + nome + quando entrou. O "quando"
+// faz parte de propósito: subir um arquivo com o MESMO nome de novo (o
+// caso mais comum aqui — "Feed.png" corrigido) é um upload novo e merece
+// aviso novo, mesmo que o anterior tenha sido dispensado.
+function chaveDeUmArquivo(pastaUrl, upload) {
+  return pastaUrl + "::" + upload.arquivo + "@" + upload.quando;
+}
+
 function chaveUploadVisto(link) {
   return "colmeia_upload_visto_" + normalizarParaComparar(DESIGNER_LOGADO || "sem-login") + "_" + link;
 }
@@ -172,27 +180,31 @@ async function renderNotificacoesUpload(task) {
       // exclui se souber com certeza que foi outra pessoa.
       (u.quem === null || u.quem === undefined || nomesCorrespondem(u.quem, DESIGNER_LOGADO)) &&
       (agora - u.quando) < JANELA_NOTIFICACAO_UPLOAD_MS
-    );
+    )
+    // "Já dispensei" é por ARQUIVO, não pelo conjunto todo.
+    //
+    // Antes a chave de dispensado era a lista inteira de arquivos junta.
+    // Como um arquivo sai da lista sozinho ao completar 30 minutos, o
+    // conjunto mudava e virava uma chave nova — que obviamente não estava
+    // marcada como dispensada, e a notificação voltava. Era isso que fazia
+    // ela "sumir e voltar toda hora" por mais que fosse dispensada.
+    //
+    // Por arquivo, o tempo passando não ressuscita nada: some quando
+    // dispensado e só volta se entrar um arquivo REALMENTE novo na pasta.
+    .filter(u => !uploadJaVisto(chaveDeUmArquivo(resultado.pastaUrl, u)));
 
   if (arquivosRelevantes.length === 0) {
     document.getElementById("beeUploadAviso")?.remove();
     return;
   }
 
-  // IMPORTANTE: o "já visto" agora é por ESSE CONJUNTO EXATO de
-  // arquivos, não pela pasta inteira — antes, dispensar a notificação
-  // uma vez escondia a pasta pra sempre, mesmo quando um arquivo
-  // totalmente novo aparecia nela depois. Assim que qualquer arquivo
-  // novo entra na lista, a chave muda e a notificação volta a aparecer.
+  // Continua existindo uma chave do conjunto, mas só pra saber se o que
+  // está desenhado na tela ainda é a mesma coisa (ver `jaMostrando`
+  // abaixo) — ela não decide mais nada sobre dispensar.
   const chaveConjunto = resultado.pastaUrl + "::" + arquivosRelevantes
     .map(u => u.arquivo + "@" + u.quando)
     .sort()
     .join("|");
-
-  if (uploadJaVisto(chaveConjunto)) {
-    document.getElementById("beeUploadAviso")?.remove();
-    return;
-  }
 
   // Já mostrando esse MESMO conjunto de arquivos? Não redesenha de novo
   // a cada checagem de 8s — só piscaria a tela à toa.
@@ -236,13 +248,19 @@ async function renderNotificacoesUpload(task) {
   jaMostrando?.remove();
   avisos.insertAdjacentHTML("beforeend", `<div id="beeUploadAviso" data-chave="${escaparHTML(chaveConjunto)}">${bolhaDaBee(corpo, -1)}</div>`);
 
+  // Dispensar marca CADA arquivo da lista, um por um — é isso que faz o
+  // aviso ficar dispensado de verdade (ver chaveDeUmArquivo acima).
+  const dispensarTodos = () => {
+    arquivosRelevantes.forEach(u => marcarUploadVisto(chaveDeUmArquivo(resultado.pastaUrl, u)));
+  };
+
   const wrap = document.getElementById("beeUploadAviso");
   wrap.querySelector('[data-upload-acao="dispensar"]').addEventListener("click", () => {
-    marcarUploadVisto(chaveConjunto);
+    dispensarTodos();
     wrap.remove();
   });
   wrap.querySelector('[data-upload-acao="copiar"]').addEventListener("click", () => {
-    adicionarComentarioDeUpload(task, wrap, link, qtd, chaveConjunto);
+    adicionarComentarioDeUpload(task, wrap, link, qtd, dispensarTodos);
   });
   iniciarRelogioDasIdadesDeUpload();
 }
@@ -256,7 +274,7 @@ async function renderNotificacoesUpload(task) {
  * escrever antes) é a pessoa. É a mesma regra que já vale pra Bee — nada
  * daqui vai pro Runrun.it sozinho.
  */
-function adicionarComentarioDeUpload(task, wrap, link, qtd, chave) {
+function adicionarComentarioDeUpload(task, wrap, link, qtd, dispensarTodos) {
   if (!task.id) return;
   const campo = document.getElementById("commentInput");
   if (!campo) return;
@@ -268,9 +286,9 @@ function adicionarComentarioDeUpload(task, wrap, link, qtd, chave) {
   campo.focus();
   campo.setSelectionRange(campo.value.length, campo.value.length);
 
-  // A notificação já cumpriu o papel dela — some, e não volta pra esse
-  // mesmo conjunto de arquivos.
-  marcarUploadVisto(chave);
+  // A notificação já cumpriu o papel dela — some, e não volta pra esses
+  // mesmos arquivos.
+  if (typeof dispensarTodos === "function") dispensarTodos();
   wrap?.remove();
 }
 

@@ -40,7 +40,11 @@
 
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="sidebar-logo-icon" alt="Colmeia">
+      <!-- onerror: se o Cloudinary não responder (rede, ad-blocker, etc), troca
+           por um hexágono amarelo desenhado aqui mesmo (não depende de internet)
+           em vez de deixar a bolinha branca em branco que o Cláudio via. -->
+      <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="sidebar-logo-icon" alt="Colmeia"
+        onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23FFC700%22 d=%22M12 2l8.66 5v10L12 22l-8.66-5V7z%22/><circle cx=%2212%22 cy=%2212%22 r=%223.2%22 fill=%22%2316181D%22/></svg>';">
       <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Hozinontal_tyqohh.png" class="sidebar-logo-full logo-light" alt="Colmeia">
       <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Horiontal_texto_branco_bpfzkw.png" class="sidebar-logo-full logo-dark" alt="Colmeia">
     </div>
@@ -248,8 +252,13 @@
     <!-- Perfil do designer: o que Gustavo e Erick veem ao clicar na
          própria foto na barra lateral (o Cláudio, sendo coordenador, cai
          nas Configurações acima). Aprovado a partir do protótipo 3. -->
+    <!-- Opção "abas" aprovada pelo Cláudio (protótipo 2): mais larga que a
+         primeira versão, uma coisa por vez ocupando a largura toda. Mesma
+         largura e o mesmo visual de abas que as Configurações do
+         coordenador já usam (.people-modal/.config-tabs), pra ficar
+         parecido em vez de inventar um estilo novo pra cada painel. -->
     <div class="rule-modal-overlay" id="perfilModalOverlay" hidden>
-      <div class="perfil-modal">
+      <div class="perfil-modal people-modal">
         <div class="perfil-capa">
           <span class="perfil-foto" id="perfilFoto"></span>
           <div class="perfil-capa-txt">
@@ -261,13 +270,12 @@
           </button>
         </div>
         <div class="perfil-agora" id="perfilAgora" hidden></div>
-        <div class="perfil-corpo">
-          <span class="perfil-secao">Clientes</span>
-          <div class="perfil-clientes" id="perfilClientes"></div>
-          <span class="perfil-secao perfil-secao-bee">Memórias da Bee</span>
-          <p class="perfil-secao-hint">O que você escrever aqui a Bee usa em toda conversa sobre esse cliente — manias, o que evitar, o que faz aprovar mais rápido.</p>
-          <div id="perfilMemorias"></div>
+        <div class="config-tabs">
+          <button type="button" class="config-tab active" id="perfilTabClientes">Clientes</button>
+          <button type="button" class="config-tab" id="perfilTabMemorias">Memórias da Bee</button>
+          <button type="button" class="config-tab" id="perfilTabDiscord">Chamadas Discord</button>
         </div>
+        <div class="rule-modal-body" id="perfilCorpo"></div>
       </div>
     </div>
 
