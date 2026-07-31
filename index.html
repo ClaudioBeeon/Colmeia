@@ -13,26 +13,40 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-07-31y">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31y">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31y">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31y">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31y">
+<link rel="stylesheet" href="css/01-base.css?v=2026-07-31z">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31z">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31z">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31z">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31z">
 </head>
 <body>
 
+<!-- Tela de login "Editorial" (opção C aprovada pelo Cláudio, ver os 3
+     protótipos): vídeo em loop de fundo (efeito de vidro é do PRÓPRIO
+     vídeo, não é feito aqui), a frase vira manchete grande no topo, e a
+     chave de acesso desce pra uma barra separada ("dock") ancorada
+     embaixo. autoplay só funciona com muted (regra do navegador, não é
+     escolha nossa) — por isso não tem áudio pra silenciar depois. -->
 <div class="login-screen" id="loginScreen">
-  <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785079704/Firefly_gpt-image_Retirar_os_textos_deixar_apenas_a_imagem_de_fundo_500924_six5xc.png" class="login-bg" alt="">
+  <video class="login-bg" autoplay loop muted playsinline
+    poster="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785079704/Firefly_gpt-image_Retirar_os_textos_deixar_apenas_a_imagem_de_fundo_500924_six5xc.png">
+    <source src="https://res.cloudinary.com/dzqsqxrkw/video/upload/v1785523009/background_rolea_colmeia_cavbeh.mp4" type="video/mp4">
+  </video>
+  <div class="login-scrim"></div>
   <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Horiontal_texto_branco_bpfzkw.png" class="login-logo" alt="Colmeia">
   <div class="login-content">
     <p class="login-frase" id="loginFrase">Bom trabalho, hoje é um bom dia pra organizar tudo.</p>
-    <form id="loginForm" class="login-form">
-      <input type="password" id="loginSenha" placeholder="Acesso" autocomplete="current-password" required>
-      <button type="submit" id="loginSubmit" aria-label="Entrar">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-    </form>
-    <p class="login-erro" id="loginErro" hidden></p>
+    <div class="login-bottom">
+      <div class="login-dock">
+        <form id="loginForm" class="login-form">
+          <input type="password" id="loginSenha" placeholder="Chave de acesso" autocomplete="current-password" required>
+          <button type="submit" id="loginSubmit" aria-label="Entrar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+      </div>
+      <p class="login-erro" id="loginErro" hidden></p>
+    </div>
   </div>
 </div>
 
@@ -594,24 +608,24 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-07-31y"></script>
-<script src="js/fila-offline.js?v=2026-07-31y"></script>
-<script src="js/notificacoes-uploads.js?v=2026-07-31y"></script>
-<script src="js/pessoas-fotos.js?v=2026-07-31y"></script>
-<script src="js/kanban-polling.js?v=2026-07-31y"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-07-31y"></script>
-<script src="js/regras-briefing.js?v=2026-07-31y"></script>
-<script src="js/kanban-board.js?v=2026-07-31y"></script>
-<script src="js/clientes-hub.js?v=2026-07-31y"></script>
-<script src="js/chat-comentarios.js?v=2026-07-31y"></script>
-<script src="js/detalhe-modal.js?v=2026-07-31y"></script>
-<script src="js/detalhe-cardmae.js?v=2026-07-31y"></script>
-<script src="js/detalhe-alteracao.js?v=2026-07-31y"></script>
-<script src="js/bee.js?v=2026-07-31y"></script>
-<script src="js/paginas-designers.js?v=2026-07-31y"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-07-31y"></script>
-<script src="js/pagina-repasse.js?v=2026-07-31y"></script>
-<script src="js/notificacoes-avisos.js?v=2026-07-31y"></script>
-<script src="js/login-boot.js?v=2026-07-31y"></script>
+<script src="js/config.js?v=2026-07-31z"></script>
+<script src="js/fila-offline.js?v=2026-07-31z"></script>
+<script src="js/notificacoes-uploads.js?v=2026-07-31z"></script>
+<script src="js/pessoas-fotos.js?v=2026-07-31z"></script>
+<script src="js/kanban-polling.js?v=2026-07-31z"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-07-31z"></script>
+<script src="js/regras-briefing.js?v=2026-07-31z"></script>
+<script src="js/kanban-board.js?v=2026-07-31z"></script>
+<script src="js/clientes-hub.js?v=2026-07-31z"></script>
+<script src="js/chat-comentarios.js?v=2026-07-31z"></script>
+<script src="js/detalhe-modal.js?v=2026-07-31z"></script>
+<script src="js/detalhe-cardmae.js?v=2026-07-31z"></script>
+<script src="js/detalhe-alteracao.js?v=2026-07-31z"></script>
+<script src="js/bee.js?v=2026-07-31z"></script>
+<script src="js/paginas-designers.js?v=2026-07-31z"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-07-31z"></script>
+<script src="js/pagina-repasse.js?v=2026-07-31z"></script>
+<script src="js/notificacoes-avisos.js?v=2026-07-31z"></script>
+<script src="js/login-boot.js?v=2026-07-31z"></script>
 </body>
 </html>

@@ -879,10 +879,16 @@ body.card-aberto .quick-access-panel { display: none; }
 [data-theme="dark"] .logo-dark { display: block; }
 
 /* ===== Tela de login ===== */
+/* ===== Login — "Editorial" (opção C dos 3 protótipos, aprovada pelo
+   Cláudio): a frase vira manchete grande no topo, a chave de acesso
+   desce pra uma barra ("dock") separada, ancorada embaixo. O vídeo em
+   loop é quem faz o efeito de vidro — aqui só existe o vidro do próprio
+   dock (backdrop-filter), sem nenhum cartão fechado em volta da frase. */
 .login-screen {
   position: fixed; inset: 0; z-index: 500;
-  background: #0A0A0A;
+  background: #0A0A0D;
   overflow: hidden;
+  font-family: var(--font-body);
 }
 .login-screen[hidden] { display: none; }
 
@@ -892,62 +898,92 @@ body.card-aberto .quick-access-panel { display: none; }
   object-fit: cover;
 }
 
+/* Sem isso o texto (ou o dock de vidro) fica ilegível dependendo do
+   trecho do vídeo — mais forte embaixo (onde fica o dock) do que em
+   cima (onde fica só a manchete, que já é branca e grande). */
+.login-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(10,10,13,0.12) 0%, rgba(10,10,13,0.18) 45%, rgba(10,10,13,0.62) 100%);
+  pointer-events: none;
+}
+
 .login-logo {
   position: absolute;
   top: 36px; left: 48px;
-  height: 22px;
+  height: 20px;
   object-fit: contain;
+  z-index: 1;
 }
 
 .login-content {
-  position: absolute;
-  left: 48px; bottom: 56px;
-  display: flex; flex-direction: column; gap: 18px;
-  max-width: 460px;
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: clamp(84px, 14vh, 130px) clamp(24px, 5vw, 56px) clamp(28px, 5vh, 48px);
 }
 
 .login-frase {
-  font-family: 'Heebo', sans-serif;
-  font-size: 32px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4.6vw, 48px);
+  font-weight: 400;
   color: #fff;
-  line-height: 1.25;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
   margin: 0;
+  max-width: 14ch;
+  text-wrap: balance;
+}
+
+.login-bottom { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+.login-dock {
+  width: min(560px, 100%);
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 999px;
+  padding: 8px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.3);
 }
 
 .login-form {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .login-form input {
-  width: 160px;
-  height: 48px;
+  flex: 1; min-width: 0;
+  height: 50px;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  border: none;
   border-radius: 999px;
-  padding: 0 22px;
+  padding: 0 20px;
   color: #fff;
-  font-family: 'Heebo', sans-serif;
-  font-size: 15px;
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  outline: none;
 }
-.login-form input::placeholder { color: rgba(255, 255, 255, 0.6); }
+.login-form input::placeholder { color: rgba(255, 255, 255, 0.55); }
 .login-form button {
   flex-shrink: 0;
-  width: 48px; height: 48px;
+  width: 50px; height: 50px;
   border-radius: 50%;
-  background: #FFD84D;
+  background: var(--kanban-yellow);
   border: none;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  color: #2C2C2A;
+  color: #16181D;
+  transition: transform 180ms ease-out;
 }
-.login-form button svg { width: 20px; height: 20px; }
+.login-form button:hover { transform: scale(1.05); }
+.login-form button svg { width: 19px; height: 19px; }
 .login-form button:disabled { opacity: 0.6; cursor: default; }
-.login-erro { color: #FFB4B4; font-size: 12.5px; margin: 0; font-family: 'Heebo', sans-serif; }
+.login-erro { color: #FFB4B4; font-size: 12.5px; margin: 0; font-family: var(--font-body); text-align: center; }
+
+@media (max-width: 640px) {
+  .login-content { padding-top: 76px; }
+  .login-frase { max-width: 12ch; }
+}
 
 .sidebar-logout {
   font-size: 11px; color: var(--text-muted); background: transparent;
