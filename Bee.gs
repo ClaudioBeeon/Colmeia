@@ -267,6 +267,7 @@ function beeConversar(taskId, pergunta, idOriginal, designer) {
 
   var prompt = BEE_INSTRUCOES_CONVERSA +
     beeQuemEstaFalando(designer) +
+    beeTrechoDoDna(material.cliente) +
     '\nTAREFA: ' + material.titulo + '\n' +
     (material.cliente ? 'CLIENTE: ' + material.cliente + '\n' : '') +
     '\nTUDO QUE ESTÁ ESCRITO SOBRE ELA:\n' + (beeTextoDoMaterial(material) || '(nada escrito ainda)') + '\n' +
@@ -527,6 +528,121 @@ function beeMemoriaDoCliente(cliente, taskIds, forcar) {
   };
   salvarMemoriaCliente(cliente, memoria);
   return { ok: true, memoria: memoria, quando: agora };
+}
+
+// ============ 4b) MEMÓRIAS ESCRITAS À MÃO ============
+//
+// O que você e o time digitam em "Memórias da Bee" (Configurações). É a
+// base do DNA do cliente: informação que ninguém precisa deduzir porque
+// alguém simplesmente SABE ("esse cliente não usa serifa", "aprova mais
+// rápido quando tem foto real").
+//
+// Elas ficam numa aba separada da memória deduzida, mas a Bee lê as duas
+// juntas na hora de conversar — foi assim que o Cláudio pediu.
+
+function getMemoriasBeeSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('MemoriasBee');
+  if (!sheet) {
+    sheet = ss.insertSheet('MemoriasBee');
+    sheet.getRange('A1:E1').setValues([['id', 'cliente', 'texto', 'autor', 'criado_em']]);
+  }
+  return sheet;
+}
+
+function listarMemoriasBee(cliente) {
+  var sheet = getMemoriasBeeSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var alvo = cliente ? String(cliente).trim().toLowerCase() : null;
+  var lista = [];
+  for (var i = 1; i < linhas.length; i++) {
+    if (!linhas[i][0]) continue;
+    if (alvo && String(linhas[i][1]).trim().toLowerCase() !== alvo) continue;
+    lista.push({
+      id: String(linhas[i][0]),
+      cliente: String(linhas[i][1]),
+      texto: String(linhas[i][2]),
+      autor: String(linhas[i][3]),
+      criadoEm: Number(linhas[i][4]) || 0
+    });
+  }
+  lista.sort(function (a, b) { return b.criadoEm - a.criadoEm; });
+  return { ok: true, memorias: lista };
+}
+
+function adicionarMemoriaBee(cliente, texto, autor) {
+  if (!cliente || !String(cliente).trim()) return { ok: false, error: 'Escolhe o cliente.' };
+  if (!texto || !String(texto).trim()) return { ok: false, error: 'Escreve a memória.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getMemoriasBeeSheet();
+    var id = 'mem-' + new Date().getTime();
+    sheet.appendRow([id, String(cliente).trim(), String(texto).trim(), autor || '', new Date().getTime()]);
+    return { ok: true, id: id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function excluirMemoriaBee(id) {
+  if (!id) return { ok: false, error: 'id não informado.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getMemoriasBeeSheet();
+    var linhas = sheet.getDataRange().getValues();
+    for (var i = linhas.length - 1; i >= 1; i--) {
+      if (String(linhas[i][0]) === String(id)) {
+        sheet.deleteRow(i + 1);
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: 'Memória não encontrada.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * O DNA do cliente numa resposta só: o que foi escrito à mão e o que a
+ * Bee deduziu, juntos — sem separar, como o Cláudio pediu. A origem
+ * continua guardada em cada item (campo "escrita") porque isso é de
+ * graça e permite separar de novo um dia, se ele mudar de ideia; a tela
+ * simplesmente não usa esse campo hoje.
+ */
+function beeDnaDoCliente(cliente) {
+  if (!cliente) return { ok: false, error: 'cliente não informado.' };
+  var manuais = listarMemoriasBee(cliente).memorias.map(function (m) {
+    return { id: m.id, texto: m.texto, autor: m.autor, escrita: true };
+  });
+  var deduzida = lerMemoriaCliente(cliente);
+  var automaticas = (deduzida && deduzida.memoria && deduzida.memoria.manias || []).map(function (t) {
+    return { id: null, texto: t, autor: 'Bee', escrita: false };
+  });
+  return {
+    ok: true,
+    cliente: cliente,
+    itens: manuais.concat(automaticas),
+    observacao: (deduzida && deduzida.memoria && deduzida.memoria.observacao) || '',
+    deduzidoEm: (deduzida && deduzida.quando) || 0
+  };
+}
+
+/**
+ * O pedaço de prompt com o DNA do cliente. Entra nas conversas da Bee
+ * (na tarefa e na livre, quando o cliente é conhecido) — é isso que faz
+ * ela "conhecer" o cliente em vez de responder no genérico.
+ */
+function beeTrechoDoDna(cliente) {
+  if (!cliente) return '';
+  var dna = beeDnaDoCliente(cliente);
+  if (!dna.ok || !dna.itens.length) return '';
+  var linhas = dna.itens.map(function (i) { return '- ' + i.texto; }).join('\n');
+  return '\nO QUE VOCÊ JÁ SABE SOBRE O CLIENTE ' + cliente + ':\n' + linhas +
+    (dna.observacao ? '\n- ' + dna.observacao : '') +
+    '\nUse isso quando for útil, sem repetir a lista pra pessoa. Se algo aqui contradisser o que ' +
+    'está escrito na tarefa, o que está na tarefa vale mais — isso aqui é histórico, aquilo é o pedido de agora.\n';
 }
 
 // ============ 5) CONFERIR O QUE FALTA (antes de entregar) ============

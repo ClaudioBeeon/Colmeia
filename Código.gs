@@ -187,6 +187,14 @@ function handleRequest(e, method) {
         output = beeMemoriaDoCliente(body.cliente, body.taskIds, body.forcar);
       } else if (body.acao === 'beeConferirEntrega') {
         output = beeConferirEntrega(body.taskId, body.idOriginal, body.cliente);
+      } else if (body.acao === 'beeMemorias') {
+        output = listarMemoriasBee(body.cliente);
+      } else if (body.acao === 'beeAdicionarMemoria') {
+        output = adicionarMemoriaBee(body.cliente, body.texto, body.autor);
+      } else if (body.acao === 'beeExcluirMemoria') {
+        output = excluirMemoriaBee(body.id);
+      } else if (body.acao === 'beeDna') {
+        output = beeDnaDoCliente(body.cliente);
       } else if (body.acao === 'beeHistorico') {
         output = { ok: true, conversa: lerConversaBee(body.taskId) };
       } else if (body.acao === 'reabrirTarefa') {

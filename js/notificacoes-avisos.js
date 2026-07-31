@@ -889,6 +889,13 @@ document.getElementById("configTabClientes").addEventListener("click", () => {
   configTabAtiva = "clientes";
   atualizarAbasConfig();
 });
+const _configTabMemorias = document.getElementById("configTabMemorias");
+if (_configTabMemorias) {
+  _configTabMemorias.addEventListener("click", () => {
+    configTabAtiva = "memorias";
+    atualizarAbasConfig();
+  });
+}
 
 /**
  * Roda tudo que o Colmeia precisa pra funcionar de verdade — só chamada

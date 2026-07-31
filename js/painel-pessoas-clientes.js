@@ -10,7 +10,14 @@ function abrirPainelPessoas() {
 function atualizarAbasConfig() {
   document.getElementById("configTabPessoas").classList.toggle("active", configTabAtiva === "pessoas");
   document.getElementById("configTabClientes").classList.toggle("active", configTabAtiva === "clientes");
+  const abaMemorias = document.getElementById("configTabMemorias");
+  if (abaMemorias) abaMemorias.classList.toggle("active", configTabAtiva === "memorias");
   const hint = document.getElementById("configHint");
+  if (configTabAtiva === "memorias") {
+    hint.textContent = "O que a Bee sabe sobre cada cliente. O que você escrever aqui ela usa em toda conversa sobre esse cliente — manias, o que evitar, o que faz aprovar mais rápido.";
+    renderPainelMemoriasBee();
+    return;
+  }
   if (configTabAtiva === "pessoas") {
     hint.textContent = "Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.";
     renderPainelPessoas();
@@ -455,3 +462,182 @@ async function abrirModalRegra(task) {
   renderModalRegra(task);
 }
 
+
+// ============================================
+// MEMÓRIAS DA BEE (aba de Configurações)
+// ============================================
+// O que a Bee SABE sobre cada cliente — as manias, o que evitar, o que
+// faz aprovar mais rápido. Vira contexto em toda conversa dela sobre
+// aquele cliente (ver beeTrechoDoDna em Bee.gs).
+//
+// Duas fontes, mostradas JUNTAS de propósito (decisão do Cláudio): o que
+// alguém escreveu aqui e o que a Bee deduziu lendo as tarefas antigas. A
+// origem continua guardada no backend, então dá pra separar um dia sem
+// perder nada — a tela é que não separa.
+
+let memoriasClienteSelecionado = null;
+let memoriasDnaAtual = null;
+let memoriasCarregando = false;
+
+function renderPainelMemoriasBee() {
+  const body = document.getElementById("peopleModalBody");
+  if (!body) return;
+
+  const clientes = listarTodosClientesConhecidos();
+  if (!memoriasClienteSelecionado && clientes.length) memoriasClienteSelecionado = clientes[0];
+
+  body.innerHTML = `
+    <div class="memorias-topo">
+      <select id="memoriasCliente" class="memorias-select">
+        ${clientes.map(c => `<option value="${escaparHTML(c)}"${c === memoriasClienteSelecionado ? " selected" : ""}>${escaparHTML(c)}</option>`).join("")}
+      </select>
+      <button type="button" id="memoriasAtualizarBee" title="A Bee lê as tarefas antigas desse cliente de novo. Demora — normalmente ela só faz isso 1x por semana.">🐝 Atualizar o que ela deduziu</button>
+    </div>
+    <div class="memorias-nova">
+      <input type="text" id="memoriasTexto" placeholder="Ex: sempre pede pra aumentar a logo depois da primeira versão">
+      <button type="button" id="memoriasAdicionar">Adicionar</button>
+    </div>
+    <div id="memoriasLista"></div>
+  `;
+
+  const select = document.getElementById("memoriasCliente");
+  if (select) {
+    select.addEventListener("change", () => {
+      memoriasClienteSelecionado = select.value;
+      memoriasDnaAtual = null;
+      renderPainelMemoriasBee();
+    });
+  }
+
+  const btnAdd = document.getElementById("memoriasAdicionar");
+  const campo = document.getElementById("memoriasTexto");
+  if (btnAdd) btnAdd.addEventListener("click", () => adicionarMemoriaDaBee());
+  if (campo) campo.addEventListener("keydown", e => { if (e.key === "Enter") adicionarMemoriaDaBee(); });
+
+  const btnAtualizar = document.getElementById("memoriasAtualizarBee");
+  if (btnAtualizar) btnAtualizar.addEventListener("click", () => atualizarMemoriaDeduzida(btnAtualizar));
+
+  desenharListaDeMemorias();
+  if (!memoriasDnaAtual) carregarDnaDoCliente();
+}
+
+async function carregarDnaDoCliente() {
+  if (!memoriasClienteSelecionado || memoriasCarregando) return;
+  memoriasCarregando = true;
+  const cliente = memoriasClienteSelecionado;
+  const data = await chamarBackend({ acao: "beeDna", cliente });
+  memoriasCarregando = false;
+  // Trocou de cliente enquanto carregava? Não escreve por cima.
+  if (cliente !== memoriasClienteSelecionado) return;
+  memoriasDnaAtual = (data && data.ok) ? data : { itens: [] };
+  desenharListaDeMemorias();
+}
+
+function desenharListaDeMemorias() {
+  const alvo = document.getElementById("memoriasLista");
+  if (!alvo) return;
+  if (!memoriasDnaAtual) {
+    alvo.innerHTML = `<p class="workflow-seq-empty">Carregando o que a Bee sabe...</p>`;
+    return;
+  }
+  const itens = memoriasDnaAtual.itens || [];
+  if (!itens.length) {
+    alvo.innerHTML = `<p class="workflow-seq-empty">A Bee ainda não sabe nada sobre esse cliente. Escreve a primeira memória aí em cima — ou manda ela ler as tarefas antigas.</p>`;
+    return;
+  }
+  alvo.innerHTML = `
+    <div class="memorias-lista">
+      ${itens.map(i => `
+        <div class="memoria-item">
+          <span class="memoria-texto">${escaparHTML(i.texto)}</span>
+          ${i.id
+            ? `<button type="button" class="memoria-x" data-id="${escaparHTML(i.id)}" title="Apagar essa memória">✕</button>`
+            : `<span class="memoria-x memoria-x-vazio" title="Essa a Bee deduziu sozinha lendo as tarefas — pra tirar, use o botão de atualizar">·</span>`}
+        </div>
+      `).join("")}
+      ${memoriasDnaAtual.observacao ? `<p class="memoria-obs">${escaparHTML(memoriasDnaAtual.observacao)}</p>` : ""}
+    </div>
+  `;
+  alvo.querySelectorAll(".memoria-x[data-id]").forEach(btn => {
+    btn.addEventListener("click", () => excluirMemoriaDaBee(btn.dataset.id));
+  });
+}
+
+async function adicionarMemoriaDaBee() {
+  const campo = document.getElementById("memoriasTexto");
+  if (!campo) return;
+  const texto = campo.value.trim();
+  if (!texto || !memoriasClienteSelecionado) return;
+  campo.value = "";
+
+  // Otimista: aparece na hora e some se o backend recusar.
+  if (memoriasDnaAtual) {
+    memoriasDnaAtual.itens = [{ id: "novo", texto, escrita: true }].concat(memoriasDnaAtual.itens || []);
+    desenharListaDeMemorias();
+  }
+
+  const data = await chamarBackend({
+    acao: "beeAdicionarMemoria",
+    cliente: memoriasClienteSelecionado,
+    texto,
+    autor: DESIGNER_LOGADO,
+  });
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "Não consegui salvar essa memória agora.", "erro");
+    if (campo && !campo.value.trim()) campo.value = texto; // devolve o texto
+  }
+  memoriasDnaAtual = null;
+  carregarDnaDoCliente();
+}
+
+async function excluirMemoriaDaBee(id) {
+  if (!id || id === "novo") return;
+  if (memoriasDnaAtual) {
+    memoriasDnaAtual.itens = (memoriasDnaAtual.itens || []).filter(i => i.id !== id);
+    desenharListaDeMemorias();
+  }
+  const data = await chamarBackend({ acao: "beeExcluirMemoria", id });
+  if (!data || !data.ok) mostrarToast((data && data.error) || "Não consegui apagar agora.", "erro");
+  memoriasDnaAtual = null;
+  carregarDnaDoCliente();
+}
+
+/**
+ * Manda a Bee reler as tarefas antigas do cliente agora, sem esperar a
+ * validade de uma semana. É a operação mais cara dela — por isso é um
+ * botão, e não algo automático.
+ */
+async function atualizarMemoriaDeduzida(btn) {
+  if (!memoriasClienteSelecionado) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Lendo as tarefas...";
+
+  // Manda os ids das tarefas DESSE cliente que já estão no quadro — o
+  // backend não precisa repaginar o Runrun.it inteiro só pra descobrir
+  // quais são. Mais recentes primeiro.
+  const doCliente = (typeof tasksTodas !== "undefined" ? tasksTodas : tasks)
+    .filter(t => t.id && nomesCorrespondem(t.client, memoriasClienteSelecionado))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .map(t => t.id);
+
+  const data = await chamarBackend({
+    acao: "beeMemoriaCliente",
+    cliente: memoriasClienteSelecionado,
+    taskIds: doCliente,
+    forcar: true,
+  });
+  btn.disabled = false;
+  btn.textContent = original;
+
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "A Bee não conseguiu ler as tarefas agora.", "erro");
+    return;
+  }
+  if (data.semMaterial) {
+    mostrarToast("Não achei conversa nenhuma nas tarefas desse cliente pra tirar padrão.");
+    return;
+  }
+  memoriasDnaAtual = null;
+  carregarDnaDoCliente();
+}

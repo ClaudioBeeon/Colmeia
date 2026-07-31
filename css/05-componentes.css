@@ -800,3 +800,51 @@ body.card-aberto .bee-painel { display: none; }
 }
 .bee-enviar svg { width: 15px; height: 15px; }
 .bee-enviar:active { transform: scale(0.9); }
+
+/* ===== Memórias da Bee (aba de Configurações) =====
+   O que ela SABE sobre cada cliente. O que está escrito aqui entra em
+   toda conversa dela sobre esse cliente (ver beeTrechoDoDna, Bee.gs).
+   As memórias escritas e as deduzidas aparecem JUNTAS de propósito —
+   a origem continua guardada no backend, só não é mostrada. */
+.memorias-topo { display: flex; gap: 8px; margin-bottom: 10px; }
+.memorias-select {
+  flex: 1; min-width: 0; font-family: var(--font-body); font-size: 13px;
+  padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--card-bg); color: var(--text-primary);
+}
+.memorias-topo button {
+  border: 1px solid var(--border); background: var(--card-bg); color: var(--text-primary);
+  font-family: var(--font-body); font-size: 12px; font-weight: 700;
+  padding: 9px 13px; border-radius: 10px; cursor: pointer; white-space: nowrap;
+}
+.memorias-topo button:hover { background: var(--page-bg); }
+.memorias-topo button:disabled { opacity: .6; cursor: default; }
+
+.memorias-nova { display: flex; gap: 8px; margin-bottom: 14px; }
+.memorias-nova input {
+  flex: 1; min-width: 0; font-family: var(--font-body); font-size: 13px;
+  padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--card-bg); color: var(--text-primary); outline: none;
+}
+.memorias-nova input:focus { border-color: var(--text-muted); }
+.memorias-nova button {
+  border: none; background: var(--kanban-yellow); color: #16181D;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
+  padding: 9px 16px; border-radius: 10px; cursor: pointer;
+}
+
+.memorias-lista { display: flex; flex-direction: column; gap: 7px; }
+.memoria-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--page-bg); border-radius: 10px; padding: 10px 12px;
+}
+.memoria-texto { flex: 1; min-width: 0; font-size: 13px; line-height: 1.45; }
+.memoria-x {
+  width: 22px; height: 22px; border-radius: 50%; border: none; flex-shrink: 0;
+  background: transparent; color: var(--text-muted); cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.memoria-x:hover { background: var(--danger-soft); color: var(--danger); }
+.memoria-x-vazio { cursor: default; opacity: .45; }
+.memoria-x-vazio:hover { background: transparent; color: var(--text-muted); }
+.memoria-obs { font-size: 12px; color: var(--text-muted); padding: 6px 4px 0; line-height: 1.5; }
