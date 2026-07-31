@@ -350,6 +350,188 @@ function beeConversarLivre(pergunta, designer) {
   return { ok: true, resposta: resultado.texto.trim(), conversa: conversa };
 }
 
+// ============ 4) A MEMÓRIA DO CLIENTE ============
+//
+// As manias de cada cliente ("sempre pede pra aumentar a logo", "não
+// gosta de fundo escuro"), tiradas das tarefas antigas dele. É a coisa
+// que uma IA genérica NUNCA vai saber — está na conversa do time, não na
+// internet — e é o que um designer novo levaria meses pra aprender.
+//
+// É de longe a coisa mais cara que a Bee faz: precisa ler os comentários
+// de várias tarefas. Por isso roda no máximo 1x por semana por cliente e
+// fica guardada na aba MemoriaCliente. Nos outros 6 dias e 23 horas,
+// abrir um card não custa nada — só lê o que já está lá.
+
+var MEMORIA_CLIENTE_VALIDADE_MS = 7 * 24 * 60 * 60 * 1000;
+var MEMORIA_CLIENTE_MAX_TAREFAS = 15;
+
+function getMemoriaClienteSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('MemoriaCliente');
+  if (!sheet) {
+    sheet = ss.insertSheet('MemoriaCliente');
+    sheet.getRange('A1:C1').setValues([['cliente', 'memoria_json', 'atualizado_em']]);
+  }
+  return sheet;
+}
+
+function lerMemoriaCliente(cliente) {
+  var sheet = getMemoriaClienteSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var alvo = String(cliente || '').trim().toLowerCase();
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]).trim().toLowerCase() === alvo) {
+      try {
+        return { indice: i + 1, memoria: JSON.parse(linhas[i][1] || '{}'), quando: Number(linhas[i][2]) || 0 };
+      } catch (e) {
+        return { indice: i + 1, memoria: null, quando: 0 };
+      }
+    }
+  }
+  return null;
+}
+
+function salvarMemoriaCliente(cliente, memoria) {
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getMemoriaClienteSheet();
+    var existente = lerMemoriaCliente(cliente);
+    var agora = new Date().getTime();
+    if (existente) {
+      sheet.getRange(existente.indice, 2).setValue(JSON.stringify(memoria));
+      sheet.getRange(existente.indice, 3).setValue(agora);
+    } else {
+      sheet.appendRow([String(cliente), JSON.stringify(memoria), agora]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * @param {string} cliente  nome do cliente
+ * @param {Array}  taskIds  ids das tarefas DELE, mais recentes primeiro —
+ *                          mandados pelo front, que já tem o quadro
+ *                          inteiro em memória. Evita o backend ter que
+ *                          repaginar o Runrun.it inteiro só pra descobrir
+ *                          quais tarefas são desse cliente.
+ * @param {boolean} forcar  ignora a validade de 7 dias e refaz agora
+ */
+function beeMemoriaDoCliente(cliente, taskIds, forcar) {
+  if (!cliente) return { ok: false, error: 'cliente não informado.' };
+
+  var guardada = lerMemoriaCliente(cliente);
+  var agora = new Date().getTime();
+  if (!forcar && guardada && guardada.memoria && (agora - guardada.quando) < MEMORIA_CLIENTE_VALIDADE_MS) {
+    return { ok: true, memoria: guardada.memoria, doCache: true, quando: guardada.quando };
+  }
+
+  var ids = (taskIds || []).slice(0, MEMORIA_CLIENTE_MAX_TAREFAS);
+  if (!ids.length) return { ok: true, semMaterial: true };
+
+  var conversas = [];
+  ids.forEach(function (id) {
+    var r = listarComentarios(id);
+    if (!r.ok) return;
+    r.comentarios.forEach(function (c) {
+      var texto = String(c.texto || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (texto) conversas.push(c.autor + ': ' + texto);
+    });
+  });
+  if (!conversas.length) return { ok: true, semMaterial: true };
+
+  // Conversa demais estoura o pedido e não melhora o resultado: as
+  // manias aparecem repetidas, não escondidas no fim.
+  var material = conversas.slice(0, 400).join('\n');
+
+  var prompt = 'Você é a Bee, assistente dos designers da Beeon (agência de marketing).\n\n' +
+    'Abaixo estão os comentários das últimas tarefas do cliente "' + cliente + '". Sua função é ' +
+    'dizer ao designer COMO ESSE CLIENTE É — as manias dele, o que ele sempre pede pra mudar, o ' +
+    'que ele não gosta. É a informação que um designer novo levaria meses pra aprender no tapa.\n\n' +
+    'REGRAS DURAS:\n' +
+    '- Só aponte um padrão se ele aparecer em MAIS DE UMA tarefa. Uma reclamação isolada não é mania.\n' +
+    '- Nada de generalidade ("gosta de qualidade", "é exigente"). Se não for específico e acionável, corta.\n' +
+    '- Fale de design e de processo, não da pessoa. Nunca escreva algo que seria constrangedor se o ' +
+    'cliente lesse.\n' +
+    '- Se não der pra tirar nenhum padrão claro, devolva a lista vazia.\n\n' +
+    'FORMATO: no máximo 5 itens, frase curta e direta em português do Brasil ' +
+    '("sempre pede pra aumentar a logo depois da primeira versão").\n\n' +
+    'COMENTÁRIOS:\n' + material + '\n\n' +
+    'Responda SOMENTE em JSON: {"manias":["...","..."],"observacao":""}\n' +
+    'A "observacao" é opcional: use pra algo do processo que ajude o designer (ex: "costuma responder ' +
+    'só no fim da tarde"). Deixe "" se não houver.';
+
+  var resultado = chamarGemini(prompt);
+  if (!resultado.ok) {
+    // Se a IA falhou mas existe uma memória velha guardada, devolve a
+    // velha: informação de uma semana atrás é muito melhor que nenhuma.
+    if (guardada && guardada.memoria) return { ok: true, memoria: guardada.memoria, doCache: true, quando: guardada.quando };
+    return resultado;
+  }
+
+  var memoria = {
+    manias: (resultado.dados && resultado.dados.manias) || [],
+    observacao: (resultado.dados && resultado.dados.observacao) || '',
+    tarefasLidas: ids.length
+  };
+  salvarMemoriaCliente(cliente, memoria);
+  return { ok: true, memoria: memoria, quando: agora };
+}
+
+// ============ 5) CONFERIR O QUE FALTA (antes de entregar) ============
+//
+// Compara o que foi PEDIDO (a mesma leitura da primeira fala dela) com o
+// que foi FEITO (os arquivos que subiram na pasta do card) e aponta o que
+// parece ter ficado de fora. Só roda quando o designer clica — nunca
+// sozinha, nunca na abertura do card.
+
+function beeConferirEntrega(taskId, idOriginal, cliente) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  var material = beeMaterialDaTarefa(taskId, idOriginal);
+  if (!material.ok) return material;
+  if (!material.mensagens.length) {
+    return { ok: true, resposta: 'Não tem nada escrito sobre o que essa tarefa pede, então não tenho com o que comparar.' };
+  }
+
+  var arquivos = [];
+  try {
+    var uploads = buscarUploadsRecentesDoCard(taskId, cliente);
+    if (uploads && uploads.ok) {
+      arquivos = (uploads.arquivos || []).map(function (a) { return a.nome || a.name || ''; }).filter(String);
+    }
+  } catch (e) { /* sem pasta no Drive ainda — segue só com o que foi pedido */ }
+
+  var prompt = 'Você é a Bee, assistente dos designers da Beeon (agência de marketing).\n\n' +
+    'O designer está prestes a entregar uma tarefa e quer conferir se não esqueceu nada.\n\n' +
+    'Abaixo está TUDO que foi pedido (descrição e comentários) e a LISTA DE ARQUIVOS que ele subiu ' +
+    'na pasta do card.\n\n' +
+    'Sua função: apontar o que parece ter FICADO DE FORA. Compare o que foi pedido com o que existe.\n\n' +
+    'REGRAS DURAS:\n' +
+    '- Só aponte o que está escrito no pedido. Não invente entregável que ninguém pediu.\n' +
+    '- Nome de arquivo é pista, não prova: você não vê o conteúdo. Escreva como dúvida ("não achei ' +
+    'nenhum arquivo que pareça o story — subiu?"), nunca como acusação.\n' +
+    '- Se estiver tudo aparentemente lá, diga isso em uma linha e pare. Não invente ressalva pra ' +
+    'parecer útil.\n' +
+    '- Português do Brasil, curto e direto, em tópicos. Sem emoji, sem enrolação.\n\n' +
+    'O QUE FOI PEDIDO:\n' + beeTextoDoMaterial(material) + '\n\n' +
+    'ARQUIVOS NA PASTA DO CARD:\n' + (arquivos.join('\n') || '(nenhum arquivo encontrado na pasta)');
+
+  var resultado = chamarGeminiTexto(prompt, GEMINI_MODEL_CONVERSA);
+  if (!resultado.ok) return resultado;
+
+  // Entra na conversa como uma fala dela: fica registrado junto com o
+  // resto, em vez de sumir quando o card fechar.
+  var conversa = lerConversaBee(taskId);
+  var agora = new Date().getTime();
+  conversa.push({ autor: 'designer', texto: 'Confere o que falta antes de eu entregar.', quando: agora });
+  conversa.push({ autor: 'bee', texto: resultado.texto.trim(), quando: agora + 1 });
+  salvarConversaBee(taskId, conversa);
+
+  return { ok: true, resposta: resultado.texto.trim(), conversa: conversa };
+}
+
 // ============ ONDE A CONVERSA FICA GUARDADA ============
 //
 // UMA LINHA POR TAREFA, com a conversa inteira dentro de uma célula só

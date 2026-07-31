@@ -181,6 +181,10 @@ function handleRequest(e, method) {
         output = beeConversarLivre(body.pergunta, body.designer);
       } else if (body.acao === 'beeHistoricoLivre') {
         output = { ok: true, conversa: lerConversaBee(beeChaveLivre(body.designer)) };
+      } else if (body.acao === 'beeMemoriaCliente') {
+        output = beeMemoriaDoCliente(body.cliente, body.taskIds, body.forcar);
+      } else if (body.acao === 'beeConferirEntrega') {
+        output = beeConferirEntrega(body.taskId, body.idOriginal, body.cliente);
       } else if (body.acao === 'beeHistorico') {
         output = { ok: true, conversa: lerConversaBee(body.taskId) };
       } else if (body.acao === 'reabrirTarefa') {
