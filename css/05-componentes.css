@@ -541,33 +541,24 @@
    seria alguém mandar pro cliente uma pergunta que era pra ela.
    ------------------------------------------------------------------- */
 
-/* Os dois ícones que trocam de chat, no topo do painel. */
-/* Ficam na linha do nome da tarefa (não junto das abas) e em tamanho de
-   gente: menores que isso, ninguém percebia que a Bee existe. */
-.chat-troca { display: flex; gap: 5px; flex-shrink: 0; margin-right: 10px; }
-.chat-troca-btn {
-  width: 36px; height: 36px; border-radius: 11px; border: 1px solid transparent;
-  background: var(--page-bg); color: var(--text-secondary); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .15s var(--ease-apple), color .15s var(--ease-apple), transform .12s var(--ease-apple);
-}
-.chat-troca-btn svg { width: 20px; height: 20px; }
-.chat-troca-btn:active { transform: scale(0.92); }
-.chat-troca-btn:hover { background: var(--page-bg); color: var(--text-primary); }
-.chat-troca-btn.active { background: var(--kanban-yellow); color: #16181D; border-color: transparent; }
-
-/* Antes tinha overflow:hidden — com 3 abas (tarefa de alteração, "Linha
-   do tempo" extra) mais o botão de "Verificar upload" na mesma linha,
-   isso cortava/empurrava a última aba por cima do botão. Com flex-wrap,
-   quando não cabe tudo numa linha só, o que sobra desce pra segunda
-   linha certinho, sem sobrepor nada. */
-.chat-grupo-comentarios { display: flex; flex-wrap: wrap; gap: 6px; row-gap: 6px; min-width: 0; }
+/* Trocar entre "Comentários" e "Bee": desde a reconstrução do chat (a
+   partir da referência que o Cláudio mandou), isso deixou de ser dois
+   ícones soltos em cima da conversa e virou item do menu "..." do
+   cabeçalho — a área de conversa ficou sendo só conversa, sem barra
+   nenhuma. A aparência dos dois botões vem toda de `.chat-hdr-menu
+   button` (css/03-detalhe.css); aqui só sobra o grupo das abas. */
+.chat-grupo-comentarios { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .chat-grupo-comentarios.escondido { display: none; }
 
 /* O campo de escrever muda de cara no chat da Bee — é o aviso mais
-   importante da tela: o que for digitado aqui NÃO vai pro Runrun.it. */
-.comment-input.modo-bee { background: rgba(255,193,7,0.07); }
-[data-theme="dark"] .comment-input.modo-bee { background: rgba(255,193,7,0.10); }
+   importante da tela: o que for digitado aqui NÃO vai pro Runrun.it.
+   O tom fica só na PÍLULA do campo, não numa faixa colorida por trás
+   dela: faixa virava um "bloco" de fundo, coisa que a referência não
+   tem em lugar nenhum. O texto do placeholder ("Perguntar pra Bee —
+   fica só no Colmeia") continua sendo o aviso principal. */
+.comment-input.modo-bee { background: transparent; }
+.comment-input.modo-bee input { background: #FFFBEE; }
+[data-theme="dark"] .comment-input.modo-bee input { background: rgba(255,193,7,0.12); }
 
 /* A bolha dela: mesmo balão branco das outras (pra ler igual — pedido
    do Cláudio), o que distingue é o avatar amarelo dela do lado de fora. */
@@ -578,9 +569,11 @@
   background: var(--kanban-yellow); color: #16181D;
 }
 .bee-avatar svg { width: 19px; height: 19px; }
+/* Sem contorno (a referência não usa stroke em lugar nenhum): é só
+   um texto secundário do lado do nome. */
 .bee-selo {
-  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
-  color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 5px;
+  font-size: 10px; font-weight: 400; letter-spacing: .01em;
+  color: #9A9AA0; border: none; padding: 0;
 }
 .bee-titulo { font-weight: 700; margin-bottom: 6px; }
 .bee-lista { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
@@ -592,12 +585,13 @@
 /* A etiqueta de origem: é ela que transforma "confio ou não confio" em
    "confiro num clique". Sem isso o resumo é só um palpite bonito. */
 .bee-origem {
-  font-size: 10px; font-weight: 700; white-space: nowrap;
-  border: 1px solid var(--border); background: transparent; color: var(--text-muted);
-  border-radius: 999px; padding: 1px 6px; cursor: pointer;
-  transition: background .15s var(--ease-apple), color .15s var(--ease-apple);
+  font-size: 10px; font-weight: 500; white-space: nowrap;
+  border: none; background: #F5F5F5; color: #777777;
+  border-radius: 999px; padding: 2px 7px; cursor: pointer;
+  transition: background 180ms ease-out, color 180ms ease-out;
 }
-.bee-origem:hover { background: var(--kanban-yellow); color: #16181D; border-color: transparent; }
+.bee-origem:hover { background: var(--kanban-yellow); color: #16181D; }
+[data-theme="dark"] .bee-origem { background: rgba(255,255,255,0.08); }
 
 /* A mensagem que a etiqueta abriu fica acesa por um instante, senão a
    pessoa cai no meio da conversa sem saber qual linha era. */
@@ -625,15 +619,10 @@
 .bee-peca:hover { border-color: var(--text-muted); }
 
 /* O ícone de mandar pro Runrun.it: é a ÚNICA saída daqui pra lá, e
-   mesmo ele não envia sozinho — joga o texto no campo pra revisar. */
-.bee-mandar {
-  border: none; background: transparent; color: var(--text-muted); cursor: pointer;
-  width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .15s var(--ease-apple), color .15s var(--ease-apple);
-}
-.bee-mandar svg { width: 13px; height: 13px; }
-.comment-bubble:hover .bee-mandar { opacity: 1; }
-.bee-mandar:hover { color: var(--text-primary); }
+   mesmo ele não envia sozinho — joga o texto no campo pra revisar.
+   Hoje ele mora na barra de ações embaixo da mensagem e herda todo o
+   visual de `.msg-acao` (css/03-detalhe.css); aqui não sobra nada
+   pra definir — as regras antigas (20px, opacity 0) brigavam com ela. */
 
 /* Prompt de imagem pronto pro Firefly. */
 .bee-firefly {
@@ -689,10 +678,10 @@ body.bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
 
 .bee-painel {
   width: 500px; max-width: 60vw; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden;
-  /* Mesmo degradê amarelinho leve do .chat-panel, cobrindo o painel
-     inteiro (não só o topo) — o balão branco (.comment-text) quase
-     sumia em cima de um fundo também branco. */
-  background: linear-gradient(180deg, rgba(255,199,0,0.10), #FFFFFF 340px);
+  /* Mesma superfície branca do .chat-panel, com o degradê creme quase
+     imperceptível só no topo (referência). */
+  font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Inter", system-ui, var(--font-body), sans-serif;
+  background: linear-gradient(180deg, #FFF7E6 0%, #FFFDF7 16%, #FFFFFF 38%);
   border-radius: 18px;
   box-shadow: 0 18px 50px rgba(10,10,20,0.16);
   /* -520px = a largura + o gap de 18px do .page (+ folga): fechado ele
@@ -702,7 +691,10 @@ body.bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
 }
 body.bee-aberta .bee-painel { margin-right: 0; opacity: 1; pointer-events: auto; }
 body.card-aberto .bee-painel { display: none; }
-[data-theme="dark"] .bee-painel { background: var(--card-bg); }
+/* Precisa ser COR SÓLIDA: --card-bg no escuro é branco translúcido
+   (rgba .045), e usar ele aqui deixava o painel inteiro transparente,
+   com o quadro aparecendo por trás da conversa. */
+[data-theme="dark"] .bee-painel { background: linear-gradient(180deg, #221E17 0%, #171620 16%, #141319 38%); }
 
 .bee-tela { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .bee-tela[hidden] { display: none; }
@@ -714,13 +706,18 @@ body.card-aberto .bee-painel { display: none; }
   display: flex; align-items: center; justify-content: center;
 }
 .bee-avatar-grande svg { width: 21px; height: 21px; }
+/* Botão de cabeçalho: sem "chip" de fundo — só o ícone, igual à
+   referência. O fundo aparece só no hover. */
 .bee-x {
-  width: 28px; height: 28px; border-radius: 50%; border: none; background: var(--page-bg);
-  color: var(--text-secondary); cursor: pointer; flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent;
+  color: #111111; cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
+  transition: background 180ms ease-out;
 }
-.bee-x:hover { background: var(--border); color: var(--text-primary); }
-.bee-x svg { width: 13px; height: 13px; }
+.bee-x:hover { background: #F5F5F5; }
+.bee-x svg { width: 18px; height: 18px; }
+[data-theme="dark"] .bee-x { color: var(--text-primary); }
+[data-theme="dark"] .bee-x:hover { background: rgba(255,255,255,0.08); }
 
 .bee-h {
   font-family: var(--font-display); font-size: 30px; line-height: 1.08; font-weight: 400;
@@ -786,53 +783,51 @@ body.card-aberto .bee-painel { display: none; }
 .bee-recente-excluir:hover { background: #FFE3E3; color: #E03131; }
 .bee-vazio { font-size: 12px; color: var(--text-muted); padding: 10px 4px; text-align: center; line-height: 1.5; }
 
-/* Gradiente quente extremamente sutil no topo — mesmo toque em cima do
-   painel inteiro (tela inicial) e do cabeçalho da conversa. */
-.bee-inicio-topo,
+/* O degradê creme agora vive no painel inteiro (.bee-painel), não em
+   faixas separadas — assim o cabeçalho não vira um "bloco" com fundo
+   próprio, que a referência não tem. */
 .bee-chat-topo {
-  background: linear-gradient(180deg, rgba(255,214,110,0.10), transparent 90%);
-}
-.bee-chat-topo {
-  display: flex; align-items: center; gap: 10px; padding: 14px 16px;
-  flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px; padding: 14px 12px 10px;
+  flex-shrink: 0; background: transparent;
 }
 .bee-chat-titulo-wrap { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .bee-chat-avatar {
-  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   background: var(--kanban-yellow); color: #16181D;
 }
-.bee-chat-avatar svg { width: 13px; height: 13px; }
+.bee-chat-avatar svg { width: 15px; height: 15px; }
 .bee-chat-titulo {
-  min-width: 0; text-align: center; font-size: 13.5px; font-weight: 700;
+  min-width: 0; text-align: center; font-size: 16px; font-weight: 600; color: #111111;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+[data-theme="dark"] .bee-chat-titulo { color: var(--text-primary); }
+.bee-inicio-topo { background: transparent; }
 .bee-thread {
-  flex: 1; min-height: 0; overflow-y: auto; padding: 18px;
-  display: flex; flex-direction: column; gap: 14px;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 8px 18px 18px;
+  display: flex; flex-direction: column; gap: 18px;
 }
 .bee-thread .comment-bubble { max-width: 88%; }
 
 .bee-campo {
-  display: flex; align-items: center; gap: 8px; padding: 12px 16px;
-  flex-shrink: 0;
-  background: linear-gradient(180deg, rgba(255,214,110,0.05), transparent 60%);
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px 16px;
+  flex-shrink: 0; background: transparent;
 }
 .bee-campo input {
-  flex: 1; min-width: 0; height: 54px; border-radius: 999px; border: none;
+  flex: 1; min-width: 0; height: 52px; border-radius: 28px; border: none;
   background: #FFFFFF; outline: none; padding: 0 20px;
-  font-family: var(--font-body); font-size: 13.5px; color: #111111;
-  box-shadow: 0 2px 8px rgba(0,0,0,.04);
-  transition: box-shadow .18s ease-out;
+  font-family: inherit; font-size: 14px; font-weight: 400; color: #111111;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  transition: box-shadow 180ms ease-out;
 }
-.bee-campo input::placeholder { color: #7A7A7A; }
-.bee-campo input:focus { box-shadow: 0 2px 10px rgba(0,0,0,.08); }
-[data-theme="dark"] .bee-campo input { background: rgba(255,255,255,0.06); color: var(--text-primary); box-shadow: none; }
+.bee-campo input::placeholder { color: #9A9AA0; }
+.bee-campo input:focus { box-shadow: 0 2px 14px rgba(0,0,0,.09); }
+[data-theme="dark"] .bee-campo input { background: rgba(255,255,255,0.07); color: var(--text-primary); box-shadow: none; }
 .bee-enviar {
   width: 44px; height: 44px; border-radius: 50%; border: none; flex-shrink: 0; cursor: pointer;
   background: #111111; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  transition: transform .18s ease-out, opacity .18s ease-out;
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 .bee-enviar svg { width: 17px; height: 17px; }
 .bee-enviar:hover { opacity: 0.88; }

@@ -13,11 +13,11 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-07-31n">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31n">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31n">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31n">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31n">
+<link rel="stylesheet" href="css/01-base.css?v=2026-07-31o">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31o">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31o">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31o">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31o">
 </head>
 <body>
 
@@ -526,12 +526,18 @@
           <span class="bee-chat-avatar" id="beeChatAvatar"></span>
           <span class="bee-chat-titulo" id="beeChatTitulo">Conversa</span>
         </span>
-        <button type="button" class="bee-x" id="beeExcluirConversa" title="Excluir essa conversa" aria-label="Excluir">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0-1 13a1 1 0 01-1 1H8a1 1 0 01-1-1L6 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <button type="button" class="bee-x" id="beeFecharChat" aria-label="Fechar">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
-        </button>
+        <!-- Voltar / título / "..." — mesma composição de 3 zonas do
+             cabeçalho do chat da tarefa (referência do Cláudio). Excluir
+             e fechar moram dentro do "...". -->
+        <div class="chat-hdr-menu-wrap">
+          <button type="button" class="bee-x" id="beeChatMenuBtn" aria-label="Mais opções">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+          </button>
+          <div class="chat-hdr-menu" id="beeChatMenu" hidden>
+            <button type="button" id="beeExcluirConversa">Excluir essa conversa</button>
+            <button type="button" id="beeFecharChat">Fechar a Bee</button>
+          </div>
+        </div>
       </div>
       <div class="bee-thread" id="beeThread"></div>
       <div class="bee-campo">
@@ -548,24 +554,24 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-07-31n"></script>
-<script src="js/fila-offline.js?v=2026-07-31n"></script>
-<script src="js/notificacoes-uploads.js?v=2026-07-31n"></script>
-<script src="js/pessoas-fotos.js?v=2026-07-31n"></script>
-<script src="js/kanban-polling.js?v=2026-07-31n"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-07-31n"></script>
-<script src="js/regras-briefing.js?v=2026-07-31n"></script>
-<script src="js/kanban-board.js?v=2026-07-31n"></script>
-<script src="js/clientes-hub.js?v=2026-07-31n"></script>
-<script src="js/chat-comentarios.js?v=2026-07-31n"></script>
-<script src="js/detalhe-modal.js?v=2026-07-31n"></script>
-<script src="js/detalhe-cardmae.js?v=2026-07-31n"></script>
-<script src="js/detalhe-alteracao.js?v=2026-07-31n"></script>
-<script src="js/bee.js?v=2026-07-31n"></script>
-<script src="js/paginas-designers.js?v=2026-07-31n"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-07-31n"></script>
-<script src="js/pagina-repasse.js?v=2026-07-31n"></script>
-<script src="js/notificacoes-avisos.js?v=2026-07-31n"></script>
-<script src="js/login-boot.js?v=2026-07-31n"></script>
+<script src="js/config.js?v=2026-07-31o"></script>
+<script src="js/fila-offline.js?v=2026-07-31o"></script>
+<script src="js/notificacoes-uploads.js?v=2026-07-31o"></script>
+<script src="js/pessoas-fotos.js?v=2026-07-31o"></script>
+<script src="js/kanban-polling.js?v=2026-07-31o"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-07-31o"></script>
+<script src="js/regras-briefing.js?v=2026-07-31o"></script>
+<script src="js/kanban-board.js?v=2026-07-31o"></script>
+<script src="js/clientes-hub.js?v=2026-07-31o"></script>
+<script src="js/chat-comentarios.js?v=2026-07-31o"></script>
+<script src="js/detalhe-modal.js?v=2026-07-31o"></script>
+<script src="js/detalhe-cardmae.js?v=2026-07-31o"></script>
+<script src="js/detalhe-alteracao.js?v=2026-07-31o"></script>
+<script src="js/bee.js?v=2026-07-31o"></script>
+<script src="js/paginas-designers.js?v=2026-07-31o"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-07-31o"></script>
+<script src="js/pagina-repasse.js?v=2026-07-31o"></script>
+<script src="js/notificacoes-avisos.js?v=2026-07-31o"></script>
+<script src="js/login-boot.js?v=2026-07-31o"></script>
 </body>
 </html>

@@ -569,7 +569,10 @@
    vão pro Runrun.it) quanto pro chat da Bee — mesmas classes,
    .bee-bubble só empresta o avatar amarelo dela por cima.
    ------------------------------------------------------------------- */
-.comments-thread { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+/* Uma superfície branca só: nada de container, caixa ou fundo cinza
+   por trás das mensagens — elas são separadas apenas pelo espaço
+   vertical entre elas (sem <hr>, sem border-bottom, sem divisória). */
+.comments-thread { flex: 1; overflow-y: auto; padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 18px; }
 
 /* Avisos da Bee (repetir no card mãe, arquivo novo no Drive) — fica
    FORA da .comments-thread de propósito, ver comentário no HTML de
@@ -625,21 +628,37 @@
 /* O nome/hora ficam ACIMA do balão, sem fundo — é por isso que
    .comment-body não tem mais o "cartão" nele: quem carrega a aparência
    de balão agora é só o .comment-text (e as reações), embaixo do nome. */
-.comment-meta { display: flex; align-items: baseline; gap: 7px; padding: 0 4px; }
-.comment-author { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-.comment-time { font-size: 10.5px; color: var(--text-muted); }
+.comment-meta { display: flex; align-items: baseline; gap: 7px; padding: 0 6px 1px; }
+.comment-author { font-size: 12px; font-weight: 500; color: #777777; }
+.comment-time { font-size: 10.5px; font-weight: 400; color: #9A9AA0; }
 /* Mensagem própria não repete "Você"/hora acima do balão — só o avatar
    do lado já deixa claro de quem é. (O botão "mandar pro Runrun" do
    chat da Bee, quando existe, continua visível — não é texto.) */
 .comment-bubble.mine .comment-author,
 .comment-bubble.mine .comment-time { display: none; }
 
+/* Balão: SEM borda/outline/stroke — a separação do fundo vem só da
+   sombrinha, como na referência (os balões "flutuam" no branco). */
 .comment-text {
   background: #FFFFFF; border-radius: 20px;
-  padding: 11px 16px; font-size: 13.5px; line-height: 1.5; color: #111111;
-  text-align: left; box-shadow: 0 3px 14px rgba(0,0,0,.09);
+  padding: 12px 16px; font-size: 14px; font-weight: 400; line-height: 1.45; color: #111111;
+  text-align: left; box-shadow: 0 2px 10px rgba(0,0,0,.06);
 }
-[data-theme="dark"] .comment-text { background: #1B1A22; color: var(--text-primary); box-shadow: 0 3px 14px rgba(0,0,0,.3); }
+[data-theme="dark"] .comment-text { background: #201F27; color: var(--text-primary); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+/* Imagem dentro do balão: sem moldura, sem container extra. */
+.comment-text img { display: block; max-width: 100%; border-radius: 18px; border: none; margin: 4px 0; }
+
+/* Barra de ações discreta embaixo da mensagem (copiar / mandar pro
+   Runrun.it). Sem fundo, sem contorno — só o ícone. */
+.msg-acoes { display: flex; gap: 2px; padding: 2px 6px 0; }
+.msg-acao {
+  width: 28px; height: 28px; border: none; background: transparent; color: #9A9AA0;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: background 180ms ease-out, color 180ms ease-out;
+}
+.msg-acao svg { width: 15px; height: 15px; }
+.msg-acao:hover { background: #F5F5F5; color: #111111; }
+[data-theme="dark"] .msg-acao:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
 .comment-text a { color: var(--accent); text-decoration: underline; word-break: break-word; }
 .comment-text a:hover { text-decoration: none; }
 .mention-tag { color: var(--accent); font-weight: 700; }
@@ -655,39 +674,42 @@
 .comment-bubble.mine .comment-reactions { justify-content: flex-end; }
 
 /* ===== Campo de escrever: pill + botão de enviar circular separado ===== */
+/* Composer da referência: botões redondos SOLTOS (emoji e anexo), o
+   campo em formato pílula e o enviar num círculo preto separado — o
+   enviar nunca fica dentro do campo. Sem linha divisória em cima. */
 .comment-input {
   position: relative;
-  padding: 12px 18px;
+  padding: 10px 16px 16px;
   display: flex; align-items: center; gap: 8px;
-  background: linear-gradient(180deg, rgba(255,214,110,0.05), transparent 60%);
+  background: transparent;
 }
 .comment-input input {
-  flex: 1; min-width: 0; height: 54px; border-radius: 999px; border: none;
-  background: #FFFFFF; padding: 0 20px; font-family: var(--font-body); font-size: 13.5px;
-  color: #111111; box-shadow: 0 2px 8px rgba(0,0,0,.04);
-  transition: box-shadow .18s ease-out;
+  flex: 1; min-width: 0; height: 52px; border-radius: 28px; border: none;
+  background: #FFFFFF; padding: 0 20px; font-family: inherit; font-size: 14px; font-weight: 400;
+  color: #111111; box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  transition: box-shadow 180ms ease-out;
 }
-.comment-input input::placeholder { color: #7A7A7A; }
-.comment-input input:focus { outline: none; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
-[data-theme="dark"] .comment-input input { background: rgba(255,255,255,0.06); color: var(--text-primary); box-shadow: none; }
+.comment-input input::placeholder { color: #9A9AA0; font-weight: 400; }
+.comment-input input:focus { outline: none; box-shadow: 0 2px 14px rgba(0,0,0,.09); }
+[data-theme="dark"] .comment-input input { background: rgba(255,255,255,0.07); color: var(--text-primary); box-shadow: none; }
 
 .comment-tool-btn {
   flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
-  border: none; background: #FFFFFF; color: #7A7A7A;
+  border: none; background: #FFFFFF; color: #777777;
   display: flex; align-items: center; justify-content: center;
-  font-size: 17px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.04);
-  transition: background .18s ease-out, transform .18s ease-out;
+  font-size: 17px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  transition: background 180ms ease-out, transform 180ms ease-out;
 }
-.comment-tool-btn:hover { background: #F5F5F7; }
+.comment-tool-btn:hover { background: #F5F5F5; }
 .comment-tool-btn:active { transform: scale(0.92); }
 .comment-tool-btn svg { width: 18px; height: 18px; }
-[data-theme="dark"] .comment-tool-btn { background: rgba(255,255,255,0.06); color: var(--text-secondary); box-shadow: none; }
+[data-theme="dark"] .comment-tool-btn { background: rgba(255,255,255,0.07); color: var(--text-secondary); box-shadow: none; }
 
 .comment-send-btn {
   flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
   border: none; background: #111111; color: #fff;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
-  transition: transform .18s ease-out, opacity .18s ease-out;
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 .comment-send-btn:hover { opacity: 0.88; }
 .comment-send-btn:active { transform: scale(0.92); }
@@ -752,49 +774,69 @@
   width: 70%; flex: 0 0 70%; min-width: 320px;
 }
 
+/* Superfície ÚNICA e branca, com um degradê creme quase imperceptível
+   só na parte de cima — igual à referência. Sem borda, sem divisórias:
+   cabeçalho, conversa e campo de escrever são a mesma folha branca. */
 .chat-panel {
   display: none; flex-direction: column; flex: 0 0 30%; min-width: 280px;
-  /* Degradê amarelinho bem leve cobrindo o painel inteiro (não só uma
-     tira no topo) — sem isso o balão branco (.comment-text) quase
-     sumia em cima de um fundo também branco. Fica no PAINEL (que não
-     rola), não na lista de mensagens — assim não "anda" junto com o
-     scroll. */
-  background: linear-gradient(180deg, rgba(255,199,0,0.10), #FFFFFF 340px);
+  font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Inter", system-ui, var(--font-body), sans-serif;
+  background: linear-gradient(180deg, #FFF7E6 0%, #FFFDF7 16%, #FFFFFF 38%);
   border-radius: 18px;
   box-shadow: 0 20px 60px rgba(10,10,20,0.28);
   overflow: hidden;
 }
-[data-theme="dark"] .chat-panel { background: var(--card-bg); }
+[data-theme="dark"] .chat-panel { background: linear-gradient(180deg, #221E17 0%, #171620 16%, #141319 38%); }
 .task-detail.chat-open .chat-panel { display: flex; }
 
+/* Cabeçalho em 3 zonas: voltar | título centralizado | "...". Sem
+   sombra e sem linha embaixo. */
 .chat-panel-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 12px 10px; flex-shrink: 0;
 }
-.chat-panel-title { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-panel-close {
-  width: 28px; height: 28px; border-radius: 8px; border: none;
-  background: var(--page-bg); color: var(--text-secondary);
-  display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+.chat-panel-title {
+  flex: 1; min-width: 0; text-align: center;
+  font-size: 16px; font-weight: 600; color: #111111;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.chat-panel-close svg { width: 14px; height: 14px; }
+[data-theme="dark"] .chat-panel-title { color: var(--text-primary); }
+.chat-hdr-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent;
+  color: #111111; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background 180ms ease-out;
+}
+.chat-hdr-btn:hover { background: #F5F5F5; }
+.chat-hdr-btn svg { width: 19px; height: 19px; }
+[data-theme="dark"] .chat-hdr-btn { color: var(--text-primary); }
+[data-theme="dark"] .chat-hdr-btn:hover { background: rgba(255,255,255,0.08); }
 
-.chat-panel-tabs { display: flex; flex-wrap: wrap; row-gap: 8px; gap: 8px; padding: 14px 20px 0; flex-shrink: 0; }
-.chat-panel-tab {
-  border: none; background: var(--page-bg); color: var(--text-secondary);
-  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
-  padding: 8px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+/* Menu do "..." — tudo que antes ocupava uma barra de abas em cima da
+   conversa mora aqui dentro. */
+.chat-hdr-menu-wrap { position: relative; flex-shrink: 0; }
+.chat-hdr-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+  min-width: 232px; padding: 6px; border-radius: 16px;
+  background: #FFFFFF; box-shadow: 0 8px 30px rgba(0,0,0,.12);
+  display: flex; flex-direction: column; gap: 2px;
 }
-.chat-panel-tab.active { background: var(--kanban-yellow); color: #16181D; }
-
-.upload-check-btn {
-  border: none; background: transparent; color: var(--text-muted);
-  font-family: var(--font-body); font-size: 12px; font-weight: 600;
-  padding: 8px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap;
-  margin-left: auto;
+.chat-hdr-menu[hidden] { display: none; }
+[data-theme="dark"] .chat-hdr-menu { background: #242430; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
+.chat-hdr-menu button {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  border: none; background: transparent; color: #111111; cursor: pointer;
+  font-family: inherit; font-size: 13.5px; font-weight: 500;
+  padding: 9px 11px; border-radius: 10px; white-space: nowrap;
+  transition: background 180ms ease-out;
 }
-.upload-check-btn:hover { background: var(--page-bg); color: var(--text-primary); }
-.upload-check-btn:disabled { opacity: 0.6; cursor: default; }
+.chat-hdr-menu button:hover { background: #F5F5F5; }
+.chat-hdr-menu button.active { background: #F5F5F5; font-weight: 600; }
+.chat-hdr-menu button em { font-style: normal; font-size: 11.5px; font-weight: 400; color: #9A9AA0; margin-left: auto; }
+.chat-hdr-menu button:disabled { opacity: .55; cursor: default; }
+[data-theme="dark"] .chat-hdr-menu button { color: var(--text-primary); }
+[data-theme="dark"] .chat-hdr-menu button:hover,
+[data-theme="dark"] .chat-hdr-menu button.active { background: rgba(255,255,255,0.08); }
+.chat-menu-ic { width: 18px; height: 18px; flex-shrink: 0; color: var(--kanban-yellow-text, #B08900); display: flex; }
+.chat-menu-ic svg { width: 18px; height: 18px; }
 
 @media (max-width: 900px) {
   .task-detail.chat-open .detail-inner { display: none; }

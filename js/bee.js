@@ -201,15 +201,35 @@ function bolhaDaBee(corpoHTML, indice) {
         <div class="comment-meta">
           <span class="comment-author">Bee</span>
           <span class="bee-selo" title="Nada daqui vai pro Runrun.it sozinho">só no Colmeia</span>
-          ${indice >= 0 ? `<button type="button" class="bee-mandar" data-indice="${indice}" title="Mandar isso pro Runrun.it">${iconeMandarProRunrun}</button>` : ""}
         </div>
         <div class="comment-text">${corpoHTML}</div>
+        <div class="msg-acoes">
+          <button type="button" class="msg-acao" data-copiar-msg title="Copiar" aria-label="Copiar">${iconeCopiar}</button>
+          ${indice >= 0 ? `<button type="button" class="msg-acao bee-mandar" data-indice="${indice}" title="Mandar isso pro Runrun.it" aria-label="Mandar pro Runrun.it">${iconeMandarProRunrun}</button>` : ""}
+        </div>
       </div>
     </div>
   `;
 }
 
 const iconeMandarProRunrun = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const iconeCopiar = `<svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.7"/><path d="M15 5.5A1.5 1.5 0 0013.5 4h-8A1.5 1.5 0 004 5.5v8A1.5 1.5 0 005.5 15" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
+
+// "Copiar" da barra de ações de uma fala da Bee. Delegado no documento
+// porque as bolhas são redesenhadas o tempo todo (ligar um a um em cada
+// redesenho vazaria listeners).
+document.addEventListener("click", e => {
+  const botao = e.target.closest("[data-copiar-msg]");
+  if (!botao) return;
+  const bolha = botao.closest(".comment-bubble");
+  const texto = bolha && bolha.querySelector(".comment-text");
+  if (!texto) return;
+  navigator.clipboard.writeText(texto.innerText.trim()).then(() => {
+    const antes = botao.innerHTML;
+    botao.innerHTML = `<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    setTimeout(() => { botao.innerHTML = antes; }, 1200);
+  });
+});
 
 function renderMensagemDaConversa(m, indice, chaveConversa) {
   if (m.autor === "bee") {
@@ -217,14 +237,18 @@ function renderMensagemDaConversa(m, indice, chaveConversa) {
     const extra = m._inspiracao ? renderLinksDeInspiracao(m._inspiracao.termos) : "";
     return bolhaDaBee(formatarFalaDaBee(m.texto, chaveConversa, indice) + extra, indice);
   }
+  // Mensagem própria: sem nome em cima (só o avatar do lado direito já
+  // diz de quem é) e a barra de ações embaixo do balão, igual à das
+  // falas da Bee.
   return `
     <div class="comment-bubble mine" data-bee-indice="${indice}">
       ${avatarHTML(DESIGNER_LOGADO, "avatar-sm comment-avatar")}
       <div class="comment-body">
-        <div class="comment-meta">
-          <button type="button" class="bee-mandar" data-indice="${indice}" title="Mandar isso pro Runrun.it">${iconeMandarProRunrun}</button>
-        </div>
         <div class="comment-text">${linkifyTexto(escaparHTML(m.texto))}</div>
+        <div class="msg-acoes">
+          <button type="button" class="msg-acao" data-copiar-msg title="Copiar" aria-label="Copiar">${iconeCopiar}</button>
+          <button type="button" class="msg-acao bee-mandar" data-indice="${indice}" title="Mandar isso pro Runrun.it" aria-label="Mandar pro Runrun.it">${iconeMandarProRunrun}</button>
+        </div>
       </div>
     </div>
   `;
@@ -1312,6 +1336,15 @@ function ligarJanelaDaBee() {
 
   const excluir = document.getElementById("beeExcluirConversa");
   if (excluir) excluir.addEventListener("click", excluirConversaAtual);
+
+  // Menu "..." do cabeçalho da conversa (excluir / fechar).
+  const menuBtn = document.getElementById("beeChatMenuBtn");
+  const menu = document.getElementById("beeChatMenu");
+  if (menuBtn && menu) {
+    menuBtn.addEventListener("click", e => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+    menu.addEventListener("click", e => { if (e.target.closest("button")) menu.hidden = true; });
+    document.addEventListener("click", () => { menu.hidden = true; });
+  }
 
   const novo = document.getElementById("beeNovoChat");
   if (novo) novo.addEventListener("click", () => beeNovaConversaCom(null));

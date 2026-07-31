@@ -807,28 +807,40 @@ function renderDetail() {
     </div>
 
     <div class="chat-panel" id="chatPanel" hidden>
+      <!-- Cabeçalho em 3 zonas, igual à referência que o Cláudio mandou:
+           voltar na esquerda, título centralizado, "..." na direita. Tudo
+           que antes ficava solto numa segunda linha (trocar entre
+           Comentários/Bee, as abas e "Verificar upload") mora agora dentro
+           do menu do "...", pra área de conversa ficar sendo só conversa,
+           sem barra nenhuma em cima. -->
       <div class="chat-panel-header">
-        <!-- Os dois chats ficam AQUI em cima, na linha do nome da tarefa,
-             e em tamanho de gente: escondidos junto das abas eles eram
-             pequenos demais pra alguém perceber que a Bee existe. -->
-        <div class="chat-troca">
-          <button type="button" class="chat-troca-btn active" id="chatIconeComentarios" title="Comentários da tarefa (vão pro Runrun.it)">${chatIcon}</button>
-          ${task.id ? `<button type="button" class="chat-troca-btn" id="chatIconeBee" title="Falar com a Bee (fica só no Colmeia)">${beeIcon}</button>` : ""}
-        </div>
-        <div class="chat-panel-title" id="chatPanelTitle">${escaparHTML(task.title)}</div>
-        <button type="button" class="chat-panel-close" id="chatPanelClose" aria-label="Fechar chat">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <button type="button" class="chat-hdr-btn" id="chatPanelClose" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-      </div>
-      <div class="chat-panel-tabs">
-        <div class="chat-grupo-comentarios" id="chatGrupoComentarios">
-          <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
-          <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
-          ${ehTarefaDeAlteracao(task) ? `
-            <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
-          ` : ""}
+        <div class="chat-panel-title" id="chatPanelTitle">${escaparHTML(task.title)}</div>
+        <div class="chat-hdr-menu-wrap">
+          <button type="button" class="chat-hdr-btn" id="chatPanelMenuBtn" aria-label="Mais opções">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+          </button>
+          <div class="chat-hdr-menu" id="chatPanelMenu" hidden>
+            <button type="button" class="chat-troca-btn active" id="chatIconeComentarios">
+              <span class="chat-menu-ic">${chatIcon}</span>Comentários <em>vão pro Runrun.it</em>
+            </button>
+            ${task.id ? `
+              <button type="button" class="chat-troca-btn" id="chatIconeBee">
+                <span class="chat-menu-ic">${beeIcon}</span>Bee <em>fica só no Colmeia</em>
+              </button>
+            ` : ""}
+            <div class="chat-grupo-comentarios" id="chatGrupoComentarios">
+              <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários aqui</button>
+              <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Comentários card mãe</button>
+              ${ehTarefaDeAlteracao(task) ? `
+                <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
+              ` : ""}
+            </div>
+            ${task.id ? `<button type="button" class="upload-check-btn" id="uploadCheckBtn" title="Verificar se subiu algum arquivo novo na pasta do card">↻ Verificar upload</button>` : ""}
+          </div>
         </div>
-        ${task.id ? `<button type="button" class="upload-check-btn" id="uploadCheckBtn" title="Verificar se subiu algum arquivo novo na pasta do card">↻ Verificar upload</button>` : ""}
       </div>
       <div class="comments-thread" id="commentsThread">
         ${renderComentariosHTML(task)}
@@ -1315,6 +1327,21 @@ function renderDetail() {
 
   const chatPanelClose = document.getElementById("chatPanelClose");
   if (chatPanelClose) chatPanelClose.addEventListener("click", fecharChatPanel);
+
+  // Menu do "..." do cabeçalho do chat. Fecha sozinho ao escolher
+  // qualquer opção (e ao clicar fora — ver o handler global de clique no
+  // fim de js/kanban-board.js).
+  const chatPanelMenuBtn = document.getElementById("chatPanelMenuBtn");
+  const chatPanelMenu = document.getElementById("chatPanelMenu");
+  if (chatPanelMenuBtn && chatPanelMenu) {
+    chatPanelMenuBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      chatPanelMenu.hidden = !chatPanelMenu.hidden;
+    });
+    chatPanelMenu.addEventListener("click", e => {
+      if (e.target.closest("button")) chatPanelMenu.hidden = true;
+    });
+  }
 
   const chatTabAqui = document.getElementById("chatTabAqui");
   if (chatTabAqui) chatTabAqui.addEventListener("click", () => abrirThreadAqui(tasks[detailIdx] || task));
