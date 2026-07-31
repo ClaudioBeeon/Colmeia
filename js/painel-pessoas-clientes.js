@@ -552,7 +552,11 @@ function desenharListaDeMemorias() {
           <span class="memoria-texto">${escaparHTML(i.texto)}</span>
           ${i.id
             ? `<button type="button" class="memoria-x" data-id="${escaparHTML(i.id)}" title="Apagar essa memória">✕</button>`
-            : `<span class="memoria-x memoria-x-vazio" title="Essa a Bee deduziu sozinha lendo as tarefas — pra tirar, use o botão de atualizar">·</span>`}
+            : `<span class="memoria-sugestao">
+                 <span class="memoria-tag" title="A Bee viu isso repetir em pelo menos 3 tarefas desse cliente">sugestão</span>
+                 <button type="button" class="memoria-ok" data-fixar="${escaparHTML(i.texto)}" title="Guardar como memória fixa">✓</button>
+                 <button type="button" class="memoria-x" data-descartar="${escaparHTML(i.texto)}" title="Descartar — ela não sugere isso de novo">✕</button>
+               </span>`}
         </div>
       `).join("")}
       ${memoriasDnaAtual.observacao ? `<p class="memoria-obs">${escaparHTML(memoriasDnaAtual.observacao)}</p>` : ""}
@@ -561,6 +565,45 @@ function desenharListaDeMemorias() {
   alvo.querySelectorAll(".memoria-x[data-id]").forEach(btn => {
     btn.addEventListener("click", () => excluirMemoriaDaBee(btn.dataset.id));
   });
+  // Sugestão que a Bee tirou sozinha das tarefas: aceitar vira memória
+  // escrita (que ela nunca mais mexe), descartar some pra sempre.
+  alvo.querySelectorAll("[data-fixar]").forEach(btn => {
+    btn.addEventListener("click", () => fixarSugestaoDaBee(btn.dataset.fixar));
+  });
+  alvo.querySelectorAll("[data-descartar]").forEach(btn => {
+    btn.addEventListener("click", () => descartarSugestaoDaBee(btn.dataset.descartar));
+  });
+}
+
+async function fixarSugestaoDaBee(texto) {
+  if (!texto || !memoriasClienteSelecionado) return;
+  const data = await chamarBackend({
+    acao: "beeAdicionarMemoria",
+    cliente: memoriasClienteSelecionado,
+    texto,
+    autor: DESIGNER_LOGADO,
+  });
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "Não consegui guardar agora.", "erro");
+    return;
+  }
+  mostrarToast("Guardado. A Bee não mexe mais nessa.");
+  memoriasDnaAtual = null;
+  carregarDnaDoCliente();
+}
+
+async function descartarSugestaoDaBee(texto) {
+  if (!texto || !memoriasClienteSelecionado) return;
+  if (memoriasDnaAtual) {
+    memoriasDnaAtual.itens = (memoriasDnaAtual.itens || []).filter(i => i.texto !== texto);
+    desenharListaDeMemorias();
+  }
+  const data = await chamarBackend({
+    acao: "beeDescartarSugestao",
+    cliente: memoriasClienteSelecionado,
+    texto,
+  });
+  if (!data || !data.ok) mostrarToast((data && data.error) || "Não consegui descartar agora.", "erro");
 }
 
 async function adicionarMemoriaDaBee() {

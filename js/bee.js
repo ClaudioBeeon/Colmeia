@@ -146,7 +146,8 @@ function desenharThreadBee(task) {
   const resumo = beeResumos.get(taskId);
   const conversa = beeConversas.get(taskId) || [];
   thread.innerHTML = renderPrimeiraFalaDaBee(task, resumo)
-    + conversa.map((m, i) => renderMensagemDaConversa(m, i)).join("");
+    + conversa.map((m, i) => renderMensagemDaConversa(m, i)).join("")
+    + `<div class="bee-pastilhas"><button type="button" class="bee-acao" id="beeInspirarBtn">🎲 Me inspirar nessa peça</button></div>`;
   wireThreadBee(task);
   thread.scrollTop = thread.scrollHeight;
 }
@@ -209,7 +210,10 @@ function bolhaDaBee(corpoHTML, indice) {
 const iconeMandarProRunrun = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 function renderMensagemDaConversa(m, indice) {
-  if (m.autor === "bee") return bolhaDaBee(formatarFalaDaBee(m.texto), indice);
+  if (m.autor === "bee") {
+    const extra = m._inspiracao ? renderLinksDeInspiracao(m._inspiracao.termos) : "";
+    return bolhaDaBee(formatarFalaDaBee(m.texto) + extra, indice);
+  }
   return `
     <div class="comment-bubble mine" data-bee-indice="${indice}">
       <div class="comment-body">
@@ -250,6 +254,118 @@ function formatarFalaDaBee(texto) {
     .replace(/<br>(\s*<div class="bee-firefly")/g, "$1");
 }
 
+// ===== Ações da Bee dentro da tarefa =====
+
+/**
+ * "🎲 Inspirar": ela lê a tarefa e devolve por onde procurar referência.
+ * O Colmeia NÃO consegue trazer as imagens do Behance/Pinterest (esses
+ * sites bloqueiam robô), então o que ela entrega são os TERMOS certos,
+ * em inglês, já virados em links de busca. Ela não escolhe a referência
+ * por você — te põe na prateleira certa.
+ */
+async function inspirarComABee(task) {
+  const taskId = task.id;
+  if (!taskId) return;
+  abrirThreadBee(task);
+
+  const conversa = beeConversas.get(taskId) || [];
+  conversa.push({ autor: "designer", texto: "Me dá referência pra essa peça.", quando: Date.now() });
+  beeConversas.set(taskId, conversa);
+  desenharThreadBee(task);
+
+  const thread = document.getElementById("commentsThread");
+  if (thread) {
+    thread.insertAdjacentHTML("beforeend", `<p class="comments-empty">A Bee está pensando na referência...</p>`);
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  const original = typeof acharTarefaOriginalDaAlteracao === "function" ? acharTarefaOriginalDaAlteracao(task) : null;
+  const data = await chamarBackend({ acao: "beeInspirar", taskId, idOriginal: original ? original.id : null });
+  const aindaAqui = chatThreadAtivo === "bee" && tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId);
+
+  if (!data || !data.ok) {
+    const lista = beeConversas.get(taskId) || [];
+    if (lista.length && lista[lista.length - 1].autor === "designer") lista.pop();
+    if (aindaAqui) desenharThreadBee(task);
+    mostrarToast((data && data.error) || "A Bee não conseguiu pensar na referência agora.", "erro");
+    return;
+  }
+
+  conversa.push({ autor: "bee", texto: textoDaInspiracao(data), quando: Date.now(), _inspiracao: data });
+  beeConversas.set(taskId, conversa);
+  if (aindaAqui) desenharThreadBee(task);
+}
+
+const BEE_SITES_REFERENCIA = [
+  { nome: "Behance", url: t => "https://www.behance.net/search/projects?search=" + encodeURIComponent(t) },
+  { nome: "Pinterest", url: t => "https://br.pinterest.com/search/pins/?q=" + encodeURIComponent(t) },
+  { nome: "Mobbin", url: t => "https://mobbin.com/search?q=" + encodeURIComponent(t) },
+  { nome: "Awwwards", url: t => "https://www.awwwards.com/websites/?text=" + encodeURIComponent(t) },
+];
+
+// A resposta dela vira texto (pra ficar guardada na conversa como
+// qualquer outra) e os links são montados na hora de desenhar.
+function textoDaInspiracao(data) {
+  const partes = [];
+  if (data.caminhos && data.caminhos.length) {
+    partes.push("Três caminhos possíveis:");
+    data.caminhos.forEach(c => partes.push("• " + c));
+  }
+  if (data.observacao) partes.push(data.observacao);
+  if (data.termos && data.termos.length) {
+    partes.push("");
+    partes.push("Procura por: " + data.termos.join(" · "));
+  }
+  return partes.join("\n");
+}
+
+function renderLinksDeInspiracao(termos) {
+  if (!termos || !termos.length) return "";
+  return `
+    <div class="bee-inspirar">
+      ${termos.map(t => `
+        <div class="bee-inspirar-linha">
+          <span class="bee-inspirar-termo">${escaparHTML(t)}</span>
+          <span class="bee-inspirar-sites">
+            ${BEE_SITES_REFERENCIA.map(s => `<a class="bee-acao" href="${s.url(t)}" target="_blank" rel="noopener">${s.nome}</a>`).join("")}
+          </span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+/**
+ * "Conferir o que falta": compara o que foi pedido com os arquivos que
+ * subiram na pasta do card. Só roda no clique — nunca sozinha.
+ */
+async function conferirEntregaComABee(task, btn) {
+  if (!task || !task.id) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Conferindo...";
+  abrirThreadBee(task);
+
+  const data = await chamarBackend({
+    acao: "beeConferirEntrega",
+    taskId: task.id,
+    idOriginal: (typeof acharTarefaOriginalDaAlteracao === "function" && acharTarefaOriginalDaAlteracao(task) || {}).id || null,
+    cliente: task.client || null,
+  });
+
+  const btnAgora = document.getElementById("beeConferirBtn");
+  if (btnAgora) { btnAgora.disabled = false; btnAgora.textContent = original; }
+
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "A Bee não conseguiu conferir agora.", "erro");
+    return;
+  }
+  beeConversas.set(task.id, data.conversa || beeConversas.get(task.id) || []);
+  if (chatThreadAtivo === "bee" && tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
+    desenharThreadBee(task);
+  }
+}
+
 // ===== Cliques =====
 
 function wireThreadBee(task) {
@@ -286,6 +402,9 @@ function wireThreadBee(task) {
       baixarAnexo(pecaBtn.dataset.docId, pecaBtn.dataset.nome, pecaBtn, pecaBtn.dataset.taskId);
     });
   }
+
+  const inspirarBtn = thread.querySelector("#beeInspirarBtn");
+  if (inspirarBtn) inspirarBtn.addEventListener("click", () => inspirarComABee(task));
 
   const perguntarBtn = thread.querySelector("#beePerguntarAtendimento");
   if (perguntarBtn) perguntarBtn.addEventListener("click", () => prepararPerguntaProAtendimento(task));

@@ -785,6 +785,7 @@ function renderDetail() {
             <div class="side-label-row">
               <span class="side-label">Anexos</span>
               <button type="button" class="download-all-btn" id="downloadAllBtn" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
+              ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>` : ""}
             </div>
             <div class="attach-box">
               <div class="attach-list" id="attachList">
@@ -1286,6 +1287,9 @@ function renderDetail() {
 
   const chatTabTudo = document.getElementById("chatTabTudo");
   if (chatTabTudo) chatTabTudo.addEventListener("click", () => abrirThreadLinhaDoTempo(tasks[detailIdx] || task));
+
+  const beeConferirBtn = document.getElementById("beeConferirBtn");
+  if (beeConferirBtn) beeConferirBtn.addEventListener("click", () => conferirEntregaComABee(tasks[detailIdx] || task, beeConferirBtn));
 
   const chatIconeBee = document.getElementById("chatIconeBee");
   if (chatIconeBee) chatIconeBee.addEventListener("click", () => abrirThreadBee(tasks[detailIdx] || task));

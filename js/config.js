@@ -225,6 +225,9 @@ const ACOES_DEMORADAS = [
   "beeResumo",            // a Bee lendo a tarefa inteira
   "beeConversar",         // a Bee usa o modelo FORTE do Gemini aqui, que é mais lento de propósito
   "beeConversarLivre",
+  "beeInspirar",           // IA lendo a tarefa inteira
+  "beeConferirEntrega",    // IA + varredura da pasta do card no Drive
+  "beeMemoriaCliente",     // le os comentarios de ate 15 tarefas do cliente
   "buscarExtrasRunrunCompleto", // pagina 15 dias de entregues dos 3 designers
   "listarPastasClientesDrive",  // varre pastas do Drive
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive

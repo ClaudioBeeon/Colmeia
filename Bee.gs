@@ -501,7 +501,7 @@ function beeMemoriaDoCliente(cliente, taskIds, forcar) {
     'dizer ao designer COMO ESSE CLIENTE É — as manias dele, o que ele sempre pede pra mudar, o ' +
     'que ele não gosta. É a informação que um designer novo levaria meses pra aprender no tapa.\n\n' +
     'REGRAS DURAS:\n' +
-    '- Só aponte um padrão se ele aparecer em MAIS DE UMA tarefa. Uma reclamação isolada não é mania.\n' +
+    '- Só aponte um padrão se ele aparecer em PELO MENOS 3 tarefas diferentes. Uma reclamação isolada, ou repetida uma vez só, não é mania — é caso pontual.\n' +
     '- Nada de generalidade ("gosta de qualidade", "é exigente"). Se não for específico e acionável, corta.\n' +
     '- Fale de design e de processo, não da pessoa. Nunca escreva algo que seria constrangedor se o ' +
     'cliente lesse.\n' +
@@ -605,6 +605,43 @@ function excluirMemoriaBee(id) {
 }
 
 /**
+ * Sugestões que alguém já descartou. Sem isso, a Bee ressugeriria a
+ * mesma coisa toda semana, quando reler as tarefas — e uma sugestão
+ * recusada que volta é pior que sugestão nenhuma.
+ */
+function getMemoriasDescartadasSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('MemoriasDescartadas');
+  if (!sheet) {
+    sheet = ss.insertSheet('MemoriasDescartadas');
+    sheet.getRange('A1:C1').setValues([['cliente', 'texto', 'quando']]);
+  }
+  return sheet;
+}
+
+function listarDescartadas(cliente) {
+  var linhas = getMemoriasDescartadasSheet().getDataRange().getValues();
+  var alvo = String(cliente || '').trim().toLowerCase();
+  var lista = [];
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]).trim().toLowerCase() === alvo) lista.push(String(linhas[i][1]).trim().toLowerCase());
+  }
+  return lista;
+}
+
+function descartarSugestaoDeMemoria(cliente, texto) {
+  if (!cliente || !texto) return { ok: false, error: 'cliente ou texto não informado.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    getMemoriasDescartadasSheet().appendRow([String(cliente).trim(), String(texto).trim(), new Date().getTime()]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * O DNA do cliente numa resposta só: o que foi escrito à mão e o que a
  * Bee deduziu, juntos — sem separar, como o Cláudio pediu. A origem
  * continua guardada em cada item (campo "escrita") porque isso é de
@@ -617,9 +654,18 @@ function beeDnaDoCliente(cliente) {
     return { id: m.id, texto: m.texto, autor: m.autor, escrita: true };
   });
   var deduzida = lerMemoriaCliente(cliente);
-  var automaticas = (deduzida && deduzida.memoria && deduzida.memoria.manias || []).map(function (t) {
-    return { id: null, texto: t, autor: 'Bee', escrita: false };
-  });
+  // Fora do DNA: o que já foi descartado e o que já foi fixado à mão
+  // (senão a mesma frase apareceria duas vezes na lista).
+  var descartadas = listarDescartadas(cliente);
+  var jaEscritas = manuais.map(function (m) { return m.texto.trim().toLowerCase(); });
+  var automaticas = (deduzida && deduzida.memoria && deduzida.memoria.manias || [])
+    .filter(function (t) {
+      var chave = String(t).trim().toLowerCase();
+      return descartadas.indexOf(chave) === -1 && jaEscritas.indexOf(chave) === -1;
+    })
+    .map(function (t) {
+      return { id: null, texto: t, autor: 'Bee', escrita: false };
+    });
   return {
     ok: true,
     cliente: cliente,
@@ -696,6 +742,54 @@ function beeConferirEntrega(taskId, idOriginal, cliente) {
   salvarConversaBee(taskId, conversa);
 
   return { ok: true, resposta: resultado.texto.trim(), conversa: conversa };
+}
+
+// ============ 5b) INSPIRAR ============
+//
+// O Colmeia NÃO consegue entrar no Behance/Pinterest e trazer as
+// imagens: esses sites bloqueiam robô e o Apps Script não passa. O que
+// funciona de verdade — e funciona sempre — é a Bee ler a tarefa,
+// entender do que é a peça, e devolver os TERMOS DE BUSCA certos (em
+// inglês, que é onde o acervo bom está). O front monta os links.
+//
+// Ou seja: ela não escolhe a referência por você, ela te põe na
+// prateleira certa. É honesto e é útil.
+
+function beeInspirar(taskId, idOriginal) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var material = beeMaterialDaTarefa(taskId, idOriginal);
+  if (!material.ok) return material;
+
+  var prompt = 'Você é a Bee, diretora de arte da Beeon (agência de marketing). Um designer vai ' +
+    'começar uma peça e quer referência visual.\n\n' +
+    'Leia o que a tarefa pede e devolva por onde ele deve procurar.\n\n' +
+    'REGRAS:\n' +
+    '- Os TERMOS DE BUSCA vão em INGLÊS (é onde está o acervo bom desses sites) e são curtos: ' +
+    '2 a 4 palavras cada. Nada de frase.\n' +
+    '- Termos de ESTILO e FORMATO, não do assunto literal. "post sobre vaga de emprego" vira ' +
+    '"minimal recruitment social post", não "job vacancy".\n' +
+    '- Nunca cite marca, artista vivo ou pessoa real.\n' +
+    '- Os CAMINHOS são direções criativas diferentes entre si (não três jeitos de dizer a mesma ' +
+    'coisa), uma frase curta cada, em português.\n' +
+    '- Se a tarefa não disser quase nada, diga isso em "observacao" e devolva termos genéricos do ' +
+    'formato mesmo assim — é melhor que nada.\n\n' +
+    beeTrechoDoDna(material.cliente) +
+    '\nTAREFA: ' + material.titulo + '\n' +
+    (material.cliente ? 'CLIENTE: ' + material.cliente + '\n' : '') +
+    '\nO QUE ESTÁ ESCRITO:\n' + (beeTextoDoMaterial(material) || '(nada escrito)') + '\n\n' +
+    'Responda SOMENTE em JSON:\n' +
+    '{"termos":["...","...","..."],"caminhos":["...","...","..."],"observacao":""}\n' +
+    'Exatamente 3 termos e no máximo 3 caminhos.';
+
+  var resultado = chamarGemini(prompt);
+  if (!resultado.ok) return resultado;
+  var dados = resultado.dados || {};
+  return {
+    ok: true,
+    termos: (dados.termos || []).slice(0, 3),
+    caminhos: (dados.caminhos || []).slice(0, 3),
+    observacao: dados.observacao || ''
+  };
 }
 
 // ============ 6) BUSCA: ÍNDICE DO DRIVE + AO VIVO ============
