@@ -331,6 +331,70 @@ function diagnosticoAlterarDataEntrega() {
 }
 
 /**
+ * Cria uma tarefa nova no Runrun.it — só o coordenador tem essa opção no
+ * Colmeia (ver botão "+ Nova tarefa" no quadro).
+ *
+ * ⚠️ PRIMEIRA VERSÃO, AINDA NÃO TESTADA COM UMA TAREFA DE VERDADE: os
+ * campos "project_id"/"user_id"/"desired_date" seguem o mesmo formato já
+ * CONFIRMADO nas outras funções de escrita deste arquivo (reatribuirTarefa,
+ * alterarDataEntregaTarefa), mas o Colmeia nunca tinha CRIADO uma tarefa
+ * antes — só editado tarefas existentes. Testar numa tarefa de teste antes
+ * de confiar 100%; se o Runrun.it recusar (status != 2xx), o `bodyBruto`
+ * devolvido tem a mensagem de erro dele pra ajustar o formato.
+ *
+ * O "Tipo" (campo personalizado — Estático/Vídeo/E-mail) NÃO é gravado
+ * como campo personalizado de verdade aqui: o id interno desse campo
+ * (tipo "custom_24" da Data de Publicação, ver CAMPO_DATA_PUBLICACAO)
+ * nunca foi descoberto pro campo "Tipo". Por segurança, ele entra só
+ * como uma linha no começo da descrição — o coordenador pode marcar o
+ * campo de verdade pelo próprio Runrun.it depois, ou me pedir pra
+ * descobrir o id certo (mesmo jeito que a Data de Publicação foi
+ * confirmada, ver diagnosticoAlterarDataPublicacao) e automatizar 100%.
+ *
+ * dados = { titulo, projectId, responsavelNome, tipo, prioridade,
+ *           desiredDate (AAAA-MM-DD, opcional), descricao (opcional) }
+ */
+function criarTarefaRunrun(dados) {
+  if (!dados || !dados.titulo || !dados.projectId) {
+    return { ok: false, error: 'Faltam campos obrigatórios (título ou cliente).' };
+  }
+
+  var responsavelId = dados.responsavelNome ? idDoDesignerPorNome(dados.responsavelNome) : null;
+
+  var corpoTask = {
+    project_id: dados.projectId,
+    title: dados.titulo,
+  };
+  if (responsavelId) corpoTask.user_id = responsavelId;
+  if (dados.desiredDate) {
+    corpoTask.desired_date = dados.desiredDate;
+    corpoTask.desired_date_with_time = dados.desiredDate + 'T18:00:00-03:00';
+  }
+
+  var descricaoFinal = '';
+  if (dados.tipo) descricaoFinal += 'Tipo: ' + dados.tipo + '\n\n';
+  if (dados.descricao) descricaoFinal += dados.descricao;
+
+  var resultado = runrunRequest('/tasks', 'post', { task: corpoTask });
+  if (!resultado.ok || !resultado.body || !resultado.body.id) {
+    return {
+      ok: false,
+      error: 'Runrun.it recusou criar a tarefa (status ' + resultado.status + ').',
+      bodyBruto: resultado.body
+    };
+  }
+  var novoId = resultado.body.id;
+
+  // Prioridade é só do Colmeia (planilha própria) — não é campo do
+  // Runrun.it. Descrição vem numa segunda chamada, mesmo padrão de
+  // salvarDescricao.
+  if (dados.prioridade) definirPrioridade(novoId, dados.prioridade);
+  if (descricaoFinal) runrunRequest('/tasks/' + novoId, 'put', { description: descricaoFinal });
+
+  return { ok: true, taskId: novoId, link: 'https://runrun.it/tasks/' + novoId };
+}
+
+/**
  * Ajusta a estimativa de horas de uma tarefa.
  */
 function ajustarEstimativaTarefa(taskId, minutos) {

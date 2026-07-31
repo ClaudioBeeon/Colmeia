@@ -324,11 +324,21 @@
 .acesso-rapido-novo-btn svg { width: 15px; height: 15px; }
 
 .acesso-rapido-campo { display: flex; flex-direction: column; gap: 6px; }
-.acesso-rapido-campo input[type="text"] {
+.acesso-rapido-campo input[type="text"],
+.acesso-rapido-campo input[type="date"],
+.acesso-rapido-campo select,
+.acesso-rapido-campo textarea {
   font-family: var(--font-body); font-size: 13.5px; padding: 10px 12px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--page-bg); color: var(--text-primary);
 }
-.acesso-rapido-campo input[type="text"]:focus { outline: none; border-color: var(--accent); }
+.acesso-rapido-campo textarea { resize: vertical; min-height: 70px; }
+.acesso-rapido-campo input[type="text"]:focus,
+.acesso-rapido-campo input[type="date"]:focus,
+.acesso-rapido-campo select:focus,
+.acesso-rapido-campo textarea:focus { outline: none; border-color: var(--accent); }
+
+.nova-tarefa-btn { display: flex; align-items: center; gap: 6px; }
+.nova-tarefa-aviso { font-size: 12.5px; color: var(--danger); margin: 4px 0 0; }
 
 .acesso-rapido-presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .acesso-rapido-preset {

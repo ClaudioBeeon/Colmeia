@@ -13,11 +13,11 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-07-31m">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31m">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31m">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31m">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31m">
+<link rel="stylesheet" href="css/01-base.css?v=2026-07-31n">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-07-31n">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-07-31n">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-07-31n">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-07-31n">
 </head>
 <body>
 
@@ -172,6 +172,7 @@
           <input type="text" id="searchInput" placeholder="Buscar tarefa, cliente...">
         </div>
         <button type="button" class="ver-todas-btn" id="verTodasBtn">VER TODAS</button>
+        <button type="button" class="ver-todas-btn nova-tarefa-btn" id="novaTarefaBtn" hidden>+ Nova tarefa</button>
       </div>
     </div>
 
@@ -304,6 +305,60 @@
             <button type="button" class="confirm-pasta-cancelar" id="confirmPastaCancelar">Cancelar</button>
             <button type="button" class="confirm-pasta-confirmar" id="confirmPastaConfirmar">Criar pasta</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rule-modal-overlay" id="novaTarefaModalOverlay" hidden>
+      <div class="rule-modal nova-tarefa-modal">
+        <div class="rule-modal-header">
+          <h3>Nova tarefa</h3>
+          <button type="button" id="novaTarefaModalClose" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="rule-modal-body">
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Título</span>
+            <input type="text" id="novaTarefaTitulo" placeholder="Ex: Arte anúncio — Campanha Dia dos Pais" maxlength="200">
+          </label>
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Cliente</span>
+            <select id="novaTarefaCliente"><option value="">Carregando clientes...</option></select>
+          </label>
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Tipo</span>
+            <select id="novaTarefaTipo">
+              <option value="Estático">Estático</option>
+              <option value="Vídeo">Vídeo</option>
+              <option value="E-mail">E-mail</option>
+            </select>
+          </label>
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Responsável</span>
+            <select id="novaTarefaResponsavel"></select>
+          </label>
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Prioridade</span>
+            <select id="novaTarefaPrioridade">
+              <option value="media" selected>Média</option>
+              <option value="alta">Alta</option>
+              <option value="baixa">Baixa</option>
+            </select>
+          </label>
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Entrega desejada</span>
+            <input type="date" id="novaTarefaData">
+          </label>
+          <label class="acesso-rapido-campo">
+            <span class="side-label">Descrição</span>
+            <textarea id="novaTarefaDescricao" rows="4" placeholder="O que precisa ser feito..."></textarea>
+          </label>
+          <p class="nova-tarefa-aviso" id="novaTarefaAviso" hidden></p>
+        </div>
+        <div class="rule-modal-transfer-row">
+          <button type="button" class="rule-modal-nav-btn" id="novaTarefaCancelar">Cancelar</button>
+          <button type="button" class="rule-modal-nav-btn" id="novaTarefaCriar">Criar tarefa</button>
         </div>
       </div>
     </div>
@@ -493,24 +548,24 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-07-31m"></script>
-<script src="js/fila-offline.js?v=2026-07-31m"></script>
-<script src="js/notificacoes-uploads.js?v=2026-07-31m"></script>
-<script src="js/pessoas-fotos.js?v=2026-07-31m"></script>
-<script src="js/kanban-polling.js?v=2026-07-31m"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-07-31m"></script>
-<script src="js/regras-briefing.js?v=2026-07-31m"></script>
-<script src="js/kanban-board.js?v=2026-07-31m"></script>
-<script src="js/clientes-hub.js?v=2026-07-31m"></script>
-<script src="js/chat-comentarios.js?v=2026-07-31m"></script>
-<script src="js/detalhe-modal.js?v=2026-07-31m"></script>
-<script src="js/detalhe-cardmae.js?v=2026-07-31m"></script>
-<script src="js/detalhe-alteracao.js?v=2026-07-31m"></script>
-<script src="js/bee.js?v=2026-07-31m"></script>
-<script src="js/paginas-designers.js?v=2026-07-31m"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-07-31m"></script>
-<script src="js/pagina-repasse.js?v=2026-07-31m"></script>
-<script src="js/notificacoes-avisos.js?v=2026-07-31m"></script>
-<script src="js/login-boot.js?v=2026-07-31m"></script>
+<script src="js/config.js?v=2026-07-31n"></script>
+<script src="js/fila-offline.js?v=2026-07-31n"></script>
+<script src="js/notificacoes-uploads.js?v=2026-07-31n"></script>
+<script src="js/pessoas-fotos.js?v=2026-07-31n"></script>
+<script src="js/kanban-polling.js?v=2026-07-31n"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-07-31n"></script>
+<script src="js/regras-briefing.js?v=2026-07-31n"></script>
+<script src="js/kanban-board.js?v=2026-07-31n"></script>
+<script src="js/clientes-hub.js?v=2026-07-31n"></script>
+<script src="js/chat-comentarios.js?v=2026-07-31n"></script>
+<script src="js/detalhe-modal.js?v=2026-07-31n"></script>
+<script src="js/detalhe-cardmae.js?v=2026-07-31n"></script>
+<script src="js/detalhe-alteracao.js?v=2026-07-31n"></script>
+<script src="js/bee.js?v=2026-07-31n"></script>
+<script src="js/paginas-designers.js?v=2026-07-31n"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-07-31n"></script>
+<script src="js/pagina-repasse.js?v=2026-07-31n"></script>
+<script src="js/notificacoes-avisos.js?v=2026-07-31n"></script>
+<script src="js/login-boot.js?v=2026-07-31n"></script>
 </body>
 </html>

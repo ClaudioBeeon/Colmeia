@@ -1006,6 +1006,9 @@ function mostrarPagina(page) {
     }
   }
 
+  const novaTarefaBtn = document.getElementById("novaTarefaBtn");
+  if (novaTarefaBtn) novaTarefaBtn.hidden = !(page === "kanban" && PAPEL_LOGADO === "coordenador");
+
   if (page === "clientes") buildClientsPage();
   if (page === "atendimento") buildAtendimentoPage();
   if (page === "tipos") buildTiposPage();

@@ -485,6 +485,124 @@ document.addEventListener("click", () => {
   if (emojiPicker) emojiPicker.hidden = true;
 });
 
+// ===== Nova tarefa (só o coordenador) =====
+//
+// Segue o padrão de campos do Runrun.it — título, cliente, tipo,
+// responsável, prioridade, entrega desejada e descrição, igual quando
+// se cria uma tarefa direto por lá. A lista de clientes vem do próprio
+// Runrun.it (ação buscarProjetosRunrun) e fica guardada aqui depois da
+// primeira busca, pra abrir na hora nas próximas vezes.
+let _projetosRunrunCache = null;
+
+async function abrirModalNovaTarefa() {
+  const overlay = document.getElementById("novaTarefaModalOverlay");
+  if (!overlay) return;
+
+  document.getElementById("novaTarefaTitulo").value = "";
+  document.getElementById("novaTarefaTipo").value = "Estático";
+  document.getElementById("novaTarefaPrioridade").value = "media";
+  document.getElementById("novaTarefaData").value = "";
+  document.getElementById("novaTarefaDescricao").value = "";
+  const aviso = document.getElementById("novaTarefaAviso");
+  aviso.hidden = true;
+  aviso.textContent = "";
+
+  const respSelect = document.getElementById("novaTarefaResponsavel");
+  if (!respSelect.dataset.montado) {
+    respSelect.innerHTML = DESIGNERS_EQUIPE.map(n => `<option value="${n}">${n}</option>`).join("");
+    respSelect.dataset.montado = "1";
+  }
+  respSelect.value = DESIGNER_LOGADO && DESIGNERS_EQUIPE.includes(DESIGNER_LOGADO) ? DESIGNER_LOGADO : DESIGNERS_EQUIPE[0];
+
+  overlay.hidden = false;
+  document.getElementById("novaTarefaTitulo").focus();
+
+  const clienteSelect = document.getElementById("novaTarefaCliente");
+  if (_projetosRunrunCache) {
+    preencherClientesNovaTarefa(clienteSelect, _projetosRunrunCache);
+    return;
+  }
+  clienteSelect.innerHTML = `<option value="">Carregando clientes...</option>`;
+  const data = await chamarBackend({ acao: "buscarProjetosRunrun" });
+  if (!data.ok || !data.projetos) {
+    clienteSelect.innerHTML = `<option value="">Não consegui carregar os clientes</option>`;
+    return;
+  }
+  _projetosRunrunCache = data.projetos;
+  // Se o modal já foi fechado enquanto isso carregava, não mexe mais na tela.
+  if (!overlay.hidden) preencherClientesNovaTarefa(clienteSelect, _projetosRunrunCache);
+}
+
+function preencherClientesNovaTarefa(select, projetos) {
+  const ordenados = projetos.slice().sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  select.innerHTML = `<option value="">Escolha o cliente...</option>` +
+    ordenados.map(p => `<option value="${p.id}">${escaparHTML(p.nome)}</option>`).join("");
+}
+
+function fecharModalNovaTarefa() {
+  const overlay = document.getElementById("novaTarefaModalOverlay");
+  if (overlay) overlay.hidden = true;
+}
+
+async function criarTarefaViaModal() {
+  const titulo = document.getElementById("novaTarefaTitulo").value.trim();
+  const projectId = document.getElementById("novaTarefaCliente").value;
+  const aviso = document.getElementById("novaTarefaAviso");
+  aviso.hidden = true;
+
+  if (!titulo || !projectId) {
+    aviso.textContent = "Preencha pelo menos o título e o cliente.";
+    aviso.hidden = false;
+    return;
+  }
+
+  const criarBtn = document.getElementById("novaTarefaCriar");
+  criarBtn.disabled = true;
+  criarBtn.textContent = "Criando...";
+
+  const dados = {
+    titulo,
+    projectId,
+    tipo: document.getElementById("novaTarefaTipo").value,
+    responsavelNome: document.getElementById("novaTarefaResponsavel").value,
+    prioridade: document.getElementById("novaTarefaPrioridade").value,
+    desiredDate: document.getElementById("novaTarefaData").value || null,
+    descricao: document.getElementById("novaTarefaDescricao").value.trim() || null,
+  };
+
+  const data = await chamarBackend({ acao: "criarTarefa", dados });
+
+  criarBtn.disabled = false;
+  criarBtn.textContent = "Criar tarefa";
+
+  if (!data.ok) {
+    aviso.textContent = data.semRede
+      ? "Sem internet agora — tenta de novo em alguns segundos."
+      : "O Runrun.it recusou criar a tarefa" + (data.error ? ": " + data.error : ".");
+    aviso.hidden = false;
+    return;
+  }
+
+  fecharModalNovaTarefa();
+  mostrarToast("Tarefa criada! Já deve aparecer no quadro em instantes.", "sucesso");
+  agendarAtualizacaoKanban();
+}
+
+const novaTarefaBtnEl = document.getElementById("novaTarefaBtn");
+if (novaTarefaBtnEl) novaTarefaBtnEl.addEventListener("click", abrirModalNovaTarefa);
+const novaTarefaModalCloseEl = document.getElementById("novaTarefaModalClose");
+if (novaTarefaModalCloseEl) novaTarefaModalCloseEl.addEventListener("click", fecharModalNovaTarefa);
+const novaTarefaCancelarEl = document.getElementById("novaTarefaCancelar");
+if (novaTarefaCancelarEl) novaTarefaCancelarEl.addEventListener("click", fecharModalNovaTarefa);
+const novaTarefaCriarEl = document.getElementById("novaTarefaCriar");
+if (novaTarefaCriarEl) novaTarefaCriarEl.addEventListener("click", criarTarefaViaModal);
+const novaTarefaModalOverlayEl = document.getElementById("novaTarefaModalOverlay");
+if (novaTarefaModalOverlayEl) {
+  novaTarefaModalOverlayEl.addEventListener("click", e => {
+    if (e.target === novaTarefaModalOverlayEl) fecharModalNovaTarefa();
+  });
+}
+
 // Links de clientes cadastrados pelo coordenador (Drive, Banco de
 // imagens, Biblioteca Adobe, Pasta de publicações + extras avulsos),
 // carregados do backend do Colmeia.

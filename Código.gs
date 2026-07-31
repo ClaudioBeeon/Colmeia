@@ -98,7 +98,7 @@ var ACOES_QUE_MUDAM_O_QUADRO = [
   'avancarWorkflow', 'desfazerWorkflow', 'entregarTarefa', 'reabrirTarefa',
   'reatribuir', 'moverEtapa', 'moverEtapaArbitraria',
   'alterarEntrega', 'alterarPublicacao', 'ajustarEstimativa',
-  'criarRegra', 'adicionarNaRegra', 'removerDaRegra'
+  'criarRegra', 'adicionarNaRegra', 'removerDaRegra', 'criarTarefa'
 ];
 
 function doGet(e) {
@@ -151,6 +151,10 @@ function handleRequest(e, method) {
         output = excluirComentario(body.commentId);
       } else if (body.acao === 'editarComentario') {
         output = editarComentario(body.commentId, body.texto);
+      } else if (body.acao === 'buscarProjetosRunrun') {
+        output = { ok: true, projetos: buscarProjetosRunrun() || [] };
+      } else if (body.acao === 'criarTarefa') {
+        output = criarTarefaRunrun(body.dados);
       } else if (body.acao === 'reagirComentario') {
         output = reagirComentario(body.commentId, body.emoji);
       } else if (body.acao === 'adicionarComentarioComAnexo') {

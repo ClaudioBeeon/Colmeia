@@ -194,6 +194,44 @@ function buscarUsuariosRunrunComCache() {
   return usuarios;
 }
 
+/**
+ * Lista de projetos do Runrun.it (é DENTRO de um projeto que uma tarefa
+ * nova é criada — ver criarTarefaRunrun, RunrunEscrita.gs). Cada projeto
+ * normalmente é um cliente. Fica em cache 20 min: muda pouco (só quando
+ * cadastra cliente novo no Runrun.it), e sem cache seria buscado de novo
+ * toda vez que o coordenador abrisse "Nova tarefa".
+ */
+function buscarProjetosRunrun() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get('projetosRunrun');
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* busca de novo abaixo */ }
+  }
+  var projetos = runrunFetch('/projects?limit=200');
+  if (!Array.isArray(projetos)) return null; // não guarda erro em cache
+  var lista = projetos.map(function (p) {
+    return { id: p.id, nome: p.name || p.title || ('Projeto ' + p.id) };
+  }).filter(function (p) { return p.id && p.nome; });
+  try { cache.put('projetosRunrun', JSON.stringify(lista), 20 * 60); } catch (e) { /* segue sem guardar */ }
+  return lista;
+}
+
+/**
+ * Acha o id de verdade de um dos 3 designers do Colmeia (Cláudio, Gustavo,
+ * Erick) pelo NOME — usado pra criar uma tarefa nova já com responsável
+ * (ver criarTarefaRunrun). Reaproveita o mapa email->id já existente
+ * (buscarIdsResponsaveisRunrun) em vez de duplicar a busca.
+ */
+function idDoDesignerPorNome(nome) {
+  if (!nome) return null;
+  var mapa = buscarIdsResponsaveisRunrun(); // email -> id
+  var emailAlvo = null;
+  Object.keys(RUNRUN_USUARIOS).forEach(function (email) {
+    if (RUNRUN_USUARIOS[email] === nome) emailAlvo = email;
+  });
+  return emailAlvo ? (mapa[emailAlvo] || null) : null;
+}
+
 function buscarIdsResponsaveisRunrun() {
   var cache = CacheService.getScriptCache();
   var cacheado = cache.get('idsResponsaveisRunrun');
