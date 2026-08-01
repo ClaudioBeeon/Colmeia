@@ -386,6 +386,20 @@ async function beeReconhecerPerguntaFuncional(pergunta, contexto) {
   const clienteCitado = clientes.find(c => texto.includes(normalizarParaComparar(c)));
   const cliente = clienteCitado || clienteDoContexto;
 
+  // "Gera uma imagem de...", "cria uma imagem com..." — pela Firefly de
+  // verdade (ver Firefly.gs), não é o "Gerar prompt de imagem" (esse
+  // outro só monta o texto pra colar no Firefly manualmente). Tira o
+  // pedido do começo da frase pra sobrar só a descrição do que a
+  // imagem deve ter; se não bater o padrão, manda a frase inteira mesmo
+  // (funciona, só perde a limpeza da extração).
+  if (/imagem/.test(texto) && /\b(gera|gerar|cria|criar|faz|fazer|desenh[ae]|desenhar)\b/.test(texto)) {
+    const descricao = pergunta
+      .replace(/^.*?\b(gera|gerar|cria|criar|faz|fazer|desenh[ae]|desenhar)\b\s*(pra mim\s*)?(uma\s+)?imagem\s*(de|do|da|com|mostrando)?\s*/i, "")
+      .trim() || pergunta;
+    const data = await chamarBackend({ acao: "beeGerarImagem", prompt: descricao });
+    return { tipo: "imagem", pergunta, prompt: descricao, resultado: data };
+  }
+
   if (/\b(link|url)\b/.test(texto) && /\b(cad[eê]|onde|achar|acha|procura)\b/.test(texto)) {
     const data = await chamarBackend({ acao: "beeBuscarLink", termo: pergunta, cliente });
     return { tipo: "link", pergunta, cliente, resultados: (data && data.ok) ? data.resultados : [] };
@@ -459,6 +473,17 @@ function beeMensagemFuncional(resultado) {
 }
 
 function renderRespostaFuncional(f) {
+  if (f.tipo === "imagem") {
+    const resultado = f.resultado;
+    if (!resultado || !resultado.ok || !resultado.urls || !resultado.urls.length) {
+      const motivo = resultado && resultado.error ? escaparHTML(resultado.error) : "Não consegui gerar a imagem agora.";
+      return `<p>${motivo}</p>`;
+    }
+    return `<p class="bee-titulo">Gerei isso pra "${escaparHTML(f.prompt)}"</p>` +
+      resultado.urls.map(url => `<img src="${escaparHTML(url)}" alt="${escaparHTML(f.prompt)}">`).join("") +
+      `<div class="bee-pastilhas">${resultado.urls.map(url => `<a class="bee-acao principal" href="${escaparHTML(url)}" target="_blank" rel="noopener">Abrir em tamanho grande</a>`).join("")}</div>`;
+  }
+
   if (f.tipo === "link") {
     if (!f.resultados.length) {
       return `<p>Não achei nenhum link ${f.cliente ? "do cliente " + escaparHTML(f.cliente) : ""} batendo com isso. Pode ter sumido do índice — ele é atualizado 1x por dia.</p>`;
@@ -841,6 +866,15 @@ const BEE_ATALHOS = [
     pergunta: "Quero um prompt de imagem pro Firefly. Me pergunta o que você precisa saber (peça, clima, formato) e depois monta o prompt.",
   },
   {
+    icone: "🖼️",
+    titulo: "Gerar<br>imagem",
+    // Diferente do atalho de cima: esse gera a imagem DE VERDADE, pela
+    // Firefly (ver Firefly.gs) — por isso não manda sozinho (faltaria a
+    // descrição): só prepara o campo, a pessoa completa e aperta enviar.
+    pergunta: "Gerar imagem: ",
+    naoEnviar: true,
+  },
+  {
     icone: "🎲",
     titulo: "Me inspirar",
     pergunta: "Preciso de referência visual. Me pergunta sobre o que é a peça e depois me dá caminhos de busca prontos no Behance, Pinterest, Mobbin e Awwwards, com os termos certos em inglês.",
@@ -912,7 +946,24 @@ function desenharAtalhosDaBee() {
   grid.querySelectorAll("[data-atalho]").forEach(btn => {
     btn.addEventListener("click", () => {
       const atalho = BEE_ATALHOS[Number(btn.dataset.atalho)];
-      if (atalho) beeNovaConversaCom(atalho.pergunta);
+      if (!atalho) return;
+      // "Gerar imagem" não manda a pergunta sozinha — faltaria a
+      // descrição de verdade. Só abre a conversa e deixa o campo
+      // pronto, com o cursor no fim, pra pessoa completar e enviar.
+      if (atalho.naoEnviar) {
+        beeConversaAtual = { chave: null, titulo: "Nova conversa", mensagens: [] };
+        beeMostrarTela("chat");
+        desenharTituloDaConversa();
+        desenharConversaDaBee();
+        const campo = document.getElementById("beeInputChat");
+        if (campo) {
+          campo.value = atalho.pergunta;
+          campo.focus();
+          campo.setSelectionRange(campo.value.length, campo.value.length);
+        }
+        return;
+      }
+      beeNovaConversaCom(atalho.pergunta);
     });
   });
 }

@@ -234,6 +234,7 @@ const ACOES_DEMORADAS = [
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive
   "buscarProgressoClientes",
   "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
+  "beeGerarImagem",       // gera imagem de verdade pela Firefly
 ];
 
 async function chamarBackend(corpo, opcoes) {
