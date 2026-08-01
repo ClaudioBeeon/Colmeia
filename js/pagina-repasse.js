@@ -1015,6 +1015,11 @@ function mostrarPagina(page) {
   if (page === "repasse") buildRepassePage();
   if (page === "runrun") buildRunrunCompletoPage();
   if (page === "hoje") buildHistoricoPage();
+  // A página de horas tem um cronômetro que anda de 1 em 1 segundo — ele
+  // precisa parar quando a pessoa sai dela, senão fica rodando à toa pelo
+  // resto da sessão (ver iniciarRelogioDaPaginaHoras, js/pagina-horas.js).
+  if (page === "horas") abrirPaginaHoras();
+  else if (typeof fecharPaginaHoras === "function") fecharPaginaHoras();
 }
 
 document.getElementById("designerFilterSelect").addEventListener("change", e => {

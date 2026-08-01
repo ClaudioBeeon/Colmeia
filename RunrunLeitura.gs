@@ -1239,3 +1239,49 @@ function listarTodosUsuariosRunrun() {
   });
   return { ok: true, usuarios: lista };
 }
+
+/**
+ * Histórico de tarefas entregues de UM designer — usado pelo card escuro
+ * da página "Minhas horas".
+ *
+ * Não reaproveita buscarExtrasRunrunCompleto de propósito: aquela varre as
+ * entregues do TIME INTEIRO e é a chamada mais pesada do backend. Aqui é
+ * uma página só, de uma pessoa só, ordenada da mais recente pra mais
+ * antiga — o suficiente pra encher a lista da tela.
+ */
+function buscarEntreguesDoDesigner(designer, limite) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  var quantos = Math.min(Number(limite) || 12, 50);
+
+  var runrunId = idDoUsuarioRunrunPorNome(designer);
+  if (!runrunId) return { ok: false, error: 'Não achei o id de ' + designer + ' no Runrun.it.' };
+
+  var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
+    '&is_closed=true&sort=close_date&sortDir=desc&limit=' + quantos);
+
+  // Se o Runrun.it não aceitar ordenar por close_date, tenta o campo que
+  // a varredura do quadro já usa e que sabemos que funciona.
+  if (!Array.isArray(lote)) {
+    lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
+      '&is_closed=true&sort=updated_at&sortDir=desc&limit=' + quantos);
+  }
+  if (!Array.isArray(lote)) {
+    return { ok: false, error: 'Resposta inesperada do Runrun.it ao buscar entregues.' };
+  }
+
+  var entregues = lote
+    .filter(function (t) { return !tarefaEhCardMae(t); })
+    .map(function (t) {
+      var quando = t.close_date || t.updated_at || null;
+      return {
+        id: t.id,
+        titulo: t.title || '',
+        cliente: (t.client_name || (t.client && t.client.name) || '').toString(),
+        projeto: extrairNomeProjeto(t),
+        tipo: extrairTipoTarefa(t),
+        quando: quando ? new Date(quando).getTime() : null
+      };
+    });
+
+  return { ok: true, entregues: entregues };
+}

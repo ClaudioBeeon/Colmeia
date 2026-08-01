@@ -13,11 +13,11 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-01c">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-01c">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-01c">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-01c">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-01c">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-01e">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-01e">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-01e">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-01e">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-01e">
 </head>
 <body>
 
@@ -82,6 +82,10 @@
       <a href="#" class="nav-ic" title="Runrun completo" data-page="runrun">
         <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M9 9v12" stroke="currentColor" stroke-width="1.8"/></svg></span>
         <span class="nav-label">Runrun completo</span>
+      </a>
+      <a href="#" class="nav-ic" title="Minhas horas" data-page="horas">
+        <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 9.5V13l2.5 1.5M9 2h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="nav-label">Minhas horas</span>
       </a>
       <a href="#" class="nav-ic" title="Histórico" data-page="hoje">
         <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -271,6 +275,24 @@
          largura e o mesmo visual de abas que as Configurações do
          coordenador já usam (.people-modal/.config-tabs), pra ficar
          parecido em vez de inventar um estilo novo pra cada painel. -->
+    <!-- "Ajustar" das horas de um dia — o mesmo que a tela Tempo do
+         Runrun.it faz: lançar horas numa tarefa e justificar o dia. -->
+    <div class="rule-modal-overlay" id="horasModalOverlay" hidden>
+      <div class="rule-modal horas-modal">
+        <div class="rule-modal-header">
+          <h3 id="horasModalTitulo">Ajustar horas</h3>
+          <button type="button" id="horasModalFechar" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="horas-abas">
+          <button type="button" class="horas-aba active" id="horasAbaLancar">Lançar horas numa tarefa</button>
+          <button type="button" class="horas-aba" id="horasAbaJustificar">Justificar o dia</button>
+        </div>
+        <div class="rule-modal-body" id="horasModalBody"></div>
+      </div>
+    </div>
+
     <div class="rule-modal-overlay" id="perfilModalOverlay" hidden>
       <div class="perfil-modal people-modal">
         <div class="perfil-capa">
@@ -452,6 +474,115 @@
       </div>
     </section>
 
+    <!-- ============ MINHAS HORAS ============
+         Reconstrução do painel de referência aprovado pelo Cláudio. A
+         composição (grid de 4 colunas, alturas de linha, radius) segue a
+         referência; o conteúdo é dado do Colmeia. Ver js/pagina-horas.js. -->
+    <section class="app-page" id="page-horas" hidden>
+      <div class="hr-conteudo">
+
+        <div class="hr-titulo-linha">
+          <div class="hr-titulo-esq">
+            <h2 class="hr-h1" id="hrTitulo">Suas informações</h2>
+            <div class="hr-barra-wrap">
+              <div class="hr-barra-col principal">
+                <div class="hr-barra-labels" id="hrBarraLabels"></div>
+                <div class="hr-barra" id="hrBarraSegs"></div>
+              </div>
+              <div class="hr-barra-col">
+                <div class="hr-barra-labels"><span>Meta</span></div>
+                <div class="hr-barra"><div class="hr-seg branca" id="hrMeta">8h</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="hr-metricas" id="hrMetricas"></div>
+        </div>
+
+        <div class="hr-grade">
+
+          <section class="hr-card hr-foto" id="hrFotoCard">
+            <div class="hr-foto-img" id="hrFotoImg"></div>
+            <div class="hr-foto-sombra"></div>
+            <div class="hr-foto-info">
+              <b id="hrFotoNome"></b>
+              <span id="hrFotoPapel"></span>
+            </div>
+            <div class="hr-foto-valor" id="hrFotoValor"></div>
+          </section>
+
+          <section class="hr-card hr-prog" id="hrProgCard">
+            <div class="hr-card-cab">
+              <span class="hr-card-titulo">Progresso</span>
+              <button type="button" class="hr-btn-canto" id="hrProgAjustar" title="Ajustar horas">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <div class="hr-prog-num">
+              <b id="hrProgTotal">—</b>
+              <span>Horas trabalhadas esta semana</span>
+            </div>
+            <div class="hr-prog-graf" id="hrProgGraf"></div>
+          </section>
+
+          <section class="hr-card hr-track">
+            <div class="hr-card-cab">
+              <span class="hr-card-titulo">Cronômetro</span>
+              <button type="button" class="hr-btn-canto" id="hrTrackAbrir" title="Abrir a tarefa que está rodando">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <div class="hr-anel">
+              <svg viewBox="0 0 132 132" width="132" height="132">
+                <circle cx="66" cy="66" r="56" fill="none" stroke="var(--border)" stroke-width="11" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+                <circle id="hrAnelArco" cx="66" cy="66" r="56" fill="none" stroke="var(--kanban-yellow)" stroke-width="11" stroke-linecap="round"
+                  stroke-dasharray="351.9" stroke-dashoffset="351.9" transform="rotate(-90 66 66)"/>
+              </svg>
+              <div class="hr-anel-txt">
+                <span class="hr-anel-horas" id="hrAnelHoras">00:00</span>
+                <span class="hr-anel-label">Horas Trabalhadas<br>Hoje</span>
+              </div>
+            </div>
+            <div class="hr-track-btns">
+              <button type="button" class="hr-track-btn" id="hrTrackPlay" aria-label="Play/Pausar"></button>
+              <button type="button" class="hr-track-btn-escuro" id="hrTrackRunrun" title="Abrir a aba Tempo no Runrun.it">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <div class="hr-col4">
+            <section class="hr-card hr-semana">
+              <div class="hr-card-cab">
+                <span class="hr-card-titulo">Semana</span>
+                <span class="hr-semana-pct" id="hrSemanaPct">—</span>
+              </div>
+              <div class="hr-semana-rots" id="hrSemanaRots"></div>
+              <div class="hr-semana-barra" id="hrSemanaBarra"></div>
+            </section>
+
+            <section class="hr-escuro">
+              <div class="hr-esc-cab">
+                <span class="hr-esc-titulo">Tarefas entregues</span>
+              </div>
+              <div class="hr-esc-lista" id="hrEntregues"></div>
+            </section>
+          </div>
+
+          <section class="hr-card hr-lista" id="hrComparativo"></section>
+
+          <section class="hr-card hr-cal">
+            <div class="hr-cal-meses">
+              <span class="hr-cal-mes-lado" id="hrMesAnterior"></span>
+              <span class="hr-cal-mes-atual" id="hrMesAtual"></span>
+              <span class="hr-cal-mes-lado" id="hrMesSeguinte"></span>
+            </div>
+            <div class="hr-cal-grade" id="hrCalGrade"></div>
+          </section>
+
+        </div>
+      </div>
+    </section>
+
     <section class="app-page" id="page-repasse" hidden>
       <div class="repasse-toolbar">
         <div class="repasse-tabs">
@@ -608,24 +739,25 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-01c"></script>
-<script src="js/fila-offline.js?v=2026-08-01c"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-01c"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-01c"></script>
-<script src="js/kanban-polling.js?v=2026-08-01c"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-01c"></script>
-<script src="js/regras-briefing.js?v=2026-08-01c"></script>
-<script src="js/kanban-board.js?v=2026-08-01c"></script>
-<script src="js/clientes-hub.js?v=2026-08-01c"></script>
-<script src="js/chat-comentarios.js?v=2026-08-01c"></script>
-<script src="js/detalhe-modal.js?v=2026-08-01c"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-01c"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-01c"></script>
-<script src="js/bee.js?v=2026-08-01c"></script>
-<script src="js/paginas-designers.js?v=2026-08-01c"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-01c"></script>
-<script src="js/pagina-repasse.js?v=2026-08-01c"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-01c"></script>
-<script src="js/login-boot.js?v=2026-08-01c"></script>
+<script src="js/config.js?v=2026-08-01e"></script>
+<script src="js/fila-offline.js?v=2026-08-01e"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-01e"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-01e"></script>
+<script src="js/kanban-polling.js?v=2026-08-01e"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-01e"></script>
+<script src="js/regras-briefing.js?v=2026-08-01e"></script>
+<script src="js/kanban-board.js?v=2026-08-01e"></script>
+<script src="js/clientes-hub.js?v=2026-08-01e"></script>
+<script src="js/chat-comentarios.js?v=2026-08-01e"></script>
+<script src="js/detalhe-modal.js?v=2026-08-01e"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-01e"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-01e"></script>
+<script src="js/bee.js?v=2026-08-01e"></script>
+<script src="js/paginas-designers.js?v=2026-08-01e"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-01e"></script>
+<script src="js/pagina-repasse.js?v=2026-08-01e"></script>
+<script src="js/pagina-horas.js?v=2026-08-01e"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-01e"></script>
+<script src="js/login-boot.js?v=2026-08-01e"></script>
 </body>
 </html>

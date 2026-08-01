@@ -325,6 +325,16 @@ function handleRequest(e, method) {
         output = buscarReunioesDeHoje(body.designer);
       } else if (body.acao === 'responderReuniao') {
         output = responderReuniao(body.designer, body.eventId, body.resposta);
+      } else if (body.acao === 'buscarHorasDaSemana') {
+        output = buscarHorasDaSemana(body.designer, body.inicio);
+      } else if (body.acao === 'buscarAgendaDaSemana') {
+        output = buscarAgendaDaSemana(body.designer, body.inicio);
+      } else if (body.acao === 'buscarEntreguesDoDesigner') {
+        output = buscarEntreguesDoDesigner(body.designer, body.limite);
+      } else if (body.acao === 'lancarHoras') {
+        output = lancarHorasNaTarefa(body.dados);
+      } else if (body.acao === 'justificarDia') {
+        output = justificarDiaTimesheet(body.dados);
       } else if (body.acao === 'criarAviso') {
         output = criarAviso(body.autor, body.texto);
       } else if (body.acao === 'listarAvisos') {
