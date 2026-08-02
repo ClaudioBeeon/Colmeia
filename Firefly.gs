@@ -33,11 +33,12 @@ var FIREFLY_IMS_AUTORIZAR = 'https://ims-na1.adobelogin.com/ims/authorize/v2';
 var FIREFLY_IMS_TOKEN = 'https://ims-na1.adobelogin.com/ims/token/v3';
 var FIREFLY_API_BASE = 'https://firefly-api.adobe.io/v3';
 
-// Escopos pedidos pra Adobe — combinação documentada pra API da
-// Firefly. Se a tela de login da Adobe não pedir nenhuma permissão de
-// imagem/geração, é sinal de que esses nomes mudaram e precisam ser
-// ajustados (ver o "Learn more" da credencial no Developer Console).
-var FIREFLY_SCOPES = 'openid,AdobeID,firefly_api,ff_apis';
+// ✅ CONFIRMADO (2026-08-02, documentação da Adobe): pra credencial
+// "Adobe Express API - Firefly Services (beta)" — que é a que a Beeon
+// tem — o escopo certo é este, não "firefly_api,ff_apis" (chute
+// anterior, causava erro "invalid_scope" da Adobe antes mesmo de
+// mostrar a tela de login).
+var FIREFLY_SCOPES = 'openid,AdobeID,ee.express_api';
 
 function fireflyClientId() {
   return PropertiesService.getScriptProperties().getProperty('FIREFLY_CLIENT_ID');
@@ -46,11 +47,17 @@ function fireflyClientSecret() {
   return PropertiesService.getScriptProperties().getProperty('FIREFLY_CLIENT_SECRET');
 }
 
-// A própria URL do Web App do Colmeia, pega em tempo de execução (em
-// vez de copiada à mão) — assim nunca fica desatualizada se o projeto
-// for redeployado com uma URL diferente.
+// A própria URL do Web App do Colmeia — igual à COLMEIA_API_URL do
+// js/config.js do front-end (sempre a MESMA implantação, nunca muda,
+// ver deploy automático no CLAUDE.md). Fixa na mão em vez de
+// ScriptApp.getService().getUrl(): essa função devolve uma URL
+// DIFERENTE (termina em "/dev", com outro ID) quando rodada a partir
+// do botão "Executar" do editor em vez de um pedido HTTP de verdade —
+// confirmado na prática (foi o que gerou o "A Adobe não mandou o
+// código" na primeira tentativa). Fixando aqui, o endereço é sempre o
+// mesmo não importa de onde essa função é chamada.
 function redirectUriFirefly() {
-  return ScriptApp.getService().getUrl() + '?fireflyAuth=callback';
+  return 'https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec?fireflyAuth=callback';
 }
 
 function urlDeAutorizacaoFirefly() {
