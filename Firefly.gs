@@ -192,6 +192,34 @@ function gerarImagemFirefly(prompt, opcoes) {
   return { ok: true, urls: urls };
 }
 
+/**
+ * CAMINHO ALTERNATIVO DE AUTORIZAÇÃO — rode esta função aqui pelo
+ * editor do Apps Script (menu "Executar") e copie do Log a URL que ela
+ * imprime; cole essa URL direto na barra do navegador.
+ *
+ * Existe porque a página "?fireflyAuth=iniciar" depende do Web App
+ * responder a um GET no navegador, e isso pode falhar por motivo que
+ * não tem nada a ver com a Firefly (domínio do Workspace, extensão do
+ * navegador, implantação desatualizada). Por aqui, o primeiro passo não
+ * depende do Web App — só o retorno da Adobe (o "callback") depende, e
+ * esse a Adobe abre sozinha.
+ *
+ * Também confere, antes de mais nada, se as duas chaves estão
+ * cadastradas — o motivo mais comum de "não funciona" é essa parte.
+ */
+function mostrarUrlDeAutorizacaoFirefly() {
+  if (!fireflyClientId() || !fireflyClientSecret()) {
+    Logger.log('FALTA CADASTRAR: preencha FIREFLY_CLIENT_ID e FIREFLY_CLIENT_SECRET em ' +
+      'Configurações do projeto > Propriedades do script, e rode de novo.');
+    return;
+  }
+  Logger.log('1) Confira se este endereço está cadastrado como Redirect URI na Adobe:');
+  Logger.log(redirectUriFirefly());
+  Logger.log('');
+  Logger.log('2) Copie a URL abaixo e cole na barra do navegador pra autorizar:');
+  Logger.log(urlDeAutorizacaoFirefly());
+}
+
 // Rode manualmente pelo editor pra confirmar que a geração funciona de
 // verdade antes de confiar na Bee usando isso sozinha.
 function diagnosticoGerarImagemFirefly() {
@@ -209,9 +237,18 @@ function tratarFireflyAuthGet(e) {
   var acao = e.parameter.fireflyAuth;
 
   if (acao === 'iniciar') {
+    // Um LINK pra clicar, não um redirecionamento automático: o
+    // HtmlService serve essa página dentro de um quadro isolado
+    // (iframe com sandbox), onde mexer em window.location só navega o
+    // quadro de dentro — e a navegação pro topo costuma ser barrada.
+    // target="_top" é o que faz o clique trocar a página inteira.
     var url = urlDeAutorizacaoFirefly();
     return HtmlService.createHtmlOutput(
-      '<p>Redirecionando pra Adobe...</p><script>window.location.href = ' + JSON.stringify(url) + ';</script>'
+      '<div style="font-family:sans-serif;padding:24px;line-height:1.6">' +
+      '<p>Clique pra autorizar a Bee a usar a Adobe Firefly:</p>' +
+      '<p><a href="' + url.replace(/"/g, '&quot;') + '" target="_top" ' +
+      'style="display:inline-block;background:#111;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none">Autorizar na Adobe</a></p>' +
+      '</div>'
     );
   }
 
