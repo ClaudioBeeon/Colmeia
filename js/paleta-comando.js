@@ -7,6 +7,14 @@
  * no meio: digita, acha tarefa/cliente, executa ação, troca de página.
  * Fecha com Esc.
  *
+ * Ctrl+/ (ou Cmd+/) faz a MESMA coisa e é o atalho de reserva: no
+ * Firefox, Ctrl+K é um atalho do próprio navegador (foca a busca da
+ * barra de ferramentas) e o Firefox não deixa a página bloquear isso
+ * com preventDefault — não tem jeito de "consertar" isso pelo código,
+ * é o navegador ignorando a página de propósito. Por isso o Ctrl+/
+ * existe: não colide com nenhum atalho de navegador conhecido, então
+ * sempre funciona, Firefox incluso.
+ *
  * COMO ELA DECIDE O QUE MOSTRAR (a parte importante):
  *
  * É HÍBRIDA de propósito. Tudo que aparece na lista é calculado AQUI no
@@ -452,10 +460,15 @@ function paletaEstaAberta() {
  * O atalho global. Fica no document em fase de captura (true) pra pegar
  * o Ctrl+K antes de qualquer campo de texto da tela — inclusive o do
  * chat e o da Bee, que também escutam tecla.
+ *
+ * Aceita Ctrl+K OU Ctrl+/ (ver comentário no topo do arquivo sobre por
+ * que o Ctrl+/ existe — é o que garante que funciona no Firefox).
  */
 document.addEventListener("keydown", e => {
-  const ehCtrlK = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "k" || e.key === "K");
-  if (ehCtrlK) {
+  const semExtras = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey;
+  const ehCtrlK = semExtras && (e.key === "k" || e.key === "K");
+  const ehCtrlBarra = semExtras && (e.key === "/" || e.code === "Slash");
+  if (ehCtrlK || ehCtrlBarra) {
     e.preventDefault();
     if (paletaEstaAberta()) paletaFechar();
     else paletaAbrir();
