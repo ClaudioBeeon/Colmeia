@@ -65,7 +65,6 @@ const ROTEADOR_SLUGS = {
   atendimento: "clientes-por-atendimento",
   tipos: "tipos-de-tarefas",
   runrun: "runrun-completo",
-  hoje: "historico",
   horas: "minhas-horas",
   repasse: "fila-de-repasse",
 };

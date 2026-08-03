@@ -345,72 +345,10 @@
    borda de baixo, e uma leve entrada pra dentro no meio da borda da
    esquerda — dá a sensação de peça moldada, não de retângulo
    arredondado. */
-.historico-secao { flex-shrink: 0; margin-bottom: 28px; }
-.historico-secao:last-child { margin-bottom: 8px; }
-.historico-secao-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
-.historico-secao-head .historico-secao-titulo { margin-bottom: 0; }
-.historico-secao-titulo {
-  font-family: var(--font-display); font-size: 18px; font-weight: 600;
-  margin-bottom: 14px; color: var(--text-primary);
-}
-
-.historico-filtro { display: flex; align-items: center; gap: 4px; background: var(--page-bg); border-radius: 999px; padding: 3px; flex-shrink: 0; }
-.historico-filtro-btn {
-  font-family: var(--font-body); font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
-  background: transparent; border: none; border-radius: 999px; padding: 7px 14px; cursor: pointer;
-  white-space: nowrap; transition: background 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
-}
-.historico-filtro-btn:hover { color: var(--text-primary); }
-.historico-filtro-btn.active { background: var(--card-bg); color: var(--text-primary); box-shadow: 0 1px 4px rgba(20,20,30,0.10); }
-[data-theme="dark"] .historico-filtro-btn.active { background: #2A2733; }
-
-/* Carrossel com setas (Histórico/Atividades recentes) — em vez de
-   arrastar o scroll pro lado, os cards ficam num trilho que rola por
-   baixo dos panos (scroll-behavior:smooth, mas sem barra de scroll
-   visível) e as setas nas pontas avançam/voltam uma "página" de cards
-   por vez. Ver montarCarrosselSetas em js/config.js. */
-.historico-carrossel { display: flex; align-items: center; gap: 6px; }
-.historico-carrossel-seta {
-  flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
-  background: var(--card-bg); border: 1px solid var(--border); color: var(--text-primary);
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
-  box-shadow: 0 2px 8px rgba(20,20,30,0.08);
-  transition: background 0.15s var(--ease-apple), opacity 0.15s var(--ease-apple);
-}
-[data-theme="dark"] .historico-carrossel-seta { background: #24252C; }
-.historico-carrossel-seta svg { width: 16px; height: 16px; }
-.historico-carrossel-seta.prev svg { transform: rotate(180deg); }
-.historico-carrossel-seta:hover:not(:disabled) { background: var(--page-bg); }
-.historico-carrossel-seta:disabled { opacity: 0.3; cursor: default; }
-
-.hoje-list, .atividades-list {
-  display: flex; flex-direction: row; gap: 16px; flex: 1; min-width: 0;
-  overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth;
-  scrollbar-width: none; padding: 6px 2px;
-}
-.hoje-list::-webkit-scrollbar, .atividades-list::-webkit-scrollbar { display: none; }
-
-/* Cards no MESMO formato padrão usado no resto do app (.task-card, ver
-   js/kanban-board.js) — só com largura fixa (pra caber lado a lado no
-   carrossel) e sem o cursor de arrastar (não são arrastáveis aqui). */
-.historico-card, .atividade-card {
-  flex-shrink: 0; width: 258px; cursor: pointer; text-decoration: none; color: inherit; display: block;
-}
-
 .avatar-cliente { color: #fff; font-family: var(--font-display); font-weight: 700; }
 
-.historico-card-hora {
-  font-size: 11px; font-weight: 600; color: var(--text-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  min-width: 0; flex: 1; text-align: right;
-}
 .card-bottom { min-width: 0; }
 .card-bottom .assignee-wrap { flex-shrink: 0; }
-
-.historico-loading {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 4px; color: var(--text-secondary); font-size: 13px;
-}
 
 /* ===== Aviso rápido (toast) ===== */
 .colmeia-toasts {

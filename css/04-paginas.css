@@ -1502,19 +1502,30 @@ body.card-aberto .quick-access-panel { display: none; }
 .hr-esc-nome { display: block; font-size: 12px; color: #FFFFFF; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hr-esc-sub { display: block; font-size: 10px; color: rgba(255,255,255,.42); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Card 5 — lista sanfona (comparativo) */
-.hr-lista { grid-column: 1; grid-row: 2; padding: 6px 20px; display: flex; flex-direction: column; }
-.hr-lis-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 0; cursor: pointer; }
-.hr-lis-linha + .hr-lis-linha, .hr-lis-corpo + .hr-lis-linha { border-top: 1px solid var(--border); }
-.hr-lis-nome { font-size: 12.5px; color: var(--text-primary); }
-.hr-lis-seta { color: var(--text-muted); flex-shrink: 0; display: grid; place-items: center; }
-.hr-lis-seta svg { width: 13px; height: 13px; }
-.hr-lis-corpo { display: flex; align-items: center; gap: 11px; padding: 2px 0 13px; }
-.hr-lis-thumb { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; background: var(--page-bg); display: grid; place-items: center; }
-.hr-lis-thumb svg { width: 17px; height: 17px; color: var(--text-secondary); }
-.hr-lis-corpo-txt { flex: 1; min-width: 0; }
-.hr-lis-corpo-nome { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
-.hr-lis-corpo-sub { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 1px; }
+/* Card 5 — atividades recentes nas pastas do Drive dos clientes (era o
+   comparativo semanal antes de 2026-08-03; a página "Histórico" foi
+   incorporada aqui — ver js/pagina-horas.js, renderAtividadesRecentesHoras).
+   Mesmo padrão do card escuro "Tarefas entregues" ao lado (.hr-esc-*),
+   só que em tom claro (esse card não é escuro). */
+.hr-lista { grid-column: 1; grid-row: 2; padding: 20px; display: flex; flex-direction: column; min-height: 0; }
+.hr-ativ-lista { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
+.hr-ativ-lista::-webkit-scrollbar { width: 4px; }
+.hr-ativ-lista::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+.hr-ativ-item {
+  display: flex; align-items: center; gap: 11px; padding: 8px 6px;
+  border: none; background: none; width: 100%; text-align: left; text-decoration: none; color: inherit;
+  cursor: pointer; font-family: inherit; border-radius: 10px;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.hr-ativ-item:hover { background: var(--page-bg); }
+.hr-ativ-ic {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  background: var(--page-bg); display: grid; place-items: center; color: var(--text-secondary);
+}
+.hr-ativ-ic svg { width: 14px; height: 14px; }
+.hr-ativ-txt { flex: 1; min-width: 0; }
+.hr-ativ-nome { display: block; font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hr-ativ-sub { display: block; font-size: 10px; color: var(--text-muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Card 6 — calendário da semana */
 .hr-cal { grid-column: 2 / span 2; grid-row: 2; padding: 18px 20px 14px; display: flex; flex-direction: column; }
@@ -1588,9 +1599,3 @@ body.card-aberto .quick-access-panel { display: none; }
   .hr-cal-grade, .hr-cal-corpo { grid-template-columns: 42px repeat(7, 1fr); }
 }
 
-/* Valores à direita da lista sanfona (horas realizadas, previstas, dias
-   travados) e as setinhas de subiu/desceu do comparativo. */
-.hr-lis-valor { font-size: 12.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.hr-lis-valor.alerta { color: var(--danger); }
-.hr-sobe { color: var(--success); }
-.hr-desce { color: var(--danger); }

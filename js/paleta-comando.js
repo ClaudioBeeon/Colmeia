@@ -221,7 +221,6 @@ function paletaMontarLinhas(termo) {
   // ---------- 3. Ir para ----------
   const paginas = [
     { page: "kanban", nome: "Quadro" },
-    { page: "hoje", nome: "Histórico" },
     { page: "horas", nome: "Minhas horas" },
     { page: "repasse", nome: "Fila de repasse" },
     { page: "clientes", nome: "Meus clientes" },

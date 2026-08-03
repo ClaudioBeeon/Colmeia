@@ -33,7 +33,8 @@ let horasSemanaAtual = null;
 let horasDadosSemana = null;   // resposta de buscarHorasDaSemana
 let horasAgendaSemana = null;  // resposta de buscarAgendaDaSemana
 let horasEntregues = null;     // resposta de buscarEntreguesDoDesigner
-let horasSemanaPassada = null; // total em segundos da semana anterior (pro comparativo)
+let horasSemanaPassada = null; // total em segundos da semana anterior (só alimenta renderMetricas)
+let horasAtividades = null;    // resposta de buscarAtividadesDrive (a antiga página Histórico)
 let _relogioDaPaginaHoras = null;
 
 /**
@@ -90,12 +91,13 @@ function iniciarRelogioDaPaginaHoras() {
 async function carregarDadosDaPaginaHoras() {
   const inicio = dataISOLocal(horasSemanaAtual);
 
-  // As três buscas em paralelo — nenhuma depende da outra, e esperar em
+  // As quatro buscas em paralelo — nenhuma depende da outra, e esperar em
   // fila indiana só deixaria a página lenta à toa.
-  const [horas, agenda, entregues] = await Promise.all([
+  const [horas, agenda, entregues, atividades] = await Promise.all([
     chamarBackend({ acao: "buscarHorasDaSemana", designer: DESIGNER_LOGADO, inicio }),
     chamarBackend({ acao: "buscarAgendaDaSemana", designer: DESIGNER_LOGADO, inicio }),
     chamarBackend({ acao: "buscarEntreguesDoDesigner", designer: DESIGNER_LOGADO, limite: 12 }),
+    chamarBackend({ acao: "buscarAtividadesDrive", designer: DESIGNER_LOGADO }),
   ]);
 
   // Trocou de semana enquanto carregava? Descarta — senão a resposta
@@ -105,11 +107,13 @@ async function carregarDadosDaPaginaHoras() {
   if (!caiuARede(horas)) horasDadosSemana = horas;
   if (!caiuARede(agenda)) horasAgendaSemana = agenda;
   if (!caiuARede(entregues)) horasEntregues = entregues;
+  if (!caiuARede(atividades)) horasAtividades = atividades;
 
   renderPaginaHoras();
 
-  // A semana anterior vem DEPOIS, em segundo plano: ela só alimenta o
-  // comparativo, e esperar por ela atrasaria a tela inteira à toa.
+  // A semana anterior vem DEPOIS, em segundo plano: ela só alimenta a
+  // métrica "últimas 2 semanas" no topo, e esperar por ela atrasaria a
+  // tela inteira à toa.
   const anterior = new Date(horasSemanaAtual.getTime() - 7 * 24 * 60 * 60 * 1000);
   const respostaAnterior = await chamarBackend({
     acao: "buscarHorasDaSemana", designer: DESIGNER_LOGADO, inicio: dataISOLocal(anterior),
@@ -119,7 +123,6 @@ async function carregarDadosDaPaginaHoras() {
     horasSemanaPassada = (respostaAnterior.dias || [])
       .filter(d => d.segundos !== null)
       .reduce((s, d) => s + d.segundos, 0);
-    renderComparativo();
     renderMetricas();
   }
 }
@@ -140,7 +143,7 @@ function renderPaginaHoras() {
   renderCronometroDeHoje();
   renderBarraSemanal();
   renderEntregues();
-  renderComparativo();
+  renderAtividadesRecentesHoras();
   renderCalendarioDaSemana();
 }
 
@@ -389,61 +392,40 @@ function iconeDoTipoDeTarefa(tipo) {
   return `<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M8 15l3-4 3 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-/** A lista sanfona da esquerda: comparativo com a semana passada. */
-function renderComparativo() {
-  const alvo = document.getElementById("hrComparativo");
+/**
+ * Card "Atividades recentes" — arquivos novos nas pastas do Drive dos
+ * seus clientes (uploads em "Publicações > ano > mês"). Era o conteúdo
+ * da página "Histórico" (2026-08-03: página incorporada aqui, ver
+ * horasAtividades acima e a busca em carregarDadosDaPaginaHoras).
+ */
+function renderAtividadesRecentesHoras() {
+  const alvo = document.getElementById("hrAtividades");
   if (!alvo) return;
 
-  const dias = (horasDadosSemana && horasDadosSemana.dias) || [];
-  const conhecidos = dias.filter(d => d.segundos !== null);
-  const somaSemana = conhecidos.reduce((s, d) => s + d.segundos, 0);
-  const travados = dias.filter(d => d.travado).length;
-  const previstas = 40 * 3600;
-
-  const seta = `<svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const setaCima = `<svg viewBox="0 0 24 24" fill="none"><path d="M18 15l-6-6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-
-  // Comparativo com a semana passada. Só aparece quando a semana anterior
-  // já foi buscada — não vale inventar uma variação sem ter com o que
-  // comparar de verdade.
-  let comparativoNome = "Carregando...";
-  let comparativoSub = "";
-  if (horasSemanaPassada !== null && conhecidos.length) {
-    const diferenca = somaSemana - horasSemanaPassada;
-    if (horasSemanaPassada === 0) {
-      comparativoNome = "Primeira semana com horas lançadas";
-      comparativoSub = formatarHoras(somaSemana) + " nesta semana";
-    } else {
-      const pct = Math.round((diferenca / horasSemanaPassada) * 100);
-      const subiu = diferenca >= 0;
-      comparativoNome = `<span class="${subiu ? "hr-sobe" : "hr-desce"}">${subiu ? "↑" : "↓"} ${subiu ? "+" : ""}${pct}%</span> vs. semana passada`;
-      comparativoSub = `${formatarHoras(somaSemana)} agora · ${formatarHoras(horasSemanaPassada)} antes`;
-    }
+  if (!horasAtividades) {
+    alvo.innerHTML = `<p class="hr-vazio">Carregando...</p>`;
+    return;
   }
+  if (!horasAtividades.ok || !horasAtividades.atividades.length) {
+    alvo.innerHTML = `<p class="hr-vazio">Nenhuma atividade recente nas pastas dos seus clientes.</p>`;
+    return;
+  }
+  alvo.innerHTML = horasAtividades.atividades.map(a => atividadeRecenteItemHTML(a)).join("");
+}
 
-  alvo.innerHTML = `
-    <div class="hr-lis-linha">
-      <span class="hr-lis-nome">Horas realizadas</span>
-      <span class="hr-lis-valor">${conhecidos.length ? formatarHoras(somaSemana) : "—"}</span>
-    </div>
-    <div class="hr-lis-linha"><span class="hr-lis-nome">Comparativo semanal</span><span class="hr-lis-seta">${setaCima}</span></div>
-    <div class="hr-lis-corpo">
-      <span class="hr-lis-thumb">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4 17l5-5 4 3 7-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h5v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+const ICONE_ARQUIVO_ATIVIDADE = `<svg viewBox="0 0 24 24" fill="none"><path d="M6 3h9l5 5v13a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v5h5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+
+function atividadeRecenteItemHTML(a) {
+  const pasta = nomeDaPastaDoCaminho(a.breadcrumb);
+  const sub = [a.cliente, pasta].filter(Boolean).join(" · ");
+  return `
+    <a class="hr-ativ-item" href="${a.pastaUrl || "#"}" target="_blank" rel="noopener" title="${escaparHTML(a.breadcrumb || "")}">
+      <span class="hr-ativ-ic">${ICONE_ARQUIVO_ATIVIDADE}</span>
+      <span class="hr-ativ-txt">
+        <span class="hr-ativ-nome">${escaparHTML(a.arquivo || "")}</span>
+        <span class="hr-ativ-sub">${escaparHTML(sub)}</span>
       </span>
-      <span class="hr-lis-corpo-txt">
-        <span class="hr-lis-corpo-nome">${comparativoNome}</span>
-        <span class="hr-lis-corpo-sub">${comparativoSub}</span>
-      </span>
-    </div>
-    <div class="hr-lis-linha">
-      <span class="hr-lis-nome">Horas previstas</span>
-      <span class="hr-lis-valor">${formatarHoras(previstas)}</span>
-    </div>
-    <div class="hr-lis-linha">
-      <span class="hr-lis-nome">Dias travados</span>
-      <span class="hr-lis-valor ${travados ? "alerta" : ""}">${conhecidos.length ? travados : "—"}</span>
-    </div>
+    </a>
   `;
 }
 

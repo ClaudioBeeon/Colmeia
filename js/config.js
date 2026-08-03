@@ -151,21 +151,6 @@ function avatarClienteHTML(nomeCliente, sizeClass) {
   return `<div class="avatar avatar-cliente ${sizeClass || ""}" style="background:${corDoCliente(nome)}" title="${escaparHTML(nome)}">${inicial}</div>`;
 }
 
-// Liga as setas de um carrossel horizontal (troca o "arrastar scroll pro
-// lado" por um botão de avançar/voltar) — usado em Histórico e
-// Atividades recentes. Habilita/desabilita sozinho conforme a posição.
-function montarCarrosselSetas(trackEl, prevBtn, nextBtn) {
-  if (!trackEl || !prevBtn || !nextBtn) return;
-  const atualizar = () => {
-    prevBtn.disabled = trackEl.scrollLeft <= 4;
-    nextBtn.disabled = trackEl.scrollLeft >= trackEl.scrollWidth - trackEl.clientWidth - 4;
-  };
-  prevBtn.onclick = () => trackEl.scrollBy({ left: -(trackEl.clientWidth * 0.9), behavior: "smooth" });
-  nextBtn.onclick = () => trackEl.scrollBy({ left: trackEl.clientWidth * 0.9, behavior: "smooth" });
-  trackEl.onscroll = atualizar;
-  atualizar();
-}
-
 const columnsDef = [
   { key: "pendentes", label: "Pendentes", hex: "var(--text-muted)" },
   { key: "prioridades", label: "Prioridades", hex: "var(--danger)" },

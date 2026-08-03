@@ -13,11 +13,11 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-03o">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-03o">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-03o">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-03o">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-03o">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-03p">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-03p">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-03p">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-03p">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-03p">
 </head>
 <body>
 
@@ -86,10 +86,6 @@
       <a href="#" class="nav-ic" title="Minhas horas" data-page="horas">
         <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 9.5V13l2.5 1.5M9 2h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="nav-label">Minhas horas</span>
-      </a>
-      <a href="#" class="nav-ic" title="Histórico" data-page="hoje">
-        <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="nav-label">Histórico</span>
       </a>
       <a href="#" class="nav-ic" title="Fila de repasse" data-page="repasse">
         <span class="nav-icon-circle">
@@ -462,32 +458,6 @@
       <div class="board" id="runrunBoard"></div>
     </section>
 
-    <section class="app-page" id="page-hoje" hidden>
-      <div class="historico-secao">
-        <div class="historico-secao-head">
-          <h3 class="historico-secao-titulo" id="hojeListTitulo">O que você deu play hoje</h3>
-          <div class="historico-filtro" id="hojeListFiltro">
-            <button type="button" class="historico-filtro-btn active" data-janela="hoje">Hoje</button>
-            <button type="button" class="historico-filtro-btn" data-janela="48h">Últimas 48h</button>
-            <button type="button" class="historico-filtro-btn" data-janela="semana">Última semana</button>
-          </div>
-        </div>
-        <div class="historico-carrossel">
-          <button type="button" class="historico-carrossel-seta prev" id="hojeListPrev" aria-label="Anterior"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <div class="hoje-list" id="hojeList"></div>
-          <button type="button" class="historico-carrossel-seta next" id="hojeListNext" aria-label="Próximo"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        </div>
-      </div>
-      <div class="historico-secao">
-        <h3 class="historico-secao-titulo">Atividades recentes</h3>
-        <div class="historico-carrossel">
-          <button type="button" class="historico-carrossel-seta prev" id="atividadesListPrev" aria-label="Anterior"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <div class="atividades-list" id="atividadesList"></div>
-          <button type="button" class="historico-carrossel-seta next" id="atividadesListNext" aria-label="Próximo"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        </div>
-      </div>
-    </section>
-
     <!-- ============ MINHAS HORAS ============
          Reconstrução do painel de referência aprovado pelo Cláudio. A
          composição (grid de 4 colunas, alturas de linha, radius) segue a
@@ -582,7 +552,12 @@
             </section>
           </div>
 
-          <section class="hr-card hr-lista" id="hrComparativo"></section>
+          <section class="hr-card hr-lista">
+            <div class="hr-card-cab">
+              <span class="hr-card-titulo">Atividades recentes</span>
+            </div>
+            <div class="hr-ativ-lista" id="hrAtividades"></div>
+          </section>
 
           <section class="hr-card hr-cal">
             <div class="hr-cal-meses">
@@ -753,29 +728,29 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-03o"></script>
-<script src="js/fila-offline.js?v=2026-08-03o"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-03o"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-03o"></script>
-<script src="js/kanban-polling.js?v=2026-08-03o"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-03o"></script>
-<script src="js/regras-briefing.js?v=2026-08-03o"></script>
-<script src="js/kanban-board.js?v=2026-08-03o"></script>
-<script src="js/clientes-hub.js?v=2026-08-03o"></script>
-<script src="js/chat-comentarios.js?v=2026-08-03o"></script>
-<script src="js/detalhe-modal.js?v=2026-08-03o"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-03o"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-03o"></script>
-<script src="js/bee.js?v=2026-08-03o"></script>
-<script src="js/paginas-designers.js?v=2026-08-03o"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-03o"></script>
-<script src="js/pagina-repasse.js?v=2026-08-03o"></script>
-<script src="js/pagina-horas.js?v=2026-08-03o"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-03o"></script>
-<script src="js/paleta-comando.js?v=2026-08-03o"></script>
-<script src="js/roteador-url.js?v=2026-08-03o"></script>
-<script src="js/detalhe-historia.js?v=2026-08-03o"></script>
-<script src="js/modo-foco.js?v=2026-08-03o"></script>
-<script src="js/login-boot.js?v=2026-08-03o"></script>
+<script src="js/config.js?v=2026-08-03p"></script>
+<script src="js/fila-offline.js?v=2026-08-03p"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-03p"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-03p"></script>
+<script src="js/kanban-polling.js?v=2026-08-03p"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-03p"></script>
+<script src="js/regras-briefing.js?v=2026-08-03p"></script>
+<script src="js/kanban-board.js?v=2026-08-03p"></script>
+<script src="js/clientes-hub.js?v=2026-08-03p"></script>
+<script src="js/chat-comentarios.js?v=2026-08-03p"></script>
+<script src="js/detalhe-modal.js?v=2026-08-03p"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-03p"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-03p"></script>
+<script src="js/bee.js?v=2026-08-03p"></script>
+<script src="js/paginas-designers.js?v=2026-08-03p"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-03p"></script>
+<script src="js/pagina-repasse.js?v=2026-08-03p"></script>
+<script src="js/pagina-horas.js?v=2026-08-03p"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-03p"></script>
+<script src="js/paleta-comando.js?v=2026-08-03p"></script>
+<script src="js/roteador-url.js?v=2026-08-03p"></script>
+<script src="js/detalhe-historia.js?v=2026-08-03p"></script>
+<script src="js/modo-foco.js?v=2026-08-03p"></script>
+<script src="js/login-boot.js?v=2026-08-03p"></script>
 </body>
 </html>

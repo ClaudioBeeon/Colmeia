@@ -74,7 +74,9 @@ produção. A checagem automática (`.github/scripts/checar-arquivos-gs.js`) bar
 
 Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-page" id="page-...">`:
 - `page-kanban` — quadro principal (`#board`)
-- `page-clientes`, `page-atendimento`, `page-tipos`, `page-runrun`, `page-hoje`, `page-repasse`
+- `page-clientes`, `page-atendimento`, `page-tipos`, `page-runrun`, `page-horas`, `page-repasse`
+  (a antiga `page-hoje`, a página "Histórico", foi incorporada dentro de `page-horas` em 2026-08-03 —
+  ver seção própria abaixo)
 
 ## Estrutura do frontend (js/)
 
@@ -384,6 +386,34 @@ cor "oficial" de comentários no app, então foi inventada uma (grafite), simét
 seta, clique numa opção, clique fora em js/kanban-board.js) via `var(--ease-apple-spring)`; o menu em
 si ganha um "pop" leve ao abrir (`@keyframes chatHdrMenuPop`, mesma família do `commentPop` que as
 bolhas de comentário já usavam); trocar de gomo aceso anima cor (`var(--dur-base)`).
+
+## A página "Histórico" virou parte de "Minhas horas" (2026-08-03)
+
+A página própria "Histórico" (`page-hoje`, nav "Histórico") deixou de existir. Ela tinha duas seções:
+"O que você deu play hoje" (removida de vez, sem migrar pra lugar nenhum) e "Atividades recentes"
+(arquivos novos nas pastas do Drive dos clientes) — essa segunda passou a viver dentro da página
+"Minhas horas" (js/pagina-horas.js), no card que antes mostrava "Horas realizadas / Comparativo
+semanal / Horas previstas / Dias travados" (`.hr-lista`, embaixo da foto do designer, ao lado do card
+escuro "Tarefas entregues"). A pedido do Cláudio, esse conteúdo de comparativo SUMIU — não foi
+realocado pra lugar nenhum — o card agora é só a lista de atividades recentes.
+
+- `renderAtividadesRecentesHoras()` (js/pagina-horas.js) substituiu `renderComparativo()`; a busca
+  (`buscarAtividadesDrive`) entrou como a 4ª chamada paralela de `carregarDadosDaPaginaHoras()` — o
+  mesmo padrão de `horasEntregues` (variável de módulo `horasAtividades`, preenchida uma vez e lida
+  pelo render). `nomeDaPastaDoCaminho()` (js/paginas-designers.js) foi reaproveitada — é só o helper
+  "pega o último pedaço do caminho", não tinha nada de específico da página antiga.
+- **`horasSemanaPassada` continua existindo**, mesmo com o comparativo removido: `renderMetricas()`
+  (o "Nesta semana"/"Últimas 2 semanas" no topo da página) também dependia dela — só o card visual de
+  comparativo (e a busca teórica de "subiu/desceu vs. semana passada") foi removido, a busca da semana
+  anterior em si continua rodando em segundo plano do mesmo jeito.
+- Removido junto (ficou órfão sem a página Histórico): `montarCarrosselSetas` (js/config.js, só
+  existia pro carrossel horizontal de lá), todas as classes `.historico-*`/`.hoje-list`/
+  `.atividades-list`/`.hr-lis-*` em css, as entradas `hoje` em `pageTitles`
+  (js/paginas-designers.js), `ROTEADOR_SLUGS` (js/roteador-url.js) e na lista "Ir para" da paleta de
+  comando (js/paleta-comando.js), e o `if (page === "hoje") ...` em `mostrarPagina()`
+  (js/pagina-repasse.js). A ação de backend `buscarTarefasHoje` (o "log de plays" de "O que você deu
+  play hoje") não foi tocada no `.gs` — ficou sem uso no front, mas não há necessidade de mexer no
+  backend só por isso.
 
 ## Bug recorrente conhecido
 

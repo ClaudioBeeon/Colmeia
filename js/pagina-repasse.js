@@ -1014,7 +1014,6 @@ function mostrarPagina(page) {
   if (page === "tipos") buildTiposPage();
   if (page === "repasse") buildRepassePage();
   if (page === "runrun") buildRunrunCompletoPage();
-  if (page === "hoje") buildHistoricoPage();
   // A página de horas tem um cronômetro que anda de 1 em 1 segundo — ele
   // precisa parar quando a pessoa sai dela, senão fica rodando à toa pelo
   // resto da sessão (ver iniciarRelogioDaPaginaHoras, js/pagina-horas.js).

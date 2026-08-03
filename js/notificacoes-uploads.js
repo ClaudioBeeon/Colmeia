@@ -410,7 +410,7 @@ async function carregarDadosPainelBeeon() {
     buildClientsPage();
     buildAtendimentoPage();
     buildTiposPage();
-    if (!document.getElementById("page-hoje").hidden) carregarAtividadesDrive();
+    if (!document.getElementById("page-horas").hidden && typeof carregarAtividadesRecentesHoras === "function") carregarAtividadesRecentesHoras();
   } catch (err) {
     console.error("Falha ao conectar com o painel-designers-beeon:", err);
   }
