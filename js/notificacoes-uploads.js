@@ -12,7 +12,14 @@ function chaveUploadVisto(link) {
   return "colmeia_upload_visto_" + normalizarParaComparar(DESIGNER_LOGADO || "sem-login") + "_" + link;
 }
 function uploadJaVisto(link) {
-  try { return localStorage.getItem(chaveUploadVisto(link)) === "1"; } catch (err) { return false; }
+  // "Existe a chave" = já foi visto, não importa o valor guardado nela.
+  // marcarUploadVisto guarda a DATA (pra dar pra limpar depois, ver
+  // limparLixoAntigoDoNavegador), não mais o texto fixo "1" — esse
+  // checagem aqui tinha ficado pra trás comparando com "1" e nunca mais
+  // batia com nada, então "Dispensar"/"Adicionar ao comentário" marcava
+  // certinho, mas a notificação nunca ficava de fato marcada como vista
+  // e voltava sozinha no próximo poll (8s).
+  try { return localStorage.getItem(chaveUploadVisto(link)) !== null; } catch (err) { return false; }
 }
 function marcarUploadVisto(link) {
   // Guarda QUANDO foi dispensado (não só "1") pra dar pra limpar depois —
