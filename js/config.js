@@ -221,6 +221,7 @@ const ACOES_DEMORADAS = [
   "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
   "buscarImagemCheiaDrive", // idem, mas pra imagem do Drive ampliada (ver js/notificacoes-uploads.js)
   "beeGerarImagem",       // gera imagem de verdade (Gemini, ver NanoBanana.gs)
+  "subirArquivoNoCard",   // arquivo arrastado pro card, sobe pro Drive (ver js/detalhe-modal.js)
 ];
 
 async function chamarBackend(corpo, opcoes) {

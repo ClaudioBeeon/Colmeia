@@ -189,6 +189,8 @@ function handleRequest(e, method) {
         output = reagirComentario(body.commentId, body.emoji, body.autor);
       } else if (body.acao === 'adicionarComentarioComAnexo') {
         output = adicionarComentarioComAnexo(body.taskId, body.texto, body.nomeArquivo, body.mimeType, body.base64Dados, body.autor);
+      } else if (body.acao === 'subirArquivoNoCard') {
+        output = subirArquivoNoCard(body.dados);
       } else if (body.acao === 'avancarWorkflow') {
         output = avancarWorkflowTarefa(body.taskId, body.autor);
       } else if (body.acao === 'desfazerWorkflow') {

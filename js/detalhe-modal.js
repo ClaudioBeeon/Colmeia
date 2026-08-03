@@ -1672,6 +1672,104 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeDetail();
 });
 
+/**
+ * Arrastar arquivo pro card — sobe pro Drive na pasta certa e comenta
+ * sozinho (pedido do Cláudio, 2026-08-03). Jogar um arquivo do computador
+ * em cima do card aberto sobe ele pra pasta do Drive dela (cria a pasta na
+ * hora se ainda não existir, mesmo caminho do botão "Criar pasta do
+ * card") e posta um comentário avisando — sem precisar abrir o Drive nem
+ * escrever nada.
+ *
+ * Ligado UMA vez só, no #taskDetail (elemento fixo que nunca é recriado —
+ * só o innerHTML dele é redesenhado a cada renderDetail), em vez de
+ * religar a cada render como os botões de dentro do card.
+ */
+const LIMITE_UPLOAD_ARRASTADO_BYTES = 30 * 1024 * 1024; // 30MB — folgado pra imagem/PSD comum, sem travar o navegador com vídeo grande
+
+function temArquivoNoDrag(e) {
+  return e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+}
+
+function wireArrastarArquivoParaCard() {
+  const panel = document.getElementById("taskDetail");
+  if (!panel) return;
+  let dragDepth = 0;
+
+  panel.addEventListener("dragenter", e => {
+    if (!temArquivoNoDrag(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    panel.classList.add("arquivo-sobre-card");
+  });
+  panel.addEventListener("dragover", e => {
+    if (!temArquivoNoDrag(e)) return;
+    e.preventDefault();
+  });
+  panel.addEventListener("dragleave", () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) panel.classList.remove("arquivo-sobre-card");
+  });
+  panel.addEventListener("drop", e => {
+    if (!temArquivoNoDrag(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    panel.classList.remove("arquivo-sobre-card");
+    const task = tasks[detailIdx];
+    if (!task || !task.id) return;
+    Array.from(e.dataTransfer.files || []).forEach(arquivo => subirArquivoArrastadoParaCard(task, arquivo));
+  });
+}
+
+async function subirArquivoArrastadoParaCard(task, arquivo) {
+  if (arquivo.size > LIMITE_UPLOAD_ARRASTADO_BYTES) {
+    mostrarToast(`"${arquivo.name}" passa de 30MB — sobe direto pela pasta do Drive.`, "erro");
+    return;
+  }
+  const idAoSoltar = task.id;
+  try {
+    const base64Dados = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = () => reject(new Error("Falha ao ler o arquivo"));
+      reader.readAsDataURL(arquivo);
+    });
+    const data = await chamarBackend({
+      acao: "subirArquivoNoCard",
+      dados: {
+        taskId: idAoSoltar,
+        cliente: task.client,
+        tituloCard: task.title,
+        projeto: task.projeto,
+        nomeArquivo: arquivo.name,
+        mimeType: arquivo.type || "application/octet-stream",
+        base64Dados,
+      },
+    });
+    if (!data.ok) {
+      mostrarToast(data.error || `Não consegui subir "${arquivo.name}" pro Drive agora.`, "erro");
+      return;
+    }
+    // A tarefa pode ter trocado enquanto o upload rodava (fechou o card,
+    // abriu outro) — o comentário vai pra tarefa CERTA (idAoSoltar) do
+    // mesmo jeito; só a pílula da pasta na tela é que só faz sentido
+    // atualizar se o card daquele arquivo ainda for o que está aberto.
+    if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(idAoSoltar)) {
+      tasks[detailIdx].pastaUrlSalva = data.pastaUrl;
+      mostrarPillCopiarLinkDaPasta(data.pastaUrl);
+    }
+    mostrarToast(`"${data.nomeFinal}" enviado pro Drive.`, "sucesso");
+    enviarEscritaNoBackend(
+      { acao: "adicionarComentario", taskId: idAoSoltar, texto: `📎 Novo arquivo na pasta do card: ${data.nomeFinal}` },
+      "avisar sobre o arquivo novo"
+    );
+  } catch (err) {
+    console.error("Falha ao subir arquivo arrastado:", err);
+    mostrarToast(`Falha de conexão ao subir "${arquivo.name}".`, "erro");
+  }
+}
+
+wireArrastarArquivoParaCard();
+
 function updateNowPlaying() {
   const el = document.getElementById("nowPlaying");
   const idle = document.getElementById("nowPlayingIdle");
