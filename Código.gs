@@ -52,10 +52,9 @@
 // RUNRUN_USER_TOKEN_GUSTAVO, RUNRUN_USER_TOKEN_ERICK — as duas últimas
 // são o token pessoal de cada um (gerado por ELES, dentro da própria
 // conta deles no Runrun.it — o do Cláudio não serve pros dois), ver o
-// comentário "TOKEN POR PESSOA" ali em cima. Também FIREFLY_CLIENT_ID e
-// FIREFLY_CLIENT_SECRET (geração de imagem pela Bee — ver Firefly.gs);
-// uma terceira, FIREFLY_REFRESH_TOKEN, é criada sozinha pelo próprio
-// fluxo de autorização, não precisa cadastrar essa na mão.
+// comentário "TOKEN POR PESSOA" ali em cima. A geração de imagem da Bee
+// (NanoBanana.gs) NÃO precisa de chave nova: usa a mesma GEMINI_API_KEY
+// dos textos dela.
 var RUNRUN_APP_KEY = PropertiesService.getScriptProperties().getProperty('RUNRUN_APP_KEY');
 var GROQ_API_KEY = PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY');
 var GROQ_MODEL = 'llama-3.3-70b-versatile';
@@ -130,13 +129,6 @@ var ACOES_QUE_MUDAM_O_QUADRO = [
 ];
 
 function doGet(e) {
-  // Fluxo de autorização da Adobe Firefly (ver Firefly.gs) — é a ÚNICA
-  // coisa que precisa de uma tela de verdade (redirecionar pra Adobe,
-  // depois mostrar "autorizado!"), então sai do roteamento normal de
-  // ações (que sempre devolve JSON) antes de cair nele.
-  if (e && e.parameter && e.parameter.fireflyAuth) {
-    return tratarFireflyAuthGet(e);
-  }
   return handleRequest(e, 'GET');
 }
 
@@ -242,7 +234,11 @@ function handleRequest(e, method) {
       } else if (body.acao === 'beeInspirar') {
         output = beeInspirar(body.taskId, body.idOriginal);
       } else if (body.acao === 'beeGerarImagem') {
-        output = gerarImagemFirefly(body.prompt, { modeloCustomizado: body.modeloCustomizado });
+        // Gemini 2.5 Flash Image ("Nano Banana") — ver NanoBanana.gs. O
+        // caminho pela Adobe Firefly foi abandonado: o produto que a Beeon
+        // tem lá não gera imagem por texto (é edição de template do Express),
+        // e a autorização nunca chegou a funcionar.
+        output = gerarImagemNanoBanana(body.prompt);
       } else if (body.acao === 'beeDescartarSugestao') {
         output = descartarSugestaoDeMemoria(body.cliente, body.texto);
       } else if (body.acao === 'beeBuscarDrive') {

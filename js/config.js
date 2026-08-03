@@ -220,7 +220,7 @@ const ACOES_DEMORADAS = [
   "buscarProgressoClientes",
   "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
   "buscarImagemCheiaDrive", // idem, mas pra imagem do Drive ampliada (ver js/notificacoes-uploads.js)
-  "beeGerarImagem",       // gera imagem de verdade pela Firefly
+  "beeGerarImagem",       // gera imagem de verdade (Gemini, ver NanoBanana.gs)
 ];
 
 async function chamarBackend(corpo, opcoes) {

@@ -390,9 +390,10 @@ async function beeReconhecerPerguntaFuncional(pergunta, contexto) {
   const clienteCitado = clientes.find(c => texto.includes(normalizarParaComparar(c)));
   const cliente = clienteCitado || clienteDoContexto;
 
-  // "Gera uma imagem de...", "cria uma imagem com..." — pela Firefly de
-  // verdade (ver Firefly.gs), não é o "Gerar prompt de imagem" (esse
-  // outro só monta o texto pra colar no Firefly manualmente). Tira o
+  // "Gera uma imagem de...", "cria uma imagem com..." — gera a imagem DE
+  // VERDADE pelo Gemini (ver NanoBanana.gs). Não confundir com o atalho
+  // "Gerar prompt de imagem", que só monta o texto pra colar no site do
+  // Firefly na mão — os dois convivem de propósito. Tira o
   // pedido do começo da frase pra sobrar só a descrição do que a
   // imagem deve ter; se não bater o padrão, manda a frase inteira mesmo
   // (funciona, só perde a limpeza da extração).
@@ -479,13 +480,20 @@ function beeMensagemFuncional(resultado) {
 function renderRespostaFuncional(f) {
   if (f.tipo === "imagem") {
     const resultado = f.resultado;
-    if (!resultado || !resultado.ok || !resultado.urls || !resultado.urls.length) {
+    // O backend devolve a imagem em base64 (gerarImagemNanoBanana,
+    // NanoBanana.gs), não um endereço — o Gemini manda os bytes na
+    // própria resposta. Vira um "data:" que o navegador desenha
+    // direto, sem precisar hospedar em lugar nenhum.
+    if (!resultado || !resultado.ok || !resultado.base64) {
       const motivo = resultado && resultado.error ? escaparHTML(resultado.error) : "Não consegui gerar a imagem agora.";
       return `<p>${motivo}</p>`;
     }
+    const src = `data:${resultado.mimeType || "image/png"};base64,${resultado.base64}`;
     return `<p class="bee-titulo">Gerei isso pra "${escaparHTML(f.prompt)}"</p>` +
-      resultado.urls.map(url => `<img src="${escaparHTML(url)}" alt="${escaparHTML(f.prompt)}">`).join("") +
-      `<div class="bee-pastilhas">${resultado.urls.map(url => `<a class="bee-acao principal" href="${escaparHTML(url)}" target="_blank" rel="noopener">Abrir em tamanho grande</a>`).join("")}</div>`;
+      `<img src="${src}" alt="${escaparHTML(f.prompt)}">` +
+      `<div class="bee-pastilhas">
+         <a class="bee-acao principal" href="${src}" download="bee-${Date.now()}.png">Baixar</a>
+       </div>`;
   }
 
   if (f.tipo === "link") {
@@ -872,8 +880,8 @@ const BEE_ATALHOS = [
   {
     icone: "🖼️",
     titulo: "Gerar<br>imagem",
-    // Diferente do atalho de cima: esse gera a imagem DE VERDADE, pela
-    // Firefly (ver Firefly.gs) — por isso não manda sozinho (faltaria a
+    // Diferente do atalho de cima: esse gera a imagem DE VERDADE, pelo
+    // Gemini (ver NanoBanana.gs) — por isso não manda sozinho (faltaria a
     // descrição): só prepara o campo, a pessoa completa e aperta enviar.
     pergunta: "Gerar imagem: ",
     naoEnviar: true,
