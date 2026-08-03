@@ -2,6 +2,7 @@ function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
   descMaeAberta = false;
+  historiaAberta = false;
   // Subtarefa de ALTERAÇÃO abre direto no contexto, não na Descrição (que
   // nessas subtarefas costuma ser genérica ou vazia): a aba "Tarefa
   // original" já vem aberta do lado da descrição, e o chat já abre na
@@ -665,6 +666,9 @@ function renderDetail() {
             ${ehTarefaDeAlteracao(task) ? `
               <button type="button" class="detail-tab" id="tabOriginal" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
             ` : ""}
+            ${task.id ? `
+              <button type="button" class="detail-tab" id="tabHistoria" title="Briefing, plays, arquivos e comentários em ordem de hora">História</button>
+            ` : ""}
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
@@ -696,6 +700,9 @@ function renderDetail() {
                 <div class="original-meta" id="originalMeta"></div>
                 <div class="desc-text-real" id="originalTextReal"></div>
               </div>
+            ` : ""}
+            ${task.id ? `
+              <div class="historia-content" id="historiaContent" hidden></div>
             ` : ""}
           </div>
         </div>
@@ -1082,11 +1089,12 @@ function renderDetail() {
     });
   }
 
-  // ===== Abas Descrição / Descrição card mãe / Tarefa original (sem
-  // re-renderizar, com transição) =====
+  // ===== Abas Descrição / Descrição card mãe / Tarefa original / História
+  // (sem re-renderizar, com transição) =====
   document.getElementById("tabDesc").addEventListener("click", () => {
     descMaeAberta = false;
     originalAberta = false;
+    historiaAberta = false;
     applyCommentsState();
   });
   const tabDescMae = document.getElementById("tabDescMae");
@@ -1094,6 +1102,7 @@ function renderDetail() {
     tabDescMae.addEventListener("click", () => {
       descMaeAberta = true;
       originalAberta = false;
+      historiaAberta = false;
       applyCommentsState();
       carregarDescricaoCardMae(tasks[detailIdx] || task);
     });
@@ -1103,8 +1112,19 @@ function renderDetail() {
     tabOriginal.addEventListener("click", () => {
       originalAberta = true;
       descMaeAberta = false;
+      historiaAberta = false;
       applyCommentsState();
       carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
+    });
+  }
+  const tabHistoria = document.getElementById("tabHistoria");
+  if (tabHistoria) {
+    tabHistoria.addEventListener("click", () => {
+      historiaAberta = true;
+      descMaeAberta = false;
+      originalAberta = false;
+      applyCommentsState();
+      carregarHistoriaDaTarefa(tasks[detailIdx] || task);
     });
   }
 
@@ -1118,6 +1138,7 @@ function renderDetail() {
   // (cardMaeCache/cache da alteração), volta na hora, sem esperar rede.
   if (descMaeAberta) carregarDescricaoCardMae(tasks[detailIdx] || task);
   if (originalAberta) carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
+  if (historiaAberta) carregarHistoriaDaTarefa(tasks[detailIdx] || task);
 
   const commentInput = document.getElementById("commentInput");
   let arquivoParaAnexar = null;
@@ -1393,18 +1414,22 @@ function applyCommentsState() {
   const childrenPanel = document.getElementById("childrenPanel");
   const tabDescMae = document.getElementById("tabDescMae");
   const tabOriginal = document.getElementById("tabOriginal");
+  const tabHistoria = document.getElementById("tabHistoria");
   const descContent = document.getElementById("descContent");
   const descMaeContent = document.getElementById("descMaeContent");
   const originalContent = document.getElementById("originalContent");
+  const historiaContent = document.getElementById("historiaContent");
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
-  // Três abas mutuamente exclusivas: Descrição (a padrão), Descrição card
-  // mãe e Tarefa original (essa última só existe em subtarefa de alteração).
-  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta);
+  // Abas mutuamente exclusivas: Descrição (a padrão), Descrição card mãe,
+  // Tarefa original (só em subtarefa de alteração) e História.
+  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta && !historiaAberta);
   if (tabDescMae) tabDescMae.classList.toggle("active", descMaeAberta);
   if (tabOriginal) tabOriginal.classList.toggle("active", originalAberta);
-  if (descContent) descContent.hidden = descMaeAberta || originalAberta;
+  if (tabHistoria) tabHistoria.classList.toggle("active", historiaAberta);
+  if (descContent) descContent.hidden = descMaeAberta || originalAberta || historiaAberta;
   if (descMaeContent) descMaeContent.hidden = !descMaeAberta;
   if (originalContent) originalContent.hidden = !originalAberta;
+  if (historiaContent) historiaContent.hidden = !historiaAberta;
 }
 
 /**

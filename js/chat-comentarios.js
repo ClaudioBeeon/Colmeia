@@ -4,6 +4,8 @@ let descMaeAberta = false;
 // Aba "Tarefa original" aberta? (só existe em subtarefa de alteração — ver
 // ehTarefaDeAlteracao em js/detalhe-modal.js)
 let originalAberta = false;
+// Aba "História" aberta? (ver js/detalhe-historia.js)
+let historiaAberta = false;
 
 // ===== Chat flutuante (comentários em pop-up separado, fora do card) =====
 let chatThreadAtivo = "aqui"; // "aqui" (a tarefa aberta) ou "mae" (o card mãe dela)

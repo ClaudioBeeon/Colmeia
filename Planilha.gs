@@ -876,6 +876,26 @@ function buscarPlaysDeHoje(designer, janela) {
   return { ok: true, tarefas: lista };
 }
 
+/**
+ * Todos os plays já registrados de UMA tarefa específica (sem corte de
+ * data) — usado pela "História da peça" (ver buscarHistoriaDaTarefa,
+ * Código.gs), a linha do tempo dentro do card. O log só guarda o
+ * instante de cada play (não quando pausou), então isso vira "começou a
+ * trabalhar às HH:MM" — não uma duração de sessão.
+ */
+function buscarHistoricoDePlaysDaTarefa(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var sheet = getLogPlaysSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var eventos = [];
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) === String(taskId)) {
+      eventos.push({ designer: linhas[i][2], quando: Number(linhas[i][3]) || 0 });
+    }
+  }
+  return { ok: true, plays: eventos };
+}
+
 // Quanto tempo de histórico de plays vale manter na planilha. A tela mais
 // longa da página Histórico é "última semana", então 60 dias é folga de
 // sobra — o resto já está guardado nos backups diários.

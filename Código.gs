@@ -313,6 +313,8 @@ function handleRequest(e, method) {
         output = entrarEmFoco(body.designer, body.ateQuando);
       } else if (body.acao === 'sairDoFoco') {
         output = sairDoFoco(body.designer);
+      } else if (body.acao === 'buscarHistoriaDaTarefa') {
+        output = buscarHistoriaDaTarefa(body.taskId);
       } else if (body.acao === 'buscarAtividadesDrive') {
         output = buscarAtividadesDrive(body.designer);
       } else if (body.acao === 'buscarProgressoClientes') {
@@ -461,6 +463,25 @@ function getTarefasColmeia() {
   } catch (err) {
     return { ok: false, error: 'Erro ao buscar tarefas do Runrun.it: ' + err.message };
   }
+}
+
+/**
+ * Junta os dois pedaços que só o Colmeia sabe (plays e arquivos da
+ * pasta do card) pra "História da peça" — a linha do tempo dentro do
+ * card (ver js/detalhe-historia.js). Os comentários (que também entram
+ * na linha do tempo) o front-end já busca à parte — já estão sendo lidos
+ * de qualquer jeito pra aba Comentários, então não faz sentido buscar
+ * de novo aqui.
+ */
+function buscarHistoriaDaTarefa(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var plays = buscarHistoricoDePlaysDaTarefa(taskId);
+  var arquivos = buscarHistoricoDeArquivosDoCard(taskId);
+  return {
+    ok: true,
+    plays: plays.ok ? plays.plays : [],
+    arquivos: arquivos.ok ? arquivos.arquivos : []
+  };
 }
 
 /**

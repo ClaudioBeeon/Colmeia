@@ -81,9 +81,9 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
 entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; o
-roteador de URL, 22; e o modo foco, 23) menores dentro da pasta `js/`, cada um cuidando de um
-assunto. **Não é um sistema de build** — não tem bundler, TypeScript, nem npm envolvido no
-frontend. É só HTML puro: o `index.html` carrega os 23 arquivos com várias tags
+roteador de URL, 22; a história da peça, 23; e o modo foco, 24) menores dentro da pasta `js/`, cada
+um cuidando de um assunto. **Não é um sistema de build** — não tem bundler, TypeScript, nem npm
+envolvido no frontend. É só HTML puro: o `index.html` carrega os 24 arquivos com várias tags
 `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
@@ -134,8 +134,9 @@ Arquivos, na ordem em que são carregados (`js/`):
 20. `paleta-comando.js` — a **paleta de comando** (Ctrl+Espaço). Ver seção própria abaixo.
 21. `roteador-url.js` — link direto pra tarefa/página pela URL (`/11503`, `/minhas-horas`). Ver
     seção própria abaixo.
-22. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
-23. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+22. `detalhe-historia.js` — a aba **"História"** (linha do tempo da tarefa). Ver seção própria abaixo.
+23. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
+24. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -243,6 +244,34 @@ que também vão precisar disso (parede do cliente, antes e depois).
   é o que o front-end usa pra saber "isso é imagem, vale tentar mostrar preview" (`ehImagemPreviewable`).
 - O visualizador ampliado captura Esc em **fase de captura**, mesmo padrão da paleta de comando: se
   ele está aberto, o Esc fecha ELE, não o card por trás.
+
+## A aba "História" — linha do tempo da tarefa (2026-08-03)
+
+`js/detalhe-historia.js`. Uma aba nova ao lado de "Descrição": briefing chegou → alguém trabalhou →
+arquivo subiu → cliente comentou → entregue, cada evento com o tempo até o próximo bem visível.
+Responde "por que demorou?" sem ninguém se defender — quase sempre é um buraco de espera, não
+trabalho lento.
+
+**Cada evento tem uma fonte diferente, e isso importa pra saber onde mexer:**
+- "Tarefa criada" — `task.createdAt`, já vem no objeto (nenhuma busca nova).
+- Comentários — `buscarComentariosDoBackend(task.id)`, a MESMA busca que já alimenta a aba
+  Comentários — reaproveitada aqui, não busca de novo o que já ia buscar de qualquer jeito.
+- "Começou a trabalhar" — ação `buscarHistoriaDaTarefa` (Código.gs) → `buscarHistoricoDePlaysDaTarefa`
+  (Planilha.gs), lendo a aba "Log de Plays" filtrada por essa tarefa. O log só guarda o INÍCIO de cada
+  play, não quando pausou — por isso é "começou a trabalhar às HH:MM", não uma duração de sessão.
+- Arquivo adicionado — mesma ação → `buscarHistoricoDeArquivosDoCard` (Drive.gs), que lê TODOS os
+  arquivos da pasta do card, sem o corte de 30 min que `buscarUploadsRecentesDoCard` usa pro aviso da
+  Bee (são duas funções de propósitos diferentes, mesma pasta).
+- "Entregue" — só o horário é exato se a entrega aconteceu NESTA sessão (`task._entregueEm`); senão
+  usa `task.lastActivityAt` como aproximação (o Runrun.it não expõe o instante exato da entrega) e
+  marca o evento como aproximado.
+
+Segue o mesmo padrão de abas mutuamente exclusivas que "Descrição"/"Descrição card mãe"/"Tarefa
+original" já usavam (`historiaAberta`, js/chat-comentarios.js) — inclusive chamando
+`carregarHistoriaDaTarefa` **direto**, sem `typeof` de guarda: mesmo o arquivo carregando depois de
+detalhe-modal.js, a chamada só acontece dentro de um clique, bem depois de todo script já ter
+carregado (mesmo raciocínio de `carregarDescricaoCardMae`, que já é chamado assim de dentro de
+detalhe-modal.js mesmo detalhe-cardmae.js carregando depois).
 
 ## Modo foco (2026-08-03)
 

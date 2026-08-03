@@ -315,6 +315,34 @@ function listarUploadsRecentesDaPasta(pasta) {
   return uploads;
 }
 
+/**
+ * TODOS os arquivos que já passaram pela pasta do card, sem corte de
+ * tempo (diferente de buscarUploadsRecentesDoCard, que só olha os
+ * últimos 30 min) — usado pela "História da peça" (ver
+ * buscarHistoriaDaTarefa, Código.gs), a linha do tempo dentro do card.
+ */
+function buscarHistoricoDeArquivosDoCard(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var salvo = buscarPastaSalvaDoCard(taskId);
+  if (!salvo.ok || !salvo.url) return { ok: true, arquivos: [] };
+  var folderId = extrairIdDeUrlDrive(salvo.url);
+  if (!folderId) return { ok: true, arquivos: [] };
+  try {
+    var pasta = DriveApp.getFolderById(folderId);
+    var arquivos = [];
+    var iter = pasta.getFiles();
+    while (iter.hasNext()) {
+      var arq = iter.next();
+      arquivos.push({ nome: arq.getName(), quando: arq.getDateCreated().getTime() });
+    }
+    return { ok: true, arquivos: arquivos };
+  } catch (e) {
+    // Pasta ainda não existe, ou id salvo ficou inválido — a linha do
+    // tempo só fica sem os eventos de arquivo, não quebra o resto.
+    return { ok: true, arquivos: [] };
+  }
+}
+
 // ============ PREVIEW DE IMAGEM DO DRIVE (dentro do Colmeia) ============
 // Duas ações separadas de propósito: a miniatura (getThumbnail) é um JPEG
 // baixinho que o próprio Google já gera, rápida de buscar — usada no

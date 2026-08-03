@@ -1434,3 +1434,49 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 @media (max-width: 640px) {
   .foco-hud { bottom: 14px; left: 14px; padding: 8px 8px 8px 14px; font-size: 12px; }
 }
+
+/* ===================================================================
+   HISTÓRIA DA PEÇA — linha do tempo dentro da tarefa
+   Ver js/detalhe-historia.js e a aba "História" ao lado de "Descrição".
+   =================================================================== */
+
+.historia-lista { display: flex; flex-direction: column; }
+
+.historia-item {
+  display: flex; gap: 12px; position: relative;
+  padding-bottom: 20px;
+}
+/* A linha vertical ligando um ponto ao próximo — não desenha depois do último. */
+.historia-item:not(:last-child)::before {
+  content: ""; position: absolute; left: 13px; top: 28px; bottom: 0;
+  width: 1.5px; background: var(--border);
+}
+
+.historia-ponto {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: var(--page-bg); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; z-index: 1;
+}
+
+.historia-corpo { flex: 1; min-width: 0; padding-top: 3px; }
+
+.historia-linha1 {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.historia-titulo { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.historia-hora {
+  flex-shrink: 0; font-size: 11.5px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+.historia-detalhe {
+  margin: 3px 0 0; font-size: 12.5px; color: var(--text-secondary);
+  line-height: 1.5; overflow-wrap: break-word;
+}
+
+.historia-intervalo {
+  display: inline-block; margin-top: 6px;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  background: var(--page-bg); border-radius: 999px; padding: 3px 9px;
+}
