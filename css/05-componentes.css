@@ -361,7 +361,8 @@
   white-space: nowrap; transition: background 0.15s var(--ease-apple), color 0.15s var(--ease-apple);
 }
 .historico-filtro-btn:hover { color: var(--text-primary); }
-.historico-filtro-btn.active { background: #fff; color: var(--text-primary); box-shadow: 0 1px 4px rgba(20,20,30,0.10); }
+.historico-filtro-btn.active { background: var(--card-bg); color: var(--text-primary); box-shadow: 0 1px 4px rgba(20,20,30,0.10); }
+[data-theme="dark"] .historico-filtro-btn.active { background: #2A2733; }
 
 /* Carrossel com setas (Histórico/Atividades recentes) — em vez de
    arrastar o scroll pro lado, os cards ficam num trilho que rola por
@@ -371,11 +372,12 @@
 .historico-carrossel { display: flex; align-items: center; gap: 6px; }
 .historico-carrossel-seta {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
-  background: #fff; border: 1px solid var(--border); color: var(--text-primary);
+  background: var(--card-bg); border: 1px solid var(--border); color: var(--text-primary);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
   box-shadow: 0 2px 8px rgba(20,20,30,0.08);
   transition: background 0.15s var(--ease-apple), opacity 0.15s var(--ease-apple);
 }
+[data-theme="dark"] .historico-carrossel-seta { background: #24252C; }
 .historico-carrossel-seta svg { width: 16px; height: 16px; }
 .historico-carrossel-seta.prev svg { transform: rotate(180deg); }
 .historico-carrossel-seta:hover:not(:disabled) { background: var(--page-bg); }
@@ -1037,7 +1039,7 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
   font-family: var(--font-display); font-size: 16px; font-weight: 600; color: #16181D;
 }
 .perfil-foto.com-foto { color: transparent; }
-[data-theme="dark"] .perfil-foto { box-shadow: 0 0 0 3px rgba(255,255,255,.15); color: #FFE9A8; }
+[data-theme="dark"] .perfil-foto { background-color: rgba(255,255,255,.12); box-shadow: 0 0 0 3px rgba(255,255,255,.15); color: #FFE9A8; }
 
 .perfil-capa-txt { flex: 1; min-width: 0; }
 .perfil-nome {

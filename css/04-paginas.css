@@ -149,6 +149,14 @@
   background: var(--border-color, #e2e2e2);
   margin: 4px 0;
 }
+/* Mesmo problema do .priority-menu/.status-menu (ver comentário em
+   css/03-detalhe.css): --card-bg translúcido + blur, num menu flutuante
+   sobre o quadro escuro, ficava um vidro fosco quase transparente. */
+[data-theme="dark"] .assignee-menu {
+  background: #0C0B12;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 
 /* ===== Tela de carregando (tema colmeia) ===== */
 .board-loading {
