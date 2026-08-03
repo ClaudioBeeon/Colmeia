@@ -80,11 +80,11 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
-entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; e o
-roteador de URL, 22) menores dentro da pasta `js/`, cada um cuidando de um assunto. **Não é um
-sistema de build** — não tem bundler, TypeScript, nem npm envolvido no frontend. É só HTML puro: o
-`index.html` carrega os 22 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem
-certa**, perto do fim do
+entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; o
+roteador de URL, 22; e o modo foco, 23) menores dentro da pasta `js/`, cada um cuidando de um
+assunto. **Não é um sistema de build** — não tem bundler, TypeScript, nem npm envolvido no
+frontend. É só HTML puro: o `index.html` carrega os 23 arquivos com várias tags
+`<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
 
@@ -134,7 +134,8 @@ Arquivos, na ordem em que são carregados (`js/`):
 20. `paleta-comando.js` — a **paleta de comando** (Ctrl+Espaço). Ver seção própria abaixo.
 21. `roteador-url.js` — link direto pra tarefa/página pela URL (`/11503`, `/minhas-horas`). Ver
     seção própria abaixo.
-22. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+22. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
+23. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -242,6 +243,35 @@ que também vão precisar disso (parede do cliente, antes e depois).
   é o que o front-end usa pra saber "isso é imagem, vale tentar mostrar preview" (`ehImagemPreviewable`).
 - O visualizador ampliado captura Esc em **fase de captura**, mesmo padrão da paleta de comando: se
   ele está aberto, o Esc fecha ELE, não o card por trás.
+
+## Modo foco (2026-08-03)
+
+`js/modo-foco.js` + o bloco no fim de `css/05-componentes.css`. Uma sessão de trabalho concentrado
+por tempo marcado: botão "🧠 Focar" no cabeçalho da tarefa (25/50/90 min) — enquanto ativo, sidebar e
+os ícones do topo somem (`body.modo-foco-ativo`), os avisos da ilha ficam guardados em vez de
+interromper (aparecem juntos quando o foco termina), e o resto do time vê "Fulano em foco até 15:40"
+no card dela no quadro.
+
+**Botão separado do play de propósito:** o play continua sendo só o cronômetro, do jeito que sempre
+foi — muita tarefa é rápida demais pra merecer o modo foco. É uma escolha à parte, feita quando a
+pessoa realmente quer se isolar.
+
+- **HUD flutuante, não o botão do cabeçalho, é a fonte de verdade enquanto ativo:** `focoBotaoHTML()`
+  devolve vazio quando já está em foco — o `.foco-hud` (fixo, sempre visível, sobrevive a fechar a
+  tarefa) é quem mostra o status e o botão de sair, pra não duplicar controle em dois lugares.
+- **A ilha (`mostrarIlha`, js/config.js) é interceptada ANTES de entrar na fila normal**, via
+  `typeof focoEstaAtivo === "function" && focoEstaAtivo()` — se estiver em foco, o evento vai pro
+  array `focoAvisosGuardados` em vez de aparecer. Ao sair do foco, cada um desses eventos é jogado de
+  volta pra `mostrarIlha` (que por essa hora já não intercepta mais nada, `focoAteQuando` já é null) —
+  reaproveita a fila de exibição de sempre, um por vez, em vez de inventar uma segunda.
+- **"O time vê" é assíncrono e barato de propósito:** `entrarEmFoco`/`sairDoFoco` (Planilha.gs, aba
+  "Foco", 1 linha por designer, sempre reescrita) mexem só na planilha; quem enxerga o selo 🧠 no
+  card de outra pessoa (`assignee-foco-badge`, js/kanban-board.js) é através da PRÓXIMA varredura do
+  quadro (`getTarefasColmeia`, Código.gs, mescla `getFocosAtivos()` por nome do responsável) — o mesmo
+  atraso de até ~45s que qualquer outra mudança de quadro já tem, não precisa ser instantâneo.
+- **Comparação por NOME** pra casar foco com tarefa (`t.assignee === designer`) é aceitável aqui: é
+  status de PESSOA, não decisão de "de quem é a tarefa" (o caso que o CLAUDE.md pede id de verdade).
+- Carregado depois do roteador de URL (mesmo motivo dos outros dois: usa função de quase todo mundo).
 
 ## Bug recorrente conhecido
 

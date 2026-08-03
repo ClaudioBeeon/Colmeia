@@ -598,6 +598,14 @@ let _ilhaTimeoutAtual = null;
 let _ilhaEventoAtual = null;
 
 function mostrarIlha(evento) {
+  // Em modo foco, os avisos ficam guardados (ver js/modo-foco.js) e só
+  // aparecem juntos quando a pessoa sai do foco — é a peça central da
+  // funcionalidade, então essa checagem tem que vir ANTES de entrar na
+  // fila normal, senão a ilha ia continuar interrompendo do mesmo jeito.
+  if (typeof focoEstaAtivo === "function" && focoEstaAtivo() && typeof focoGuardarAviso === "function") {
+    focoGuardarAviso(evento);
+    return;
+  }
   _ilhaFila.push(evento);
   _processarProximaIlha();
 }

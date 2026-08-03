@@ -590,6 +590,7 @@ function renderDetail() {
           ${task.entregue ? "" : `
             <button type="button" class="play-btn" id="detailPlay" aria-label="${task.running ? "Pausar" : "Iniciar"} tarefa">${task.running ? pauseIcon : playIcon}</button>
             <span class="timer-text" id="detailTimer">${formatTime(task.timerSeconds)}</span>
+            ${typeof focoBotaoHTML === "function" ? focoBotaoHTML() : ""}
             <span class="detail-sep">|</span>
           `}
           ${task.isMotherCard ? `
@@ -909,6 +910,8 @@ function renderDetail() {
     applyCommentsState();
     updateNowPlaying();
   });
+
+  if (typeof focoWireBotao === "function") focoWireBotao();
 
   // ===== Menu de mais opções (⋮) =====
   const criarPastaBtn = document.getElementById("criarPastaDriveBtn");

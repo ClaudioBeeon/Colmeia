@@ -679,6 +679,105 @@ function invalidarCacheDePrioridades() {
   try { CacheService.getScriptCache().remove(CACHE_PRIORIDADES_CHAVE); } catch (e) { /* segue */ }
 }
 
+// ============ MODO FOCO (aba "Foco") ============
+// Uma linha por designer, sempre a mesma (é encontrada e sobrescrita, não
+// acumula histórico) — só interessa o estado ATUAL de cada um. O cache
+// curto (1 min) é o que faz o resto do time enxergar "Fulano em foco até
+// 15:40" na varredura do quadro (ver getTarefasColmeia, Código.gs), sem
+// precisar ler a planilha a cada 60s de polling de cada pessoa.
+var CACHE_FOCOS_CHAVE = 'focosAtivosColmeia';
+var CACHE_FOCOS_SEGUNDOS = 60;
+
+function getFocoSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Foco');
+  if (!sheet) {
+    sheet = ss.insertSheet('Foco');
+    sheet.getRange('A1:C1').setValues([['designer', 'ate_quando', 'atualizado_em']]);
+  }
+  return sheet;
+}
+
+/**
+ * Mapa { designer: ateQuando } só com quem está em foco DE VERDADE agora
+ * (já filtra fora quem passou do horário — sem isso, "sairDoFoco" nunca
+ * chamado por algum motivo deixaria a pessoa "em foco" pra sempre aos
+ * olhos do resto do time).
+ */
+function getFocosAtivos() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get(CACHE_FOCOS_CHAVE);
+  var mapa;
+  if (cacheado) {
+    try { mapa = JSON.parse(cacheado); } catch (e) { mapa = null; }
+  }
+  if (!mapa) {
+    var sheet = getFocoSheet();
+    var linhas = sheet.getDataRange().getValues();
+    mapa = {};
+    for (var i = 1; i < linhas.length; i++) {
+      if (linhas[i][0]) mapa[linhas[i][0]] = Number(linhas[i][1]) || 0;
+    }
+    try { cache.put(CACHE_FOCOS_CHAVE, JSON.stringify(mapa), CACHE_FOCOS_SEGUNDOS); } catch (e) { /* segue sem cache */ }
+  }
+  var agora = new Date().getTime();
+  var ativos = {};
+  Object.keys(mapa).forEach(function (designer) {
+    if (mapa[designer] > agora) ativos[designer] = mapa[designer];
+  });
+  return ativos;
+}
+
+function invalidarCacheDeFocos() {
+  try { CacheService.getScriptCache().remove(CACHE_FOCOS_CHAVE); } catch (e) { /* segue */ }
+}
+
+function entrarEmFoco(designer, ateQuando) {
+  if (!designer || !ateQuando) return { ok: false, error: 'designer ou ateQuando inválidos.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getFocoSheet();
+    var linhas = sheet.getDataRange().getValues();
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) === String(designer)) {
+        sheet.getRange(i + 1, 2).setValue(ateQuando);
+        sheet.getRange(i + 1, 3).setValue(new Date().getTime());
+        invalidarCacheDeFocos();
+        return { ok: true };
+      }
+    }
+    sheet.appendRow([designer, ateQuando, new Date().getTime()]);
+    invalidarCacheDeFocos();
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function sairDoFoco(designer) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getFocoSheet();
+    var linhas = sheet.getDataRange().getValues();
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) === String(designer)) {
+        // Zera em vez de apagar a linha: mais simples (não precisa
+        // deslocar as linhas de baixo) e "0" já é sempre "no passado",
+        // então getFocosAtivos filtra ela fora sozinho.
+        sheet.getRange(i + 1, 2).setValue(0);
+        invalidarCacheDeFocos();
+        break;
+      }
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function definirPrioridade(taskId, prioridade) {
   if (!taskId || ['alta', 'media', 'baixa'].indexOf(prioridade) === -1) {
     return { ok: false, error: 'taskId ou prioridade inválidos.' };

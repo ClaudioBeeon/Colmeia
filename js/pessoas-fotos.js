@@ -285,6 +285,9 @@ function mapearTarefaDoBackend(t) {
     // decidir "essa tarefa é minha?" sem depender de nome parecido.
     assigneeId: t.assigneeId || null,
     assigneeAvatarUrl: t.assigneeAvatarUrl || null,
+    // Até quando o responsável está em modo foco (epoch ms), se estiver
+    // — ver js/modo-foco.js e o badge no card, js/kanban-board.js.
+    assigneeEmFocoAte: t.assigneeEmFocoAte || null,
     timerSeconds: t.workedSeconds || 0,
     running: !!t.isRunning,
     estimateMinutes: t.estimateMinutes || 30,

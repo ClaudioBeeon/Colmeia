@@ -1345,3 +1345,92 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 }
 .upload-notif-thumb.carregado { opacity: 1; }
 .upload-notif-thumb:hover { box-shadow: 0 0 0 2px var(--kanban-yellow); }
+
+/* ===================================================================
+   MODO FOCO
+   Ver js/modo-foco.js. O botão "Focar" mora no cabeçalho da tarefa
+   (perto do play); enquanto ativo, some e o status/controle vira o HUD
+   flutuante (.foco-hud), sempre visível mesmo se a tarefa fechar.
+   =================================================================== */
+
+.foco-wrap { position: relative; }
+
+.foco-btn {
+  display: flex; align-items: center; gap: 5px;
+  border: none; border-radius: 999px; padding: 6px 12px;
+  background: rgba(255,255,255,0.12); color: #fff;
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.foco-btn:hover { background: rgba(255,255,255,0.2); }
+
+.foco-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 4px; box-shadow: var(--shadow-hover);
+  display: flex; flex-direction: column; gap: 2px; min-width: 100px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.92) translateY(-4px); transform-origin: top left;
+  pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear var(--dur-fast);
+}
+.foco-menu.open {
+  opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple), visibility 0s linear;
+}
+.foco-menu button {
+  border: none; background: transparent; text-align: left;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 500;
+  color: var(--text-primary);
+  padding: 7px 9px; border-radius: 6px; cursor: pointer;
+}
+.foco-menu button:hover { background: var(--page-bg); }
+[data-theme="dark"] .foco-menu { background: #0C0B12; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* Selo pequeno no card do quadro — "esse designer está em foco agora" */
+.assignee-foco-badge {
+  position: absolute; bottom: -2px; right: -2px;
+  font-size: 11px; line-height: 1; cursor: default;
+  background: var(--card-bg); border-radius: 50%; padding: 2px;
+  box-shadow: 0 0 0 2px var(--card-bg);
+}
+
+/* ----- Modo "tela limpa": esconde sidebar e os ícones do topo ----- */
+.modo-foco-ativo .sidebar,
+.modo-foco-ativo .topbar-outside,
+.modo-foco-ativo .theme-switch {
+  display: none;
+}
+.modo-foco-ativo .task-detail { left: 22px; }
+
+/* ----- HUD flutuante: status + botão de sair, sempre visível -----
+   Canto inferior ESQUERDO de propósito: o centro de baixo já é dos
+   toasts (.colmeia-toasts) e o centro de cima já é da ilha
+   (.topbar-ilha) — nos dois, o HUD ficava embaixo e escondido atrás. */
+.foco-hud {
+  position: fixed; bottom: 22px; left: 22px;
+  z-index: 350;
+  display: flex; align-items: center; gap: 12px;
+  background: #14151A; color: #fff;
+  border-radius: 999px; padding: 10px 10px 10px 16px;
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  box-shadow: 0 14px 32px rgba(10,10,15,0.3);
+  animation: focoHudEntrar var(--dur-base) var(--ease-apple-spring);
+}
+@keyframes focoHudEntrar {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.foco-hud-restante { font-variant-numeric: tabular-nums; opacity: 0.75; font-weight: 500; }
+.foco-hud button {
+  border: none; border-radius: 999px; padding: 7px 14px;
+  background: rgba(255,255,255,0.14); color: #fff;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.foco-hud button:hover { background: rgba(255,255,255,0.24); }
+
+@media (max-width: 640px) {
+  .foco-hud { bottom: 14px; left: 14px; padding: 8px 8px 8px 14px; font-size: 12px; }
+}

@@ -102,6 +102,9 @@ function cardHTML(task, idx) {
       <div class="card-bottom">
         <div class="assignee-wrap" data-idx="${idx}">
           ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
+          ${task.assigneeEmFocoAte && task.assigneeEmFocoAte > Date.now() ? `
+            <span class="assignee-foco-badge" title="${escaparHTML(task.assignee)} está em modo foco até ${new Date(task.assigneeEmFocoAte).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}">🧠</span>
+          ` : ""}
           <div class="assignee-menu"></div>
         </div>
         <div class="card-due-wrap" data-idx="${idx}">

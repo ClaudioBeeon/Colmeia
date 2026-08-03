@@ -309,6 +309,10 @@ function handleRequest(e, method) {
         output = buscarThumbnailDrive(body.fileId);
       } else if (body.acao === 'buscarImagemCheiaDrive') {
         output = buscarImagemCheiaDrive(body.fileId);
+      } else if (body.acao === 'entrarEmFoco') {
+        output = entrarEmFoco(body.designer, body.ateQuando);
+      } else if (body.acao === 'sairDoFoco') {
+        output = sairDoFoco(body.designer);
       } else if (body.acao === 'buscarAtividadesDrive') {
         output = buscarAtividadesDrive(body.designer);
       } else if (body.acao === 'buscarProgressoClientes') {
@@ -429,6 +433,7 @@ function getTarefasColmeia() {
   try {
     var tarefas = buscarTarefasRunrun();
     var prioridadesSalvas = getPrioridadesSalvas();
+    var focosAtivos = getFocosAtivos();
 
     tarefas.forEach(function (t) {
       if (prioridadesSalvas.hasOwnProperty(t.id)) {
@@ -437,6 +442,13 @@ function getTarefasColmeia() {
         t.priority = 'alta';
       } else {
         t.priority = 'media';
+      }
+      // Pra que o resto do time veja "Fulano em foco até 15:40" no card
+      // dela (ver modo foco, js/modo-foco.js) — comparação por NOME de
+      // propósito: é o mesmo nome que a pessoa usou pra entrar em foco
+      // (DESIGNER_LOGADO), não uma decisão de "de quem é a tarefa".
+      if (t.assignee && focosAtivos.hasOwnProperty(t.assignee)) {
+        t.assigneeEmFocoAte = focosAtivos[t.assignee];
       }
     });
 
