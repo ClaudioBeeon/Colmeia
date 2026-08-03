@@ -1045,6 +1045,9 @@ document.getElementById("searchInput").addEventListener("input", e => {
   searchQuery = e.target.value;
   render();
   if (!document.getElementById("page-runrun").hidden) buildRunrunCompletoPage();
+  // Busca profunda (dentro de comentários/descrição) mora em
+  // notificacoes-avisos.js, carregado DEPOIS deste arquivo.
+  if (typeof agendarBuscaProfunda === "function") agendarBuscaProfunda(searchQuery, tasks);
 });
 
 document.getElementById("verTodasBtn").addEventListener("click", () => {
