@@ -211,7 +211,13 @@ function salvarAcessoRapido(designer, dados) {
   var nome = (dados.nome || '').toString().trim();
   var link = (dados.link || '').toString().trim();
   if (!nome || !link) return { ok: false, error: 'Preenche o nome e o link.' };
-  if (!/^https?:\/\//i.test(link)) link = 'https://' + link;
+  // Só completa com "https://" quando não tem NENHUM protocolo — antes
+  // só aceitava http/https, então um link de abrir programa direto
+  // (ex: "adbps:///", "premierepro://") virava "https://adbps:///" (o
+  // endereço de verdade ficava colado atrás de um https:// que não
+  // devia estar ali, e o navegador não sabia mais abrir). Qualquer
+  // "algumacoisa://" já é um protocolo válido e passa direto.
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(link)) link = 'https://' + link;
   var fixo = !!dados.fixo;
   if (fixo && !ehCoordenador(designer)) {
     return { ok: false, error: 'Só o coordenador pode criar um acesso fixo.' };

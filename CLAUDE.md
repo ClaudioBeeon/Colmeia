@@ -440,6 +440,25 @@ realocado pra lugar nenhum — o card agora é só a lista de atividades recente
   play hoje") não foi tocada no `.gs` — ficou sem uso no front, mas não há necessidade de mexer no
   backend só por isso.
 
+## Sugestão de programa pra abrir + bug do link de "Acesso rápido" (2026-08-03)
+
+**O bug:** `salvarAcessoRapido` (Planilha.gs) forçava `https://` na frente de QUALQUER link que não
+começasse com `http`/`https` — um link de abrir programa direto (`adbps:///`, o Photoshop configurado
+por fora pelo Cláudio) virava `https://adbps:///`, um endereço quebrado que o navegador não sabia mais
+abrir. Trocado pra só completar com `https://` quando o link não tem NENHUM protocolo — agora
+`algumacoisa://` de qualquer nome passa direto.
+
+**A sugestão:** no painel de detalhe da tarefa, logo abaixo de "Criar pasta do card", um bloco
+"Sugestão pra abrir" aparece quando o TÍTULO da tarefa contém "feed"/"stories"/"story" — mostra Ps
+(Photoshop) e Ai (Illustrator) como pílulas coloridas (cores oficiais da Adobe), que abrem os programas
+direto via `adbps:///`/`adbai:///` (`sugestaoDeProgramaHTML`/`SUGESTOES_DE_PROGRAMA`,
+js/detalhe-modal.js). **Baseado só no título, não na descrição:** a descrição só chega depois, em
+`carregarTudoDaTarefa` — se a sugestão dependesse dela, ficaria errada (ausente) na primeira olhada,
+bem quando mais importa. **Só Photoshop/Illustrator por enquanto:** Premiere e After Effects ficaram
+de fora — Reels/vídeo/animação sugeriria eles, mas não existe (ainda) um jeito de abrir eles direto
+igual o Photoshop/Illustrator têm; a estrutura (`SUGESTOES_DE_PROGRAMA`) já está pronta pra adicionar
+uma regra nova assim que tiver o link.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

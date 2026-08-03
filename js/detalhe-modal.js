@@ -1,3 +1,54 @@
+/**
+ * Sugestão de qual programa abrir, baseada no TÍTULO da tarefa (não a
+ * descrição — ela só chega em `carregarTudoDaTarefa`, depois do
+ * primeiro desenho do card, e essa sugestão precisa estar certa já na
+ * primeira olhada). Pedido do Cláudio: peça de feed/stories sugere
+ * Photoshop e Illustrator. Só essas duas por enquanto — Premiere/After
+ * Effects ficam de fora até ter um link de abrir programa pra elas
+ * (Adobe não tem um esquema `app://` oficial pra elas, diferente do
+ * Photoshop/Illustrator, que o Cláudio configurou por fora).
+ */
+const SUGESTOES_DE_PROGRAMA = [
+  {
+    termos: ["feed", "stories", "story", "storys"],
+    apps: [
+      { nome: "Photoshop", sigla: "Ps", link: "adbps:///", corFundo: "#001E36", corTexto: "#31A8FF" },
+      { nome: "Illustrator", sigla: "Ai", link: "adbai:///", corFundo: "#330000", corTexto: "#FF9A00" },
+    ],
+  },
+];
+
+function sugestoesDeProgramaParaTarefa(task) {
+  const texto = normalizarParaComparar(task.title || "");
+  const apps = [];
+  const vistos = new Set();
+  SUGESTOES_DE_PROGRAMA.forEach(regra => {
+    const bateu = regra.termos.some(t => texto.includes(normalizarParaComparar(t)));
+    if (!bateu) return;
+    regra.apps.forEach(app => {
+      if (vistos.has(app.nome)) return;
+      vistos.add(app.nome);
+      apps.push(app);
+    });
+  });
+  return apps;
+}
+
+function sugestaoDeProgramaHTML(task) {
+  const apps = sugestoesDeProgramaParaTarefa(task);
+  if (!apps.length) return "";
+  return `
+    <div class="side-block">
+      <span class="side-label">Sugestão pra abrir</span>
+      <div class="hub-grid">
+        ${apps.map(app => `
+          <a href="${app.link}" class="hub-pill" style="background:${app.corFundo};color:${app.corTexto}" title="Abrir ${escaparHTML(app.nome)}">${escaparHTML(app.sigla)} ${escaparHTML(app.nome)}</a>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
@@ -738,6 +789,7 @@ function renderDetail() {
               <button type="button" class="pasta-link-manual-btn" id="pastaLinkManualBtn">Linkar pasta certa</button>
             </div>
           ` : ""}
+          ${sugestaoDeProgramaHTML(task)}
           <div class="side-block">
             <span class="side-label">Tipo de tarefa</span>
             <span class="badge ${type.class}">${type.label}</span>
