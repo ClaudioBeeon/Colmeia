@@ -234,6 +234,7 @@ const ACOES_DEMORADAS = [
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive
   "buscarProgressoClientes",
   "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
+  "buscarImagemCheiaDrive", // idem, mas pra imagem do Drive ampliada (ver js/notificacoes-uploads.js)
   "beeGerarImagem",       // gera imagem de verdade pela Firefly
 ];
 
@@ -810,3 +811,91 @@ function _avancarNotifPill() {
     }, 320);
   }
 }
+
+/**
+ * ===================================================================
+ * VISUALIZADOR DE IMAGEM DO DRIVE (preview + ampliar)
+ * ===================================================================
+ *
+ * Um pop-up genérico pra mostrar uma imagem que mora no Drive quase em
+ * tela cheia — usado primeiro pela fala da Bee que reconhece upload
+ * novo (js/notificacoes-uploads.js), e feito pra ser reaproveitado por
+ * qualquer outra tela que precise mostrar imagem do Drive (a "parede do
+ * cliente" e o "antes e depois" do roteiro de melhorias vão usar o
+ * mesmo visualizador, não um pop-up novo cada um).
+ *
+ * SEMPRE passa pelo backend (nunca linka a URL do Drive direto numa tag
+ * <img>): nem todo arquivo tem "qualquer pessoa com o link" habilitado,
+ * e a conta do Apps Script já tem acesso à pasta de qualquer jeito —
+ * ver buscarThumbnailDrive/buscarImagemCheiaDrive em Drive.gs.
+ */
+
+let _visualizadorImagemPedidoAtual = null; // fileId sendo buscado agora, pra ignorar resposta velha se trocar/fechar no meio
+
+function garantirVisualizadorDeImagem() {
+  let overlay = document.getElementById("visualizadorImagemOverlay");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "visualizadorImagemOverlay";
+  overlay.className = "drive-img-overlay";
+  overlay.hidden = true;
+  overlay.innerHTML = `
+    <div class="drive-img-janela">
+      <div class="drive-img-topo">
+        <span class="drive-img-legenda" id="visualizadorImagemLegenda"></span>
+        <button type="button" class="drive-img-fechar" id="visualizadorImagemFechar" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="drive-img-corpo" id="visualizadorImagemCorpo"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("mousedown", e => { if (e.target === overlay) fecharVisualizadorDeImagem(); });
+  document.getElementById("visualizadorImagemFechar").addEventListener("click", fecharVisualizadorDeImagem);
+  return overlay;
+}
+
+/** Abre o pop-up quase em tela cheia com a imagem CHEIA (não a miniatura) de um arquivo do Drive. */
+function abrirImagemAmpliadaDoDrive(fileId, nomeArquivo) {
+  if (!fileId) return;
+  const overlay = garantirVisualizadorDeImagem();
+  overlay.hidden = false;
+  requestAnimationFrame(() => overlay.classList.add("aberto"));
+  document.getElementById("visualizadorImagemLegenda").textContent = nomeArquivo || "";
+  const corpo = document.getElementById("visualizadorImagemCorpo");
+  corpo.innerHTML = `<div class="drive-img-carregando">Carregando imagem...</div>`;
+
+  _visualizadorImagemPedidoAtual = fileId;
+  chamarBackend({ acao: "buscarImagemCheiaDrive", fileId }).then(resultado => {
+    // A pessoa fechou ou clicou em outra imagem enquanto essa vinha —
+    // desenhar agora só confundiria (uma imagem errada aparecendo depois
+    // do pop-up já ter mudado de assunto ou fechado).
+    if (_visualizadorImagemPedidoAtual !== fileId) return;
+    if (!resultado || !resultado.ok) {
+      corpo.innerHTML = `<div class="drive-img-erro">${escaparHTML((resultado && resultado.error) || "Não consegui abrir essa imagem.")}</div>`;
+      return;
+    }
+    corpo.innerHTML = `<img src="data:${resultado.mimeType};base64,${resultado.base64}" alt="${escaparHTML(nomeArquivo || "")}">`;
+  });
+}
+
+function fecharVisualizadorDeImagem() {
+  const overlay = document.getElementById("visualizadorImagemOverlay");
+  if (!overlay || overlay.hidden) return;
+  overlay.classList.remove("aberto");
+  _visualizadorImagemPedidoAtual = null;
+  setTimeout(() => { overlay.hidden = true; }, 160);
+}
+
+// Fase de captura, mesmo padrão da paleta de comando (js/paleta-comando.js):
+// se o visualizador está aberto, o Esc fecha ELE, e não o card por trás.
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  const overlay = document.getElementById("visualizadorImagemOverlay");
+  if (overlay && !overlay.hidden) {
+    e.preventDefault();
+    e.stopPropagation();
+    fecharVisualizadorDeImagem();
+  }
+}, true);

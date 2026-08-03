@@ -225,6 +225,24 @@ pro `404.html`, que calcula a base do mesmo jeito.
   link direto pra uma tarefa que já estava carregada caía sempre no caminho lento de buscar de novo.
 - Carregado logo depois da paleta de comando (mesmo motivo: usa função de quase todo mundo).
 
+## Preview de imagem do Drive (2026-08-03)
+
+Mostrar uma imagem que mora no Drive DENTRO do Colmeia (preview pequeno, clique amplia quase em tela
+cheia) — usado primeiro na fala da Bee que avisa upload novo (js/notificacoes-uploads.js), com
+`abrirImagemAmpliadaDoDrive` (js/config.js) feito de propósito pra ser reaproveitado por outras telas
+que também vão precisar disso (parede do cliente, antes e depois).
+
+- **Sempre passa pelo backend**, nunca linka a URL do Drive direto numa `<img>`: nem todo arquivo tem
+  "qualquer pessoa com o link" habilitado, e a conta do Apps Script já tem acesso à pasta de qualquer
+  jeito. Duas ações separadas em Drive.gs: `buscarThumbnailDrive` (usa `getThumbnail()`, um JPEG
+  baixinho que o próprio Google já gera — rápido, pro preview pequeno) e `buscarImagemCheiaDrive`
+  (usa `getBlob()`, a imagem de verdade — só buscada quando clica pra ampliar). Mesmo limite de 25MB
+  e mesmo formato de erro do `baixarDocumentoAnexo` (anexos do Runrun.it).
+- `listarUploadsRecentesDaPasta` (Drive.gs) agora também devolve `id` e `mimeType` de cada arquivo —
+  é o que o front-end usa pra saber "isso é imagem, vale tentar mostrar preview" (`ehImagemPreviewable`).
+- O visualizador ampliado captura Esc em **fase de captura**, mesmo padrão da paleta de comando: se
+  ele está aberto, o Esc fecha ELE, não o card por trás.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

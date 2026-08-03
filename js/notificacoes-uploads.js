@@ -214,7 +214,10 @@ async function renderNotificacoesUpload(task) {
   const qtd = arquivosRelevantes.length;
   // Nomes dos arquivos, um embaixo do outro, com há quanto tempo cada um
   // subiu — sem isso a notificação dizia só "você adicionou 2 arquivos" e
-  // não dava pra saber SE eram os certos sem abrir o Drive.
+  // não dava pra saber SE eram os certos sem abrir o Drive. Quando o
+  // arquivo é uma imagem (PNG/JPG), entra também um preview pequeno —
+  // clicar nele abre a imagem cheia quase em tela cheia (ver
+  // abrirImagemAmpliadaDoDrive, js/config.js).
   const listaArquivos = arquivosRelevantes
     .slice()
     .sort((a, b) => (b.quando || 0) - (a.quando || 0))
@@ -222,6 +225,9 @@ async function renderNotificacoesUpload(task) {
       <li>
         <span class="upload-notif-nome">${escaparHTML(u.arquivo)}</span>
         <span class="upload-notif-idade" data-quando="${u.quando}">${idadeDoUpload(u.quando)}</span>
+        ${u.id && ehImagemPreviewable(u.mimeType) ? `
+          <img class="upload-notif-thumb" data-file-id="${escaparHTML(u.id)}" data-nome="${escaparHTML(u.arquivo)}" alt="Preview de ${escaparHTML(u.arquivo)}">
+        ` : ""}
       </li>
     `).join("");
   // Nome de verdade da pasta (normalmente o título da tarefa) — o
@@ -262,7 +268,34 @@ async function renderNotificacoesUpload(task) {
   wrap.querySelector('[data-upload-acao="copiar"]').addEventListener("click", () => {
     adicionarComentarioDeUpload(task, wrap, link, qtd, dispensarTodos);
   });
+  wrap.querySelectorAll(".upload-notif-thumb").forEach(img => {
+    const fileId = img.dataset.fileId;
+    carregarThumbnailDoUpload(fileId, img);
+    img.addEventListener("click", () => abrirImagemAmpliadaDoDrive(fileId, img.dataset.nome));
+  });
   iniciarRelogioDasIdadesDeUpload();
+}
+
+/** É uma imagem (PNG/JPG/etc) que vale a pena tentar mostrar em preview? */
+function ehImagemPreviewable(mimeType) {
+  return !!mimeType && mimeType.indexOf("image/") === 0;
+}
+
+/**
+ * Busca a miniatura de um arquivo do Drive e desenha ela no lugar do
+ * quadradinho vazio que já está na tela. Se não der (sem miniatura,
+ * erro, sem rede), o quadradinho some sozinho — não é grave o
+ * suficiente pra virar mensagem de erro no meio da fala da Bee.
+ */
+async function carregarThumbnailDoUpload(fileId, imgEl) {
+  const resultado = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
+  if (!resultado || !resultado.ok || caiuARede(resultado)) { imgEl.remove(); return; }
+  // O elemento pode ter saído da tela enquanto a miniatura vinha
+  // (dispensou o aviso, ou a fala inteira foi redesenhada de novo) —
+  // escrever nele nesse caso não aparece pra ninguém, mas não quebra nada.
+  if (!imgEl.isConnected) return;
+  imgEl.src = `data:${resultado.mimeType};base64,${resultado.base64}`;
+  imgEl.classList.add("carregado");
 }
 
 /**

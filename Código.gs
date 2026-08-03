@@ -305,6 +305,10 @@ function handleRequest(e, method) {
         output = linkarPastaManualNoDrive(body.taskId, body.url);
       } else if (body.acao === 'buscarUploadsRecentesDoCard') {
         output = buscarUploadsRecentesDoCard(body.taskId, body.cliente);
+      } else if (body.acao === 'buscarThumbnailDrive') {
+        output = buscarThumbnailDrive(body.fileId);
+      } else if (body.acao === 'buscarImagemCheiaDrive') {
+        output = buscarImagemCheiaDrive(body.fileId);
       } else if (body.acao === 'buscarAtividadesDrive') {
         output = buscarAtividadesDrive(body.designer);
       } else if (body.acao === 'buscarProgressoClientes') {

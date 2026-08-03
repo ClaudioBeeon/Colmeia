@@ -1276,3 +1276,72 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
   .paleta-overlay { padding-top: 60px; }
   .paleta-rodape-bee { display: none; }
 }
+
+/* ===================================================================
+   VISUALIZADOR DE IMAGEM DO DRIVE — preview pequeno + ampliar
+   Ver js/config.js (abrirImagemAmpliadaDoDrive) e
+   js/notificacoes-uploads.js (onde o preview pequeno aparece primeiro).
+   =================================================================== */
+
+.drive-img-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: center;
+  padding: clamp(16px, 4vw, 48px);
+  background: rgba(8, 7, 14, 0.82);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-apple);
+}
+.drive-img-overlay[hidden] { display: none; }
+.drive-img-overlay.aberto { opacity: 1; }
+
+.drive-img-janela {
+  width: 100%; height: 100%;
+  max-width: 1400px;
+  display: flex; flex-direction: column; gap: 10px;
+  transform: scale(0.97);
+  transition: transform var(--dur-base) var(--ease-apple-spring);
+}
+.drive-img-overlay.aberto .drive-img-janela { transform: scale(1); }
+
+.drive-img-topo {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-shrink: 0;
+}
+.drive-img-legenda {
+  color: #fff; font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85;
+}
+.drive-img-fechar {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  border: none; background: rgba(255,255,255,0.12); color: #fff;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.drive-img-fechar:hover { background: rgba(255,255,255,0.22); }
+.drive-img-fechar svg { width: 18px; height: 18px; }
+
+.drive-img-corpo {
+  flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.drive-img-corpo img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.drive-img-carregando, .drive-img-erro {
+  color: #fff; font-size: 14px; opacity: 0.8; text-align: center; max-width: 40ch;
+}
+
+/* Preview pequeno dentro da fala da Bee (upload novo detectado) */
+.upload-notif-thumb {
+  width: 100%; max-width: 220px; aspect-ratio: 4 / 3;
+  border-radius: 8px; margin-top: 6px;
+  object-fit: cover; cursor: pointer; display: block;
+  background: var(--page-bg);
+  border: 1px solid var(--border);
+  opacity: 0; transition: opacity var(--dur-base) var(--ease-apple);
+}
+.upload-notif-thumb.carregado { opacity: 1; }
+.upload-notif-thumb:hover { box-shadow: 0 0 0 2px var(--kanban-yellow); }

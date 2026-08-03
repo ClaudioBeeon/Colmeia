@@ -300,9 +300,66 @@ function listarUploadsRecentesDaPasta(pasta) {
     var arq = arquivos.next();
     var criadoEm = arq.getDateCreated().getTime();
     if ((agora - criadoEm) > JANELA_UPLOAD_RECENTE_MS) continue;
-    uploads.push({ arquivo: arq.getName(), quando: criadoEm, quem: nomeDeQuemSubiuArquivo(arq) });
+    // id + mimeType: o front-end usa isso pra saber se o arquivo é uma
+    // imagem (PNG/JPG) e, se for, buscar uma miniatura pra mostrar dentro
+    // da própria fala da Bee (ver buscarThumbnailDrive/buscarImagemCheiaDrive
+    // mais abaixo e renderNotificacoesUpload em js/notificacoes-uploads.js).
+    uploads.push({
+      arquivo: arq.getName(),
+      quando: criadoEm,
+      quem: nomeDeQuemSubiuArquivo(arq),
+      id: arq.getId(),
+      mimeType: arq.getMimeType()
+    });
   }
   return uploads;
+}
+
+// ============ PREVIEW DE IMAGEM DO DRIVE (dentro do Colmeia) ============
+// Duas ações separadas de propósito: a miniatura (getThumbnail) é um JPEG
+// baixinho que o próprio Google já gera, rápida de buscar — usada no
+// preview pequeno dentro da fala da Bee. A imagem cheia (getBlob) só é
+// buscada quando a pessoa CLICA pra ampliar, porque é mais pesada.
+// Passar pelo backend (em vez de linkar a URL do Drive direto na tag
+// <img>) evita o problema de permissão: nem todo arquivo tem
+// "qualquer pessoa com o link" habilitado, e a conta de serviço do
+// Apps Script já tem acesso à pasta de qualquer jeito.
+function buscarThumbnailDrive(fileId) {
+  if (!fileId) return { ok: false, error: 'fileId não informado.' };
+  try {
+    var arquivo = DriveApp.getFileById(fileId);
+    var thumb = arquivo.getThumbnail();
+    if (!thumb) return { ok: false, error: 'Esse arquivo não tem miniatura.' };
+    return {
+      ok: true,
+      base64: Utilities.base64Encode(thumb.getBytes()),
+      mimeType: thumb.getContentType() || 'image/jpeg'
+    };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao buscar a miniatura: ' + err.message };
+  }
+}
+
+function buscarImagemCheiaDrive(fileId) {
+  if (!fileId) return { ok: false, error: 'fileId não informado.' };
+  try {
+    var arquivo = DriveApp.getFileById(fileId);
+    var blob = arquivo.getBlob();
+    var bytes = blob.getBytes();
+    // Mesmo limite e mesmo motivo do baixarDocumentoAnexo (RunrunLeitura.gs):
+    // acima disso não cabe direito na resposta do Apps Script.
+    var LIMITE_BYTES = 25 * 1024 * 1024;
+    if (bytes.length > LIMITE_BYTES) {
+      return { ok: false, arquivoGrande: true, error: 'Essa imagem tem ' + Math.round(bytes.length / 1024 / 1024) + ' MB, grande demais pra abrir por aqui. Abre direto no Drive.' };
+    }
+    return {
+      ok: true,
+      base64: Utilities.base64Encode(bytes),
+      mimeType: blob.getContentType() || 'image/jpeg'
+    };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao buscar a imagem: ' + err.message };
+  }
 }
 
 // ============ ATIVIDADES DO DRIVE (aba "Histórico" > Atividades recentes) ============
