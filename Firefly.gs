@@ -94,8 +94,20 @@ function trocarCodigoPorTokenFirefly(code) {
   var corpo = {};
   try { corpo = JSON.parse(resposta.getContentText()); } catch (e) { /* segue com objeto vazio */ }
   if (codigo < 200 || codigo >= 300 || !corpo.refresh_token) {
-    Logger.log('Firefly: falha ao trocar code por token (status ' + codigo + '): ' + resposta.getContentText());
-    return { ok: false, error: 'A Adobe recusou (status ' + codigo + '). Veja o Log de execução do Apps Script pra detalhe.' };
+    var corpoBruto = resposta.getContentText();
+    Logger.log('Firefly: falha ao trocar code por token (status ' + codigo + '): ' + corpoBruto);
+    // O detalhe vai JUNTO na resposta (não só no Log de execução) — a tela
+    // de callback (tratarFireflyAuthGet, Código.gs) mostra isso direto no
+    // navegador. Antes disso, achar esse erro exigia caçar a execução
+    // certa na lista "Execuções" do Apps Script, uma tela que se mostrou
+    // difícil de navegar sem prática (cliques não abriam o painel de
+    // detalhe, provavelmente por causa do zoom/tamanho da janela).
+    return {
+      ok: false,
+      error: 'A Adobe recusou (status ' + codigo + ').',
+      detalheStatus: codigo,
+      detalheBruto: corpoBruto.substring(0, 500)
+    };
   }
   var props = PropertiesService.getScriptProperties();
   props.setProperty('FIREFLY_REFRESH_TOKEN', corpo.refresh_token);
@@ -234,14 +246,33 @@ function diagnosticoGerarImagemFirefly() {
   Logger.log(JSON.stringify(resultado, null, 2));
 }
 
+// Escapa texto antes de pôr dentro de HTML — usado só aqui porque o
+// detalhe do erro (vindo da Adobe) agora aparece direto na tela de
+// callback. Sem isso, texto com "<" ou "&" no meio quebraria a página, e
+// na teoria a Adobe poderia devolver algo malicioso ali.
+function escaparHtmlSimples(texto) {
+  return String(texto == null ? '' : texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /**
  * Serve as duas telas do fluxo de autorização (chamada pelo doGet,
- * Código.gs, antes de cair no roteamento normal de ações). Nunca
- * imprime texto vindo da Adobe direto no HTML (evita qualquer risco de
- * injeção) — detalhe de erro sempre só no Log de execução.
+ * Código.gs, antes de cair no roteamento normal de ações).
+ *
+ * O detalhe do erro (o que a Adobe respondeu, e o status) aparece DIRETO
+ * NA TELA agora, escapado — antes só ia pro "Log de execução" do Apps
+ * Script, uma tela que se mostrou difícil de navegar sem prática (o
+ * clique numa linha não abria o painel de detalhe, dependendo do zoom/
+ * tamanho da janela do navegador). Assim o Cláudio só precisa olhar a
+ * própria página, ou tirar um print dela.
  */
 function tratarFireflyAuthGet(e) {
   var acao = e.parameter.fireflyAuth;
+  var ESTILO_CAIXA = 'font-family:sans-serif;padding:24px;line-height:1.6;max-width:640px';
+  var ESTILO_ERRO = 'background:#FDECEC;color:#8A1C1C;border-radius:10px;padding:14px 16px;margin-top:14px;font-size:13px;white-space:pre-wrap;word-break:break-word';
 
   if (acao === 'iniciar') {
     // Um LINK pra clicar, não um redirecionamento automático: o
@@ -251,7 +282,7 @@ function tratarFireflyAuthGet(e) {
     // target="_top" é o que faz o clique trocar a página inteira.
     var url = urlDeAutorizacaoFirefly();
     return HtmlService.createHtmlOutput(
-      '<div style="font-family:sans-serif;padding:24px;line-height:1.6">' +
+      '<div style="' + ESTILO_CAIXA + '">' +
       '<p>Clique pra autorizar a Bee a usar a Adobe Firefly:</p>' +
       '<p><a href="' + url.replace(/"/g, '&quot;') + '" target="_top" ' +
       'style="display:inline-block;background:#111;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none">Autorizar na Adobe</a></p>' +
@@ -262,11 +293,31 @@ function tratarFireflyAuthGet(e) {
   if (acao === 'callback') {
     var code = e.parameter.code;
     if (!code) {
-      return HtmlService.createHtmlOutput('<p>A Adobe não mandou o código de autorização. Veja o Log de execução do Apps Script pra detalhe.</p>');
+      // Quando a própria Adobe recusa antes de voltar pro Colmeia, ela manda
+      // "error" e "error_description" na URL em vez do "code" — mostra isso
+      // também, é a pista mais direta que existe.
+      var erroAdobe = e.parameter.error;
+      var descricaoAdobe = e.parameter.error_description;
+      return HtmlService.createHtmlOutput(
+        '<div style="' + ESTILO_CAIXA + '">' +
+        '<p>A Adobe não mandou o código de autorização.</p>' +
+        (erroAdobe ? '<div style="' + ESTILO_ERRO + '">' + escaparHtmlSimples(erroAdobe) +
+          (descricaoAdobe ? '\n' + escaparHtmlSimples(descricaoAdobe) : '') + '</div>' : '') +
+        '</div>'
+      );
     }
     var resultado = trocarCodigoPorTokenFirefly(code);
     if (!resultado.ok) {
-      return HtmlService.createHtmlOutput('<p>Não consegui autorizar a Firefly agora. Veja o Log de execução do Apps Script pra detalhe.</p>');
+      return HtmlService.createHtmlOutput(
+        '<div style="' + ESTILO_CAIXA + '">' +
+        '<p>Não consegui autorizar a Firefly agora.</p>' +
+        '<div style="' + ESTILO_ERRO + '">' +
+        escaparHtmlSimples(resultado.error) +
+        (resultado.detalheBruto ? '\n\n' + escaparHtmlSimples(resultado.detalheBruto) : '') +
+        '</div>' +
+        '<p style="margin-top:14px;font-size:13px;color:#666">Tira um print desta página e manda pro Claude.</p>' +
+        '</div>'
+      );
     }
     return HtmlService.createHtmlOutput('<p>Autorizado! Pode fechar essa aba — a Bee já pode gerar imagem pela Firefly agora.</p>');
   }
