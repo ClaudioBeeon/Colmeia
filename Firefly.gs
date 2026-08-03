@@ -17,6 +17,20 @@
  * nisso, do mesmo jeito que outras integrações novas deste projeto
  * (ver o comentário em cima de criarTarefaRunrun, RunrunEscrita.gs).
  *
+ * ⚠️ PENDÊNCIA (2026-08-03): a autorização funciona e devolve um
+ * access_token, mas SEM refresh_token — a Adobe recusa o escopo
+ * "offline_access" (que normalmente traz o refresh_token) com
+ * "invalid_scope" pra essa credencial. Sem refresh_token, o token some
+ * depois de algumas horas e é preciso autorizar de novo — não dá pra
+ * deixar a Bee gerando imagem sozinha de forma duradoura ainda. Precisa
+ * checar no Adobe Developer Console (developer.adobe.com/console),
+ * dentro do projeto/credencial da Firefly, se existe uma lista de
+ * escopos pra marcar/liberar (procurar "offline_access" ou "Refresh
+ * Token") — se não existir essa opção pra esse produto, pode ser uma
+ * limitação da própria API "Adobe Express API - Firefly Services
+ * (beta)" e precisaria trocar de produto/credencial pra resolver de
+ * vez.
+ *
  * COMO AUTORIZAR (só precisa fazer 1 vez):
  * 1. No Adobe Developer Console, crie a credencial "OAuth Web App" pra
  *    API da Firefly, com o Redirect URI = a própria URL do Colmeia +
@@ -39,14 +53,16 @@ var FIREFLY_API_BASE = 'https://firefly-api.adobe.io/v3';
 // anterior, causava erro "invalid_scope" da Adobe antes mesmo de
 // mostrar a tela de login).
 //
-// ✅ CONFIRMADO (2026-08-03, teste real do Cláudio): faltava "offline_access".
-// Sem ele a Adobe autoriza normal (status 200, o login e a tela de
-// consentimento funcionam certinho) e devolve um access_token válido —
-// só que SEM refresh_token. É o refresh_token que permite a Bee pedir
-// token novo sozinha depois que o primeiro expira (dura só horas); sem
-// ele, precisaria de alguém logando de novo toda vez. offline_access é
-// o escopo que faz a Adobe incluir o refresh_token na resposta.
-var FIREFLY_SCOPES = 'openid,AdobeID,ee.express_api,offline_access';
+// ⚠️ TENTATIVA (2026-08-03): a resposta vinha com access_token mas sem
+// refresh_token, então acrescentei "offline_access" (é esse escopo que
+// normalmente faz a Adobe incluir o refresh_token). Só que a Adobe
+// recusou com "invalid_scope" ANTES de mostrar a tela de login — sinal
+// de que esse escopo não está liberado pra essa credencial específica no
+// Adobe Developer Console (nem toda combinação de produto/credencial
+// pode pedir todo escopo). Voltado pro que funcionava (sem
+// offline_access) até confirmar do lado da Adobe se dá pra liberar.
+// Ver o aviso grande no topo deste arquivo.
+var FIREFLY_SCOPES = 'openid,AdobeID,ee.express_api';
 
 function fireflyClientId() {
   return PropertiesService.getScriptProperties().getProperty('FIREFLY_CLIENT_ID');
