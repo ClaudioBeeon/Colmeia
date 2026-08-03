@@ -701,7 +701,7 @@ body.card-aberto .quick-access-panel { display: none; }
   border-radius: 6px; flex-shrink: 0;
 }
 .rule-row-remove svg { width: 14px; height: 14px; }
-.rule-row-remove:hover { background: #FFE3E3; color: #E03131; }
+.rule-row-remove:hover { background: var(--danger-soft); color: var(--danger); }
 
 .rule-row {
   transition: opacity 0.18s var(--ease-apple), transform 0.18s var(--ease-apple), max-height 0.2s var(--ease-apple);
@@ -748,6 +748,7 @@ body.card-aberto .quick-access-panel { display: none; }
   font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
   background: #FBEAF0; color: #72243E; white-space: nowrap;
 }
+[data-theme="dark"] .ai-briefing-plataforma-tag { background: rgba(212,83,126,0.20); color: #F0A8C0; }
 .ai-briefing-preenchidos {
   display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
 }
@@ -791,22 +792,37 @@ body.card-aberto .quick-access-panel { display: none; }
 .cat-teal { background: #E1F5EE; }
 .cat-teal .ai-briefing-cat-icon { background: #5DCAA5; color: #04342C; }
 .cat-teal .ai-briefing-cat-label, .cat-teal .ai-briefing-cat-valor { color: #085041; }
+[data-theme="dark"] .cat-teal { background: rgba(93,202,165,0.16); }
+[data-theme="dark"] .cat-teal .ai-briefing-cat-label,
+[data-theme="dark"] .cat-teal .ai-briefing-cat-valor { color: #8FE0D0; }
 
 .cat-blue { background: #FFF4CC; }
 .cat-blue .ai-briefing-cat-icon { background: var(--kanban-yellow); color: #16181D; }
 .cat-blue .ai-briefing-cat-label, .cat-blue .ai-briefing-cat-valor { color: #7A5C00; }
+[data-theme="dark"] .cat-blue { background: rgba(255,199,0,0.14); }
+[data-theme="dark"] .cat-blue .ai-briefing-cat-label,
+[data-theme="dark"] .cat-blue .ai-briefing-cat-valor { color: #FFD666; }
 
 .cat-purple { background: #EEEDFE; }
 .cat-purple .ai-briefing-cat-icon { background: #7F77DD; color: #26215C; }
 .cat-purple .ai-briefing-cat-label, .cat-purple .ai-briefing-cat-valor { color: #3C3489; }
+[data-theme="dark"] .cat-purple { background: rgba(127,119,221,0.20); }
+[data-theme="dark"] .cat-purple .ai-briefing-cat-label,
+[data-theme="dark"] .cat-purple .ai-briefing-cat-valor { color: #C4B5FD; }
 
 .cat-pink { background: #FBEAF0; }
 .cat-pink .ai-briefing-cat-icon { background: #D4537E; color: #fff; }
 .cat-pink .ai-briefing-cat-label, .cat-pink .ai-briefing-cat-valor { color: #72243E; }
+[data-theme="dark"] .cat-pink { background: rgba(212,83,126,0.18); }
+[data-theme="dark"] .cat-pink .ai-briefing-cat-label,
+[data-theme="dark"] .cat-pink .ai-briefing-cat-valor { color: #F0A8C0; }
 
 .cat-gray { background: #F1EFE8; }
 .cat-gray .ai-briefing-cat-icon { background: #888780; color: #fff; }
 .cat-gray .ai-briefing-cat-label, .cat-gray .ai-briefing-cat-valor { color: #444441; }
+[data-theme="dark"] .cat-gray { background: rgba(255,255,255,0.06); }
+[data-theme="dark"] .cat-gray .ai-briefing-cat-label,
+[data-theme="dark"] .cat-gray .ai-briefing-cat-valor { color: var(--text-secondary); }
 
 .ai-briefing-vazios {
   display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px;
@@ -828,6 +844,7 @@ body.card-aberto .quick-access-panel { display: none; }
   background: rgba(255,255,255,0.7); padding: 4px 10px; border-radius: 999px;
   text-decoration: none;
 }
+[data-theme="dark"] .ai-briefing-link-pill { background: rgba(255,255,255,0.12); }
 
 .ai-briefing-destaque {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -847,6 +864,11 @@ body.card-aberto .quick-access-panel { display: none; }
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .ai-briefing-copy-btn:hover { background: #FAC775; }
+[data-theme="dark"] .ai-briefing-destaque { background: rgba(239,159,39,0.14); }
+[data-theme="dark"] .ai-briefing-destaque-label { color: #E0B064; }
+[data-theme="dark"] .ai-briefing-destaque-valor { color: var(--text-primary); }
+[data-theme="dark"] .ai-briefing-copy-btn { color: #E0B064; }
+[data-theme="dark"] .ai-briefing-copy-btn:hover { background: rgba(239,159,39,0.25); }
 
 /* ===== Logo oficial na barra lateral =====
    Centralizado com a barra lateral (justify-content) e alinhado com o
@@ -1014,18 +1036,18 @@ body.card-aberto .quick-access-panel { display: none; }
   margin-bottom: 10px;
 }
 #driveAutofillBtn {
-  border: 1px solid #0000FB; border-radius: 8px;
-  background: transparent; color: #0000FB;
+  border: 1px solid var(--accent); border-radius: 8px;
+  background: transparent; color: var(--accent);
   font-family: inherit; font-size: 12.5px; font-weight: 600;
   padding: 7px 12px; cursor: pointer;
 }
-#driveAutofillBtn:hover { background: #EDEDFF; }
+#driveAutofillBtn:hover { background: var(--accent-soft); }
 #driveAutofillBtn:disabled { opacity: 0.6; cursor: default; }
 
 .cliente-drive-vinculo {
-  border: 1px solid #0000FB; border-radius: 8px;
+  border: 1px solid var(--accent); border-radius: 8px;
   padding: 7px 10px; font-family: inherit; font-size: 12.5px;
-  background: #EDEDFF; color: #0000FB; font-weight: 600;
+  background: var(--accent-soft); color: var(--accent); font-weight: 600;
 }
 
 /* ===== Aviso de upload (Drive) e prompt de repetir comentário no card
