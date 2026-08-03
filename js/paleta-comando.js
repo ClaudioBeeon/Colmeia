@@ -1,19 +1,20 @@
 /**
  * ===================================================================
- * A PALETA DE COMANDO — Ctrl+K (a "janelinha da Bee")
+ * A PALETA DE COMANDO — Ctrl+Espaço (a "janelinha da Bee")
  * ===================================================================
  *
- * Aperta Ctrl+K (ou Cmd+K no Mac) em qualquer tela e abre uma caixinha
- * no meio: digita, acha tarefa/cliente, executa ação, troca de página.
- * Fecha com Esc.
+ * Aperta Ctrl+Espaço (ou Cmd+Espaço no Mac) em qualquer tela e abre uma
+ * caixinha no meio: digita, acha tarefa/cliente, executa ação, troca de
+ * página. Fecha com Esc.
  *
- * Ctrl+/ (ou Cmd+/) faz a MESMA coisa e é o atalho de reserva: no
- * Firefox, Ctrl+K é um atalho do próprio navegador (foca a busca da
- * barra de ferramentas) e o Firefox não deixa a página bloquear isso
- * com preventDefault — não tem jeito de "consertar" isso pelo código,
- * é o navegador ignorando a página de propósito. Por isso o Ctrl+/
- * existe: não colide com nenhum atalho de navegador conhecido, então
- * sempre funciona, Firefox incluso.
+ * POR QUE NÃO É Ctrl+K (a escolha óbvia, e a que a primeira versão
+ * deste arquivo usava): tanto o Firefox quanto o Chrome reservam Ctrl+K
+ * pra focar a busca da barra de endereço, NO NÍVEL DO NAVEGADOR — antes
+ * de a página sequer receber o evento. `preventDefault()` não alcança
+ * isso, em nenhum dos dois; não é bug de código, é o navegador
+ * ignorando a página de propósito. Testado e confirmado nos dois.
+ * Ctrl+Espaço não é reservado por nenhum navegador nem é atalho comum
+ * de sistema em teclado português — por isso a troca.
  *
  * COMO ELA DECIDE O QUE MOSTRAR (a parte importante):
  *
@@ -458,17 +459,17 @@ function paletaEstaAberta() {
 
 /**
  * O atalho global. Fica no document em fase de captura (true) pra pegar
- * o Ctrl+K antes de qualquer campo de texto da tela — inclusive o do
- * chat e o da Bee, que também escutam tecla.
+ * o Ctrl+Espaço antes de qualquer campo de texto da tela — inclusive o
+ * do chat e o da Bee, que também escutam tecla.
  *
- * Aceita Ctrl+K OU Ctrl+/ (ver comentário no topo do arquivo sobre por
- * que o Ctrl+/ existe — é o que garante que funciona no Firefox).
+ * Checa e.code também (não só e.key) porque "Espaço" é a mesma tecla
+ * física em qualquer layout de teclado — diferente de "/", que muda de
+ * lugar (e às vezes precisa de Shift) dependendo do layout (ex: ABNT2).
  */
 document.addEventListener("keydown", e => {
   const semExtras = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey;
-  const ehCtrlK = semExtras && (e.key === "k" || e.key === "K");
-  const ehCtrlBarra = semExtras && (e.key === "/" || e.code === "Slash");
-  if (ehCtrlK || ehCtrlBarra) {
+  const ehCtrlEspaco = semExtras && (e.key === " " || e.code === "Space");
+  if (ehCtrlEspaco) {
     e.preventDefault();
     if (paletaEstaAberta()) paletaFechar();
     else paletaAbrir();

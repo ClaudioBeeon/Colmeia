@@ -1146,7 +1146,7 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 .perfil-discord-salvar:disabled { opacity: .6; cursor: default; }
 
 /* ===================================================================
-   A PALETA DE COMANDO — Ctrl+K (a "janelinha da Bee")
+   A PALETA DE COMANDO — Ctrl+Espaço (a "janelinha da Bee")
    Ver js/paleta-comando.js.
 
    Visual: mesma família da Bee de propósito (mesmo gradiente escuro,

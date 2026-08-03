@@ -130,7 +130,7 @@ Arquivos, na ordem em que são carregados (`js/`):
 17. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
 18. `pagina-horas.js` — página "Minhas horas" (tem cronômetro próprio de 1s, desligado ao sair).
 19. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
-20. `paleta-comando.js` — a **paleta de comando** (Ctrl+K). Ver seção própria abaixo.
+20. `paleta-comando.js` — a **paleta de comando** (Ctrl+Espaço). Ver seção própria abaixo.
 21. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
@@ -152,10 +152,16 @@ Comparação por NOME continua certa (e inevitável) só onde o nome é a única
 autor de comentário, menções (`<mention>`), dono de arquivo no Drive, o seletor de designer do
 coordenador, os dados do painel-designers-beeon (que é indexado por nome) e `souClaudio()`.
 
-## A paleta de comando — Ctrl+K (2026-08-03)
+## A paleta de comando — Ctrl+Espaço (2026-08-03)
 
-`js/paleta-comando.js` + o bloco no fim de `css/05-componentes.css`. Ctrl+K (Cmd+K no Mac) abre uma
-janelinha no meio da tela: busca tarefa/cliente/responsável, executa ação e troca de página. Esc fecha.
+`js/paleta-comando.js` + o bloco no fim de `css/05-componentes.css`. Ctrl+Espaço (Cmd+Espaço no Mac)
+abre uma janelinha no meio da tela: busca tarefa/cliente/responsável, executa ação e troca de página.
+Esc fecha.
+
+**Por que não é Ctrl+K, a escolha óbvia:** testado e confirmado que tanto o Firefox quanto o Chrome
+reservam Ctrl+K pra focar a busca da barra de endereço, NO NÍVEL DO NAVEGADOR — a página nunca chega
+a ver o evento, então `preventDefault()` não alcança. Não é bug de código, é decisão dos dois
+navegadores. Ctrl+Espaço não é reservado por nenhum dos dois nem é atalho comum de teclado português.
 
 **É HÍBRIDA de propósito, e isso é a decisão principal do arquivo:** tudo que aparece na lista é
 calculado no navegador, na hora, **sem nenhuma ida ao backend** — por isso responde instantâneo e
@@ -172,7 +178,7 @@ Por isso a linha da Bee é sempre a ÚLTIMA: pra nunca ser a escolha acidental d
   pasta no Drive"/"Dar play" só com card aberto. Ação sem alvo não deve aparecer nem apagada.
 - Abrir tarefa usa `abrirTarefaPorId()` (js/detalhe-modal.js), que já sabe buscar avulsa no
   Runrun.it quando ela não está carregada — por isso a busca pode varrer `tasksTodas` inteiro.
-- O atalho é registrado no `document` em **fase de captura** (`true`), pra pegar o Ctrl+K antes de
+- O atalho é registrado no `document` em **fase de captura** (`true`), pra pegar o Ctrl+Espaço antes de
   qualquer campo de texto da tela. O Esc também é capturado ali: sem isso, apertar Esc com a paleta
   aberta fechava o CARD atrás dela.
 - Carregada por último (só antes do `login-boot.js`) porque usa função de quase todo mundo.
