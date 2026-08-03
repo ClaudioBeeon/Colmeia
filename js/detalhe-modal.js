@@ -1548,7 +1548,6 @@ document.addEventListener("keydown", e => {
 function updateNowPlaying() {
   const el = document.getElementById("nowPlaying");
   const idle = document.getElementById("nowPlayingIdle");
-  const retomar = document.getElementById("nowPlayingRetomar");
   if (!el) return;
   // Só considera tarefas rodando do PRÓPRIO designer logado — o array
   // `tasks` pode ter tarefas de outras pessoas (visão do coordenador),
@@ -1557,30 +1556,39 @@ function updateNowPlaying() {
   if (running) {
     el.hidden = false;
     if (idle) idle.hidden = true;
-    if (retomar) retomar.hidden = true;
     document.getElementById("nowPlayingTitle").textContent = running.title;
     document.getElementById("nowPlayingTime").textContent = formatTime(running.timerSeconds);
     const clienteEl = document.getElementById("nowPlayingClient");
     if (clienteEl) clienteEl.textContent = running.client || "";
   } else {
     el.hidden = true;
-    // Nada rodando: mostra "Retomar <última pausada>" se tiver uma, senão
-    // o texto ocioso de sempre (ver ultimaTarefaPausada, js/kanban-polling.js).
-    if (ultimaTarefaPausada && retomar) {
-      if (idle) idle.hidden = true;
-      retomar.hidden = false;
-      const tituloEl = document.getElementById("nowPlayingRetomarTitulo");
-      if (tituloEl) tituloEl.textContent = ultimaTarefaPausada.title;
-    } else {
-      if (idle) idle.hidden = false;
-      if (retomar) retomar.hidden = true;
-    }
+    if (idle) idle.hidden = false;
+  }
+  atualizarBadgeRetomar();
+}
+
+/**
+ * O selo "Retomar" é INDEPENDENTE do carrossel acima — fica visível
+ * mesmo com outra tarefa rodando (a pessoa pausou uma pra atender
+ * prioridade, sem entregar nem passar pra frente). Ver
+ * ultimaTarefaPausada em js/kanban-polling.js pra saber quando ele
+ * aparece/some.
+ */
+function atualizarBadgeRetomar() {
+  const badge = document.getElementById("retomarBadge");
+  if (!badge) return;
+  if (ultimaTarefaPausada) {
+    badge.hidden = false;
+    const tituloEl = document.getElementById("retomarBadgeTitulo");
+    if (tituloEl) tituloEl.textContent = ultimaTarefaPausada.title;
+  } else {
+    badge.hidden = true;
   }
 }
 
 // "Retomar" — dá play de novo na última tarefa que a pessoa pausou de
 // propósito, direto da pílula, sem precisar procurar o card no quadro.
-document.getElementById("nowPlayingRetomar")?.addEventListener("click", (ev) => {
+document.getElementById("retomarBadge")?.addEventListener("click", (ev) => {
   ev.stopPropagation();
   if (!ultimaTarefaPausada) return;
   const tarefaViva = tasks.find(t => String(t.id) === String(ultimaTarefaPausada.id));

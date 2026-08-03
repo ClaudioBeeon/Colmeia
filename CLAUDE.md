@@ -305,23 +305,32 @@ pessoa realmente quer se isolar.
 ## "Retomar" na pílula do topo (2026-08-03)
 
 `ultimaTarefaPausada` (js/kanban-polling.js) — quando a pessoa pausa uma tarefa de propósito (pra
-atender uma prioridade, por exemplo) sem entregar nem passar pra frente, a pílula do topo troca o
-texto ocioso por "↻ Retomar `<nome da tarefa>`", clicável, sem precisar procurar o card no quadro.
+atender uma prioridade, por exemplo) sem entregar nem passar pra frente, um selo circular preto
+(`#retomarBadge`, index.html) aparece à ESQUERDA da pílula do topo — só o ícone em repouso, expande
+mostrando "↻ Retomar `<nome da tarefa>`" no `:hover`. Clica e volta a tocar, sem precisar procurar o
+card no quadro.
 
-**A regra de quando o botão some é "qualquer play apaga":** `tocarTarefaNoBackend` (o único ponto de
-entrada de todo play do app, não importa o botão) zera `ultimaTarefaPausada` logo no topo, sempre —
-se a tarefa retomada for a mesma, ela já está rodando (não precisa mais do botão); se for outra
-qualquer, a pessoa já seguiu em frente. Isso evita ter que caçar "todo lugar que dá play" pra limpar
-o estado — só o de PAUSAR precisa marcar.
+**Independente do carrossel da pílula de propósito:** ao contrário de `.now-playing`/
+`.now-playing-idle` (que se revezam no mesmo espaço, um de cada vez), o selo é um elemento à parte —
+fica visível mesmo com OUTRA tarefa rodando. É assim que "pausei pra apagar um incêndio rápido"
+continua lembrado enquanto esse incêndio está rodando.
+
+**Some depois de DUAS tarefas diferentes tocadas, não uma:** uma pausa rápida pra atender uma
+prioridade não deve fazer a pessoa perder o fio do que estava fazendo antes — só na SEGUNDA tarefa
+diferente é que se considera "seguiu em frente de vez". `_outrasTarefasTocadasDesdeQuePausou`
+(js/kanban-polling.js) é um `Set` de ids (não um contador solto): tocar a MESMA outra tarefa duas
+vezes não conta em dobro. Tocar a PRÓPRIA tarefa marcada (retomou ela) zera tudo na hora — é
+exatamente pra isso que o selo existe.
 
 **Só pause MANUAL marca** (a pessoa escolheu parar, não o Colmeia pausando sozinho por outro
 motivo) — `marcarUltimaTarefaPausada(taskId)` é chamada nos 6 cliques de pausar de verdade
 (pílula do topo, botão do card no quadro, botão dentro do card aberto, pílula de coordenação, a
-paleta de comando, a página Minhas horas). NÃO é chamada em `pararOutrasTarefasRodando` (para a
-tarefa VELHA sozinho quando uma nova começa) nem no pause de segurança da entrega — esse último,
-inclusive, LIMPA a marca se bater com a tarefa entregue: não faz sentido oferecer "Retomar" algo que
-acabou de ser concluído. Ao adicionar um novo botão de pausar no futuro, decidir esse mesmo jeito:
-pause escolhido pela pessoa marca, pause automático do sistema não.
+paleta de comando, a página Minhas horas), e reseta o contador de outras tarefas (é uma marca NOVA).
+NÃO é chamada em `pararOutrasTarefasRodando` (para a tarefa VELHA sozinho quando uma nova começa)
+nem no pause de segurança da entrega — esse último, inclusive, LIMPA a marca se bater com a tarefa
+entregue: não faz sentido oferecer "Retomar" algo que acabou de ser concluído. Ao adicionar um novo
+botão de pausar no futuro, decidir esse mesmo jeito: pause escolhido pela pessoa marca (e reseta o
+contador), pause automático do sistema não.
 
 ## Bug recorrente conhecido
 

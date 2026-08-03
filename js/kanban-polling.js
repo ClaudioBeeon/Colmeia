@@ -3,18 +3,24 @@
  * próprio Colmeia pausou sozinho — ver os comentários "AUTOMÁTICO, não
  * conta" espalhados abaixo) — { id, title, client } ou null.
  *
- * É o que faz o botão "↻ Retomar" aparecer na pílula do topo quando não
- * tem nada rodando: pausou pra atender uma prioridade, o ícone fica ali
- * esperando; deu play em QUALQUER outra tarefa (inclusive essa mesma),
- * o ícone some — ver o topo de tocarTarefaNoBackend, mais abaixo, que é
- * o único ponto de entrada de todo play do app.
+ * É o que faz o selo "↻ Retomar" aparecer do lado esquerdo da pílula do
+ * topo — INDEPENDENTE de ter outra tarefa rodando ou não: pausou pra
+ * atender uma prioridade, o selo fica ali esperando, mesmo que você dê
+ * play em outra coisa logo em seguida.
  */
 let ultimaTarefaPausada = null;
+
+// Quantas tarefas DIFERENTES da pausada já tocaram desde então — usado
+// pra decidir quando o selo desiste de esperar (ver tocarTarefaNoBackend
+// mais abaixo). Um Set, não um número: tocar a MESMA outra tarefa de
+// novo (parar e retomar ela) não deve contar duas vezes.
+let _outrasTarefasTocadasDesdeQuePausou = new Set();
 
 /** Chamado só pelos cliques de pausar de VERDADE (a pessoa escolheu parar). */
 function marcarUltimaTarefaPausada(taskId) {
   const t = tasks.find(x => String(x.id) === String(taskId));
   ultimaTarefaPausada = t ? { id: t.id, title: t.title, client: t.client || "" } : null;
+  _outrasTarefasTocadasDesdeQuePausou = new Set();
   if (typeof updateNowPlaying === "function") updateNowPlaying();
 }
 
@@ -52,11 +58,25 @@ async function salvarPrioridadeNoBackend(taskId, prioridade) {
  */
 async function tocarTarefaNoBackend(taskId, taskTitle) {
   if (!COLMEIA_API_URL || !taskId) return;
-  // A partir do instante que QUALQUER tarefa toca — essa mesma sendo
-  // retomada, ou outra qualquer — não faz mais sentido oferecer
-  // "Retomar" a última pausada: se for ela, já está rodando; se for
-  // outra, a pessoa já seguiu em frente (ver ultimaTarefaPausada acima).
-  ultimaTarefaPausada = null;
+  // Decide se o selo "Retomar" continua valendo (ver ultimaTarefaPausada
+  // acima). Tocou a PRÓPRIA tarefa pausada: resolvido, some na hora — é
+  // exatamente pra isso que o selo existe. Tocou OUTRA: só conta como
+  // "seguiu em frente de vez" na SEGUNDA tarefa diferente — uma pausa
+  // rápida pra apagar um incêndio não deve fazer a pessoa perder o fio
+  // do que estava fazendo antes.
+  if (ultimaTarefaPausada) {
+    if (String(ultimaTarefaPausada.id) === String(taskId)) {
+      ultimaTarefaPausada = null;
+      _outrasTarefasTocadasDesdeQuePausou = new Set();
+    } else {
+      _outrasTarefasTocadasDesdeQuePausou.add(String(taskId));
+      if (_outrasTarefasTocadasDesdeQuePausou.size >= 2) {
+        ultimaTarefaPausada = null;
+        _outrasTarefasTocadasDesdeQuePausou = new Set();
+      }
+    }
+    if (typeof updateNowPlaying === "function") updateNowPlaying();
+  }
   try {
     const data = await chamarBackend({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO });
     if (!data.ok) console.error("Runrun.it recusou o play:", data.error);
