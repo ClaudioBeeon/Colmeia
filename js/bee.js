@@ -40,8 +40,6 @@ async function abrirThreadBee(task) {
   chatThreadAtivo = "bee";
   chatAlvoTaskId = null; // nada daqui vai pro Runrun.it por engano
   marcarAbaBeeAtiva(true);
-
-  atualizarTituloDoChat();
   atualizarCampoParaBee(true);
 
   const taskId = task.id;
@@ -58,12 +56,13 @@ function marcarAbaBeeAtiva(ativa) {
   // conversa dela invalida o que o pintarThread tem em memória sobre o
   // que está desenhado ali (ver esquecerPinturaDaThread).
   esquecerPinturaDaThread();
-  if (ativa) {
-    ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.classList.remove("active");
-    });
-  }
+  // A fileira de pílulas (Comentários/Card mãe/Todos os comentários/
+  // Linha do tempo) e o interruptor "mostrar Bee" só fazem sentido do
+  // lado dos comentários — somem inteiros enquanto a Bee está aberta.
+  const subpills = document.getElementById("chatSubpills");
+  if (subpills) subpills.hidden = ativa;
+  const toggleBee = document.getElementById("chatBeeToggleRow");
+  if (toggleBee && ativa) toggleBee.hidden = true;
   // O ícone da Bee no topo fica aceso enquanto você está na conversa dela
   // — e é o mesmo botão que traz de volta pros comentários. O selo
   // "Comentários" faz o gangorra oposto: apaga (vira contorno) enquanto
@@ -87,7 +86,7 @@ function marcarAbaBeeAtiva(ativa) {
 function abrirThreadComentarios(task) {
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
-  if (ehTarefaDeAlteracao(task)) abrirThreadLinhaDoTempo(task);
+  if (ehTarefaDeAlteracao(task)) abrirThreadTodos(task);
   else abrirThreadAqui(task);
 }
 
@@ -765,7 +764,7 @@ function wireThreadBee(task) {
 async function irParaOrigemDoItem(task, item) {
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
-  if (ehTarefaDeAlteracao(task)) await abrirThreadLinhaDoTempo(task);
+  if (ehTarefaDeAlteracao(task)) await abrirThreadTodos(task);
   else await abrirThreadAqui(task);
 
   const alvo = item.onde === "descricao" ? "descricao" : item.comentarioId;

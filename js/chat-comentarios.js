@@ -4,18 +4,15 @@ let descMaeAberta = false;
 // Aba "Tarefa original" aberta? (só existe em subtarefa de alteração — ver
 // ehTarefaDeAlteracao em js/detalhe-modal.js)
 let originalAberta = false;
-// Aba "História" aberta? (ver js/detalhe-historia.js)
-let historiaAberta = false;
 
 // ===== Chat flutuante (comentários em pop-up separado, fora do card) =====
-let chatThreadAtivo = "aqui"; // "aqui" (a tarefa aberta) ou "mae" (o card mãe dela)
-// Igual a chatThreadAtivo, mas NUNCA vira "bee" — é só o que o gomo
-// "Comentários"/"Card mãe"/"Linha do tempo" da barra do topo mostra (ver
-// nomeDaConversaAtiva). Desde que a Bee ganhou o próprio gomo ao lado, o
-// rótulo desse primeiro gomo não deve trocar pra "Bee" só porque a
-// conversa dela está aberta — ele continua mostrando de qual comentário
-// você "veio", pra onde volta ao apertar o botão da Bee de novo.
-let chatThreadRotulo = "aqui";
+// "aqui" (a tarefa aberta), "mae" (o card mãe dela), "todos" (Todos os
+// comentários — aqui+mãe+original+Bee misturados por hora) ou "linha"
+// (Linha do tempo — o mesmo de "todos" + eventos do sistema: criada,
+// começou a trabalhar, arquivo, entregue). "bee" é a conversa dela,
+// que mora no mesmo campo mas NUNCA entra nesse merge de "todos"/"linha"
+// sem o interruptor ligado (ver chatMostrarBeeNoUnificado abaixo).
+let chatThreadAtivo = "aqui";
 let chatAlvoTaskId = null;    // id de quem recebe o próximo comentário enviado
 const chatMaeCache = new Map(); // taskId (da subtarefa) -> {id, title, comments}
 
@@ -131,35 +128,23 @@ function pintarThread(thread, html, opcoes) {
   return true;
 }
 
-// ===== Nome da conversa ativa, no topo do chat =====
+// ===== Sub-pills logo abaixo do cabeçalho (Comentários/Card mãe/Todos
+// os comentários/Linha do tempo) =====
 //
-// O topo mostra a conversa em que você está ("Comentários", "Card mãe",
-// "Linha do tempo", "Bee") com uma setinha do lado pra trocar ali mesmo.
-// Antes ele mostrava o nome da tarefa e a troca de aba estava escondida
-// dentro do menu de "...", que sumiu.
-function nomeDaConversaAtiva() {
-  if (chatThreadRotulo === "mae") return "Card mãe";
-  if (chatThreadRotulo === "tudo") return "Linha do tempo";
-  return "Comentários";
-}
-
-function atualizarTituloDoChat() {
-  const titulo = document.getElementById("chatPanelTitle");
-  if (titulo) titulo.textContent = nomeDaConversaAtiva();
-
-  const porAba = { aqui: "chatTabAqui", mae: "chatTabMae", tudo: "chatTabTudo" };
-  let quantasAbas = 0;
-  ["chatTabAqui", "chatTabMae", "chatTabTudo"].forEach(id => {
+// O gomo "Comentários" do cabeçalho não muda mais de nome (fica sempre
+// "Comentários", contra "Bee" do outro gomo) — quem mostra ONDE você
+// está agora é essa fileira de pílulas cinzas, sempre visível enquanto
+// não está na Bee (marcarAbaBeeAtiva esconde a fileira inteira).
+function atualizarSubpillsAtivas() {
+  const porAba = { aqui: "chatSubAqui", mae: "chatSubMae", todos: "chatSubTodos", linha: "chatSubLinha" };
+  ["chatSubAqui", "chatSubMae", "chatSubTodos", "chatSubLinha"].forEach(id => {
     const el = document.getElementById(id);
-    if (!el) return;
-    el.classList.toggle("active", porAba[chatThreadAtivo] === id);
-    if (!el.hidden) quantasAbas++;
+    if (el) el.classList.toggle("active", porAba[chatThreadAtivo] === id);
   });
-
-  // Tarefa sem card mãe e que não é alteração tem uma aba só — aí a
-  // setinha não serviria pra nada e some, junto com o clique.
-  const botao = document.getElementById("chatPanelMenuBtn");
-  if (botao) botao.classList.toggle("sem-opcoes", quantasAbas < 2);
+  // O interruptor da Bee só faz sentido nos dois merges — nas outras
+  // pílulas não tem o que ligar/desligar.
+  const linhaDoToggle = document.getElementById("chatBeeToggleRow");
+  if (linhaDoToggle) linhaDoToggle.hidden = chatThreadAtivo !== "todos" && chatThreadAtivo !== "linha";
 }
 
 // Também por pessoa, pelo mesmo motivo do log de notificações (ver
@@ -218,11 +203,10 @@ function fecharChatPanel() {
 
 function abrirThreadAqui(task) {
   chatThreadAtivo = "aqui";
-  chatThreadRotulo = "aqui";
   chatAlvoTaskId = task.id;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
-  atualizarTituloDoChat();
+  atualizarSubpillsAtivas();
   // Nunca começa em branco: se a conversa dessa tarefa já foi vista antes
   // neste navegador, ela aparece na hora e a busca real corrige por baixo.
   if (task.comments === undefined) {
@@ -247,11 +231,10 @@ function abrirThreadAqui(task) {
  */
 async function abrirThreadDoCardMae(task) {
   chatThreadAtivo = "mae";
-  chatThreadRotulo = "mae";
   chatAlvoTaskId = null;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
-  atualizarTituloDoChat();
+  atualizarSubpillsAtivas();
   const thread = document.getElementById("commentsThread");
   const avisosMae = document.getElementById("beeInlineAvisos");
   if (avisosMae) avisosMae.innerHTML = "";
@@ -292,100 +275,224 @@ async function abrirThreadDoCardMae(task) {
   }
   if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de aba/tarefa enquanto carregava
   chatAlvoTaskId = cache.id;
-  atualizarTituloDoChat();
   if (thread) pintarThread(thread, renderComentariosHTML({ id: cache.id, comments: cache.comments }));
 }
 
+// ===== "Todos os comentários" e "Linha do tempo" — os dois merges =====
+//
+// Generalização do que antes só existia pra subtarefa de ALTERAÇÃO (a
+// antiga abrirThreadLinhaDoTempo): junta, em ordem de hora, os
+// comentários de todas as pontas que existirem pra essa tarefa — ela
+// mesma, o card mãe (se tiver) e a tarefa original (se for uma
+// alteração) — e, se o interruptor estiver ligado, a conversa com a
+// Bee também. "Linha do tempo" é a mesma coisa + os eventos do sistema
+// (criada, começou a trabalhar, arquivo, entregue — ver
+// js/detalhe-historia.js), pra ela sozinha já responder "por que
+// demorou" sem precisar de uma aba separada.
+
+// Preferência por designer (mesmo padrão de colmeia_<coisa>_v1): mostrar
+// os comentários da Bee misturados no "Todos os comentários"/"Linha do
+// tempo"? Começa ligado — só quem quiser tira.
+function lerPreferenciaBeeUnificado() {
+  try {
+    const v = localStorage.getItem("colmeia_comentarios_bee_v1_" + normalizarParaComparar(DESIGNER_LOGADO || "sem-login"));
+    return v === null ? true : v === "1";
+  } catch (err) { return true; }
+}
+function salvarPreferenciaBeeUnificado(mostrar) {
+  try { localStorage.setItem("colmeia_comentarios_bee_v1_" + normalizarParaComparar(DESIGNER_LOGADO || "sem-login"), mostrar ? "1" : "0"); }
+  catch (err) { /* sem problema */ }
+}
+let chatMostrarBeeNoUnificado = lerPreferenciaBeeUnificado();
+
 /**
- * Linha do tempo única de uma subtarefa de ALTERAÇÃO: junta, em ordem de
- * hora, os comentários das três pontas que contam a história daquela peça
- * — a própria alteração, a tarefa original (a peça que foi feita) e o card
- * mãe (onde o atendimento normalmente escreve o pedido do cliente).
- *
- * É isso que responde "o que exatamente pediram nessa alteração": antes
- * essas conversas viviam em lugares separados (e a da tarefa original nem
- * era acessível pelo Colmeia), então o designer abria uma subtarefa
- * chamada só "Alteração 01" sem nenhum contexto do que mudar.
- *
- * Comentar por aqui vai pra própria alteração (é a tarefa aberta).
+ * Busca as três pontas de comentários "de verdade" (não inclui Bee nem
+ * eventos do sistema — isso é acrescentado por quem chama). Retorna
+ * `null` em cada ponta que falhou (pra quem chama saber que a lista
+ * está incompleta, não vazia de verdade).
  */
-async function abrirThreadLinhaDoTempo(task) {
-  chatThreadAtivo = "tudo";
-  chatThreadRotulo = "tudo";
+async function buscarFontesDeComentarios(task) {
+  const taskId = task.id;
+  const original = acharTarefaOriginalDaAlteracao(task);
+  const infoMae = cardMaeCache.get(taskId);
+
+  const [aqui, deOriginal, deMae] = await Promise.all([
+    task.comments !== undefined ? Promise.resolve(task.comments) : buscarComentariosDoBackend(taskId),
+    original ? buscarComentariosDoBackend(original.id) : Promise.resolve([]),
+    (infoMae && infoMae.ok && infoMae.temPai)
+      ? (chatMaeCache.has(taskId) ? Promise.resolve(chatMaeCache.get(taskId).comments) : buscarComentariosDoBackend(infoMae.cardMae.id))
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    aqui, deOriginal, deMae,
+    temOriginal: !!original,
+    temMae: !!(infoMae && infoMae.ok && infoMae.temPai),
+  };
+}
+
+/** Conversa com a Bee (se o interruptor estiver ligado), no mesmo formato de comentário. */
+async function buscarBeeComoComentarios(task) {
+  if (!chatMostrarBeeNoUnificado) return [];
+  let conversa = beeConversas.get(task.id);
+  if (conversa === undefined) {
+    const historico = await chamarBackend({ acao: "beeHistorico", taskId: task.id });
+    conversa = (historico && historico.ok) ? (historico.conversa || []) : null;
+    if (conversa !== null) beeConversas.set(task.id, conversa);
+  }
+  if (!conversa) return [];
+  return conversa.map((m, i) => ({
+    id: "bee-" + i,
+    autor: m.autor === "bee" ? "Bee" : (DESIGNER_LOGADO || "Você"),
+    texto: m.texto,
+    data: m.quando,
+    _origem: "Bee",
+    _somenteLeitura: true,
+  }));
+}
+
+/** Monta os pseudo-comentários dos eventos do sistema (ver js/detalhe-historia.js). */
+async function buscarEventosComoComentarios(task) {
+  const dados = await chamarBackend({ acao: "buscarHistoriaDaTarefa", taskId: task.id });
+  if (!dados || !dados.ok) return null;
+  const eventos = montarEventosDoSistema(task, dados);
+  // Sem _origem de propósito: pra um comentário de verdade essa etiqueta
+  // diz DE ONDE ele veio (Card mãe/Tarefa original/Bee), o que importa.
+  // Pra um evento, "Sistema" + o ícone já contam a história sozinhos —
+  // repetir "Linha do tempo" na etiqueta seria só ruído.
+  return eventos.map((ev, i) => ({
+    id: "evt-" + i,
+    autor: "Sistema",
+    texto: ev.titulo + (ev.detalhe ? `: ${ev.detalhe}` : "") + (ev.aproximado ? " (aproximado)" : ""),
+    data: new Date(ev.quando).toISOString(),
+    _somenteLeitura: true,
+    _icone: HISTORIA_ICONES[ev.tipo],
+  }));
+}
+
+function juntarEOrdenar(partes) {
+  return [].concat(...partes).sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0));
+}
+
+/**
+ * A descrição entra como a PRIMEIRA mensagem dos merges, só pra leitura
+ * — muitas vezes o pedido inteiro está lá, e sem isso a lista conta a
+ * história pela metade. Ela continua sendo editada onde sempre foi (a
+ * aba Descrição); aqui é só uma cópia.
+ */
+function pseudoComentarioDescricao(task) {
+  if (!task.descricaoTexto) return [];
+  return [{
+    id: "descricao",
+    autor: "Descrição da tarefa",
+    texto: task.descricaoTexto,
+    data: task.createdAt || null,
+    _origem: "Descrição",
+    _somenteLeitura: true,
+  }];
+}
+
+/** Card mãe existe → devolve o id dele (senão null). Usado no seletor de destino ao enviar. */
+function idDoCardMae(task) {
+  const infoMae = cardMaeCache.get(task.id);
+  return (infoMae && infoMae.ok && infoMae.temPai) ? infoMae.cardMae.id : null;
+}
+
+async function abrirThreadTodos(task) {
+  chatThreadAtivo = "todos";
   chatAlvoTaskId = task.id;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
-  atualizarTituloDoChat();
+  atualizarSubpillsAtivas();
   const thread = document.getElementById("commentsThread");
   const avisosTudo = document.getElementById("beeInlineAvisos");
   if (avisosTudo) avisosTudo.innerHTML = "";
 
   const taskId = task.id;
-  // Mesma ideia das outras abas: a última linha do tempo montada fica
-  // guardada no navegador e reaparece na hora, sem "Montando...".
+  const chaveCache = "todos-" + taskId + (chatMostrarBeeNoUnificado ? "-bee" : "");
   if (thread) {
-    const guardados = comentariosDoCacheLocal("tudo-" + taskId);
+    const guardados = comentariosDoCacheLocal(chaveCache);
     if (guardados) pintarThread(thread, renderComentariosHTML({ id: taskId, comments: guardados }), { rolarPraBaixo: true });
-    else pintarThread(thread, `<p class="comments-empty">Montando a linha do tempo...</p>`);
+    else pintarThread(thread, `<p class="comments-empty">Juntando os comentários...</p>`);
   }
-  const original = acharTarefaOriginalDaAlteracao(task);
-  const infoMae = cardMaeCache.get(taskId);
 
-  // As três buscas em paralelo (a da alteração e a do card mãe costumam
-  // já estar em cache do pré-carregamento).
-  const [comentariosAqui, comentariosOriginal, comentariosMae] = await Promise.all([
-    task.comments !== undefined ? Promise.resolve(task.comments) : buscarComentariosDoBackend(taskId),
-    original ? buscarComentariosDoBackend(original.id) : Promise.resolve([]),
-    (infoMae && infoMae.ok && infoMae.temPai)
-      ? (chatMaeCache.has(taskId)
-          ? Promise.resolve(chatMaeCache.get(taskId).comments)
-          : buscarComentariosDoBackend(infoMae.cardMae.id))
-      : Promise.resolve([]),
+  const [fontes, bee] = await Promise.all([buscarFontesDeComentarios(task), buscarBeeComoComentarios(task)]);
+  if (chatThreadAtivo !== "todos" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
+
+  const algumaFalhou = fontes.aqui === null || fontes.deOriginal === null || fontes.deMae === null;
+  const juntos = juntarEOrdenar([
+    pseudoComentarioDescricao(task),
+    (fontes.aqui || []).map(c => Object.assign({}, c, { _origem: "Nesta tarefa" })),
+    (fontes.deOriginal || []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })),
+    (fontes.deMae || []).map(c => Object.assign({}, c, { _origem: "Card mãe" })),
+    bee,
   ]);
 
-  // Trocou de aba ou de tarefa enquanto carregava? Compara por id.
-  if (chatThreadAtivo !== "tudo" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
-
-  // Alguma das três pontas não respondeu? (`null`, ver
-  // buscarComentariosDoBackend.) Aí a linha do tempo está incompleta e não
-  // pode afirmar "não tem nada" — seria mentira.
-  const algumaFalhou = comentariosAqui === null || comentariosOriginal === null || comentariosMae === null;
-
-  const juntos = []
-    .concat((comentariosAqui || []).map(c => Object.assign({}, c, { _origem: "Nesta alteração" })))
-    .concat((comentariosOriginal || []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })))
-    .concat((comentariosMae || []).map(c => Object.assign({}, c, { _origem: "Card mãe" })))
-    .sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0));
-
-  // A descrição entra como a PRIMEIRA mensagem da linha do tempo, só pra
-  // leitura — muitas vezes o pedido inteiro está lá, e sem isso a linha
-  // do tempo conta a história pela metade. Ela continua sendo editada
-  // onde sempre foi (a aba Descrição); aqui é só uma cópia pra ler.
-  if (task.descricaoTexto) {
-    juntos.unshift({
-      id: "descricao",
-      autor: "Descrição da tarefa",
-      texto: task.descricaoTexto,
-      data: task.createdAt || null,
-      _origem: "Descrição",
-      _somenteLeitura: true,
-    });
-  }
-
-  atualizarTituloDoChat();
-  // Só guarda quando a linha do tempo veio COMPLETA — uma montada com uma
-  // das três pontas faltando seria uma versão capenga da conversa, e ela
-  // ficaria guardada como se fosse a verdade.
-  if (!algumaFalhou && juntos.length) guardarComentariosNoCacheLocal("tudo-" + taskId, juntos);
+  if (!algumaFalhou && juntos.length) guardarComentariosNoCacheLocal(chaveCache, juntos);
 
   if (thread) {
     let html;
     if (juntos.length) html = renderComentariosHTML({ id: taskId, comments: juntos });
-    else if (algumaFalhou) html = `<p class="comments-empty">Não consegui carregar a linha do tempo agora.</p>`;
-    else html = `<p class="comments-empty">Nenhum comentário em nenhuma das três pontas ainda.</p>`;
+    else if (algumaFalhou) html = `<p class="comments-empty">Não consegui juntar os comentários agora.</p>`;
+    else html = `<p class="comments-empty">Nenhum comentário em lugar nenhum ainda.</p>`;
     pintarThread(thread, html);
-    inserirLinhaDaBeeNaThread(task);
   }
+}
+
+async function abrirThreadLinha(task) {
+  chatThreadAtivo = "linha";
+  chatAlvoTaskId = task.id;
+  marcarAbaBeeAtiva(false);
+  atualizarCampoParaBee(false);
+  atualizarSubpillsAtivas();
+  const thread = document.getElementById("commentsThread");
+  const avisosLinha = document.getElementById("beeInlineAvisos");
+  if (avisosLinha) avisosLinha.innerHTML = "";
+
+  const taskId = task.id;
+  const chaveCache = "linha-" + taskId + (chatMostrarBeeNoUnificado ? "-bee" : "");
+  if (thread) {
+    const guardados = comentariosDoCacheLocal(chaveCache);
+    if (guardados) pintarThread(thread, renderComentariosHTML({ id: taskId, comments: guardados }), { rolarPraBaixo: true });
+    else pintarThread(thread, `<p class="comments-empty">Montando a linha do tempo...</p>`);
+  }
+
+  const [fontes, bee, eventos] = await Promise.all([
+    buscarFontesDeComentarios(task),
+    buscarBeeComoComentarios(task),
+    buscarEventosComoComentarios(task),
+  ]);
+  if (chatThreadAtivo !== "linha" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
+
+  const algumaFalhou = fontes.aqui === null || fontes.deOriginal === null || fontes.deMae === null || eventos === null;
+  const juntos = juntarEOrdenar([
+    pseudoComentarioDescricao(task),
+    (fontes.aqui || []).map(c => Object.assign({}, c, { _origem: "Nesta tarefa" })),
+    (fontes.deOriginal || []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })),
+    (fontes.deMae || []).map(c => Object.assign({}, c, { _origem: "Card mãe" })),
+    bee,
+    eventos || [],
+  ]);
+
+  if (!algumaFalhou && juntos.length) guardarComentariosNoCacheLocal(chaveCache, juntos);
+
+  if (thread) {
+    let html;
+    if (juntos.length) html = renderComentariosHTML({ id: taskId, comments: juntos });
+    else if (algumaFalhou) html = `<p class="comments-empty">Não consegui montar a linha do tempo agora.</p>`;
+    else html = `<p class="comments-empty">Ainda não tem nada pra mostrar aqui.</p>`;
+    pintarThread(thread, html);
+  }
+}
+
+/** Liga/desliga os comentários da Bee no merge e redesenha na hora, sem rebuscar nada. */
+function alternarBeeNoUnificado(mostrar) {
+  chatMostrarBeeNoUnificado = mostrar;
+  salvarPreferenciaBeeUnificado(mostrar);
+  const task = tasks[detailIdx];
+  if (!task) return;
+  if (chatThreadAtivo === "todos") abrirThreadTodos(task);
+  else if (chatThreadAtivo === "linha") abrirThreadLinha(task);
 }
 
 /**
@@ -395,13 +502,15 @@ async function abrirThreadLinhaDoTempo(task) {
  */
 async function recarregarThreadAtiva() {
   const task = tasks[detailIdx];
-  if (chatThreadAtivo === "tudo") {
-    // Rebusca os comentários da própria alteração (é onde a pessoa acabou
-    // de escrever) e remonta a linha do tempo inteira. Se a rebusca não
-    // chegar (`null`), mantém o que já tinha — ver buscarComentariosDoBackend.
+  if (chatThreadAtivo === "todos" || chatThreadAtivo === "linha") {
+    // Rebusca os comentários da própria tarefa (é onde a pessoa mais
+    // provavelmente acabou de escrever) e remonta o merge inteiro. Se a
+    // rebusca não chegar (`null`), mantém o que já tinha — ver
+    // buscarComentariosDoBackend.
     const rebuscados = await buscarComentariosDoBackend(task.id);
     if (rebuscados !== null) task.comments = rebuscados;
-    await abrirThreadLinhaDoTempo(task);
+    if (chatThreadAtivo === "todos") await abrirThreadTodos(task);
+    else await abrirThreadLinha(task);
     return;
   }
   if (chatThreadAtivo === "aqui") {
@@ -592,31 +701,33 @@ function renderComentariosHTML(task) {
     return `<p class="comments-empty">Nenhum comentário ainda.</p>`;
   }
   return task.comments.map(c => {
-    const minha = nomesCorrespondem(c.autor, DESIGNER_LOGADO);
+    const minha = !c._somenteLeitura && nomesCorrespondem(c.autor, DESIGNER_LOGADO);
     return `
-    <div class="comment-bubble ${minha ? "mine" : ""}" data-comment-id="${c.id}">
+    <div class="comment-bubble ${minha ? "mine" : ""} ${c._somenteLeitura ? "somente-leitura" : ""}" data-comment-id="${c.id}">
       ${avatarHTML(minha ? DESIGNER_LOGADO : c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-meta"><span class="comment-author">${minha ? "Você" : escaparHTML(c.autor)}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span>${c._origem ? `<span class="comment-origem">${escaparHTML(c._origem)}</span>` : ""}</div>
-        <div class="comment-text">${prepararTextoComentario(c.texto)}</div>
+        <div class="comment-text">${c._icone ? `<span class="comment-evento-icone">${c._icone}</span> ` : ""}${prepararTextoComentario(c.texto)}</div>
         ${(c.reactions || []).length ? `
           <div class="comment-reactions">
             ${c.reactions.map(r => `<span class="comment-reaction-chip" title="${(r.users || []).map(u => u.name).join(", ")}">${r.emoji} ${r.count}</span>`).join("")}
           </div>
         ` : ""}
       </div>
-      <button type="button" class="comment-react-btn" data-comment-id="${c.id}" title="Reagir" aria-label="Reagir">🙂</button>
-      <div class="comment-react-picker" data-comment-id="${c.id}" hidden></div>
-      <div class="comment-bubble-acoes">
-        ${minha ? `
-          <button type="button" class="comment-edit-btn" data-comment-id="${c.id}" title="Editar comentário" aria-label="Editar comentário">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      ${c._somenteLeitura ? "" : `
+        <button type="button" class="comment-react-btn" data-comment-id="${c.id}" title="Reagir" aria-label="Reagir">🙂</button>
+        <div class="comment-react-picker" data-comment-id="${c.id}" hidden></div>
+        <div class="comment-bubble-acoes">
+          ${minha ? `
+            <button type="button" class="comment-edit-btn" data-comment-id="${c.id}" title="Editar comentário" aria-label="Editar comentário">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          ` : ""}
+          <button type="button" class="comment-delete-btn" data-comment-id="${c.id}" title="Excluir comentário" aria-label="Excluir comentário">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
-        ` : ""}
-        <button type="button" class="comment-delete-btn" data-comment-id="${c.id}" title="Excluir comentário" aria-label="Excluir comentário">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </button>
-      </div>
+        </div>
+      `}
     </div>
   `;
   }).join("");
@@ -944,10 +1055,11 @@ async function carregarTudoDaTarefa(task) {
       : "Sem descrição cadastrada nessa tarefa.";
     carregarImagensDaDescricao(descEl);
   }
-  // Guarda a descrição na própria tarefa: a Linha do tempo mostra ela
-  // como a primeira mensagem (ver abrirThreadLinhaDoTempo), e é isso que
-  // faz o "ver original" da Bee ter pra onde apontar quando o pedido veio
-  // da descrição, e não de um comentário.
+  // Guarda a descrição na própria tarefa: Todos os comentários/Linha do
+  // tempo mostram ela como a primeira mensagem (ver
+  // pseudoComentarioDescricao), e é isso que faz o "ver original" da Bee
+  // ter pra onde apontar quando o pedido veio da descrição, e não de um
+  // comentário.
   task.descricaoTexto = data.descricao || "";
 
   const seqEl = document.getElementById("workflowSeqGroup");

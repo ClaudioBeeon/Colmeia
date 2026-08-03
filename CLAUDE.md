@@ -136,7 +136,8 @@ Arquivos, na ordem em que são carregados (`js/`):
 20. `paleta-comando.js` — a **paleta de comando** (Ctrl+Espaço). Ver seção própria abaixo.
 21. `roteador-url.js` — link direto pra tarefa/página pela URL (`/11503`, `/minhas-horas`). Ver
     seção própria abaixo.
-22. `detalhe-historia.js` — a aba **"História"** (linha do tempo da tarefa). Ver seção própria abaixo.
+22. `detalhe-historia.js` — os **eventos do sistema** (criada, começou a trabalhar, arquivo, entregue)
+    que alimentam a pílula "Linha do tempo" do painel de comentários. Ver seção própria abaixo.
 23. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
 24. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
@@ -247,33 +248,64 @@ que também vão precisar disso (parede do cliente, antes e depois).
 - O visualizador ampliado captura Esc em **fase de captura**, mesmo padrão da paleta de comando: se
   ele está aberto, o Esc fecha ELE, não o card por trás.
 
-## A aba "História" — linha do tempo da tarefa (2026-08-03)
+## Painel de comentários: pílulas "Todos os comentários"/"Linha do tempo" (2026-08-03)
 
-`js/detalhe-historia.js`. Uma aba nova ao lado de "Descrição": briefing chegou → alguém trabalhou →
-arquivo subiu → cliente comentou → entregue, cada evento com o tempo até o próximo bem visível.
-Responde "por que demorou?" sem ninguém se defender — quase sempre é um buraco de espera, não
-trabalho lento.
+Antes disso, "Linha do tempo" (juntar os comentários da alteração + tarefa original + card mãe) só
+existia pra subtarefa de ALTERAÇÃO, e a "aba História" (criada → começou a trabalhar → arquivo →
+entregue) vivia sozinha, do lado da Descrição, sem nenhum comentário junto. Os dois foram fundidos e
+generalizados pra QUALQUER tarefa dentro do próprio painel de comentários, como duas pílulas novas:
 
-**Cada evento tem uma fonte diferente, e isso importa pra saber onde mexer:**
-- "Tarefa criada" — `task.createdAt`, já vem no objeto (nenhuma busca nova).
-- Comentários — `buscarComentariosDoBackend(task.id)`, a MESMA busca que já alimenta a aba
-  Comentários — reaproveitada aqui, não busca de novo o que já ia buscar de qualquer jeito.
-- "Começou a trabalhar" — ação `buscarHistoriaDaTarefa` (Código.gs) → `buscarHistoricoDePlaysDaTarefa`
-  (Planilha.gs), lendo a aba "Log de Plays" filtrada por essa tarefa. O log só guarda o INÍCIO de cada
-  play, não quando pausou — por isso é "começou a trabalhar às HH:MM", não uma duração de sessão.
-- Arquivo adicionado — mesma ação → `buscarHistoricoDeArquivosDoCard` (Drive.gs), que lê TODOS os
-  arquivos da pasta do card, sem o corte de 30 min que `buscarUploadsRecentesDoCard` usa pro aviso da
-  Bee (são duas funções de propósitos diferentes, mesma pasta).
-- "Entregue" — só o horário é exato se a entrega aconteceu NESTA sessão (`task._entregueEm`); senão
-  usa `task.lastActivityAt` como aproximação (o Runrun.it não expõe o instante exato da entrega) e
-  marca o evento como aproximado.
+- **"Todos os comentários"** — mistura, por hora, os comentários desta tarefa + card mãe (se tiver) +
+  tarefa original (se for alteração) + a conversa com a Bee (se o interruptor estiver ligado).
+- **"Linha do tempo"** — a mesma coisa + os eventos do sistema (criada, começou a trabalhar, arquivo,
+  entregue) — substituiu de vez a antiga aba "História" (removida do lado da Descrição).
 
-Segue o mesmo padrão de abas mutuamente exclusivas que "Descrição"/"Descrição card mãe"/"Tarefa
-original" já usavam (`historiaAberta`, js/chat-comentarios.js) — inclusive chamando
-`carregarHistoriaDaTarefa` **direto**, sem `typeof` de guarda: mesmo o arquivo carregando depois de
-detalhe-modal.js, a chamada só acontece dentro de um clique, bem depois de todo script já ter
-carregado (mesmo raciocínio de `carregarDescricaoCardMae`, que já é chamado assim de dentro de
-detalhe-modal.js mesmo detalhe-cardmae.js carregando depois).
+**Sub-pills cinzas, não mais um menu suspenso:** o antigo botão "Comentários ∨" que abria uma listinha
+virou uma fileira de pílulas sempre visível (`.chat-subpills`, `#chatSubAqui`/`#chatSubMae`/
+`#chatSubTodos`/`#chatSubLinha`) logo abaixo do cabeçalho — sem precisar clicar pra revelar as opções.
+Por causa disso o gomo "Comentários" do cabeçalho (a pílula amarela ao lado da Bee) **parou de mudar
+de nome**: fica sempre "Comentários", já que quem mostra ONDE você está agora é a fileira de baixo.
+`atualizarSubpillsAtivas()` (js/chat-comentarios.js) troca qual pílula fica marcada e mostra/esconde o
+interruptor da Bee; `marcarAbaBeeAtiva()` (js/bee.js) esconde a fileira inteira enquanto a Bee está
+aberta (não faz sentido nenhuma pílula lá).
+
+**A generalização junta 4 fontes possíveis, cada uma com sua própria busca:**
+- Comentários daqui, do card mãe e da tarefa original — `buscarFontesDeComentarios(task)`, extraído
+  do que já era a lógica da antiga "Linha do tempo" de alteração (`cardMaeCache`/
+  `acharTarefaOriginalDaAlteracao`), agora chamado pra QUALQUER tarefa (cada ponta que não existir
+  simplesmente devolve `[]`).
+- Bee — `buscarBeeComoComentarios(task)`, ação `beeHistorico`, convertida pro mesmo formato de
+  comentário (`_origem: "Bee"`). **Só entra se `chatMostrarBeeNoUnificado` estiver ligado** — ver o
+  interruptor abaixo.
+- Eventos do sistema (só na Linha do tempo) — `buscarEventosComoComentarios(task)`
+  (js/chat-comentarios.js) chama `montarEventosDoSistema` (js/detalhe-historia.js, a mesma fonte de
+  dados de quando isso era a aba "História" — `buscarHistoriaDaTarefa`, Código.gs), convertendo cada
+  evento num pseudo-comentário com `_icone` (🐣▶️📎✅) e `_somenteLeitura: true`. **De propósito SEM
+  comentário nenhum misturado aqui dentro** (a antiga `montarEventosDaHistoria` misturava — a nova
+  `montarEventosDoSistema` não) — os comentários de verdade já vêm da fonte acima; incluir de novo
+  duplicaria.
+- A descrição da tarefa entra como a primeira mensagre, só leitura (`pseudoComentarioDescricao`) —
+  mesma ideia de antes, generalizada pras duas pílulas.
+
+**`_somenteLeitura: true`** (Bee, eventos, descrição) tira os botões de reagir/editar/excluir da bolha
+em `renderComentariosHTML` — antes esse campo existia só na descrição e nunca era checado de verdade
+(os botões apareciam mesmo assim, um comentário fantasma clicável); agora é respeitado.
+
+**Interruptor "mostrar comentários da Bee"** (`#chatBeeToggleRow`, só aparece nas duas pílulas de
+merge): preferência por designer em `localStorage` (`colmeia_comentarios_bee_v1_<nome>`, começa
+ligado). Ligar/desligar **não rebusca nada** — `alternarBeeNoUnificado` só re-desenha com o que já foi
+buscado (a Bee é buscada sempre, só é filtrada na hora de montar a lista).
+
+**Enviar um comentário nas duas pílulas de merge pergunta ONDE, em vez de adivinhar** (pedido do
+Cláudio): clicar em Enviar abre `#chatDestinoMenu` (reaproveita o CSS de `.chat-hdr-menu`, só que
+ancorado pra CIMA — `.chat-destino-menu`, porque o campo de escrever fica no rodapé do painel) com até
+4 botões — "Nesta tarefa" (sempre), "Card mãe"/"Tarefa principal" (só se existirem) e "Todos" (só
+aparece se tiver mais de 1 destino real — manda a MESMA mensagem, em sequência, pra cada um).
+`enviarParaAlvo(alvoId, texto, arquivo, ofereceRepetir)` é o envio de verdade, compartilhado entre o
+caminho normal (Comentários/Card mãe, onde o destino já é óbvio, sem seletor) e o seletor.
+
+Fora das pílulas de merge, nada mudou: comentar em "Comentários" ou "Card mãe" ainda vai direto pro
+lugar óbvio, sem perguntar nada.
 
 ## Modo foco (2026-08-03)
 
@@ -343,20 +375,14 @@ contador), pause automático do sistema não.
 ## Cabeçalho do painel de comentários (2026-08-03)
 
 `js/detalhe-modal.js` (markup) + o bloco `.chat-panel-header`/`.chat-hdr-*` em css/03-detalhe.css.
-Refeito pra seguir o mesmo padrão visual da barra escura do quadro (`.topbar-dark`/`.now-playing-wrap`,
+Segue o mesmo padrão visual da barra escura do quadro (`.topbar-dark`/`.now-playing-wrap`,
 css/01-base.css): voltar (círculo preto solto, à esquerda) | barra preta arredondada, dividida em dois
-"gomos" — a aba ativa dos comentários (`#chatPanelMenuBtn`, pílula amarela com a setinha de trocar
-entre Comentários/Card mãe/Linha do tempo) e a Bee (`#chatIconeBee`, agora um botão largo com o texto
-"Bee", não mais um ícone sozinho).
-
-**O rótulo do primeiro gomo tem uma variável PRÓPRIA, separada de `chatThreadAtivo`:** antes só existia
-`chatThreadAtivo`, que virava `"bee"` quando a conversa da Bee abria — e como o topo mostrava um único
-nome centralizado, isso bastava. Agora que a Bee ganhou o próprio gomo ao lado, deixar o primeiro gomo
-também mostrar "Bee" ficava redundante e confuso (os dois gomos com o mesmo texto). `chatThreadRotulo`
-(js/chat-comentarios.js) guarda só "aqui"/"mae"/"tudo" e NUNCA vira "bee" — é atualizado nos mesmos 3
-lugares que setam `chatThreadAtivo` pra essas três, e ignorado em `abrirThreadBee`. `nomeDaConversaAtiva()`
-passou a ler `chatThreadRotulo`, não `chatThreadAtivo` — assim o primeiro gomo sempre mostra pra qual
-comentário você volta, mesmo com a Bee acesa.
+"gomos" — Comentários (`#chatPanelMenuBtn`) e a Bee (`#chatIconeBee`, um botão largo com o texto "Bee",
+não um ícone sozinho). **O gomo "Comentários" tem rótulo FIXO** (nunca muda de texto, nem quando a
+conversa ativa é Card mãe/Todos os comentários/Linha do tempo) — quem mostra ONDE você está é a
+fileira de pílulas cinzas logo abaixo (`.chat-subpills`, ver a seção "Painel de comentários: pílulas
+'Todos os comentários'/'Linha do tempo'" mais abaixo), não mais um menu suspenso escondido atrás de
+uma setinha (isso existiu brevemente e foi substituído no mesmo dia).
 
 **Só um gomo "aceso" (amarelo) por vez, como um controle segmentado, SEM stroke nenhum:**
 `marcarAbaBeeAtiva(ativa)` (js/bee.js) já acendia `.chat-hdr-bee.active`; agora também apaga o outro
@@ -364,16 +390,16 @@ gomo com `.chat-aba-atual.aba-apagada`. Nenhum dos dois estados usa borda — s�
 (ou a ausência dele) diferencia qual está aceso; o contorno claro que existia antes no estado apagado
 foi tirado a pedido (ficava competindo visualmente com o preenchimento). Simétrico nos dois sentidos:
 sair da Bee (`abrirThreadComentarios`) já limpa `.active` da Bee, e entrar nela apaga o gomo dos
-comentários.
+comentários (e some com a fileira de pílulas inteira — não fazem sentido do lado da Bee).
 
 **Os dois gomos têm o MESMO tamanho, e isso exigiu um truque de estrutura:** `flex:1` nos dois pareceria
 bastar, mas um `<button>` como item flex direto resiste a encolher até o tamanho do irmão mesmo com
 `min-width:0` (motor do navegador reserva um mínimo intrínseco próprio de elemento de formulário) —
 testado isoladamente e confirmado: o botão da Bee sempre ficava ~18px mais largo que o dos Comentários
 (exatamente o padding horizontal do botão). Um `<div>` não tem essa reserva. Por isso o botão da Bee
-agora mora dentro de um `<div class="chat-hdr-bee-wrap">` que é quem recebe o `flex:1` — o mesmo
-truque que o gomo dos Comentários já usava por outro motivo (`.chat-hdr-menu-wrap`, pra ancorar o
-menu suspenso). Os dois flex-items da barra passaram a ser DIVs, nunca mais BOTÕES direto.
+mora dentro de um `<div class="chat-hdr-bee-wrap">` que é quem recebe o `flex:1`, e o gomo dos
+Comentários dentro de um `<div class="chat-abas-wrap">` do mesmo jeito — os dois flex-items da barra
+são DIVs, nunca BOTÕES direto.
 
 **Avatarzinho redondo em cada gomo, cor FIXA (não muda com aceso/apagado):** `.chat-hdr-avatar-bee`
 (fundo amarelo, ícone preto) reusa o mesmo `beeIcon` (js/bee.js) usado em toda foto da Bee no app —
@@ -381,11 +407,10 @@ menu suspenso). Os dois flex-items da barra passaram a ser DIVs, nunca mais BOT�
 (js/config.js, o mesmo do botão flutuante de comentários) com um fundo escuro fixo — não existe uma
 cor "oficial" de comentários no app, então foi inventada uma (grafite), simétrica ao amarelo da Bee.
 
-**Animações leves, no mesmo vocabulário já usado no resto do app:** a setinha do dropdown gira 180°
-(classe `.menu-aberto` no botão, ligada/desligada nos 3 lugares que abrem/fecham o menu — clique na
-seta, clique numa opção, clique fora em js/kanban-board.js) via `var(--ease-apple-spring)`; o menu em
-si ganha um "pop" leve ao abrir (`@keyframes chatHdrMenuPop`, mesma família do `commentPop` que as
-bolhas de comentário já usavam); trocar de gomo aceso anima cor (`var(--dur-base)`).
+**Animações leves, no mesmo vocabulário já usado no resto do app:** trocar de gomo aceso anima cor
+(`var(--dur-base)`); o popup do seletor de destino (`.chat-hdr-menu`, ver a seção de baixo) ganha um
+"pop" leve ao abrir (`@keyframes chatHdrMenuPop`, mesma família do `commentPop` que as bolhas de
+comentário já usavam).
 
 ## A página "Histórico" virou parte de "Minhas horas" (2026-08-03)
 

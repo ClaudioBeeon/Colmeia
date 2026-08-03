@@ -833,10 +833,11 @@
 .chat-hdr-avatar-comentarios { background: #2A2C33; color: #fff; }
 .chat-hdr-avatar-bee { background: var(--kanban-yellow); color: #16181D; }
 
-/* Os dois gomos da barra — "Comentários" (com a setinha de trocar entre
-   Comentários/Card mãe/Linha do tempo) e "Bee" — dividem o mesmo
-   tamanho, sem stroke nenhum: só o preenchimento amarelo diferencia
-   qual dos dois está aceso, igual um controle segmentado simples. */
+/* Os dois gomos da barra — "Comentários" (o rótulo não muda mais: quem
+   mostra qual conversa está aberta é a fileira de pílulas cinzas
+   abaixo, ver .chat-subpills) e "Bee" — dividem o mesmo tamanho, sem
+   stroke nenhum: só o preenchimento amarelo diferencia qual dos dois
+   está aceso, igual um controle segmentado simples. */
 .chat-abas-wrap { flex: 1; min-width: 0; }
 .chat-aba-atual {
   display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%;
@@ -848,13 +849,6 @@
 }
 .chat-aba-atual:hover { background: #E0A800; }
 .chat-aba-atual:active { transform: scale(0.97); }
-.chat-aba-seta {
-  width: 12px; height: 12px; flex-shrink: 0; color: inherit;
-  transition: transform var(--dur-base) var(--ease-apple-spring);
-}
-.chat-aba-atual.sem-opcoes { pointer-events: none; }
-.chat-aba-atual.sem-opcoes .chat-aba-seta { display: none; }
-.chat-aba-atual.menu-aberto .chat-aba-seta { transform: rotate(180deg); }
 
 /* Enquanto a Bee está acesa, o gomo "Comentários" apaga — mesma ideia
    de controle segmentado, só uma opção acesa por vez. */
@@ -886,12 +880,15 @@
 .chat-hdr-bee.active:hover { background: #E0A800; }
 .chat-hdr-bee-vazio { visibility: hidden; }
 
-/* Listinha de trocar de conversa — mesmo "pop" leve das bolhas de
-   comentário (commentPop), só com uma descidinha maior. */
+/* Popup pequeno reaproveitável (mesmo "pop" leve das bolhas de
+   comentário, commentPop, só com uma descidinha/subidinha maior) — hoje
+   usado só pelo seletor de destino do envio (ver .chat-destino-menu
+   abaixo), que ancora pra CIMA (fica junto ao campo de escrever, embaixo
+   da tela) em vez de pra baixo. */
 .chat-hdr-menu-wrap { position: relative; }
 .chat-hdr-menu {
   position: absolute; top: calc(100% + 8px); left: 0; z-index: 40;
-  min-width: 232px; padding: 6px; border-radius: 16px;
+  min-width: 200px; padding: 6px; border-radius: 16px;
   background: #FFFFFF; box-shadow: 0 8px 30px rgba(0,0,0,.16);
   display: flex; flex-direction: column; gap: 2px;
   transform-origin: top left;
@@ -917,6 +914,58 @@
 [data-theme="dark"] .chat-hdr-menu button { color: var(--text-primary); }
 [data-theme="dark"] .chat-hdr-menu button:hover,
 [data-theme="dark"] .chat-hdr-menu button.active { background: rgba(255,255,255,0.08); }
+
+/* Seletor "onde você quer comentar?" — só aparece em Todos os
+   comentários/Linha do tempo, ancorado por cima do campo de escrever
+   (que mora no rodapé do painel, então "pra baixo" não caberia). */
+.chat-destino-menu {
+  bottom: calc(100% + 8px); right: 16px; left: auto; top: auto;
+  transform-origin: bottom right;
+}
+
+/* Fileira de pílulas cinzas logo abaixo do cabeçalho — Comentários /
+   Card mãe / Todos os comentários / Linha do tempo. Substituiu o menu
+   suspenso que existia ali (2026-08-03): ficam todas visíveis o tempo
+   todo, sem precisar clicar pra revelar as opções. */
+.chat-subpills {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  padding: 10px 14px 4px; flex-shrink: 0;
+}
+.chat-subpill {
+  border: none; background: var(--page-bg); color: var(--text-secondary);
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 7px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  transition: background 180ms ease-out, color 180ms ease-out;
+}
+.chat-subpill:hover { color: var(--text-primary); }
+.chat-subpill.active { background: #16181D; color: #fff; }
+[data-theme="dark"] .chat-subpill.active { background: var(--kanban-yellow); color: #16181D; }
+.chat-subpill[hidden] { display: none; }
+
+/* Interruptor "mostrar comentários da Bee" — só aparece junto de Todos
+   os comentários/Linha do tempo (ver atualizarSubpillsAtivas). */
+.chat-bee-toggle-row { padding: 2px 14px 8px; flex-shrink: 0; }
+.chat-bee-toggle-row[hidden] { display: none; }
+.chat-bee-toggle {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: 12px; color: var(--text-secondary); user-select: none;
+}
+.chat-bee-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chat-bee-toggle-track {
+  position: relative; width: 30px; height: 18px; border-radius: 999px;
+  background: var(--border); flex-shrink: 0; transition: background 180ms ease-out;
+}
+.chat-bee-toggle-bolinha {
+  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: transform var(--dur-base) var(--ease-apple-spring);
+}
+.chat-bee-toggle input:checked + .chat-bee-toggle-track { background: var(--kanban-yellow); }
+.chat-bee-toggle input:checked + .chat-bee-toggle-track .chat-bee-toggle-bolinha { transform: translateX(12px); }
+
+/* Ícone de evento do sistema (Linha do tempo) na frente do texto da
+   bolha. */
+.comment-evento-icone { margin-right: 2px; }
 
 @media (max-width: 900px) {
   .task-detail.chat-open .detail-inner { display: none; }

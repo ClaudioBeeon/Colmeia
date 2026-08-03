@@ -486,11 +486,8 @@ document.addEventListener("click", () => {
   document.querySelectorAll(".assignee-menu").forEach(m => m.classList.remove("open"));
   const emojiPicker = document.getElementById("emojiPicker");
   if (emojiPicker) emojiPicker.hidden = true;
-  const chatPanelMenu = document.getElementById("chatPanelMenu");
-  if (chatPanelMenu) {
-    chatPanelMenu.hidden = true;
-    document.getElementById("chatPanelMenuBtn")?.classList.remove("menu-aberto");
-  }
+  const chatDestinoMenu = document.getElementById("chatDestinoMenu");
+  if (chatDestinoMenu) chatDestinoMenu.hidden = true;
 });
 
 // ===== Nova tarefa (só o coordenador) =====

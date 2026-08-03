@@ -2,7 +2,6 @@ function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
   descMaeAberta = false;
-  historiaAberta = false;
   // Subtarefa de ALTERAÇÃO abre direto no contexto, não na Descrição (que
   // nessas subtarefas costuma ser genérica ou vazia): a aba "Tarefa
   // original" já vem aberta do lado da descrição, e o chat já abre na
@@ -43,9 +42,11 @@ function openDetail(idx, entradaAnimacao) {
   if (abrirNoContextoDeAlteracao) {
     // A aba de contexto já foi carregada pelo renderDetail() de cima
     // (originalAberta já estava true antes dele rodar) — só falta deixar
-    // o chat na Linha do tempo.
+    // o chat em Todos os comentários (mais rápido que Linha do tempo,
+    // que também busca os eventos do sistema — a pessoa pede essa se
+    // quiser, clicando na pílula).
     abrirChatPanel(tasks[detailIdx]);
-    abrirThreadLinhaDoTempo(tasks[detailIdx]);
+    abrirThreadTodos(tasks[detailIdx]);
   }
   // Só pede o briefing pra IA quando ainda não temos ele — antes pedia
   // sempre, mesmo com o resultado pronto e já na tela, gastando uma ida ao
@@ -673,9 +674,6 @@ function renderDetail() {
             ${ehTarefaDeAlteracao(task) ? `
               <button type="button" class="detail-tab" id="tabOriginal" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
             ` : ""}
-            ${task.id ? `
-              <button type="button" class="detail-tab" id="tabHistoria" title="Briefing, plays, arquivos e comentários em ordem de hora">História</button>
-            ` : ""}
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
@@ -707,9 +705,6 @@ function renderDetail() {
                 <div class="original-meta" id="originalMeta"></div>
                 <div class="desc-text-real" id="originalTextReal"></div>
               </div>
-            ` : ""}
-            ${task.id ? `
-              <div class="historia-content" id="historiaContent" hidden></div>
             ` : ""}
           </div>
         </div>
@@ -827,31 +822,23 @@ function renderDetail() {
     </div>
 
     <div class="chat-panel" id="chatPanel" hidden>
-      <!-- Cabeçalho em 3 zonas: voltar na esquerda, NOME DA ABA ATIVA no
-           meio (com uma setinha pra trocar de aba ali mesmo) e o ícone da
-           Bee na direita, no lugar onde ficavam os "..." — clicar nele
-           entra no chat dela, clicar de novo volta pros comentários.
-           O botão "Verificar upload" saiu: o Colmeia já checa sozinho a
-           cada 8s e sempre que a aba do navegador volta a ficar em foco
-           (ver iniciarChecagemUploadEmSegundoPlano). -->
+      <!-- Cabeçalho: voltar na esquerda, e uma barra preta dividida em 2
+           gomos — Comentários (que não muda mais de nome: quem mostra
+           qual conversa está aberta é a fileira de pílulas cinzas logo
+           abaixo, ver .chat-subpills) e a Bee. O botão "Verificar
+           upload" saiu: o Colmeia já checa sozinho a cada 8s e sempre
+           que a aba do navegador volta a ficar em foco (ver
+           iniciarChecagemUploadEmSegundoPlano). -->
       <div class="chat-panel-header">
         <button type="button" class="chat-hdr-back" id="chatPanelClose" aria-label="Voltar">
           <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="chat-hdr-bar">
-          <div class="chat-hdr-menu-wrap chat-abas-wrap">
-            <button type="button" class="chat-aba-atual" id="chatPanelMenuBtn" aria-label="Trocar de conversa">
+          <div class="chat-abas-wrap">
+            <button type="button" class="chat-aba-atual" id="chatPanelMenuBtn" aria-label="Comentários">
               <span class="chat-hdr-avatar chat-hdr-avatar-comentarios" aria-hidden="true">${chatIcon}</span>
               <span class="chat-panel-title" id="chatPanelTitle">Comentários</span>
-              <svg class="chat-aba-seta" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <div class="chat-hdr-menu" id="chatPanelMenu" hidden>
-              <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários <em>vão pro Runrun.it</em></button>
-              <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Card mãe</button>
-              ${ehTarefaDeAlteracao(task) ? `
-                <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
-              ` : ""}
-            </div>
           </div>
           <div class="chat-hdr-bee-wrap">
             ${task.id ? `
@@ -863,6 +850,21 @@ function renderDetail() {
           </div>
         </div>
       </div>
+      ${task.id ? `
+        <div class="chat-subpills" id="chatSubpills">
+          <button type="button" class="chat-subpill active" id="chatSubAqui">Comentários</button>
+          <button type="button" class="chat-subpill" id="chatSubMae" ${task.parentTaskId ? "" : "hidden"}>Card mãe</button>
+          <button type="button" class="chat-subpill" id="chatSubTodos" title="Comentários desta tarefa, do card mãe, da tarefa original e da Bee, tudo junto por hora">Todos os comentários</button>
+          <button type="button" class="chat-subpill" id="chatSubLinha" title="Todos os comentários + eventos do sistema (criada, começou a trabalhar, arquivo, entregue)">Linha do tempo</button>
+        </div>
+        <div class="chat-bee-toggle-row" id="chatBeeToggleRow" hidden>
+          <label class="chat-bee-toggle">
+            <input type="checkbox" id="chatBeeToggleInput" ${chatMostrarBeeNoUnificado ? "checked" : ""}>
+            <span class="chat-bee-toggle-track"><span class="chat-bee-toggle-bolinha"></span></span>
+            <span class="chat-bee-toggle-label">Mostrar comentários da Bee</span>
+          </label>
+        </div>
+      ` : ""}
       <div class="comments-thread" id="commentsThread">
         ${renderComentariosHTML(task)}
       </div>
@@ -875,6 +877,12 @@ function renderDetail() {
       <div class="bee-inline-avisos" id="beeInlineAvisos"></div>
       <div class="comment-input">
         <div class="comment-mention-list" id="mentionList" hidden></div>
+        <div class="chat-hdr-menu chat-destino-menu" id="chatDestinoMenu" hidden>
+          <button type="button" class="chat-panel-tab" data-destino="aqui">Nesta tarefa</button>
+          <button type="button" class="chat-panel-tab" id="chatDestinoMae" data-destino="mae" hidden>Card mãe</button>
+          <button type="button" class="chat-panel-tab" id="chatDestinoOriginal" data-destino="original" hidden>Tarefa principal</button>
+          <button type="button" class="chat-panel-tab" id="chatDestinoTodos" data-destino="todos">Todos</button>
+        </div>
         <button type="button" class="comment-tool-btn" id="emojiBtn" title="Emoji" aria-label="Emoji">😊</button>
         <button type="button" class="comment-tool-btn" id="attachBtn" title="Anexar arquivo" aria-label="Anexar arquivo">
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 11.5l-9 9a4 4 0 01-5.7-5.7l9-9a2.7 2.7 0 013.8 3.8l-8.5 8.5a1.3 1.3 0 01-1.9-1.9L16.2 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1102,12 +1110,11 @@ function renderDetail() {
     });
   }
 
-  // ===== Abas Descrição / Descrição card mãe / Tarefa original / História
+  // ===== Abas Descrição / Descrição card mãe / Tarefa original
   // (sem re-renderizar, com transição) =====
   document.getElementById("tabDesc").addEventListener("click", () => {
     descMaeAberta = false;
     originalAberta = false;
-    historiaAberta = false;
     applyCommentsState();
   });
   const tabDescMae = document.getElementById("tabDescMae");
@@ -1115,7 +1122,6 @@ function renderDetail() {
     tabDescMae.addEventListener("click", () => {
       descMaeAberta = true;
       originalAberta = false;
-      historiaAberta = false;
       applyCommentsState();
       carregarDescricaoCardMae(tasks[detailIdx] || task);
     });
@@ -1125,19 +1131,8 @@ function renderDetail() {
     tabOriginal.addEventListener("click", () => {
       originalAberta = true;
       descMaeAberta = false;
-      historiaAberta = false;
       applyCommentsState();
       carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
-    });
-  }
-  const tabHistoria = document.getElementById("tabHistoria");
-  if (tabHistoria) {
-    tabHistoria.addEventListener("click", () => {
-      historiaAberta = true;
-      descMaeAberta = false;
-      originalAberta = false;
-      applyCommentsState();
-      carregarHistoriaDaTarefa(tasks[detailIdx] || task);
     });
   }
 
@@ -1151,33 +1146,18 @@ function renderDetail() {
   // (cardMaeCache/cache da alteração), volta na hora, sem esperar rede.
   if (descMaeAberta) carregarDescricaoCardMae(tasks[detailIdx] || task);
   if (originalAberta) carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
-  if (historiaAberta) carregarHistoriaDaTarefa(tasks[detailIdx] || task);
 
   const commentInput = document.getElementById("commentInput");
   let arquivoParaAnexar = null;
 
-  async function enviarComentarioAtual() {
-    const texto = commentInput.value.trim();
-    if (!texto && !arquivoParaAnexar) return;
-    // No chat da Bee o mesmo campo fala com ela, e NADA vai pro
-    // Runrun.it por aqui (ver js/bee.js).
-    if (chatThreadAtivo === "bee") {
-      if (!texto) return;
-      commentInput.value = "";
-      await perguntarParaBee(tasks[detailIdx] || task, texto);
-      return;
-    }
-    if (!chatAlvoTaskId) {
-      console.warn("Essa tarefa não está conectada ao Runrun.it, não dá pra comentar de verdade.");
-      return;
-    }
-    const alvoId = chatAlvoTaskId;
-    // "aqui" e "tudo" (Linha do tempo) escrevem os dois na PRÓPRIA tarefa
-    // — então nos dois casos faz sentido a Bee perguntar se é pra repetir
-    // no card mãe. Antes só valia pra "aqui", e quem comentava pela Linha
-    // do tempo (o caminho normal numa alteração) nunca recebia a oferta.
-    const eraThreadAqui = chatThreadAtivo === "aqui" || chatThreadAtivo === "tudo";
-    const arquivoAtual = arquivoParaAnexar;
+  /**
+   * O envio de verdade — manda pra UM destino (alvoId). Compartilhado
+   * entre o caminho normal (Comentários/Card mãe, onde o destino já é
+   * óbvio) e o seletor de destino de Todos os comentários/Linha do
+   * tempo (onde a pessoa escolhe, e "Todos" chama isso uma vez por
+   * destino em sequência).
+   */
+  async function enviarParaAlvo(alvoId, texto, arquivoAtual, ofereceRepetir) {
     // No Runrun.it de verdade, "@Nome" escolhido na lista vira uma menção
     // de verdade (a pessoa é avisada) — não é só texto colorido. O jeito
     // que o Runrun.it manda ISSO pra gente quando LÊ um comentário é
@@ -1186,14 +1166,11 @@ function renderDetail() {
     // manda de volta pra ELE reconhecer como menção de verdade ao criar
     // o comentário, não só "@Nome" solto.
     const textoParaEnviar = converterMencoesParaTagRunrun(texto);
-    commentInput.value = "";
-    commentInput.disabled = true;
-    limparAnexoSelecionado();
 
     // Mostra a bolha na hora (opaca/pendente), antes mesmo do Runrun.it
     // confirmar — assim que confirma, ela "acende" (muda de cor).
     const thread = document.getElementById("commentsThread");
-    const idTemporario = "pendente-" + Date.now();
+    const idTemporario = "pendente-" + Date.now() + "-" + alvoId;
     if (thread && texto) {
       const vazio = thread.querySelector(".comments-empty");
       if (vazio) vazio.remove();
@@ -1213,7 +1190,6 @@ function renderDetail() {
       ? await enviarComentarioComAnexoNoBackend(alvoId, textoParaEnviar, arquivoAtual)
       : await enviarComentarioNoBackend(alvoId, textoParaEnviar);
 
-    commentInput.disabled = false;
     const bolhaTemporaria = document.querySelector(`.comment-bubble[data-comment-id="${idTemporario}"]`);
     if (ok) {
       // Confirma visualmente (some o opaco/pendente) até a lista real
@@ -1224,22 +1200,101 @@ function renderDetail() {
       // então ele aparecia e sumia num piscar.
       await recarregarThreadAtiva();
       agendarAtualizacaoKanban();
-      if (eraThreadAqui && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, textoParaEnviar);
+      if (ofereceRepetir && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, textoParaEnviar);
     } else {
       if (bolhaTemporaria) bolhaTemporaria.remove(); // não foi enviado — some a bolha
-      // Devolve o texto pro campo em vez de perder o que a pessoa escreveu:
-      // o campo é limpo ANTES da resposta chegar (pra bolha aparecer na
-      // hora), então numa falha o texto simplesmente evaporava e tinha que
-      // ser digitado de novo. Só devolve se a pessoa ainda não começou a
-      // escrever outra coisa nesse meio-tempo — nunca sobrescreve o que
-      // ela está digitando agora.
-      const campoAgora = document.getElementById("commentInput");
-      if (campoAgora && !campoAgora.value.trim() && texto) {
-        campoAgora.value = texto;
-        campoAgora.focus();
-      }
-      mostrarToast("Não consegui enviar esse comentário agora. Seu texto voltou pro campo.", "erro");
+      mostrarToast("Não consegui enviar esse comentário agora.", "erro");
     }
+    return ok;
+  }
+
+  /**
+   * Lista de destinos possíveis pra essa tarefa — usada tanto pra
+   * decidir quais botões mostrar no seletor quanto pra resolver a
+   * escolha "Todos".
+   */
+  function destinosDisponiveis(t) {
+    const destinos = { aqui: t.id, mae: idDoCardMae(t), original: null };
+    const original = acharTarefaOriginalDaAlteracao(t);
+    if (original) destinos.original = original.id;
+    return destinos;
+  }
+
+  /**
+   * Todos os comentários/Linha do tempo escrevem em MAIS de um lugar
+   * possível — em vez de escolher um destino sozinho, pergunta onde a
+   * pessoa quer comentar (pedido do Cláudio). "Todos" manda a MESMA
+   * mensagem, em sequência, pra cada destino que existir.
+   */
+  function abrirEscolhaDeDestino() {
+    const menu = document.getElementById("chatDestinoMenu");
+    if (!menu) return;
+    const t = tasks[detailIdx] || task;
+    const destinos = destinosDisponiveis(t);
+    const maeBtn = document.getElementById("chatDestinoMae");
+    if (maeBtn) maeBtn.hidden = !destinos.mae;
+    const originalBtn = document.getElementById("chatDestinoOriginal");
+    if (originalBtn) originalBtn.hidden = !destinos.original;
+    // "Todos" só faz sentido quando existe mais de um destino de verdade
+    // — com só "Nesta tarefa" disponível, seria um botão duplicado.
+    const todosBtn = document.getElementById("chatDestinoTodos");
+    if (todosBtn) todosBtn.hidden = !destinos.mae && !destinos.original;
+    menu.hidden = false;
+  }
+
+  const chatDestinoMenu = document.getElementById("chatDestinoMenu");
+  if (chatDestinoMenu) {
+    chatDestinoMenu.addEventListener("click", async e => {
+      const btn = e.target.closest("button[data-destino]");
+      if (!btn) return;
+      chatDestinoMenu.hidden = true;
+      const texto = commentInput.value.trim();
+      if (!texto && !arquivoParaAnexar) return;
+      const arquivoAtual = arquivoParaAnexar;
+      commentInput.value = "";
+      commentInput.disabled = true;
+      limparAnexoSelecionado();
+
+      const t = tasks[detailIdx] || task;
+      const destinos = destinosDisponiveis(t);
+      const escolha = btn.dataset.destino;
+      const alvos = escolha === "todos"
+        ? [destinos.aqui, destinos.mae, destinos.original].filter(Boolean)
+        : [destinos[escolha]].filter(Boolean);
+
+      for (const alvoId of alvos) await enviarParaAlvo(alvoId, texto, arquivoAtual, false);
+      commentInput.disabled = false;
+    });
+  }
+
+  async function enviarComentarioAtual() {
+    const texto = commentInput.value.trim();
+    if (!texto && !arquivoParaAnexar) return;
+    // No chat da Bee o mesmo campo fala com ela, e NADA vai pro
+    // Runrun.it por aqui (ver js/bee.js).
+    if (chatThreadAtivo === "bee") {
+      if (!texto) return;
+      commentInput.value = "";
+      await perguntarParaBee(tasks[detailIdx] || task, texto);
+      return;
+    }
+    // Todos os comentários/Linha do tempo: não manda direto, pergunta
+    // onde primeiro (ver abrirEscolhaDeDestino).
+    if (chatThreadAtivo === "todos" || chatThreadAtivo === "linha") {
+      abrirEscolhaDeDestino();
+      return;
+    }
+    if (!chatAlvoTaskId) {
+      console.warn("Essa tarefa não está conectada ao Runrun.it, não dá pra comentar de verdade.");
+      return;
+    }
+    const alvoId = chatAlvoTaskId;
+    const arquivoAtual = arquivoParaAnexar;
+    commentInput.value = "";
+    commentInput.disabled = true;
+    limparAnexoSelecionado();
+    await enviarParaAlvo(alvoId, texto, arquivoAtual, chatThreadAtivo === "aqui");
+    commentInput.disabled = false;
   }
 
   function limparAnexoSelecionado() {
@@ -1264,7 +1319,16 @@ function renderDetail() {
   }
 
   const sendBtn = document.getElementById("commentSendBtn");
-  if (sendBtn) sendBtn.addEventListener("click", enviarComentarioAtual);
+  if (sendBtn) {
+    sendBtn.addEventListener("click", e => {
+      // stopPropagation: enviarComentarioAtual() pode abrir o seletor de
+      // destino (#chatDestinoMenu) nos merges — sem isso, esse MESMO
+      // clique borbulhava até o handler global de "fechar tudo" (fim de
+      // js/kanban-board.js) e fechava o menu no instante em que abria.
+      e.stopPropagation();
+      enviarComentarioAtual();
+    });
+  }
 
   // ===== Anexar arquivo =====
   const attachBtn = document.getElementById("attachBtn");
@@ -1372,33 +1436,38 @@ function renderDetail() {
   const chatPanelClose = document.getElementById("chatPanelClose");
   if (chatPanelClose) chatPanelClose.addEventListener("click", fecharChatPanel);
 
-  // Listinha de trocar de conversa, que abre na setinha do nome da aba.
-  // Fecha sozinha ao escolher qualquer opção (e ao clicar fora — ver o
-  // handler global de clique no fim de js/kanban-board.js).
+  // Clicar no gomo "Comentários" do cabeçalho enquanto a Bee está aberta
+  // volta pra última conversa de comentários (mesma ideia do botão da
+  // Bee, que faz o caminho contrário) — um controle segmentado, clicar
+  // no lado apagado acende ele.
   const chatPanelMenuBtn = document.getElementById("chatPanelMenuBtn");
-  const chatPanelMenu = document.getElementById("chatPanelMenu");
-  if (chatPanelMenuBtn && chatPanelMenu) {
-    chatPanelMenuBtn.addEventListener("click", e => {
-      e.stopPropagation();
-      chatPanelMenu.hidden = !chatPanelMenu.hidden;
-      chatPanelMenuBtn.classList.toggle("menu-aberto", !chatPanelMenu.hidden);
-    });
-    chatPanelMenu.addEventListener("click", e => {
-      if (e.target.closest("button")) {
-        chatPanelMenu.hidden = true;
-        chatPanelMenuBtn.classList.remove("menu-aberto");
-      }
+  if (chatPanelMenuBtn) {
+    chatPanelMenuBtn.addEventListener("click", () => {
+      if (chatThreadAtivo === "bee") abrirThreadComentarios(tasks[detailIdx] || task);
     });
   }
 
-  const chatTabAqui = document.getElementById("chatTabAqui");
-  if (chatTabAqui) chatTabAqui.addEventListener("click", () => abrirThreadAqui(tasks[detailIdx] || task));
+  // As pílulas cinzas logo abaixo do cabeçalho — cada uma troca de
+  // conversa sem reabrir o painel inteiro.
+  const chatSubAqui = document.getElementById("chatSubAqui");
+  if (chatSubAqui) chatSubAqui.addEventListener("click", () => abrirThreadAqui(tasks[detailIdx] || task));
 
-  const chatTabMae = document.getElementById("chatTabMae");
-  if (chatTabMae) chatTabMae.addEventListener("click", () => abrirThreadDoCardMae(tasks[detailIdx] || task));
+  const chatSubMae = document.getElementById("chatSubMae");
+  if (chatSubMae) chatSubMae.addEventListener("click", () => abrirThreadDoCardMae(tasks[detailIdx] || task));
 
-  const chatTabTudo = document.getElementById("chatTabTudo");
-  if (chatTabTudo) chatTabTudo.addEventListener("click", () => abrirThreadLinhaDoTempo(tasks[detailIdx] || task));
+  const chatSubTodos = document.getElementById("chatSubTodos");
+  if (chatSubTodos) chatSubTodos.addEventListener("click", () => abrirThreadTodos(tasks[detailIdx] || task));
+
+  const chatSubLinha = document.getElementById("chatSubLinha");
+  if (chatSubLinha) chatSubLinha.addEventListener("click", () => abrirThreadLinha(tasks[detailIdx] || task));
+
+  // Interruptor "mostrar comentários da Bee" — só aparece em Todos os
+  // comentários/Linha do tempo (ver marcarAbaBeeAtiva e as duas funções
+  // acima, que mostram/escondem #chatBeeToggleRow conforme a pílula).
+  const chatBeeToggleInput = document.getElementById("chatBeeToggleInput");
+  if (chatBeeToggleInput) {
+    chatBeeToggleInput.addEventListener("change", () => alternarBeeNoUnificado(chatBeeToggleInput.checked));
+  }
 
   const beeConferirBtn = document.getElementById("beeConferirBtn");
   if (beeConferirBtn) beeConferirBtn.addEventListener("click", () => conferirEntregaComABee(tasks[detailIdx] || task, beeConferirBtn));
@@ -1414,7 +1483,7 @@ function renderDetail() {
     });
   }
 
-  atualizarTituloDoChat();
+  atualizarSubpillsAtivas();
   atualizarBadgeChat(task);
 
   // O pop-up foi redesenhado do zero, então a lista de anexos voltou a
@@ -1431,22 +1500,18 @@ function applyCommentsState() {
   const childrenPanel = document.getElementById("childrenPanel");
   const tabDescMae = document.getElementById("tabDescMae");
   const tabOriginal = document.getElementById("tabOriginal");
-  const tabHistoria = document.getElementById("tabHistoria");
   const descContent = document.getElementById("descContent");
   const descMaeContent = document.getElementById("descMaeContent");
   const originalContent = document.getElementById("originalContent");
-  const historiaContent = document.getElementById("historiaContent");
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
   // Abas mutuamente exclusivas: Descrição (a padrão), Descrição card mãe,
-  // Tarefa original (só em subtarefa de alteração) e História.
-  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta && !historiaAberta);
+  // Tarefa original (só em subtarefa de alteração).
+  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta);
   if (tabDescMae) tabDescMae.classList.toggle("active", descMaeAberta);
   if (tabOriginal) tabOriginal.classList.toggle("active", originalAberta);
-  if (tabHistoria) tabHistoria.classList.toggle("active", historiaAberta);
-  if (descContent) descContent.hidden = descMaeAberta || originalAberta || historiaAberta;
+  if (descContent) descContent.hidden = descMaeAberta || originalAberta;
   if (descMaeContent) descMaeContent.hidden = !descMaeAberta;
   if (originalContent) originalContent.hidden = !originalAberta;
-  if (historiaContent) historiaContent.hidden = !historiaAberta;
 }
 
 /**
