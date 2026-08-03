@@ -38,7 +38,15 @@ var FIREFLY_API_BASE = 'https://firefly-api.adobe.io/v3';
 // tem — o escopo certo é este, não "firefly_api,ff_apis" (chute
 // anterior, causava erro "invalid_scope" da Adobe antes mesmo de
 // mostrar a tela de login).
-var FIREFLY_SCOPES = 'openid,AdobeID,ee.express_api';
+//
+// ✅ CONFIRMADO (2026-08-03, teste real do Cláudio): faltava "offline_access".
+// Sem ele a Adobe autoriza normal (status 200, o login e a tela de
+// consentimento funcionam certinho) e devolve um access_token válido —
+// só que SEM refresh_token. É o refresh_token que permite a Bee pedir
+// token novo sozinha depois que o primeiro expira (dura só horas); sem
+// ele, precisaria de alguém logando de novo toda vez. offline_access é
+// o escopo que faz a Adobe incluir o refresh_token na resposta.
+var FIREFLY_SCOPES = 'openid,AdobeID,ee.express_api,offline_access';
 
 function fireflyClientId() {
   return PropertiesService.getScriptProperties().getProperty('FIREFLY_CLIENT_ID');
@@ -93,6 +101,22 @@ function trocarCodigoPorTokenFirefly(code) {
   var codigo = resposta.getResponseCode();
   var corpo = {};
   try { corpo = JSON.parse(resposta.getContentText()); } catch (e) { /* segue com objeto vazio */ }
+
+  if (codigo >= 200 && codigo < 300 && corpo.access_token && !corpo.refresh_token) {
+    // Caso específico já visto na prática (2026-08-03): a Adobe autoriza
+    // normal (200, com access_token), mas sem "offline_access" no escopo
+    // ela não manda refresh_token. Detectado à parte pra dar uma mensagem
+    // que aponta a causa, em vez de um "a Adobe recusou" genérico e
+    // confuso pra quem está vendo um 200 na tela.
+    Logger.log('Firefly: veio access_token mas sem refresh_token (faltava offline_access no escopo).');
+    return {
+      ok: false,
+      error: 'A Adobe autorizou, mas não mandou o "refresh_token" (só um token que expira em algumas horas). ' +
+             'Faltava o escopo "offline_access" no pedido — se isso já foi corrigido no código, tenta autorizar de novo.',
+      detalheStatus: codigo
+    };
+  }
+
   if (codigo < 200 || codigo >= 300 || !corpo.refresh_token) {
     var corpoBruto = resposta.getContentText();
     Logger.log('Firefly: falha ao trocar code por token (status ' + codigo + '): ' + corpoBruto);
