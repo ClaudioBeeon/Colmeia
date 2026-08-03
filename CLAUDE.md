@@ -356,17 +356,34 @@ lugares que setam `chatThreadAtivo` pra essas três, e ignorado em `abrirThreadB
 passou a ler `chatThreadRotulo`, não `chatThreadAtivo` — assim o primeiro gomo sempre mostra pra qual
 comentário você volta, mesmo com a Bee acesa.
 
-**Só um gomo "aceso" (amarelo) por vez, como um controle segmentado:** `marcarAbaBeeAtiva(ativa)`
-(js/bee.js) já acendia `.chat-hdr-bee.active`; agora também apaga o outro gomo com
-`.chat-aba-atual.aba-apagada` (vira contorno claro sobre o preto, mesma ideia do próprio botão da Bee
-em repouso). Simétrico nos dois sentidos: sair da Bee (`abrirThreadComentarios`) já limpa `.active` da
-Bee, e entrar nela apaga o gomo dos comentários.
+**Só um gomo "aceso" (amarelo) por vez, como um controle segmentado, SEM stroke nenhum:**
+`marcarAbaBeeAtiva(ativa)` (js/bee.js) já acendia `.chat-hdr-bee.active`; agora também apaga o outro
+gomo com `.chat-aba-atual.aba-apagada`. Nenhum dos dois estados usa borda — só o preenchimento amarelo
+(ou a ausência dele) diferencia qual está aceso; o contorno claro que existia antes no estado apagado
+foi tirado a pedido (ficava competindo visualmente com o preenchimento). Simétrico nos dois sentidos:
+sair da Bee (`abrirThreadComentarios`) já limpa `.active` da Bee, e entrar nela apaga o gomo dos
+comentários.
+
+**Os dois gomos têm o MESMO tamanho, e isso exigiu um truque de estrutura:** `flex:1` nos dois pareceria
+bastar, mas um `<button>` como item flex direto resiste a encolher até o tamanho do irmão mesmo com
+`min-width:0` (motor do navegador reserva um mínimo intrínseco próprio de elemento de formulário) —
+testado isoladamente e confirmado: o botão da Bee sempre ficava ~18px mais largo que o dos Comentários
+(exatamente o padding horizontal do botão). Um `<div>` não tem essa reserva. Por isso o botão da Bee
+agora mora dentro de um `<div class="chat-hdr-bee-wrap">` que é quem recebe o `flex:1` — o mesmo
+truque que o gomo dos Comentários já usava por outro motivo (`.chat-hdr-menu-wrap`, pra ancorar o
+menu suspenso). Os dois flex-items da barra passaram a ser DIVs, nunca mais BOTÕES direto.
+
+**Avatarzinho redondo em cada gomo, cor FIXA (não muda com aceso/apagado):** `.chat-hdr-avatar-bee`
+(fundo amarelo, ícone preto) reusa o mesmo `beeIcon` (js/bee.js) usado em toda foto da Bee no app —
+"o padrão que já usamos", não um ícone novo. `.chat-hdr-avatar-comentarios` reusa o `chatIcon`
+(js/config.js, o mesmo do botão flutuante de comentários) com um fundo escuro fixo — não existe uma
+cor "oficial" de comentários no app, então foi inventada uma (grafite), simétrica ao amarelo da Bee.
 
 **Animações leves, no mesmo vocabulário já usado no resto do app:** a setinha do dropdown gira 180°
 (classe `.menu-aberto` no botão, ligada/desligada nos 3 lugares que abrem/fecham o menu — clique na
 seta, clique numa opção, clique fora em js/kanban-board.js) via `var(--ease-apple-spring)`; o menu em
 si ganha um "pop" leve ao abrir (`@keyframes chatHdrMenuPop`, mesma família do `commentPop` que as
-bolhas de comentário já usavam); trocar de gomo aceso anima cor e borda (`var(--dur-base)`).
+bolhas de comentário já usavam); trocar de gomo aceso anima cor (`var(--dur-base)`).
 
 ## Bug recorrente conhecido
 

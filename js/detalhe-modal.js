@@ -841,6 +841,7 @@ function renderDetail() {
         <div class="chat-hdr-bar">
           <div class="chat-hdr-menu-wrap chat-abas-wrap">
             <button type="button" class="chat-aba-atual" id="chatPanelMenuBtn" aria-label="Trocar de conversa">
+              <span class="chat-hdr-avatar chat-hdr-avatar-comentarios" aria-hidden="true">${chatIcon}</span>
               <span class="chat-panel-title" id="chatPanelTitle">Comentários</span>
               <svg class="chat-aba-seta" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -852,11 +853,14 @@ function renderDetail() {
               ` : ""}
             </div>
           </div>
-          ${task.id ? `
-            <button type="button" class="chat-hdr-bee" id="chatIconeBee" aria-label="Falar com a Bee" title="Bee — fica só no Colmeia">
-              <span class="chat-hdr-bee-texto">Bee</span>
-            </button>
-          ` : `<span class="chat-hdr-bee chat-hdr-bee-vazio" aria-hidden="true"></span>`}
+          <div class="chat-hdr-bee-wrap">
+            ${task.id ? `
+              <button type="button" class="chat-hdr-bee" id="chatIconeBee" aria-label="Falar com a Bee" title="Bee — fica só no Colmeia">
+                <span class="chat-hdr-avatar chat-hdr-avatar-bee" aria-hidden="true">${beeIcon}</span>
+                <span class="chat-hdr-bee-texto">Bee</span>
+              </button>
+            ` : `<span class="chat-hdr-bee chat-hdr-bee-vazio" aria-hidden="true"></span>`}
+          </div>
         </div>
       </div>
       <div class="comments-thread" id="commentsThread">

@@ -811,70 +811,84 @@
 
 .chat-hdr-bar {
   flex: 1; min-width: 0; height: 38px;
-  display: flex; align-items: center;
+  display: flex; align-items: center; gap: 6px;
   background: #16181D; border-radius: 999px; padding: 3px;
 }
 [data-theme="dark"] .chat-hdr-bar { background: #0A0A0D; }
 
 .chat-panel-title {
   min-width: 0;
-  font-size: 13.5px; font-weight: 600; color: inherit;
+  font-size: 12.5px; font-weight: 600; color: inherit;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* Nome da conversa ativa + setinha — o "gomo" amarelo da barra. É o
-   botão que abre a listinha de trocar de conversa (Comentários / Card
-   mãe / Linha do tempo). */
-.chat-abas-wrap { flex-shrink: 0; min-width: 0; max-width: 62%; }
+/* Avatarzinho redondo no começo de cada gomo — cor FIXA, não muda com
+   aceso/apagado (mesma lógica do avatar da Bee no resto do app: uma
+   identidade própria, não um estado). */
+.chat-hdr-avatar {
+  width: 19px; height: 19px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.chat-hdr-avatar svg { width: 11px; height: 11px; }
+.chat-hdr-avatar-comentarios { background: #2A2C33; color: #fff; }
+.chat-hdr-avatar-bee { background: var(--kanban-yellow); color: #16181D; }
+
+/* Os dois gomos da barra — "Comentários" (com a setinha de trocar entre
+   Comentários/Card mãe/Linha do tempo) e "Bee" — dividem o mesmo
+   tamanho, sem stroke nenhum: só o preenchimento amarelo diferencia
+   qual dos dois está aceso, igual um controle segmentado simples. */
+.chat-abas-wrap { flex: 1; min-width: 0; }
 .chat-aba-atual {
-  display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
-  height: 32px; border: 1.5px solid transparent; cursor: pointer;
-  padding: 0 14px; border-radius: 999px; font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%;
+  height: 32px; border: none; cursor: pointer;
+  padding: 0 7px; border-radius: 999px; font-family: inherit;
   background: var(--kanban-yellow); color: #16181D;
   transition: background var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple),
-    border-color var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple-spring);
+    transform var(--dur-base) var(--ease-apple-spring);
 }
 .chat-aba-atual:hover { background: #E0A800; }
 .chat-aba-atual:active { transform: scale(0.97); }
 .chat-aba-seta {
-  width: 14px; height: 14px; flex-shrink: 0; color: inherit;
+  width: 12px; height: 12px; flex-shrink: 0; color: inherit;
   transition: transform var(--dur-base) var(--ease-apple-spring);
 }
 .chat-aba-atual.sem-opcoes { pointer-events: none; }
 .chat-aba-atual.sem-opcoes .chat-aba-seta { display: none; }
 .chat-aba-atual.menu-aberto .chat-aba-seta { transform: rotate(180deg); }
 
-/* Enquanto a Bee está acesa, o gomo "Comentários" apaga (vira contorno)
-   — mesma ideia de controle segmentado, só uma opção acesa por vez. */
-.chat-aba-atual.aba-apagada {
-  background: transparent; color: #fff; border-color: rgba(255,255,255,0.22);
-}
+/* Enquanto a Bee está acesa, o gomo "Comentários" apaga — mesma ideia
+   de controle segmentado, só uma opção acesa por vez. */
+.chat-aba-atual.aba-apagada { background: transparent; color: #fff; }
 .chat-aba-atual.aba-apagada:hover { background: rgba(255,255,255,0.08); }
 
-/* Botão da Bee — o segundo "gomo" da barra, ocupando o resto do espaço.
-   Contorno claro em repouso (pro botão ficar visível contra o preto de
-   fundo, que é a MESMA cor); acende amarelo quando a conversa dela é a
-   que está aberta (mesmo botão volta pros comentários nesse estado). */
+/* Botão da Bee — o segundo gomo, do mesmo tamanho do primeiro. Acende
+   amarelo quando a conversa dela é a que está aberta (mesmo botão volta
+   pros comentários nesse estado).
+   O `flex:1` mora no DIV (.chat-hdr-bee-wrap), não no botão em si — de
+   propósito: testado que um <button> como item flex direto resiste a
+   encolher até o tamanho do irmão mesmo com min-width:0 (o motor do
+   navegador reserva um mínimo intrínseco próprio de elemento de
+   formulário), enquanto um <div> encolhe do jeito esperado. Sem esse
+   wrapper, o gomo da Bee ficava sempre mais largo que o dos Comentários. */
+.chat-hdr-bee-wrap { flex: 1; min-width: 0; }
 .chat-hdr-bee {
-  flex: 1; min-width: 0; height: 32px; margin-left: 6px;
-  display: flex; align-items: center; justify-content: center;
-  border: 1.5px solid rgba(255,255,255,0.22); border-radius: 999px; cursor: pointer;
+  width: 100%; height: 32px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  border: none; border-radius: 999px; cursor: pointer; padding: 0 7px;
   background: transparent; color: #fff; font-family: inherit;
   transition: background var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple),
-    border-color var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple-spring);
+    transform var(--dur-base) var(--ease-apple-spring);
 }
 .chat-hdr-bee:hover { background: rgba(255,255,255,0.1); }
 .chat-hdr-bee:active { transform: scale(0.97); }
-.chat-hdr-bee-texto { font-size: 13.5px; font-weight: 600; }
-.chat-hdr-bee.active {
-  background: var(--kanban-yellow, #FFE9A8); color: #16181D; border-color: transparent;
-}
+.chat-hdr-bee-texto { font-size: 12.5px; font-weight: 600; }
+.chat-hdr-bee.active { background: var(--kanban-yellow, #FFE9A8); color: #16181D; }
 .chat-hdr-bee.active:hover { background: #E0A800; }
 .chat-hdr-bee-vazio { visibility: hidden; }
 
 /* Listinha de trocar de conversa — mesmo "pop" leve das bolhas de
    comentário (commentPop), só com uma descidinha maior. */
-.chat-hdr-menu-wrap { position: relative; flex-shrink: 0; }
+.chat-hdr-menu-wrap { position: relative; }
 .chat-hdr-menu {
   position: absolute; top: calc(100% + 8px); left: 0; z-index: 40;
   min-width: 232px; padding: 6px; border-radius: 16px;
