@@ -295,9 +295,85 @@ function mostrarUrlDeAutorizacaoFirefly() {
 
 // Rode manualmente pelo editor pra confirmar que a geração funciona de
 // verdade antes de confiar na Bee usando isso sozinha.
+//
+// ⚠️ CUSTA CRÉDITO DE VERDADE. Cada geração que der certo consome crédito
+// da conta da Beeon na Adobe (a mesma tela do firefly.adobe.com mostrou
+// "Usa 20 créditos" por imagem) — igual geraria clicando em "Gerar" no
+// site. Tentativa que a Adobe RECUSA (modelo não existe/não permitido)
+// não deveria custar nada, mas isso não está 100% garantido.
 function diagnosticoGerarImagemFirefly() {
   var resultado = gerarImagemFirefly('um sol amarelo bem simples, estilo ícone, fundo branco');
   Logger.log(JSON.stringify(resultado, null, 2));
+}
+
+/**
+ * Testa se dá pra escolher o MODELO (GPT Image, Gemini/Nano Banana) pela
+ * API, não só no site firefly.adobe.com — o Cláudio viu essa escolha lá
+ * (dropdown com "Firefly Image 5", "GPT Image 2", "Gemini 3.1 (Nano
+ * Banana 2)" etc.), mas API "beta" e site nem sempre têm as mesmas
+ * funções liberadas (foi exatamente o caso do Server-to-Server).
+ *
+ * ⚠️⚠️ CUSTA CRÉDITO DE VERDADE, PODE SER BEM MAIS QUE O DIAGNÓSTICO
+ * ACIMA: cada candidato de modelo que a Adobe ACEITAR gera uma imagem de
+ * verdade (crédito gasto). Com 2 candidatos de GPT + 3 de Gemini, o pior
+ * caso são 5 imagens geradas. Se preferir gastar menos, comente linhas
+ * do array `candidatos` antes de rodar, testando um de cada vez.
+ *
+ * Como rodar: editor do Apps Script → escolhe
+ * "diagnosticoModelosParceirosFirefly" → Executar → copia o log.
+ */
+function diagnosticoModelosParceirosFirefly() {
+  var accessToken = tokenFireflyValido();
+  if (!accessToken) {
+    Logger.log('Sem autorização válida agora — abra "?fireflyAuth=iniciar" e autoriza de novo antes de rodar isso.');
+    return;
+  }
+
+  var promptTeste = 'um círculo azul simples, fundo branco, estilo ícone minimalista';
+
+  // Nomes de campo E de modelo são CHUTES — a Adobe nunca documentou
+  // publicamente essa seleção de modelo parceiro pela API REST (só
+  // apareceu no site). Cada linha tenta uma combinação plausível.
+  var candidatos = [
+    { rotulo: 'GPT Image 2 (campo "model")', corpo: { model: 'gpt-image-2' } },
+    { rotulo: 'GPT Image (campo "model", nome alternativo)', corpo: { model: 'gpt_image_1' } },
+    { rotulo: 'Nano Banana / Gemini (campo "model")', corpo: { model: 'gemini-2.5-flash-image' } },
+    { rotulo: 'Nano Banana (campo "model", apelido direto)', corpo: { model: 'nano-banana' } },
+    { rotulo: 'Nano Banana (campo "model", nome com pontos)', corpo: { model: 'gemini-nano-banana' } }
+  ];
+
+  Logger.log('=== DIAGNÓSTICO MODELOS PARCEIROS DA FIREFLY ===');
+  Logger.log('');
+
+  candidatos.forEach(function (c) {
+    var corpo = Object.assign({
+      prompt: promptTeste,
+      numVariations: 1,
+      size: { width: 1024, height: 1024 } // menor possível, pra pesar menos se der certo
+    }, c.corpo);
+
+    var resposta = UrlFetchApp.fetch(FIREFLY_API_BASE + '/images/generate', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'Authorization': 'Bearer ' + accessToken, 'x-api-key': fireflyClientId() },
+      payload: JSON.stringify(corpo),
+      muteHttpExceptions: true
+    });
+    var codigo = resposta.getResponseCode();
+    var corpoResp = resposta.getContentText();
+
+    if (codigo >= 200 && codigo < 300) {
+      Logger.log('✅ ACEITOU (status ' + codigo + ') — GEROU IMAGEM DE VERDADE, CUSTOU CRÉDITO: ' + c.rotulo);
+      Logger.log('   payload enviado: ' + JSON.stringify(c.corpo));
+      Logger.log('   resposta: ' + corpoResp.substring(0, 400));
+    } else {
+      Logger.log('❌ recusou (status ' + codigo + '), sem custo (provável): ' + c.rotulo);
+      Logger.log('   ' + corpoResp.substring(0, 300));
+    }
+    Logger.log('');
+  });
+
+  Logger.log('=== FIM. Copie tudo e mande pro Claude — inclusive o que a Adobe ACEITOU. ===');
 }
 
 // Escapa texto antes de pôr dentro de HTML — usado só aqui porque o
