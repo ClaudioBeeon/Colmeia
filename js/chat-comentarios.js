@@ -9,6 +9,13 @@ let historiaAberta = false;
 
 // ===== Chat flutuante (comentários em pop-up separado, fora do card) =====
 let chatThreadAtivo = "aqui"; // "aqui" (a tarefa aberta) ou "mae" (o card mãe dela)
+// Igual a chatThreadAtivo, mas NUNCA vira "bee" — é só o que o gomo
+// "Comentários"/"Card mãe"/"Linha do tempo" da barra do topo mostra (ver
+// nomeDaConversaAtiva). Desde que a Bee ganhou o próprio gomo ao lado, o
+// rótulo desse primeiro gomo não deve trocar pra "Bee" só porque a
+// conversa dela está aberta — ele continua mostrando de qual comentário
+// você "veio", pra onde volta ao apertar o botão da Bee de novo.
+let chatThreadRotulo = "aqui";
 let chatAlvoTaskId = null;    // id de quem recebe o próximo comentário enviado
 const chatMaeCache = new Map(); // taskId (da subtarefa) -> {id, title, comments}
 
@@ -131,9 +138,8 @@ function pintarThread(thread, html, opcoes) {
 // Antes ele mostrava o nome da tarefa e a troca de aba estava escondida
 // dentro do menu de "...", que sumiu.
 function nomeDaConversaAtiva() {
-  if (chatThreadAtivo === "bee") return "Bee";
-  if (chatThreadAtivo === "mae") return "Card mãe";
-  if (chatThreadAtivo === "tudo") return "Linha do tempo";
+  if (chatThreadRotulo === "mae") return "Card mãe";
+  if (chatThreadRotulo === "tudo") return "Linha do tempo";
   return "Comentários";
 }
 
@@ -212,6 +218,7 @@ function fecharChatPanel() {
 
 function abrirThreadAqui(task) {
   chatThreadAtivo = "aqui";
+  chatThreadRotulo = "aqui";
   chatAlvoTaskId = task.id;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
@@ -240,6 +247,7 @@ function abrirThreadAqui(task) {
  */
 async function abrirThreadDoCardMae(task) {
   chatThreadAtivo = "mae";
+  chatThreadRotulo = "mae";
   chatAlvoTaskId = null;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
@@ -303,6 +311,7 @@ async function abrirThreadDoCardMae(task) {
  */
 async function abrirThreadLinhaDoTempo(task) {
   chatThreadAtivo = "tudo";
+  chatThreadRotulo = "tudo";
   chatAlvoTaskId = task.id;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);

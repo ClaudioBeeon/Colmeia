@@ -487,7 +487,10 @@ document.addEventListener("click", () => {
   const emojiPicker = document.getElementById("emojiPicker");
   if (emojiPicker) emojiPicker.hidden = true;
   const chatPanelMenu = document.getElementById("chatPanelMenu");
-  if (chatPanelMenu) chatPanelMenu.hidden = true;
+  if (chatPanelMenu) {
+    chatPanelMenu.hidden = true;
+    document.getElementById("chatPanelMenuBtn")?.classList.remove("menu-aberto");
+  }
 });
 
 // ===== Nova tarefa (só o coordenador) =====

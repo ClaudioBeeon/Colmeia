@@ -788,62 +788,106 @@
 [data-theme="dark"] .chat-panel { background: linear-gradient(180deg, #221E17 0%, #171620 16%, #141319 38%); }
 .task-detail.chat-open .chat-panel { display: flex; }
 
-/* Cabeçalho em 3 zonas: voltar | título centralizado | "...". Sem
-   sombra e sem linha embaixo. */
+/* Cabeçalho no mesmo padrão visual da barra escura do quadro
+   (.topbar-dark/.now-playing-wrap, css/01-base.css): voltar (círculo
+   preto solto) | barra preta arredondada, com a aba ativa como pílula
+   amarela e a Bee como o segundo "gomo" dela. */
 .chat-panel-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 14px 12px 10px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 14px 10px; flex-shrink: 0;
 }
+
+.chat-hdr-back {
+  width: 38px; height: 38px; border-radius: 50%; border: none;
+  background: #16181D; color: #fff; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple-spring);
+}
+.chat-hdr-back:hover { background: #26282F; transform: scale(1.06); }
+.chat-hdr-back:active { transform: scale(0.94); }
+.chat-hdr-back svg { width: 18px; height: 18px; }
+[data-theme="dark"] .chat-hdr-back { background: #0A0A0D; }
+[data-theme="dark"] .chat-hdr-back:hover { background: #1C1D22; }
+
+.chat-hdr-bar {
+  flex: 1; min-width: 0; height: 38px;
+  display: flex; align-items: center;
+  background: #16181D; border-radius: 999px; padding: 3px;
+}
+[data-theme="dark"] .chat-hdr-bar { background: #0A0A0D; }
+
 .chat-panel-title {
-  min-width: 0; text-align: center;
-  font-size: 16px; font-weight: 600; color: #111111;
+  min-width: 0;
+  font-size: 13.5px; font-weight: 600; color: inherit;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-[data-theme="dark"] .chat-panel-title { color: var(--text-primary); }
-.chat-hdr-btn {
-  width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent;
-  color: #111111; display: flex; align-items: center; justify-content: center;
-  cursor: pointer; flex-shrink: 0; transition: background 180ms ease-out;
-}
-.chat-hdr-btn:hover { background: #F5F5F5; }
-.chat-hdr-btn svg { width: 19px; height: 19px; }
-[data-theme="dark"] .chat-hdr-btn { color: var(--text-primary); }
-[data-theme="dark"] .chat-hdr-btn:hover { background: rgba(255,255,255,0.08); }
 
-/* Nome da conversa ativa + setinha, no meio do cabeçalho. É o botão que
-   abre a listinha de trocar de conversa (Comentários / Card mãe / Linha
-   do tempo) — antes isso vivia escondido dentro do menu de "...". */
-.chat-abas-wrap { flex: 1; min-width: 0; display: flex; justify-content: center; }
+/* Nome da conversa ativa + setinha — o "gomo" amarelo da barra. É o
+   botão que abre a listinha de trocar de conversa (Comentários / Card
+   mãe / Linha do tempo). */
+.chat-abas-wrap { flex-shrink: 0; min-width: 0; max-width: 62%; }
 .chat-aba-atual {
-  display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
-  border: none; background: transparent; cursor: pointer;
-  padding: 4px 8px; border-radius: 10px; font-family: inherit;
-  transition: background 180ms ease-out;
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+  height: 32px; border: 1.5px solid transparent; cursor: pointer;
+  padding: 0 14px; border-radius: 999px; font-family: inherit;
+  background: var(--kanban-yellow); color: #16181D;
+  transition: background var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple),
+    border-color var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple-spring);
 }
-.chat-aba-atual:hover { background: #F5F5F5; }
-[data-theme="dark"] .chat-aba-atual:hover { background: rgba(255,255,255,0.08); }
+.chat-aba-atual:hover { background: #E0A800; }
+.chat-aba-atual:active { transform: scale(0.97); }
 .chat-aba-seta {
-  width: 15px; height: 15px; flex-shrink: 0; color: #9A9AA0;
-  transition: transform 180ms ease-out;
+  width: 14px; height: 14px; flex-shrink: 0; color: inherit;
+  transition: transform var(--dur-base) var(--ease-apple-spring);
 }
 .chat-aba-atual.sem-opcoes { pointer-events: none; }
 .chat-aba-atual.sem-opcoes .chat-aba-seta { display: none; }
+.chat-aba-atual.menu-aberto .chat-aba-seta { transform: rotate(180deg); }
 
-/* Ícone da Bee no topo, no lugar onde ficavam os "...". Aceso enquanto a
-   conversa dela é a que está aberta. */
-.chat-hdr-bee.active { background: var(--kanban-yellow, #FFE9A8); }
-[data-theme="dark"] .chat-hdr-bee.active { background: rgba(255,214,102,0.22); }
+/* Enquanto a Bee está acesa, o gomo "Comentários" apaga (vira contorno)
+   — mesma ideia de controle segmentado, só uma opção acesa por vez. */
+.chat-aba-atual.aba-apagada {
+  background: transparent; color: #fff; border-color: rgba(255,255,255,0.22);
+}
+.chat-aba-atual.aba-apagada:hover { background: rgba(255,255,255,0.08); }
 
-/* Listinha de trocar de conversa. */
+/* Botão da Bee — o segundo "gomo" da barra, ocupando o resto do espaço.
+   Contorno claro em repouso (pro botão ficar visível contra o preto de
+   fundo, que é a MESMA cor); acende amarelo quando a conversa dela é a
+   que está aberta (mesmo botão volta pros comentários nesse estado). */
+.chat-hdr-bee {
+  flex: 1; min-width: 0; height: 32px; margin-left: 6px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid rgba(255,255,255,0.22); border-radius: 999px; cursor: pointer;
+  background: transparent; color: #fff; font-family: inherit;
+  transition: background var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple),
+    border-color var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple-spring);
+}
+.chat-hdr-bee:hover { background: rgba(255,255,255,0.1); }
+.chat-hdr-bee:active { transform: scale(0.97); }
+.chat-hdr-bee-texto { font-size: 13.5px; font-weight: 600; }
+.chat-hdr-bee.active {
+  background: var(--kanban-yellow, #FFE9A8); color: #16181D; border-color: transparent;
+}
+.chat-hdr-bee.active:hover { background: #E0A800; }
+.chat-hdr-bee-vazio { visibility: hidden; }
+
+/* Listinha de trocar de conversa — mesmo "pop" leve das bolhas de
+   comentário (commentPop), só com uma descidinha maior. */
 .chat-hdr-menu-wrap { position: relative; flex-shrink: 0; }
-.chat-abas-wrap.chat-hdr-menu-wrap { flex-shrink: 1; }
 .chat-hdr-menu {
-  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 40;
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 40;
   min-width: 232px; padding: 6px; border-radius: 16px;
-  background: #FFFFFF; box-shadow: 0 8px 30px rgba(0,0,0,.12);
+  background: #FFFFFF; box-shadow: 0 8px 30px rgba(0,0,0,.16);
   display: flex; flex-direction: column; gap: 2px;
+  transform-origin: top left;
+  animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
 }
 .chat-hdr-menu[hidden] { display: none; }
+@keyframes chatHdrMenuPop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 [data-theme="dark"] .chat-hdr-menu { background: #242430; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
 .chat-hdr-menu button {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;

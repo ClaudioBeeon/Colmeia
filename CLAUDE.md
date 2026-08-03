@@ -338,6 +338,36 @@ entregue: não faz sentido oferecer "Retomar" algo que acabou de ser concluído.
 botão de pausar no futuro, decidir esse mesmo jeito: pause escolhido pela pessoa marca (e reseta o
 contador), pause automático do sistema não.
 
+## Cabeçalho do painel de comentários (2026-08-03)
+
+`js/detalhe-modal.js` (markup) + o bloco `.chat-panel-header`/`.chat-hdr-*` em css/03-detalhe.css.
+Refeito pra seguir o mesmo padrão visual da barra escura do quadro (`.topbar-dark`/`.now-playing-wrap`,
+css/01-base.css): voltar (círculo preto solto, à esquerda) | barra preta arredondada, dividida em dois
+"gomos" — a aba ativa dos comentários (`#chatPanelMenuBtn`, pílula amarela com a setinha de trocar
+entre Comentários/Card mãe/Linha do tempo) e a Bee (`#chatIconeBee`, agora um botão largo com o texto
+"Bee", não mais um ícone sozinho).
+
+**O rótulo do primeiro gomo tem uma variável PRÓPRIA, separada de `chatThreadAtivo`:** antes só existia
+`chatThreadAtivo`, que virava `"bee"` quando a conversa da Bee abria — e como o topo mostrava um único
+nome centralizado, isso bastava. Agora que a Bee ganhou o próprio gomo ao lado, deixar o primeiro gomo
+também mostrar "Bee" ficava redundante e confuso (os dois gomos com o mesmo texto). `chatThreadRotulo`
+(js/chat-comentarios.js) guarda só "aqui"/"mae"/"tudo" e NUNCA vira "bee" — é atualizado nos mesmos 3
+lugares que setam `chatThreadAtivo` pra essas três, e ignorado em `abrirThreadBee`. `nomeDaConversaAtiva()`
+passou a ler `chatThreadRotulo`, não `chatThreadAtivo` — assim o primeiro gomo sempre mostra pra qual
+comentário você volta, mesmo com a Bee acesa.
+
+**Só um gomo "aceso" (amarelo) por vez, como um controle segmentado:** `marcarAbaBeeAtiva(ativa)`
+(js/bee.js) já acendia `.chat-hdr-bee.active`; agora também apaga o outro gomo com
+`.chat-aba-atual.aba-apagada` (vira contorno claro sobre o preto, mesma ideia do próprio botão da Bee
+em repouso). Simétrico nos dois sentidos: sair da Bee (`abrirThreadComentarios`) já limpa `.active` da
+Bee, e entrar nela apaga o gomo dos comentários.
+
+**Animações leves, no mesmo vocabulário já usado no resto do app:** a setinha do dropdown gira 180°
+(classe `.menu-aberto` no botão, ligada/desligada nos 3 lugares que abrem/fecham o menu — clique na
+seta, clique numa opção, clique fora em js/kanban-board.js) via `var(--ease-apple-spring)`; o menu em
+si ganha um "pop" leve ao abrir (`@keyframes chatHdrMenuPop`, mesma família do `commentPop` que as
+bolhas de comentário já usavam); trocar de gomo aceso anima cor e borda (`var(--dur-base)`).
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

@@ -835,27 +835,29 @@ function renderDetail() {
            cada 8s e sempre que a aba do navegador volta a ficar em foco
            (ver iniciarChecagemUploadEmSegundoPlano). -->
       <div class="chat-panel-header">
-        <button type="button" class="chat-hdr-btn" id="chatPanelClose" aria-label="Voltar">
+        <button type="button" class="chat-hdr-back" id="chatPanelClose" aria-label="Voltar">
           <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <div class="chat-hdr-menu-wrap chat-abas-wrap">
-          <button type="button" class="chat-aba-atual" id="chatPanelMenuBtn" aria-label="Trocar de conversa">
-            <span class="chat-panel-title" id="chatPanelTitle">Comentários</span>
-            <svg class="chat-aba-seta" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <div class="chat-hdr-menu" id="chatPanelMenu" hidden>
-            <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários <em>vão pro Runrun.it</em></button>
-            <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Card mãe</button>
-            ${ehTarefaDeAlteracao(task) ? `
-              <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
-            ` : ""}
+        <div class="chat-hdr-bar">
+          <div class="chat-hdr-menu-wrap chat-abas-wrap">
+            <button type="button" class="chat-aba-atual" id="chatPanelMenuBtn" aria-label="Trocar de conversa">
+              <span class="chat-panel-title" id="chatPanelTitle">Comentários</span>
+              <svg class="chat-aba-seta" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="chat-hdr-menu" id="chatPanelMenu" hidden>
+              <button type="button" class="chat-panel-tab active" id="chatTabAqui">Comentários <em>vão pro Runrun.it</em></button>
+              <button type="button" class="chat-panel-tab" id="chatTabMae" ${task.parentTaskId ? "" : "hidden"}>Card mãe</button>
+              ${ehTarefaDeAlteracao(task) ? `
+                <button type="button" class="chat-panel-tab" id="chatTabTudo" title="Todos os comentários desta alteração, da tarefa original e do card mãe, em ordem de hora">Linha do tempo</button>
+              ` : ""}
+            </div>
           </div>
+          ${task.id ? `
+            <button type="button" class="chat-hdr-bee" id="chatIconeBee" aria-label="Falar com a Bee" title="Bee — fica só no Colmeia">
+              <span class="chat-hdr-bee-texto">Bee</span>
+            </button>
+          ` : `<span class="chat-hdr-bee chat-hdr-bee-vazio" aria-hidden="true"></span>`}
         </div>
-        ${task.id ? `
-          <button type="button" class="chat-hdr-btn chat-hdr-bee" id="chatIconeBee" aria-label="Falar com a Bee" title="Bee — fica só no Colmeia">
-            ${beeIcon}
-          </button>
-        ` : `<span class="chat-hdr-btn" aria-hidden="true"></span>`}
       </div>
       <div class="comments-thread" id="commentsThread">
         ${renderComentariosHTML(task)}
@@ -1375,9 +1377,13 @@ function renderDetail() {
     chatPanelMenuBtn.addEventListener("click", e => {
       e.stopPropagation();
       chatPanelMenu.hidden = !chatPanelMenu.hidden;
+      chatPanelMenuBtn.classList.toggle("menu-aberto", !chatPanelMenu.hidden);
     });
     chatPanelMenu.addEventListener("click", e => {
-      if (e.target.closest("button")) chatPanelMenu.hidden = true;
+      if (e.target.closest("button")) {
+        chatPanelMenu.hidden = true;
+        chatPanelMenuBtn.classList.remove("menu-aberto");
+      }
     });
   }
 

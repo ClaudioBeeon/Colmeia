@@ -65,12 +65,17 @@ function marcarAbaBeeAtiva(ativa) {
     });
   }
   // O ícone da Bee no topo fica aceso enquanto você está na conversa dela
-  // — e é o mesmo botão que traz de volta pros comentários.
+  // — e é o mesmo botão que traz de volta pros comentários. O selo
+  // "Comentários" faz o gangorra oposto: apaga (vira contorno) enquanto
+  // a Bee está acesa, pro par parecer um controle segmentado só com uma
+  // opção acesa por vez (ver .chat-aba-atual.aba-apagada em css/03-detalhe.css).
   const botaoBee = document.getElementById("chatIconeBee");
   if (botaoBee) {
     botaoBee.classList.toggle("active", ativa);
     botaoBee.title = ativa ? "Voltar pros comentários" : "Bee — fica só no Colmeia";
   }
+  const botaoAba = document.getElementById("chatPanelMenuBtn");
+  if (botaoAba) botaoAba.classList.toggle("aba-apagada", ativa);
 }
 
 /**
