@@ -43,6 +43,7 @@ const ORDEM_ESPERADA = [
   "js/pagina-horas.js",
   "js/notificacoes-avisos.js",
   "js/paleta-comando.js",
+  "js/roteador-url.js",
   "js/login-boot.js",
 ];
 

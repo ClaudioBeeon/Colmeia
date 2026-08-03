@@ -1020,6 +1020,11 @@ function mostrarPagina(page) {
   // resto da sessão (ver iniciarRelogioDaPaginaHoras, js/pagina-horas.js).
   if (page === "horas") abrirPaginaHoras();
   else if (typeof fecharPaginaHoras === "function") fecharPaginaHoras();
+
+  // Deixa o endereço lá em cima do navegador combinando com a página
+  // (ver js/roteador-url.js) — permite link direto, F5 sem perder o
+  // lugar, e o botão Voltar funcionando.
+  if (typeof roteadorAoMostrarPagina === "function") roteadorAoMostrarPagina(page);
 }
 
 document.getElementById("designerFilterSelect").addEventListener("change", e => {

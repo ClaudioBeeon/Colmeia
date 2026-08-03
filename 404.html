@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Colmeia</title>
+<script>
+  /**
+   * O Colmeia é uma SPA (site de página única) publicada no GitHub
+   * Pages, que não tem servidor de verdade entendendo URLs como
+   * /11503 ou /minhas-horas — são endereços que só fazem sentido pro
+   * JavaScript do próprio app (ver js/roteador-url.js). Quando alguém
+   * abre um link desses direto — colou no navegador, clicou vindo de
+   * fora, ou até um F5 simples — não existe arquivo nenhum com esse
+   * nome e o GitHub cai bem aqui, nesta página de "não encontrado".
+   *
+   * Esse script guarda o caminho que a pessoa queria (numa "encomenda"
+   * de curta duração, só desta aba) e manda ela pro index.html de
+   * verdade — que lê essa encomenda e abre a tarefa/página certa
+   * sozinho. Ninguém percebe o pulo: é instantâneo.
+   *
+   * `new URL(".", location.href).pathname` acha a "pasta" onde este
+   * 404.html está publicado, sem precisar saber o nome do repositório
+   * escrito na mão — funciona tanto hoje (algo como
+   * "/Colmeia/11503" → pasta "/Colmeia/") quanto depois que o domínio
+   * colmeia.beeon.com.br entrar no ar (algo como "/11503" → pasta "/"),
+   * sem precisar mudar este arquivo quando isso acontecer.
+   */
+  try {
+    sessionStorage.setItem("colmeiaRotaPendente", location.pathname + location.search + location.hash);
+  } catch (e) {
+    // Sem sessionStorage (aba anônima bem restrita, por exemplo) a
+    // pessoa só cai na tela inicial normal, sem a tarefa/página abrindo
+    // sozinha — não trava nada.
+  }
+  location.replace(new URL(".", location.href).pathname);
+</script>
+</head>
+<body></body>
+</html>

@@ -80,10 +80,11 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
-entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; e a paleta de comando, 21)
-menores dentro da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não
-tem bundler, TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os
-21 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
+entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; e o
+roteador de URL, 22) menores dentro da pasta `js/`, cada um cuidando de um assunto. **Não é um
+sistema de build** — não tem bundler, TypeScript, nem npm envolvido no frontend. É só HTML puro: o
+`index.html` carrega os 22 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem
+certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
 
@@ -131,7 +132,9 @@ Arquivos, na ordem em que são carregados (`js/`):
 18. `pagina-horas.js` — página "Minhas horas" (tem cronômetro próprio de 1s, desligado ao sair).
 19. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
 20. `paleta-comando.js` — a **paleta de comando** (Ctrl+Espaço). Ver seção própria abaixo.
-21. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+21. `roteador-url.js` — link direto pra tarefa/página pela URL (`/11503`, `/minhas-horas`). Ver
+    seção própria abaixo.
+22. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -182,6 +185,45 @@ Por isso a linha da Bee é sempre a ÚLTIMA: pra nunca ser a escolha acidental d
   qualquer campo de texto da tela. O Esc também é capturado ali: sem isso, apertar Esc com a paleta
   aberta fechava o CARD atrás dela.
 - Carregada por último (só antes do `login-boot.js`) porque usa função de quase todo mundo.
+
+## O roteador de URL — link direto pra tarefa e página (2026-08-03)
+
+`js/roteador-url.js` + `404.html` na raiz do repositório. Faz o endereço do navegador virar algo
+útil: `.../11503` abre direto a tarefa 11503, `.../minhas-horas` abre a página de horas, `.../` (nada
+depois) é o quadro. Com isso: dá pra mandar o link de uma tarefa pra alguém, apertar F5 sem perder o
+lugar, e o botão Voltar/Avançar do navegador passa a funcionar de verdade dentro do app.
+
+**Por que existe o `404.html`:** o Colmeia é só arquivo estático no GitHub Pages, sem servidor que
+entenda `/11503` como uma rota — navegação DENTRO do app usa `history.pushState` e nunca passa perto
+do GitHub, mas um link aberto DE FORA (colado, favoritos) ou um F5 vira um pedido por um arquivo
+chamado "11503" que não existe. O GitHub cai no `404.html`, que guarda o caminho pedido numa
+"encomenda" (`sessionStorage`) e manda a pessoa de volta pro `index.html` de verdade — que lê essa
+encomenda (`restaurarRotaPendente`, primeira coisa que roda no arquivo) e conserta a URL visível antes
+até da tela de login. É a técnica padrão pra SPA em GitHub Pages, sem nada exótico.
+
+**`ROTA_BASE` não tem o nome do repositório escrito na mão:** usa `new URL(".", location.href)`, que
+acha sozinho a pasta onde o `index.html` está publicado. Funciona tanto na URL de hoje
+(`claudiobeeon.github.io/Colmeia/...`) quanto na de amanhã (`colmeia.beeon.com.br/...`, quando o
+domínio entrar no ar) **sem precisar mexer no código** quando isso acontecer — o mesmo raciocínio vale
+pro `404.html`, que calcula a base do mesmo jeito.
+
+- **Três ganchos, ligados nos lugares certos:** `roteadorAoMostrarPagina` (fim de `mostrarPagina`,
+  js/pagina-repasse.js), `roteadorAoAbrirTarefa` (fim de `openDetail`, js/detalhe-modal.js) e
+  `roteadorAoFecharTarefa` (fim de `closeDetail`, js/detalhe-modal.js) — todos atrás de
+  `typeof ... === "function"`, o mesmo padrão já usado em `mostrarPagina` pra `fecharPaginaHoras`.
+- **Fechar substitui a URL (`replaceState`), abrir empilha (`pushState`):** abrir uma tarefa cria uma
+  entrada nova no histórico (Voltar retorna pra página de antes); fechar ela manualmente (X ou Esc)
+  troca essa MESMA entrada de volta pra URL da página, em vez de empilhar mais uma — sem isso, Voltar
+  depois de fechar uma tarefa reabria ela de novo antes de sair de verdade.
+- **A trava `roteadorReagindoAoHistorico`:** existem dois momentos em que o app precisa se atualizar A
+  PARTIR da URL (o carregamento inicial de um link direto, e o botão Voltar/Avançar) — nesses dois, a
+  URL já está certa, e os três ganchos acima não podem escrever por cima dela de novo no meio da
+  reconciliação (ex: "mostra o quadro de fundo, depois abre a tarefa" escrevendo a URL do quadro por
+  cima da URL da tarefa que era pra ficar). A trava desliga os ganchos só durante esses dois momentos.
+- **Comparação de ID por `String()`** em `abrirTarefaPorId` (js/detalhe-modal.js) — o roteador manda o
+  ID como texto (veio da URL), `task.id` vem como número do backend; sem `String()` dos dois lados, um
+  link direto pra uma tarefa que já estava carregada caía sempre no caminho lento de buscar de novo.
+- Carregado logo depois da paleta de comando (mesmo motivo: usa função de quase todo mundo).
 
 ## Bug recorrente conhecido
 

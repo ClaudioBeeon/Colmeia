@@ -24,7 +24,11 @@ function iniciarAppPosLogin() {
   restaurarSnapshotDoQuadro();
   buildBoard();
   render();
-  mostrarPagina("kanban");
+  // Abre a página/tarefa certa lendo o que estiver na barra de endereço
+  // (ver js/roteador-url.js) — sem isso, sempre caía no quadro fixo,
+  // mesmo quando a pessoa chegou por um link direto de tarefa.
+  if (typeof roteadorAbrirRotaInicial === "function") roteadorAbrirRotaInicial();
+  else mostrarPagina("kanban");
   carregarTarefasReais();
   carregarDadosPainelBeeon();
   carregarPessoasSalvas();

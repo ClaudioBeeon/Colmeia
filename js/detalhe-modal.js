@@ -61,6 +61,11 @@ function openDetail(idx, entradaAnimacao) {
       wireBriefingVersaoOriginalToggles(resultEl);
     }
   }
+
+  // Deixa o endereço lá em cima do navegador virar o ID desta tarefa
+  // (ver js/roteador-url.js) — permite mandar o link pra alguém, F5 sem
+  // perder o lugar, e o botão Voltar funcionando.
+  if (typeof roteadorAoAbrirTarefa === "function") roteadorAoAbrirTarefa(tasks[detailIdx]);
 }
 
 /**
@@ -1416,7 +1421,12 @@ async function abrirTarefaPorId(taskId) {
   if (inner) inner.classList.add("panel-exit-down");
   await esperar(200);
 
-  const idxExistente = tasks.findIndex(t => t.id === taskId);
+  // String() nos dois lados: quem chama pode vir com o ID como texto (o
+  // roteador de URL, js/roteador-url.js, lê da barra de endereço) ou
+  // como número (task.id do backend) — comparar direto (===) sem isso
+  // deixava passar batido um link direto pra uma tarefa que JÁ estava
+  // carregada, indo pro caminho mais lento de buscar ela de novo à toa.
+  const idxExistente = tasks.findIndex(t => String(t.id) === String(taskId));
   if (idxExistente !== -1) {
     openDetail(idxExistente, "panel-enter-above");
     return;
@@ -1490,6 +1500,10 @@ function closeDetail() {
   // sempre a cada atualização em segundo plano, mesmo depois de a
   // pessoa já ter fechado o pop-up manualmente.
   detailIdx = -1;
+
+  // Devolve o endereço do navegador pra página que estava por baixo
+  // (ver js/roteador-url.js).
+  if (typeof roteadorAoFecharTarefa === "function") roteadorAoFecharTarefa();
 }
 
 document.addEventListener("keydown", e => {
