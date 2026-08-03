@@ -622,6 +622,17 @@
   flex-shrink: 0; margin-top: 1px;
 }
 
+/* A Bee dentro de Todos os comentários/Linha do tempo — `avatarHTML`
+   (js/pessoas-fotos.js) não acha foto pra "Bee" (não é um designer de
+   verdade) e caía nas iniciais genéricas ("B" numa bolinha cinza).
+   Usa o MESMO ícone/cor dela no resto do app (ver `.bee-avatar`,
+   css/05-componentes.css) em vez disso. */
+.comment-avatar-bee {
+  background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center;
+}
+.comment-avatar-bee svg { width: 13px; height: 13px; }
+
 .comment-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .comment-bubble.mine .comment-body { align-items: flex-end; }
 

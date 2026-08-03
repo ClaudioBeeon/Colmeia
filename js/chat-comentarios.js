@@ -704,7 +704,9 @@ function renderComentariosHTML(task) {
     const minha = !c._somenteLeitura && nomesCorrespondem(c.autor, DESIGNER_LOGADO);
     return `
     <div class="comment-bubble ${minha ? "mine" : ""} ${c._somenteLeitura ? "somente-leitura" : ""}" data-comment-id="${c.id}">
-      ${avatarHTML(minha ? DESIGNER_LOGADO : c.autor, "avatar-sm comment-avatar")}
+      ${c.autor === "Bee"
+        ? `<span class="avatar avatar-sm comment-avatar comment-avatar-bee" aria-hidden="true">${beeIcon}</span>`
+        : avatarHTML(minha ? DESIGNER_LOGADO : c.autor, "avatar-sm comment-avatar")}
       <div class="comment-body">
         <div class="comment-meta"><span class="comment-author">${minha ? "Você" : escaparHTML(c.autor)}</span><span class="comment-time">${formatarHoraComentario(c.data)}</span>${c._origem ? `<span class="comment-origem">${escaparHTML(c._origem)}</span>` : ""}</div>
         <div class="comment-text">${c._icone ? `<span class="comment-evento-icone">${c._icone}</span> ` : ""}${prepararTextoComentario(c.texto)}</div>
