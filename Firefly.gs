@@ -123,22 +123,8 @@ function trocarCodigoPorTokenFirefly(code) {
   var corpo = {};
   try { corpo = JSON.parse(resposta.getContentText()); } catch (e) { /* segue com objeto vazio */ }
 
-  if (codigo >= 200 && codigo < 300 && corpo.access_token && !corpo.refresh_token) {
-    // Caso específico já visto na prática (2026-08-03): a Adobe autoriza
-    // normal (200, com access_token), mas sem "offline_access" no escopo
-    // ela não manda refresh_token. Detectado à parte pra dar uma mensagem
-    // que aponta a causa, em vez de um "a Adobe recusou" genérico e
-    // confuso pra quem está vendo um 200 na tela.
-    Logger.log('Firefly: veio access_token mas sem refresh_token (faltava offline_access no escopo).');
-    return {
-      ok: false,
-      error: 'A Adobe autorizou, mas não mandou o "refresh_token" (só um token que expira em algumas horas). ' +
-             'Faltava o escopo "offline_access" no pedido — se isso já foi corrigido no código, tenta autorizar de novo.',
-      detalheStatus: codigo
-    };
-  }
-
-  if (codigo < 200 || codigo >= 300 || !corpo.refresh_token) {
+  // Falha de verdade: nem o access_token veio.
+  if (codigo < 200 || codigo >= 300 || !corpo.access_token) {
     var corpoBruto = resposta.getContentText();
     Logger.log('Firefly: falha ao trocar code por token (status ' + codigo + '): ' + corpoBruto);
     // O detalhe vai JUNTO na resposta (não só no Log de execução) — a tela
@@ -154,11 +140,29 @@ function trocarCodigoPorTokenFirefly(code) {
       detalheBruto: corpoBruto.substring(0, 500)
     };
   }
+
+  // ACEITA sem refresh_token — é ESPERADO com o plano atual da Beeon na
+  // Adobe (ver LIMITAÇÃO CONFIRMADA no topo do arquivo: nenhuma
+  // combinação de escopo faz essa credencial devolver refresh_token). A
+  // versão anterior desta função tratava isso como falha e pedia pra
+  // "corrigir o código" — só que não tinha o que corrigir, e por isso a
+  // mesma mensagem aparecia sempre, em loop, confundindo o Cláudio. Ele
+  // decidiu (2026-08-03) aceitar autorizar de novo periodicamente em vez
+  // de esperar um jeito de tornar isso permanente — então aqui é sucesso,
+  // só que temporário: guarda o access_token, e quando ele expirar,
+  // tokenFireflyValido() (mais abaixo) vai devolver null normalmente,
+  // pedindo pra autorizar de novo — sem confundir com erro de configuração.
+  if (!corpo.refresh_token) {
+    Logger.log('Firefly: autorizado sem refresh_token (esperado com o plano atual) — vale até expirar em ' +
+      Math.round((corpo.expires_in || 3600) / 60) + ' minutos.');
+    PropertiesService.getScriptProperties().deleteProperty('FIREFLY_REFRESH_TOKEN');
+    CacheService.getScriptCache().put('fireflyAccessToken', corpo.access_token, Math.max(60, (corpo.expires_in || 3600) - 120));
+    return { ok: true, temporario: true };
+  }
+
   var props = PropertiesService.getScriptProperties();
   props.setProperty('FIREFLY_REFRESH_TOKEN', corpo.refresh_token);
-  if (corpo.access_token) {
-    CacheService.getScriptCache().put('fireflyAccessToken', corpo.access_token, Math.max(60, (corpo.expires_in || 3600) - 120));
-  }
+  CacheService.getScriptCache().put('fireflyAccessToken', corpo.access_token, Math.max(60, (corpo.expires_in || 3600) - 120));
   return { ok: true };
 }
 
@@ -369,7 +373,10 @@ function tratarFireflyAuthGet(e) {
         '</div>'
       );
     }
-    return HtmlService.createHtmlOutput('<p>Autorizado! Pode fechar essa aba — a Bee já pode gerar imagem pela Firefly agora.</p>');
+    var aviso = resultado.temporario
+      ? ' Vale por algumas horas — quando expirar, é só autorizar de novo por aqui (não é erro, é assim que funciona com o plano atual da Adobe).'
+      : '';
+    return HtmlService.createHtmlOutput('<p>Autorizado! Pode fechar essa aba — a Bee já pode gerar imagem pela Firefly agora.' + aviso + '</p>');
   }
 
   return HtmlService.createHtmlOutput('<p>Ação de autorização da Firefly desconhecida.</p>');
