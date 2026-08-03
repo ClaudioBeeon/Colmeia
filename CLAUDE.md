@@ -80,10 +80,10 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
-entrou a fila offline, 18; depois a Bee, 19)
+entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; e a paleta de comando, 21)
 menores dentro da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não
 tem bundler, TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os
-19 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
+21 arquivos com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
 
@@ -128,8 +128,10 @@ Arquivos, na ordem em que são carregados (`js/`):
     e "Clientes por atendimento".
 16. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
 17. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
-18. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
-19. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+18. `pagina-horas.js` — página "Minhas horas" (tem cronômetro próprio de 1s, desligado ao sair).
+19. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
+20. `paleta-comando.js` — a **paleta de comando** (Ctrl+K). Ver seção própria abaixo.
+21. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -149,6 +151,31 @@ na comparação por nome quando falta algum (backend antigo, sessão salva de an
 Comparação por NOME continua certa (e inevitável) só onde o nome é a única informação que existe:
 autor de comentário, menções (`<mention>`), dono de arquivo no Drive, o seletor de designer do
 coordenador, os dados do painel-designers-beeon (que é indexado por nome) e `souClaudio()`.
+
+## A paleta de comando — Ctrl+K (2026-08-03)
+
+`js/paleta-comando.js` + o bloco no fim de `css/05-componentes.css`. Ctrl+K (Cmd+K no Mac) abre uma
+janelinha no meio da tela: busca tarefa/cliente/responsável, executa ação e troca de página. Esc fecha.
+
+**É HÍBRIDA de propósito, e isso é a decisão principal do arquivo:** tudo que aparece na lista é
+calculado no navegador, na hora, **sem nenhuma ida ao backend** — por isso responde instantâneo e
+funciona com a internet fora. A Bee de verdade (que pensa, demora alguns segundos e precisa de rede)
+só entra quando a pessoa **escolhe** a última linha, "Perguntar pra Bee" — nunca sozinha. Mandar tudo
+pra IA interpretar deixaria "achar uma tarefa", a coisa mais repetida do dia, dependente de rede.
+Por isso a linha da Bee é sempre a ÚLTIMA: pra nunca ser a escolha acidental do Enter.
+
+- **Ordenação por relevância:** `paletaNota()` dá 3 (começa igual), 2 (começo de palavra), 1 (só
+  contém) ou 0 (não serve), sempre sem acento e em minúsculo. As notas de título/cliente/responsável
+  são **somadas** (peso 3/2/1), não `Math.max` — com `max`, uma tarefa que casa no título E no
+  cliente empatava com uma que só casa no cliente, e o desempate virava a ordem crua do array.
+- **Ações contextuais** só aparecem quando têm alvo: "Pausar" só se algo está rodando, "Abrir a
+  pasta no Drive"/"Dar play" só com card aberto. Ação sem alvo não deve aparecer nem apagada.
+- Abrir tarefa usa `abrirTarefaPorId()` (js/detalhe-modal.js), que já sabe buscar avulsa no
+  Runrun.it quando ela não está carregada — por isso a busca pode varrer `tasksTodas` inteiro.
+- O atalho é registrado no `document` em **fase de captura** (`true`), pra pegar o Ctrl+K antes de
+  qualquer campo de texto da tela. O Esc também é capturado ali: sem isso, apertar Esc com a paleta
+  aberta fechava o CARD atrás dela.
+- Carregada por último (só antes do `login-boot.js`) porque usa função de quase todo mundo.
 
 ## Bug recorrente conhecido
 
