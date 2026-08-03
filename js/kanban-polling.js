@@ -1,3 +1,23 @@
+/**
+ * A última tarefa que a PESSOA pausou de propósito (não uma que o
+ * próprio Colmeia pausou sozinho — ver os comentários "AUTOMÁTICO, não
+ * conta" espalhados abaixo) — { id, title, client } ou null.
+ *
+ * É o que faz o botão "↻ Retomar" aparecer na pílula do topo quando não
+ * tem nada rodando: pausou pra atender uma prioridade, o ícone fica ali
+ * esperando; deu play em QUALQUER outra tarefa (inclusive essa mesma),
+ * o ícone some — ver o topo de tocarTarefaNoBackend, mais abaixo, que é
+ * o único ponto de entrada de todo play do app.
+ */
+let ultimaTarefaPausada = null;
+
+/** Chamado só pelos cliques de pausar de VERDADE (a pessoa escolheu parar). */
+function marcarUltimaTarefaPausada(taskId) {
+  const t = tasks.find(x => String(x.id) === String(taskId));
+  ultimaTarefaPausada = t ? { id: t.id, title: t.title, client: t.client || "" } : null;
+  if (typeof updateNowPlaying === "function") updateNowPlaying();
+}
+
 let _timeoutAtualizacaoKanban = null;
 function agendarAtualizacaoKanban() {
   clearTimeout(_timeoutAtualizacaoKanban);
@@ -32,6 +52,11 @@ async function salvarPrioridadeNoBackend(taskId, prioridade) {
  */
 async function tocarTarefaNoBackend(taskId, taskTitle) {
   if (!COLMEIA_API_URL || !taskId) return;
+  // A partir do instante que QUALQUER tarefa toca — essa mesma sendo
+  // retomada, ou outra qualquer — não faz mais sentido oferecer
+  // "Retomar" a última pausada: se for ela, já está rodando; se for
+  // outra, a pessoa já seguiu em frente (ver ultimaTarefaPausada acima).
+  ultimaTarefaPausada = null;
   try {
     const data = await chamarBackend({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO });
     if (!data.ok) console.error("Runrun.it recusou o play:", data.error);

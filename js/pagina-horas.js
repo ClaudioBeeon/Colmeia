@@ -683,6 +683,7 @@ document.addEventListener("DOMContentLoaded", () => {
     rodando.running = false;
     rodando._runningToggleEm = Date.now();
     pausarTarefaNoBackend(rodando.id);
+    marcarUltimaTarefaPausada(rodando.id);
     render();
     updateNowPlaying();
     renderCronometroDeHoje();

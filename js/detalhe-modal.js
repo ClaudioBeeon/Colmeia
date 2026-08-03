@@ -344,6 +344,13 @@ function wireWorkflowArrows(task) {
           task._entregueEm = Date.now();
           // Segurança extra: garante que o Runrun.it recebeu o pause.
           pausarTarefaNoBackend(task.id);
+          // Esse pause é AUTOMÁTICO (entrega), não a pessoa escolhendo
+          // parar pra fazer outra coisa — não oferece "Retomar" uma
+          // tarefa que acabou de ser entregue.
+          if (ultimaTarefaPausada && String(ultimaTarefaPausada.id) === String(task.id)) {
+            ultimaTarefaPausada = null;
+            if (typeof updateNowPlaying === "function") updateNowPlaying();
+          }
           // O cronômetro já foi parado no objeto capturado no início
           // (pararCronometroAoTransferir), mas se o quadro atualizou
           // sozinho em segundo plano nesse meio-tempo (atualizarKanbanEmBackground
@@ -911,7 +918,7 @@ function renderDetail() {
     tarefaViva.running = vaiComecar;
     tarefaViva._runningToggleEm = Date.now();
     if (tarefaViva.running) tocarTarefaNoBackend(tarefaViva.id, tarefaViva.title);
-    else pausarTarefaNoBackend(tarefaViva.id);
+    else { pausarTarefaNoBackend(tarefaViva.id); marcarUltimaTarefaPausada(tarefaViva.id); }
     renderDetail();
     render();
     applyCommentsState();
@@ -1541,6 +1548,7 @@ document.addEventListener("keydown", e => {
 function updateNowPlaying() {
   const el = document.getElementById("nowPlaying");
   const idle = document.getElementById("nowPlayingIdle");
+  const retomar = document.getElementById("nowPlayingRetomar");
   if (!el) return;
   // Só considera tarefas rodando do PRÓPRIO designer logado — o array
   // `tasks` pode ter tarefas de outras pessoas (visão do coordenador),
@@ -1549,15 +1557,49 @@ function updateNowPlaying() {
   if (running) {
     el.hidden = false;
     if (idle) idle.hidden = true;
+    if (retomar) retomar.hidden = true;
     document.getElementById("nowPlayingTitle").textContent = running.title;
     document.getElementById("nowPlayingTime").textContent = formatTime(running.timerSeconds);
     const clienteEl = document.getElementById("nowPlayingClient");
     if (clienteEl) clienteEl.textContent = running.client || "";
   } else {
     el.hidden = true;
-    if (idle) idle.hidden = false;
+    // Nada rodando: mostra "Retomar <última pausada>" se tiver uma, senão
+    // o texto ocioso de sempre (ver ultimaTarefaPausada, js/kanban-polling.js).
+    if (ultimaTarefaPausada && retomar) {
+      if (idle) idle.hidden = true;
+      retomar.hidden = false;
+      const tituloEl = document.getElementById("nowPlayingRetomarTitulo");
+      if (tituloEl) tituloEl.textContent = ultimaTarefaPausada.title;
+    } else {
+      if (idle) idle.hidden = false;
+      if (retomar) retomar.hidden = true;
+    }
   }
 }
+
+// "Retomar" — dá play de novo na última tarefa que a pessoa pausou de
+// propósito, direto da pílula, sem precisar procurar o card no quadro.
+document.getElementById("nowPlayingRetomar")?.addEventListener("click", (ev) => {
+  ev.stopPropagation();
+  if (!ultimaTarefaPausada) return;
+  const tarefaViva = tasks.find(t => String(t.id) === String(ultimaTarefaPausada.id));
+  if (!tarefaViva) {
+    // Saiu do quadro enquanto ficou pausada (entregue, movida pra outro
+    // designer...) — sem o objeto vivo não dá pra retomar.
+    ultimaTarefaPausada = null;
+    updateNowPlaying();
+    mostrarToast("Não achei mais essa tarefa no quadro.", "erro");
+    return;
+  }
+  pararOutrasTarefasRodando(tarefaViva);
+  tarefaViva.running = true;
+  tarefaViva._runningToggleEm = Date.now();
+  tocarTarefaNoBackend(tarefaViva.id, tarefaViva.title);
+  if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(tarefaViva.id)) renderDetail();
+  render();
+  updateNowPlaying();
+});
 
 // Pausar direto pela pílula do topbar, sem precisar abrir a tarefa — só
 // existe uma tarefa rodando por vez (a pílula só mostra quando tem
@@ -1569,6 +1611,7 @@ document.getElementById("nowPlayingPause").addEventListener("click", (ev) => {
   running.running = false;
   running._runningToggleEm = Date.now();
   pausarTarefaNoBackend(running.id);
+  marcarUltimaTarefaPausada(running.id);
   if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(running.id)) renderDetail();
   render();
   applyCommentsState();

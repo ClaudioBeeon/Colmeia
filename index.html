@@ -136,6 +136,14 @@
             </span>
           </button>
           <div class="now-playing-idle" id="nowPlayingIdle">Nenhuma tarefa sendo executada no momento</div>
+          <!-- "Retomar": aparece só quando a ÚLTIMA coisa que aconteceu foi
+               a própria pessoa pausando uma tarefa (não entregar, não
+               passar pra frente, não dar play em outra) — ver
+               ultimaTarefaPausada em js/kanban-polling.js. -->
+          <button type="button" class="now-playing-retomar" id="nowPlayingRetomar" hidden title="Retomar essa tarefa">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 4v5h5M4.5 15a8 8 0 1014-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="now-playing-retomar-texto">Retomar <span id="nowPlayingRetomarTitulo"></span></span>
+          </button>
           <div class="pill-notif" id="pillNotif" hidden></div>
           <!-- Selo fixo de reunião próxima (Google Agenda) — some espaço no
                canto direito da pílula enquanto falta até 1h pra uma reunião

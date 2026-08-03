@@ -302,6 +302,27 @@ pessoa realmente quer se isolar.
   status de PESSOA, não decisão de "de quem é a tarefa" (o caso que o CLAUDE.md pede id de verdade).
 - Carregado depois do roteador de URL (mesmo motivo dos outros dois: usa função de quase todo mundo).
 
+## "Retomar" na pílula do topo (2026-08-03)
+
+`ultimaTarefaPausada` (js/kanban-polling.js) — quando a pessoa pausa uma tarefa de propósito (pra
+atender uma prioridade, por exemplo) sem entregar nem passar pra frente, a pílula do topo troca o
+texto ocioso por "↻ Retomar `<nome da tarefa>`", clicável, sem precisar procurar o card no quadro.
+
+**A regra de quando o botão some é "qualquer play apaga":** `tocarTarefaNoBackend` (o único ponto de
+entrada de todo play do app, não importa o botão) zera `ultimaTarefaPausada` logo no topo, sempre —
+se a tarefa retomada for a mesma, ela já está rodando (não precisa mais do botão); se for outra
+qualquer, a pessoa já seguiu em frente. Isso evita ter que caçar "todo lugar que dá play" pra limpar
+o estado — só o de PAUSAR precisa marcar.
+
+**Só pause MANUAL marca** (a pessoa escolheu parar, não o Colmeia pausando sozinho por outro
+motivo) — `marcarUltimaTarefaPausada(taskId)` é chamada nos 6 cliques de pausar de verdade
+(pílula do topo, botão do card no quadro, botão dentro do card aberto, pílula de coordenação, a
+paleta de comando, a página Minhas horas). NÃO é chamada em `pararOutrasTarefasRodando` (para a
+tarefa VELHA sozinho quando uma nova começa) nem no pause de segurança da entrega — esse último,
+inclusive, LIMPA a marca se bater com a tarefa entregue: não faz sentido oferecer "Retomar" algo que
+acabou de ser concluído. Ao adicionar um novo botão de pausar no futuro, decidir esse mesmo jeito:
+pause escolhido pela pessoa marca, pause automático do sistema não.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

@@ -327,12 +327,14 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
    preenchendo o envelope inteiro) — só assim dá pra deslizar um saindo
    por cima enquanto o outro entra por baixo, no mesmo espaço. */
 .now-playing-wrap .now-playing,
-.now-playing-wrap .now-playing-idle {
+.now-playing-wrap .now-playing-idle,
+.now-playing-wrap .now-playing-retomar {
   position: absolute; inset: 0; width: 100%; margin: 0;
   transition: transform var(--dur-slow) var(--ease-apple-spring), background 0.15s var(--ease-apple);
 }
 .now-playing-wrap.pill-notif-ativa .now-playing,
-.now-playing-wrap.pill-notif-ativa .now-playing-idle {
+.now-playing-wrap.pill-notif-ativa .now-playing-idle,
+.now-playing-wrap.pill-notif-ativa .now-playing-retomar {
   transform: translateY(-100%);
 }
 
@@ -343,6 +345,7 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
    ao espaço que sobra. */
 .now-playing-wrap.tem-reuniao-proxima .now-playing,
 .now-playing-wrap.tem-reuniao-proxima .now-playing-idle,
+.now-playing-wrap.tem-reuniao-proxima .now-playing-retomar,
 .now-playing-wrap.tem-reuniao-proxima .pill-notif {
   right: 108px;
 }
@@ -373,6 +376,24 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
    lugar — ver .now-playing-wrap .now-playing-idle acima —, e o idle vem
    depois no HTML, então pintava por cima mesmo "escondido"). */
 .now-playing-idle[hidden] { display: none; }
+
+.now-playing-retomar {
+  min-width: 0; border: none; cursor: pointer;
+  background: var(--kanban-yellow); color: #16181D;
+  border-radius: 999px; padding: 10px 20px;
+  font-family: var(--font-body); font-size: 13.5px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.now-playing-retomar:hover { background: #E0A800; }
+.now-playing-retomar svg { width: 15px; height: 15px; flex-shrink: 0; }
+.now-playing-retomar-texto {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Mesmo motivo do .now-playing-idle[hidden] logo acima: o display:flex
+   daqui ganha do [hidden] nativo por especificidade igual, então sem
+   isso o botão continuava pintado por cima mesmo "escondido". */
+.now-playing-retomar[hidden] { display: none; }
 
 /* Notificação "ambiente" dentro da própria pílula (comentário, aviso,
    upload no Drive, tarefa recebida via repasse) — só usada quando não

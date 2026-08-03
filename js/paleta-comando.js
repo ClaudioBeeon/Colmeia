@@ -122,6 +122,7 @@ function paletaMontarLinhas(termo) {
         viva.running = false;
         viva._runningToggleEm = Date.now();
         pausarTarefaNoBackend(viva.id);
+        marcarUltimaTarefaPausada(viva.id);
         render();
         updateNowPlaying();
         mostrarToast("Cronômetro pausado.");

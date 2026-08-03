@@ -240,7 +240,7 @@ function renderCoordenacaoPill() {
     // na tela, mesmo a tarefa já estando rodando de verdade lá.
     tarefaViva._runningToggleEm = Date.now();
     if (tarefaViva.running) tocarTarefaNoBackend(tarefaViva.id, tarefaViva.title);
-    else pausarTarefaNoBackend(tarefaViva.id);
+    else { pausarTarefaNoBackend(tarefaViva.id); marcarUltimaTarefaPausada(tarefaViva.id); }
     render();
     updateNowPlaying();
   });
@@ -472,7 +472,7 @@ function attachCardDragHandlers() {
       task.running = vaiComecar;
       task._runningToggleEm = Date.now();
       if (task.running) tocarTarefaNoBackend(task.id, task.title);
-      else pausarTarefaNoBackend(task.id);
+      else { pausarTarefaNoBackend(task.id); marcarUltimaTarefaPausada(task.id); }
       render(); // atualiza o ícone dessa tarefa E o da outra que parou junto
       updateNowPlaying();
     });
