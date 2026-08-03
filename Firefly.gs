@@ -17,19 +17,24 @@
  * nisso, do mesmo jeito que outras integrações novas deste projeto
  * (ver o comentário em cima de criarTarefaRunrun, RunrunEscrita.gs).
  *
- * ⚠️ PENDÊNCIA (2026-08-03): a autorização funciona e devolve um
- * access_token, mas SEM refresh_token — a Adobe recusa o escopo
- * "offline_access" (que normalmente traz o refresh_token) com
- * "invalid_scope" pra essa credencial. Sem refresh_token, o token some
- * depois de algumas horas e é preciso autorizar de novo — não dá pra
- * deixar a Bee gerando imagem sozinha de forma duradoura ainda. Precisa
- * checar no Adobe Developer Console (developer.adobe.com/console),
- * dentro do projeto/credencial da Firefly, se existe uma lista de
- * escopos pra marcar/liberar (procurar "offline_access" ou "Refresh
- * Token") — se não existir essa opção pra esse produto, pode ser uma
- * limitação da própria API "Adobe Express API - Firefly Services
- * (beta)" e precisaria trocar de produto/credencial pra resolver de
- * vez.
+ * ⚠️ LIMITAÇÃO CONFIRMADA (2026-08-03): não tem como conseguir
+ * refresh_token com a credencial atual. Investigado a fundo com o
+ * Cláudio direto no Adobe Developer Console:
+ *   - o escopo "offline_access" (que normalmente traz o refresh_token)
+ *     é recusado com "invalid_scope" pra essa credencial;
+ *   - "Server-to-Server Authentication" aparece CINZA/desabilitado pra
+ *     essa conta — só "User Authentication" está disponível;
+ *   - removendo e reconectando a API do zero ao projeto (pra tentar
+ *     escolher escopos diferentes), a Adobe nem oferece tela de escolha
+ *     de escopo — ela simplesmente não existe pra esse produto.
+ * Ou seja: com o plano/produto que a Beeon tem hoje ("Adobe Express API
+ * - Firefly Services (beta)"), o token dura só algumas horas e NUNCA vai
+ * durar mais que isso — não é uma configuração faltando, é como esse
+ * produto funciona. Pra ter geração de imagem automática de verdade
+ * (sem ninguém precisando logar de novo periodicamente), precisaria de
+ * um produto/plano diferente da Adobe com liberação pra
+ * Server-to-Server — isso é decisão de conta/contrato com a Adobe, não
+ * dá pra resolver só no código.
  *
  * COMO AUTORIZAR (só precisa fazer 1 vez):
  * 1. No Adobe Developer Console, crie a credencial "OAuth Web App" pra
