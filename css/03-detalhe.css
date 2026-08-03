@@ -853,7 +853,7 @@
 .chat-aba-atual {
   display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%;
   height: 32px; border: none; cursor: pointer;
-  padding: 0 7px; border-radius: 999px; font-family: inherit;
+  padding: 0 7px; border-radius: 999px; font-family: var(--font-body);
   background: var(--kanban-yellow); color: #16181D;
   transition: background var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple),
     transform var(--dur-base) var(--ease-apple-spring);
@@ -880,7 +880,7 @@
   width: 100%; height: 32px;
   display: flex; align-items: center; justify-content: center; gap: 4px;
   border: none; border-radius: 999px; cursor: pointer; padding: 0 7px;
-  background: transparent; color: #fff; font-family: inherit;
+  background: transparent; color: #fff; font-family: var(--font-body);
   transition: background var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple),
     transform var(--dur-base) var(--ease-apple-spring);
 }
@@ -944,7 +944,7 @@
 }
 .chat-subpill {
   border: none; background: var(--page-bg); color: var(--text-secondary);
-  font-family: inherit; font-size: 12px; font-weight: 600;
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
   padding: 7px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
   transition: background 180ms ease-out, color 180ms ease-out;
 }
