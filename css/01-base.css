@@ -348,12 +348,17 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 }
 
 /* Mesma ideia, do lado esquerdo: enquanto o selo "Retomar" está visível
-   (ver .retomar-badge abaixo), reserva espaço pra ele — sem isso o
-   conteúdo centralizado da pílula ficaria por baixo do ícone. */
+   (ver .retomar-badge abaixo), empurra o conteúdo centralizado da pílula
+   pra não ficar por baixo do ícone. IMPORTANTE: usar padding, não `left`
+   — `left` (com `right` já em 0 por causa do `inset:0`) ENCOLHE a caixa
+   e deixa uma faixa sem o amarelo de fundo nela (o preto da barra por
+   trás aparece ali, e o ícone parece "flutuar" fora da pílula). Com
+   padding a caixa continua ocupando o envelope inteiro (amarelo de
+   ponta a ponta), só o texto centralizado que desloca. */
 .now-playing-wrap.tem-retomar .now-playing,
 .now-playing-wrap.tem-retomar .now-playing-idle,
 .now-playing-wrap.tem-retomar .pill-notif {
-  left: 40px;
+  padding-left: 44px;
 }
 
 .now-playing {
