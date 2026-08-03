@@ -215,7 +215,12 @@ function gerarImagemFirefly(prompt, opcoes) {
   if (!accessToken) {
     return {
       ok: false,
-      error: 'A Bee ainda não tem autorização pra usar a Firefly. Peça pro Cláudio abrir a URL do Colmeia (COLMEIA_API_URL) + "?fireflyAuth=iniciar" num navegador e autorizar uma vez.'
+      // A palavra é "expirou", não "ainda não foi autorizada" — com o
+      // plano atual da Adobe (ver o aviso de LIMITAÇÃO CONFIRMADA no topo
+      // do arquivo) isso é esperado acontecer de novo periodicamente
+      // (a cada poucas horas), não é um erro de configuração.
+      semAutorizacaoFirefly: true,
+      error: 'A autorização da Firefly expirou (isso acontece de tempos em tempos, o token da Adobe não dura muito com o plano atual). Peça pro Cláudio abrir a URL do Colmeia (COLMEIA_API_URL) + "?fireflyAuth=iniciar" num navegador e autorizar de novo — leva só alguns segundos.'
     };
   }
   opcoes = opcoes || {};
