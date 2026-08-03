@@ -1577,12 +1577,15 @@ function updateNowPlaying() {
 function atualizarBadgeRetomar() {
   const badge = document.getElementById("retomarBadge");
   if (!badge) return;
+  const wrap = document.getElementById("nowPlayingWrap");
   if (ultimaTarefaPausada) {
     badge.hidden = false;
+    if (wrap) wrap.classList.add("tem-retomar");
     const tituloEl = document.getElementById("retomarBadgeTitulo");
     if (tituloEl) tituloEl.textContent = ultimaTarefaPausada.title;
   } else {
     badge.hidden = true;
+    if (wrap) wrap.classList.remove("tem-retomar");
   }
 }
 

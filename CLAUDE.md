@@ -306,14 +306,20 @@ pessoa realmente quer se isolar.
 
 `ultimaTarefaPausada` (js/kanban-polling.js) — quando a pessoa pausa uma tarefa de propósito (pra
 atender uma prioridade, por exemplo) sem entregar nem passar pra frente, um selo circular preto
-(`#retomarBadge`, index.html) aparece à ESQUERDA da pílula do topo — só o ícone em repouso, expande
-mostrando "↻ Retomar `<nome da tarefa>`" no `:hover`. Clica e volta a tocar, sem precisar procurar o
-card no quadro.
+(`#retomarBadge`, index.html) aparece DENTRO da própria pílula amarela, colado na borda esquerda
+dela — só o ícone em repouso, expande por cima do amarelo mostrando "↻ Retomar `<nome da tarefa>`"
+no `:hover`. Clica e volta a tocar, sem precisar procurar o card no quadro.
 
-**Independente do carrossel da pílula de propósito:** ao contrário de `.now-playing`/
-`.now-playing-idle` (que se revezam no mesmo espaço, um de cada vez), o selo é um elemento à parte —
-fica visível mesmo com OUTRA tarefa rodando. É assim que "pausei pra apagar um incêndio rápido"
-continua lembrado enquanto esse incêndio está rodando.
+**Dentro do envelope da pílula, mas fora do carrossel dela:** `#retomarBadge` mora dentro de
+`.now-playing-wrap` (mesmo elemento que guarda `.now-playing`/`.now-playing-idle`/`.pill-notif`) pra
+herdar a altura e o cantos arredondados certos, mas não participa do sobe-desce entre esses três
+estados — fica sempre visível, inclusive com OUTRA tarefa rodando. `position: absolute` com
+`top`/`bottom` (em vez de um `height` fixo) faz a altura dele acompanhar a da pílula de verdade; é
+isso que evita o corte no topo que dava numa versão anterior (selo fora da pílula, com altura solta
+que não batia com a da pílula ao lado). Quando visível, a classe `.tem-retomar` no wrap empurra pra
+direita o conteúdo centralizado de `.now-playing`/`.now-playing-idle`/`.pill-notif` (mesmo padrão já
+usado por `.tem-reuniao-proxima`, só que do lado esquerdo) — sem isso o texto centralizado ficaria
+por baixo do ícone.
 
 **Some depois de DUAS tarefas diferentes tocadas, não uma:** uma pausa rápida pra atender uma
 prioridade não deve fazer a pessoa perder o fio do que estava fazendo antes — só na SEGUNDA tarefa

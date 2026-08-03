@@ -347,6 +347,15 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   right: 108px;
 }
 
+/* Mesma ideia, do lado esquerdo: enquanto o selo "Retomar" está visível
+   (ver .retomar-badge abaixo), reserva espaço pra ele — sem isso o
+   conteúdo centralizado da pílula ficaria por baixo do ícone. */
+.now-playing-wrap.tem-retomar .now-playing,
+.now-playing-wrap.tem-retomar .now-playing-idle,
+.now-playing-wrap.tem-retomar .pill-notif {
+  left: 40px;
+}
+
 .now-playing {
   display: flex; align-items: center; gap: 9px;
   background: var(--kanban-yellow); border: none; border-radius: 999px;
@@ -374,16 +383,20 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
    depois no HTML, então pintava por cima mesmo "escondido"). */
 .now-playing-idle[hidden] { display: none; }
 
-/* "Retomar" — selo independente à esquerda da pílula (não faz parte do
-   carrossel: fica visível mesmo com outra tarefa rodando). Em repouso é
-   só a bolinha preta com o ícone (largura = altura, perfeitamente
-   circular — evita o corte que dava quando o ícone dividia espaço com
-   texto dentro de uma pílula de altura fixa); passar o mouse expande a
-   MESMA cápsula preta pra revelar o nome da tarefa, sem trocar de cor. */
+/* "Retomar" — selo DENTRO da pílula amarela, colado na borda esquerda
+   dela (não faz parte do carrossel: fica visível mesmo com outra tarefa
+   rodando). position:absolute com top/bottom iguais (em vez de
+   height fixo) faz a altura acompanhar a da pílula de verdade — é isso
+   que evita o corte no topo que dava com um height solto que não batia
+   com o da pílula. Em repouso é só a bolinha preta com o ícone; passar
+   o mouse expande a MESMA cápsula preta por cima do amarelo pra revelar
+   o nome da tarefa. */
 .retomar-badge {
-  flex-shrink: 0; position: relative;
+  position: absolute; top: 3px; bottom: 3px; left: 3px;
+  z-index: 2;
+  flex-shrink: 0;
   display: flex; align-items: center;
-  width: 34px; height: 34px; overflow: hidden;
+  width: 34px; overflow: hidden;
   border: none; cursor: pointer; padding: 0;
   background: #16181D; color: #fff;
   border-radius: 999px;
@@ -393,7 +406,7 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 .retomar-badge[hidden] { display: none; }
 
 .retomar-badge-icone {
-  width: 34px; height: 34px; flex-shrink: 0;
+  width: 34px; flex-shrink: 0; align-self: stretch;
   display: flex; align-items: center; justify-content: center;
 }
 .retomar-badge-icone svg { width: 15px; height: 15px; }
