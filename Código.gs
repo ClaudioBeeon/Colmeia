@@ -128,7 +128,9 @@ var ACOES_QUE_MUDAM_O_QUADRO = [
   'criarRegra', 'adicionarNaRegra', 'removerDaRegra', 'criarTarefa',
   // Devolver pro designer cria a subtarefa de alteração, aloca alguém e
   // move pra Ajustes — três coisas que aparecem no quadro na hora.
-  'devolverParaDesigner'
+  'devolverParaDesigner',
+  // Manda o card mãe pra "Aprovação do Cliente" — muda de coluna no quadro.
+  'moverCardMaeParaAprovacaoCliente'
 ];
 
 function doGet(e) {
@@ -263,6 +265,8 @@ function handleRequest(e, method) {
         output = aprovarInternamente(body.taskId, body.nomePeca, body.aprovadoPor);
       } else if (body.acao === 'devolverParaDesigner') {
         output = devolverParaDesigner(body);
+      } else if (body.acao === 'moverCardMaeParaAprovacaoCliente') {
+        output = moverCardMaeParaAprovacaoCliente(body.taskId, body.autor);
       } else if (body.acao === 'buscarConferenciaDaTarefa') {
         output = buscarConferenciaDaTarefa(body.taskId, body.idsRelacionados);
       } else if (body.acao === 'buscarDevolucaoDaTarefa') {

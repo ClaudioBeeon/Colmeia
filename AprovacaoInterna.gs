@@ -417,6 +417,95 @@ function aprovarInternamente(taskId, nomePeca, aprovadoPor) {
 }
 
 // ---------------------------------------------------------------------
+// Mandar o card mãe pra "Aprovação do Cliente"
+// ---------------------------------------------------------------------
+
+// Nome da etapa no Runrun.it, como está escrito lá. A comparação ignora
+// acento e maiúscula (ver normalizarNomeDeEtapa), então pequenas
+// diferenças de escrita não quebram nada.
+var ETAPA_APROVACAO_CLIENTE = 'Aprovação do Cliente';
+
+/**
+ * Move o card mãe pra etapa "Aprovação do Cliente" no Runrun.it.
+ *
+ * Pedido do Cláudio: quando o atendimento manda o link, o card mãe tem que
+ * sair da fila de produção e ir pra aba onde o time acompanha o que está
+ * esperando resposta do cliente. Sem isso ele continua parecendo trabalho
+ * em aberto pra quem olha o quadro do Runrun.it.
+ *
+ * Vale pro CARD MÃE, não pra subtarefa: quem representa a peça no mês
+ * inteiro é ele, e é ele que o time olha.
+ */
+function moverCardMaeParaAprovacaoCliente(taskId, autor) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  var tarefa = runrunFetch('/tasks/' + taskId);
+  if (!tarefa || tarefa.erroFetch) {
+    return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.', runrunFora: runrunPareceForaDoAr() };
+  }
+  var cardMaeId = tarefa.parent_task_id || taskId;
+
+  var stageId = idDaEtapaPorNome(ETAPA_APROVACAO_CLIENTE);
+  if (!stageId) {
+    // Falha honesta: a interface avisa que o link foi gerado mas o card
+    // não se moveu, em vez de dizer "pronto!" pra uma coisa que não
+    // aconteceu.
+    return { ok: false, error: 'Não achei a etapa "' + ETAPA_APROVACAO_CLIENTE + '" no Runrun.it. O link foi gerado; o card mãe precisa ser movido à mão.' };
+  }
+
+  var r = moverParaEtapaArbitraria(cardMaeId, stageId, autor);
+  if (!r.ok) return { ok: false, error: r.error || 'O Runrun.it recusou mover o card mãe.' };
+  return { ok: true, cardMaeId: cardMaeId, link: 'https://runrun.it/tasks/' + cardMaeId };
+}
+
+function normalizarNomeDeEtapa(nome) {
+  return String(nome || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim();
+}
+
+/**
+ * Descobre o id de uma etapa pelo NOME dela.
+ *
+ * O Runrun.it não tem (nem o Colmeia usa) um endpoint que liste as etapas
+ * do quadro — o jeito que o app já usava pra isso, na página "Runrun
+ * completo", é olhar uma tarefa que esteja na etapa e ler o
+ * `task_state_id` dela. Aqui é a mesma ideia, procurando por nome.
+ *
+ * Por isso NÃO existe id escrito na mão: a agência pode renomear ou
+ * recriar a etapa, e um número fixo aqui viraria uma dessas quebras
+ * silenciosas que ninguém liga à causa. O id fica 6h em cache (etapa não
+ * muda de id) pra não repetir a varredura a cada envio.
+ */
+function idDaEtapaPorNome(nomeProcurado) {
+  var chaveCache = 'colmeia_etapa_id_' + normalizarNomeDeEtapa(nomeProcurado);
+  var cache = CacheService.getScriptCache();
+  var guardado = cache.get(chaveCache);
+  if (guardado) return guardado;
+
+  var alvo = normalizarNomeDeEtapa(nomeProcurado);
+  // Ordenado por atualização: a etapa que interessa é usada o tempo todo,
+  // então aparece nas primeiras páginas. Para no que achar — e desiste
+  // depois de 5 páginas pra nunca virar uma varredura infinita.
+  for (var pagina = 1; pagina <= 5; pagina++) {
+    var lote = runrunFetch('/tasks?is_closed=false&sort=updated_at&sortDir=desc&limit=100&page=' + pagina);
+    if (!lote || lote.erroFetch || !lote.length) break;
+    for (var i = 0; i < lote.length; i++) {
+      var t = lote[i];
+      var nomes = [t.board_stage_name, t.task_state_name];
+      for (var n = 0; n < nomes.length; n++) {
+        if (nomes[n] && normalizarNomeDeEtapa(nomes[n]) === alvo && t.task_state_id) {
+          cache.put(chaveCache, String(t.task_state_id), 6 * 60 * 60);
+          return String(t.task_state_id);
+        }
+      }
+    }
+    if (lote.length < 100) break;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------
 // Devolver pro designer
 // ---------------------------------------------------------------------
 
