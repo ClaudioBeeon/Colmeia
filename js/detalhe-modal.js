@@ -1859,14 +1859,19 @@ function registrarFalaDaBeeSobrePasta(taskId, dataBee) {
   if (!dataBee || !dataBee.ok) return;
   if (typeof beeConversas === "undefined") return;
   beeConversas.set(taskId, dataBee.conversa);
-  // Se a Bee dessa MESMA tarefa já está aberta na tela, mostra a fala
-  // nova na hora — senão ela já está salva, e aparece quando a pessoa
-  // abrir a aba da Bee.
+  // Bug encontrado em 2026-08-04: isso só REDESENHAVA se a pessoa já
+  // estivesse na aba da Bee — como quem manda o link do Drive normalmente
+  // está na aba "Comentários" (é de lá que vem o aviso de upload), a fala
+  // ficava salva, mas escondida, esperando um clique que nunca vinha. O
+  // pedido original ("a Bee apareça perguntando as 3 opções") é uma
+  // TROCA de aba automática, não só uma atualização condicional — troca
+  // pra aba dela sempre que é a MESMA tarefa que ainda está aberta na
+  // tela (se a pessoa já tiver saído do card, só fica salvo mesmo).
   if (
     tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId) &&
-    chatThreadAtivo === "bee" && typeof desenharThreadBee === "function"
+    typeof abrirThreadBee === "function"
   ) {
-    desenharThreadBee(tasks[detailIdx]);
+    abrirThreadBee(tasks[detailIdx]);
   }
 }
 
