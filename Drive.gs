@@ -196,6 +196,64 @@ function linkarPastaManualNoDrive(taskId, url) {
 }
 
 /**
+ * Recebe um arquivo arrastado pro card no navegador e sobe pra pasta do
+ * Drive dele — cria a pasta na hora se ainda não existir (mesmo caminho de
+ * criarPastaDoCardNoDrive, então nunca duplica uma pasta que já existe).
+ * O nome final segue o padrão da agência (ver nomeArquivoPadronizado logo
+ * abaixo): "<título do card> - vN.<extensão>", numerando a versão sozinho.
+ */
+function subirArquivoNoCard(dados) {
+  if (!dados || !dados.taskId || !dados.nomeArquivo || !dados.base64Dados) {
+    return { ok: false, error: 'Dados do arquivo incompletos.' };
+  }
+  var pastaInfo = criarPastaDoCardNoDrive(dados.cliente, dados.tituloCard, dados.taskId, dados.projeto);
+  if (!pastaInfo.ok) return pastaInfo;
+
+  try {
+    var pastaCard = DriveApp.getFolderById(extrairIdDeUrlDrive(pastaInfo.url));
+    var nomeFinal = nomeArquivoPadronizado(pastaCard, dados.tituloCard, dados.nomeArquivo);
+    var bytes = Utilities.base64Decode(dados.base64Dados);
+    var blob = Utilities.newBlob(bytes, dados.mimeType || 'application/octet-stream', nomeFinal);
+    var arquivo = pastaCard.createFile(blob);
+    return { ok: true, url: arquivo.getUrl(), nomeFinal: nomeFinal, pastaUrl: pastaInfo.url };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao subir o arquivo: ' + err.message };
+  }
+}
+
+/**
+ * Monta o nome padrão da agência pra um arquivo novo dentro da pasta do
+ * card: "<título do card> - vN.<extensão>". A versão (vN) é calculada
+ * sozinha, olhando o que já tem na pasta com essa mesma base de nome —
+ * primeiro upload vira "v1", o próximo "v2", e assim por diante. Isso já
+ * deixa o material pronto pra uma comparação futura "o que mudou da V1 pra
+ * V2" (ideia pendente, ver CLAUDE.md).
+ *
+ * Sanitiza caracteres que o Drive aceita mas Windows/Mac não usariam num
+ * nome de arquivo (: / \ * ? " < > |), pra não dar dor de cabeça em quem
+ * baixar o arquivo depois.
+ */
+function nomeArquivoPadronizado(pastaCard, tituloCard, nomeOriginal) {
+  var pontoIdx = nomeOriginal.lastIndexOf('.');
+  var extensao = pontoIdx > -1 ? nomeOriginal.substring(pontoIdx) : '';
+  var baseBruta = tituloCard || nomeOriginal.substring(0, pontoIdx > -1 ? pontoIdx : nomeOriginal.length);
+  var base = String(baseBruta).replace(/[\/\\:*?"<>|]/g, '-').trim().substring(0, 80);
+
+  var escapado = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  var re = new RegExp('^' + escapado + ' - v(\\d+)', 'i');
+  var maiorVersao = 0;
+  var arquivos = pastaCard.getFiles();
+  while (arquivos.hasNext()) {
+    var m = arquivos.next().getName().match(re);
+    if (m) {
+      var v = parseInt(m[1], 10);
+      if (v > maiorVersao) maiorVersao = v;
+    }
+  }
+  return base + ' - v' + (maiorVersao + 1) + extensao;
+}
+
+/**
  * Verifica, direto na pasta do Drive da tarefa (sem depender do cache
  * de 10 minutos do painel-designers-beeon), se teve upload de arquivo
  * novo nas últimas 3 horas. Como já sabemos exatamente qual pasta é

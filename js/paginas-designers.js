@@ -420,6 +420,53 @@ function abrirHubDoCliente(cliente, designer) {
   }
 
   clientHubModalOverlay.hidden = false;
+  atualizarTermometroDoCliente(cliente);
+}
+
+// ===== Termômetro do cliente — "está mais exigente que o normal esse
+// mês?" (pedido do Cláudio, 2026-08-03) =====
+//
+// Só faz sentido pro coordenador (é uma leitura de time, não de tarefa
+// individual). Busca UMA vez só (varre as tarefas dos 3 designers, é
+// pesada — ver buscarTermometroClientes, RunrunLeitura.gs), guarda em
+// cache neste módulo, e cada abertura de hub só CONSULTA o que já veio,
+// sem repetir a ida à rede.
+let termometroClientesCache = null;
+let termometroClientesPromise = null;
+
+async function atualizarTermometroDoCliente(cliente) {
+  const el = document.getElementById("chModalTermometro");
+  if (!el) return;
+  el.innerHTML = "";
+  if (PAPEL_LOGADO !== "coordenador") return;
+
+  if (!termometroClientesCache) {
+    if (!termometroClientesPromise) {
+      termometroClientesPromise = chamarBackend({ acao: "buscarTermometroClientes" }).then(data => {
+        termometroClientesCache = (data && data.ok) ? data.clientes : [];
+        return termometroClientesCache;
+      });
+    }
+    await termometroClientesPromise;
+    // O hub pode ter trocado de cliente (ou fechado) enquanto a busca
+    // pesada rodava — só desenha se ainda é ESTE cliente na tela.
+    if (document.getElementById("chModalNome")?.textContent !== formatarNomeExibicao(cliente)) return;
+  }
+
+  const reg = (termometroClientesCache || []).find(r => normalizarParaComparar(r.cliente) === normalizarParaComparar(cliente));
+  // Sem registro = sem volume/histórico suficiente esse mês pra comparar
+  // (ver o filtro em buscarTermometroClientes) — não é erro, só não
+  // mostra nada, pra não poluir o hub de clientes pequenos.
+  if (!reg) return;
+
+  const pontos = Math.round(reg.diferenca * 100);
+  if (pontos <= 5) return; // diferença pequena demais pra significar algo — só avisa quando sobe de verdade
+
+  el.innerHTML = `
+    <div class="ch-termometro ch-termometro-alto" title="${Math.round(reg.taxaAtual * 100)}% das tarefas desse cliente viraram alteração esse mês, contra ${Math.round(reg.mediaAnterior * 100)}% na média de ${reg.mesesAnteriores} ${reg.mesesAnteriores === 1 ? "mês anterior" : "meses anteriores"}">
+      🌡️ Mais exigente que o normal esse mês — ${pontos} pontos a mais de alteração
+    </div>
+  `;
 }
 
 /**

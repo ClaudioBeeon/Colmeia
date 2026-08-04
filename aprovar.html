@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Aprovação de peça — Beeon</title>
+<style>
+  /**
+   * Página de aprovação pro CLIENTE, sem login nenhum — pedido do
+   * Cláudio (2026-08-03): "página só com a peça e dois botões". Segurança
+   * pelo código aleatório na URL (ver gerarLinkDeAprovacao, Aprovacao.gs),
+   * não por senha — por isso essa página não pede nada além de já vir com
+   * o link certo.
+   *
+   * De propósito um arquivo SOZINHO, sem carregar os 24 arquivos de js/
+   * do app principal: quem abre isso é o cliente, geralmente pelo celular
+   * (link mandado por WhatsApp/e-mail), então tem que ser leve e não
+   * depender de estar logado em nada.
+   */
+  * { box-sizing: border-box; }
+  :root {
+    color-scheme: light;
+    --bg: #f4f3f0;
+    --card-bg: #ffffff;
+    --text: #1c1b1f;
+    --text-secondary: #6b6a70;
+    --border: #e6e4e0;
+    --amarelo: #ffcc00;
+    --verde: #1f9d55;
+    --verde-bg: #e8f7ee;
+    --laranja: #c9720a;
+    --laranja-bg: #fdf1e2;
+  }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap {
+    max-width: 560px; margin: 0 auto; padding: 28px 18px 60px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .marca {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 14px; color: var(--text-secondary);
+    letter-spacing: 0.02em; text-transform: uppercase;
+  }
+  .marca-selo {
+    width: 22px; height: 22px; border-radius: 7px; background: var(--amarelo);
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px;
+    padding: 20px; box-shadow: 0 10px 30px rgba(20,18,10,0.06);
+  }
+  .titulo { font-size: 19px; font-weight: 700; margin: 0 0 2px; }
+  .subtitulo { font-size: 14px; color: var(--text-secondary); margin: 0 0 16px; }
+  .imagem-box {
+    position: relative;
+    border-radius: 12px; overflow: hidden; background: var(--bg);
+    border: 1px solid var(--border); margin-bottom: 10px;
+  }
+  .imagem-box img { display: block; width: 100%; height: auto; }
+  .imagem-box.marcavel { cursor: crosshair; }
+
+  /* Pins: marcar um ponto exato na imagem (pedido do Cláudio,
+     2026-08-04) — clica na imagem, solta um pino numerado, escreve o
+     que precisa mudar ali. Posição em PORCENTAGEM (não pixel), pra
+     acompanhar a imagem em qualquer tamanho de tela. */
+  #pinsOverlay { position: absolute; inset: 0; pointer-events: none; }
+  .pin-marcador {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--amarelo); color: #16181d; font-weight: 800; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    pointer-events: auto; cursor: pointer;
+  }
+  .dica-pins {
+    font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pins-lista { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
+  .pin-linha { display: flex; align-items: center; gap: 8px; }
+  .pin-linha-numero {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--amarelo); color: #16181d;
+    font-weight: 800; font-size: 11px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .pin-linha input {
+    font: inherit; font-size: 13.5px; flex: 1; min-width: 0;
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  .pin-linha-texto { flex: 1; font-size: 13.5px; }
+  .pin-linha-remover {
+    flex: 0; min-width: auto; width: 26px; height: 26px; padding: 0;
+    border-radius: 50%; background: var(--bg); color: var(--text-secondary); font-size: 15px;
+  }
+  .acoes { display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    font: inherit; cursor: pointer; border: none; border-radius: 12px;
+    padding: 14px 18px; font-weight: 700; font-size: 15px; flex: 1;
+    min-width: 140px; transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.55; cursor: default; transform: none; }
+  .btn-aprovar { background: var(--verde); color: #fff; }
+  .btn-ajuste { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+  .ajuste-form { display: none; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .ajuste-form.aberto { display: flex; }
+  textarea {
+    font: inherit; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+    resize: vertical; min-height: 80px;
+  }
+  .ajuste-form-botoes { display: flex; gap: 10px; }
+  .ajuste-form-botoes button { flex: 1; }
+  .btn-cancelar { background: transparent; color: var(--text-secondary); }
+  .estado {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    gap: 10px; padding: 40px 10px;
+  }
+  .estado-icone { font-size: 40px; }
+  .estado-titulo { font-size: 18px; font-weight: 700; margin: 0; }
+  .estado-texto { font-size: 14px; color: var(--text-secondary); margin: 0; }
+  .pill-status {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
+    border-radius: 999px; font-size: 14px; font-weight: 700; align-self: flex-start;
+  }
+  .pill-aprovado { background: var(--verde-bg); color: var(--verde); }
+  .pill-ajuste { background: var(--laranja-bg); color: var(--laranja); }
+  .erro-texto { color: #b3261e; font-size: 14px; margin-top: 8px; display: none; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="marca"><span class="marca-selo">🐝</span> Beeon</div>
+
+  <div id="telaCarregando" class="card estado">
+    <div class="estado-icone">⏳</div>
+    <p class="estado-titulo">Carregando a peça...</p>
+  </div>
+
+  <div id="telaErro" class="card estado" hidden>
+    <div class="estado-icone">😕</div>
+    <p class="estado-titulo">Não consegui abrir esse link</p>
+    <p class="estado-texto" id="telaErroTexto">Confere se o link está completo e certo.</p>
+  </div>
+
+  <div id="telaAprovacao" class="card" hidden>
+    <p class="titulo" id="tituloTarefa"></p>
+    <p class="subtitulo" id="nomeCliente"></p>
+    <div class="imagem-box" id="imagemBox">
+      <img id="imagemPeca" alt="Peça pra aprovação">
+      <div id="pinsOverlay"></div>
+    </div>
+    <p class="dica-pins" id="dicaPins" hidden>📍 Clique na imagem pra marcar um ponto exato</p>
+    <div class="pins-lista" id="pinsLista" hidden></div>
+
+    <div id="blocoPendente">
+      <div class="acoes">
+        <button type="button" class="btn-aprovar" id="btnAprovar">✅ Aprovar</button>
+        <button type="button" class="btn-ajuste" id="btnPedirAjuste">✏️ Pedir ajuste</button>
+      </div>
+      <div class="ajuste-form" id="formAjuste">
+        <textarea id="textoAjuste" placeholder="O que precisa mudar? (opcional)"></textarea>
+        <div class="ajuste-form-botoes">
+          <button type="button" class="btn-cancelar" id="btnCancelarAjuste">Cancelar</button>
+          <button type="button" class="btn-ajuste" id="btnConfirmarAjuste" style="background:var(--laranja-bg);color:var(--laranja);">Enviar pedido de ajuste</button>
+        </div>
+      </div>
+      <p class="erro-texto" id="erroEnvio"></p>
+    </div>
+
+    <div id="blocoRespondido" hidden>
+      <span class="pill-status" id="pillStatus"></span>
+      <p class="estado-texto" id="textoRespondido" style="margin-top:10px;"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  var COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
+
+  function pegarCodigo() {
+    var params = new URLSearchParams(location.search);
+    return params.get("codigo") || "";
+  }
+
+  function chamar(corpo) {
+    return fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify(corpo) })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return { ok: false, semRede: true, error: "Falha de conexão." }; });
+  }
+
+  function mostrarTela(id) {
+    ["telaCarregando", "telaErro", "telaAprovacao"].forEach(function (t) {
+      document.getElementById(t).hidden = (t !== id);
+    });
+  }
+
+  function mostrarComoRespondido(status, respostaTexto) {
+    document.getElementById("blocoPendente").hidden = true;
+    var bloco = document.getElementById("blocoRespondido");
+    bloco.hidden = false;
+    var pill = document.getElementById("pillStatus");
+    if (status === "aprovado") {
+      pill.className = "pill-status pill-aprovado";
+      pill.textContent = "✅ Aprovado";
+      document.getElementById("textoRespondido").textContent = "Obrigado! Já avisamos o time.";
+    } else {
+      pill.className = "pill-status pill-ajuste";
+      pill.textContent = "✏️ Ajuste pedido";
+      document.getElementById("textoRespondido").textContent = respostaTexto
+        ? "Você pediu: “" + respostaTexto + "”"
+        : "Já avisamos o time — eles entram em contato.";
+    }
+    modoLeitura = true;
+    document.getElementById("imagemBox").classList.remove("marcavel");
+    document.getElementById("dicaPins").hidden = true;
+    renderPins();
+  }
+
+  // ===== Pins: marcar um ponto exato na imagem =====
+  // Clica na imagem -> solta um pino numerado -> escreve o que precisa
+  // mudar naquele ponto. Posição guardada em PORCENTAGEM da imagem (x,
+  // y de 0 a 100), não em pixel — assim funciona em qualquer tamanho de
+  // tela, do celular ao desktop. Depois de responder (ou se o link já
+  // veio respondido), vira só leitura: mostra onde foram marcados, sem
+  // deixar adicionar/editar mais nada.
+  var pins = [];
+  var modoLeitura = false;
+
+  function renderPins() {
+    var overlay = document.getElementById("pinsOverlay");
+    overlay.innerHTML = pins.map(function (p, i) {
+      return '<div class="pin-marcador" style="left:' + p.x + '%;top:' + p.y + '%" title="Ponto ' + (i + 1) + '">' + (i + 1) + '</div>';
+    }).join("");
+
+    var lista = document.getElementById("pinsLista");
+    if (!pins.length) {
+      lista.hidden = true;
+      lista.innerHTML = "";
+      return;
+    }
+    lista.hidden = false;
+    lista.innerHTML = pins.map(function (p, i) {
+      if (modoLeitura) {
+        return '<div class="pin-linha"><span class="pin-linha-numero">' + (i + 1) + '</span>' +
+          '<span class="pin-linha-texto">' + (p.texto ? escaparTexto(p.texto) : '(sem descrição)') + '</span></div>';
+      }
+      return '<div class="pin-linha">' +
+        '<span class="pin-linha-numero">' + (i + 1) + '</span>' +
+        '<input type="text" placeholder="O que precisa mudar aqui?" value="' + escaparTexto(p.texto || "") + '" data-pin-indice="' + i + '">' +
+        '<button type="button" class="pin-linha-remover" data-pin-remover="' + i + '" aria-label="Remover ponto">×</button>' +
+        '</div>';
+    }).join("");
+
+    if (!modoLeitura) {
+      lista.querySelectorAll("input[data-pin-indice]").forEach(function (input) {
+        input.addEventListener("input", function () {
+          pins[Number(input.dataset.pinIndice)].texto = input.value;
+        });
+      });
+      lista.querySelectorAll("[data-pin-remover]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          pins.splice(Number(btn.dataset.pinRemover), 1);
+          renderPins();
+        });
+      });
+    }
+  }
+
+  function escaparTexto(t) {
+    var div = document.createElement("div");
+    div.textContent = t;
+    return div.innerHTML;
+  }
+
+  document.getElementById("imagemBox").addEventListener("click", function (e) {
+    if (modoLeitura || e.target.closest(".pin-marcador")) return;
+    var box = document.getElementById("imagemBox").getBoundingClientRect();
+    var x = ((e.clientX - box.left) / box.width) * 100;
+    var y = ((e.clientY - box.top) / box.height) * 100;
+    pins.push({ x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)), texto: "" });
+    renderPins();
+    var novoInput = document.querySelector('input[data-pin-indice="' + (pins.length - 1) + '"]');
+    if (novoInput) novoInput.focus();
+  });
+
+  var codigo = pegarCodigo();
+  if (!codigo) {
+    mostrarTela("telaErro");
+  } else {
+    chamar({ acao: "buscarAprovacaoPublica", codigo: codigo }).then(function (data) {
+      if (!data || !data.ok) {
+        document.getElementById("telaErroTexto").textContent = (data && data.error) || "Link inválido.";
+        mostrarTela("telaErro");
+        return;
+      }
+      document.getElementById("tituloTarefa").textContent = data.tituloTarefa || data.nomeArquivo || "Peça pra aprovação";
+      document.getElementById("nomeCliente").textContent = data.cliente || "";
+      document.getElementById("imagemPeca").src = "data:" + data.mimeType + ";base64," + data.base64;
+      mostrarTela("telaAprovacao");
+
+      if (data.status && data.status !== "pendente") {
+        pins = data.pins || [];
+        mostrarComoRespondido(data.status, data.respostaTexto);
+      } else {
+        document.getElementById("imagemBox").classList.add("marcavel");
+        document.getElementById("dicaPins").hidden = false;
+      }
+
+      document.getElementById("btnAprovar").addEventListener("click", function () {
+        enviarResposta(true, "");
+      });
+      document.getElementById("btnPedirAjuste").addEventListener("click", function () {
+        document.getElementById("formAjuste").classList.add("aberto");
+      });
+      document.getElementById("btnCancelarAjuste").addEventListener("click", function () {
+        document.getElementById("formAjuste").classList.remove("aberto");
+      });
+      document.getElementById("btnConfirmarAjuste").addEventListener("click", function () {
+        enviarResposta(false, document.getElementById("textoAjuste").value.trim());
+      });
+    });
+  }
+
+  function enviarResposta(aprovado, respostaTexto) {
+    var botoes = document.querySelectorAll("#blocoPendente button");
+    botoes.forEach(function (b) { b.disabled = true; });
+    document.getElementById("erroEnvio").style.display = "none";
+
+    chamar({ acao: "responderAprovacaoPublica", codigo: codigo, aprovado: aprovado, respostaTexto: respostaTexto, pins: pins })
+      .then(function (data) {
+        if (!data || !data.ok) {
+          botoes.forEach(function (b) { b.disabled = false; });
+          var erro = document.getElementById("erroEnvio");
+          erro.textContent = (data && data.error) || "Não consegui enviar agora. Tenta de novo em alguns segundos.";
+          erro.style.display = "block";
+          return;
+        }
+        mostrarComoRespondido(data.status, respostaTexto);
+      });
+  }
+</script>
+</body>
+</html>

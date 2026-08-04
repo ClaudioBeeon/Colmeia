@@ -403,22 +403,6 @@
   font-size: 11.5px; font-weight: 600; color: var(--text-muted);
   margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* Anexo que veio da tarefa original, dentro de uma alteração. */
-.attach-origem {
-  font-size: 10px; font-weight: 700; color: #8A4B00; background: #FDECD2;
-  border-radius: 999px; padding: 1px 6px; margin-left: 4px; white-space: nowrap;
-}
-[data-theme="dark"] .attach-origem { background: rgba(253,236,210,0.20); color: #F0A860; }
-
-/* Anexo grande demais pra passar pelo Colmeia: o clique leva direto pro
-   Runrun.it (ver abrirAnexoNoRunrun). O aviso fica no próprio botão pra
-   ninguém clicar esperando um download que não vai acontecer. */
-.attach-runrun {
-  font-size: 10px; font-weight: 700; color: var(--text-muted);
-  border: 1px solid var(--border); border-radius: 999px;
-  padding: 1px 6px; margin-left: 4px; white-space: nowrap;
-}
-
 /* Resumo por IA do que o cliente pediu pra mudar, no topo da aba
    "Tarefa original" de uma subtarefa de alteração (ver resumirAlteracao). */
 .alteracao-resumo { margin-bottom: 16px; }
@@ -869,9 +853,6 @@ a.bee-recente { text-decoration: none; }
 }
 .memoria-ok:hover { background: rgba(34,176,125,0.14); color: var(--success); }
 
-/* "🐝 conferir o que falta", no bloco de anexos do card. */
-.bee-conferir-btn { margin-left: 6px; }
-
 /* Os links de referência que o "Me inspirar" devolve. Cada linha é um
    termo de busca; os botões abrem esse termo já pesquisado em cada site. */
 .bee-inspirar { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
@@ -1283,6 +1264,15 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 }
 .upload-notif-thumb.carregado { opacity: 1; }
 .upload-notif-thumb:hover { box-shadow: 0 0 0 2px var(--kanban-yellow); }
+
+/* Diff visual entre versões (comparar v1/v2 com a Bee) */
+.bee-comparativo-thumbs { display: flex; gap: 10px; margin-top: 8px; }
+.bee-comparativo-item { flex: 1; min-width: 0; }
+.bee-comparativo-label {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--text-secondary); margin-bottom: 3px;
+}
+.bee-comparativo-item .upload-notif-thumb { max-width: 100%; }
 
 /* ===================================================================
    MODO FOCO

@@ -92,6 +92,59 @@ function chamarGemini(prompt) {
   return { ok: true, dados: dados };
 }
 
+/**
+ * Como chamarGemini, mas manda IMAGENS junto do texto (Gemini vision) —
+ * usado pelo diff visual entre versões de uma peça (ver
+ * compararVersoesDoCard, Bee.gs; é a primeira vez que o Colmeia manda a
+ * Bee OLHAR o conteúdo de uma imagem, não só o nome do arquivo — antes
+ * disso, beeConferirEntrega (Bee.gs) só conseguia checar nome/data,
+ * nunca o desenho em si).
+ * imagens: [{base64, mimeType}, ...], na ordem que devem aparecer pro modelo.
+ */
+function chamarGeminiComImagens(prompt, imagens) {
+  var partes = (imagens || []).map(function (img) {
+    return { inlineData: { mimeType: img.mimeType, data: img.base64 } };
+  });
+  partes.push({ text: prompt });
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent';
+  var payload = {
+    contents: [{ parts: partes }],
+    generationConfig: { responseMimeType: 'application/json' }
+  };
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-goog-api-key': GEMINI_API_KEY },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  var codigo = res.getResponseCode();
+  var corpo = res.getContentText();
+
+  var parsed;
+  try {
+    parsed = JSON.parse(corpo);
+  } catch (e) {
+    return { ok: false, error: 'Resposta inesperada do Gemini (status ' + codigo + ').' };
+  }
+  if (codigo < 200 || codigo >= 300) {
+    var msg = (parsed.error && parsed.error.message) || ('Gemini recusou (status ' + codigo + ').');
+    return { ok: false, error: msg };
+  }
+  var candidato = parsed.candidates && parsed.candidates[0];
+  var texto = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0] && candidato.content.parts[0].text;
+  if (!texto) return { ok: false, error: 'Gemini não devolveu nenhum texto.' };
+
+  var dados;
+  try {
+    dados = JSON.parse(texto);
+  } catch (e) {
+    return { ok: false, error: 'Gemini devolveu algo que não é um JSON válido: ' + texto.substring(0, 200) };
+  }
+  return { ok: true, dados: dados };
+}
+
 function gerarFraseDoDia() {
   var agora = new Date();
   var diaSemana = Utilities.formatDate(agora, 'America/Sao_Paulo', 'EEEE');

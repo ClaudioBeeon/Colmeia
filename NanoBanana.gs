@@ -6,9 +6,12 @@
  * Por que este caminho, e não pelo Firefly: o produto que a Beeon tem na
  * Adobe ("Adobe Express API - Firefly Services beta") NÃO é uma API de
  * gerar imagem por texto — é uma API de trocar elementos dentro de
- * templates prontos do Adobe Express (ver a descoberta em Firefly.gs,
- * 2026-08-03). Pra gerar imagem livre pela Adobe precisaria do produto
- * "Firefly API" (Enterprise, Server-to-Server), que é outro contrato.
+ * templates prontos do Adobe Express. Pra gerar imagem livre pela Adobe
+ * precisaria do produto "Firefly API" (Enterprise, Server-to-Server),
+ * que é outro contrato — e nem a autorização daquele chegou a funcionar.
+ * O Firefly.gs, que tentava esse caminho, foi removido em 2026-08-03 a
+ * pedido do Cláudio; o site do Firefly continua sendo usado à mão, pelo
+ * botão que a Bee monta com o prompt pronto (ver Bee.gs).
  *
  * O Gemini já está configurado no Colmeia (GEMINI_API_KEY, mesma chave
  * usada pros textos da Bee em IA.gs) — geração de imagem usa a MESMA

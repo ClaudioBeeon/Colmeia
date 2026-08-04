@@ -258,9 +258,14 @@ function render() {
     }
     if (searchQuery) {
       const alvo = normalizarParaComparar(searchQuery);
+      // A busca profunda (dentro de comentários/descrição) mora em
+      // notificacoes-avisos.js, carregado DEPOIS deste arquivo — daí o
+      // typeof-guard, o mesmo padrão já usado pros ganchos do roteador de
+      // URL e do modo foco.
       list = list.filter(t =>
         normalizarParaComparar(t.title).includes(alvo) ||
-        normalizarParaComparar(t.client).includes(alvo)
+        normalizarParaComparar(t.client).includes(alvo) ||
+        (typeof buscaProfundaBate === "function" && buscaProfundaBate(t.id, alvo))
       );
     }
     if (columnMode[key] === "hoje") {

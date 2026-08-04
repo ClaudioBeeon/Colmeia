@@ -164,6 +164,7 @@ function renderPainelPessoas() {
         // a bolinha da barra lateral, se a foto trocada foi a de quem
         // está logado.
         atualizarAvatarDaSidebar();
+        precarregarFotosConhecidas();
         render();
         buildClientsPage();
         buildAtendimentoPage();

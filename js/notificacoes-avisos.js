@@ -138,6 +138,84 @@ async function buscarComentariosComCache(taskId, lastActivityAt) {
   return comentarios;
 }
 
+// ===== Busca profunda: dentro de comentários e da descrição, não só
+// título/cliente (pedido do Cláudio, 2026-08-03) =====
+//
+// A busca do quadro (js/kanban-board.js) sempre olhou só título e
+// cliente, porque esses dois já vêm de graça em toda tarefa (ver
+// getTarefasColmeia). Comentário e descrição não vêm — custam uma ida ao
+// Runrun.it POR TAREFA. Por isso essa busca é DEVAGAR de propósito: só
+// dispara depois que a pessoa já digitou 3+ letras e parou por um
+// instante (debounce, ver agendarBuscaProfunda), busca em lotes de 4 (o
+// mesmo ritmo já usado pela checagem de notificações) e reaproveita o
+// MESMO cacheComentariosPorTarefa que a checagem de notificações já
+// mantém quente — muita tarefa já está ali de graça, sem gastar nada.
+const descricaoCachePorTarefa = new Map(); // taskId -> texto
+const MAX_TAREFAS_NO_CACHE_DESCRICAO = 120;
+
+function podarCacheDeDescricoes() {
+  if (descricaoCachePorTarefa.size <= MAX_TAREFAS_NO_CACHE_DESCRICAO) return;
+  const excedente = descricaoCachePorTarefa.size - MAX_TAREFAS_NO_CACHE_DESCRICAO;
+  let i = 0;
+  for (const chave of descricaoCachePorTarefa.keys()) {
+    if (i++ >= excedente) break;
+    descricaoCachePorTarefa.delete(chave);
+  }
+}
+
+async function buscarDescricaoComCache(taskId) {
+  if (descricaoCachePorTarefa.has(taskId)) return descricaoCachePorTarefa.get(taskId);
+  const texto = await buscarDescricaoDoBackend(taskId);
+  if (texto === null) return ""; // não chegou — não guarda em cache, tenta de novo na próxima busca
+  descricaoCachePorTarefa.set(taskId, texto);
+  podarCacheDeDescricoes();
+  return texto;
+}
+
+/**
+ * Só olha o que JÁ ESTÁ em cache (nunca vai à rede) — usado pelo filtro
+ * de render() do quadro (js/kanban-board.js), que roda a cada tecla
+ * digitada e não pode esperar rede nenhuma. Chamado com typeof-guard de
+ * lá porque kanban-board.js carrega ANTES deste arquivo (ver ordem dos
+ * scripts no index.html / CLAUDE.md).
+ */
+function buscaProfundaBate(taskId, alvoNormalizado) {
+  const desc = descricaoCachePorTarefa.get(taskId);
+  if (desc && normalizarParaComparar(desc).includes(alvoNormalizado)) return true;
+  const cache = cacheComentariosPorTarefa.get(taskId);
+  if (cache && cache.comentarios) {
+    return cache.comentarios.some(c => normalizarParaComparar(c.texto || "").includes(alvoNormalizado));
+  }
+  return false;
+}
+
+let _buscaProfundaDebounceId = null;
+
+/**
+ * Dispara a busca de verdade (rede) pras tarefas visíveis que ainda não
+ * têm descrição/comentários em cache. Chamado a cada tecla pelo listener
+ * de busca (js/pagina-repasse.js), mas só FAZ alguma coisa 700ms depois
+ * de a pessoa parar de digitar, e só com 3+ letras — nunca a cada tecla.
+ * Redesenha o quadro (render()) a cada lote, então os resultados
+ * profundos vão aparecendo aos poucos, sem travar a tela esperando tudo.
+ */
+function agendarBuscaProfunda(termo, tasksVisiveis) {
+  if (_buscaProfundaDebounceId) clearTimeout(_buscaProfundaDebounceId);
+  const alvo = normalizarParaComparar(termo || "");
+  if (alvo.length < 3) return;
+  _buscaProfundaDebounceId = setTimeout(async () => {
+    const faltando = (tasksVisiveis || [])
+      .filter(t => t.id && !descricaoCachePorTarefa.has(t.id) && !cacheComentariosPorTarefa.has(t.id))
+      .slice(0, 60); // teto de segurança — nunca varre o quadro inteiro de uma vez só
+    for (let i = 0; i < faltando.length; i += 4) {
+      if (normalizarParaComparar(searchQuery || "") !== alvo) return; // a pessoa já digitou outra coisa
+      const lote = faltando.slice(i, i + 4);
+      await Promise.all(lote.map(t => Promise.all([buscarDescricaoComCache(t.id), buscarComentariosComCache(t.id, null)])));
+      render();
+    }
+  }, 700);
+}
+
 // Se true, é a primeira checagem dessa sessão (assim que o Colmeia
 // carrega) — nesse caso não mostra a ilha pra cada comentário "novo"
 // encontrado, senão a pessoa levaria uma enxurrada de avisos só de

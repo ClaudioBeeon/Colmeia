@@ -53,6 +53,7 @@ function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
   descMaeAberta = false;
+  anexosAberta = false;
   // Subtarefa de ALTERAÇÃO abre direto no contexto, não na Descrição (que
   // nessas subtarefas costuma ser genérica ou vazia): a aba "Tarefa
   // original" já vem aberta do lado da descrição, e o chat já abre na
@@ -725,6 +726,12 @@ function renderDetail() {
             ${ehTarefaDeAlteracao(task) ? `
               <button type="button" class="detail-tab" id="tabOriginal" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
             ` : ""}
+            <div class="detail-tabs-spacer"></div>
+            ${task.id ? `
+              <button type="button" class="detail-tab anexos-tab" id="tabAnexos" title="Arquivos da tarefa, do card mãe e das subtarefas, tudo junto">
+                Anexos <span class="anexos-tab-count" id="anexosTabCount" hidden>0</span>
+              </button>
+            ` : ""}
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
@@ -755,6 +762,27 @@ function renderDetail() {
                 <div class="descmae-titulo" id="originalTitulo">Procurando a tarefa original...</div>
                 <div class="original-meta" id="originalMeta"></div>
                 <div class="desc-text-real" id="originalTextReal"></div>
+              </div>
+            ` : ""}
+            ${task.id ? `
+              <div class="anexos-content" id="anexosContent" hidden>
+                <div class="anexos-secao">
+                  <div class="anexos-secao-label"><span>Ações da pasta do card</span></div>
+                  <div class="pill-row">
+                    <button type="button" class="acao-pill" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>
+                    <button type="button" class="acao-pill" id="beeCompararVersoesBtn" title="A Bee compara as duas versões mais recentes (arquivos '- v1', '- v2'...) da pasta do card">🔍 comparar versões</button>
+                    <button type="button" class="acao-pill" id="gerarLinkAprovacaoBtn" title="Gera um link sem login pro cliente aprovar (ou pedir ajuste) na peça mais recente da pasta do card">🔗 link de aprovação</button>
+                  </div>
+                </div>
+                <div class="anexos-secao">
+                  <div class="anexos-secao-label">
+                    <span>Arquivos</span>
+                    <button type="button" class="acao-pill baixar-todos-pill" id="downloadAllBtn" hidden>Baixar todos</button>
+                  </div>
+                  <div class="pill-row" id="attachList">
+                    <p class="attach-empty">Carregando anexos...</p>
+                  </div>
+                </div>
               </div>
             ` : ""}
           </div>
@@ -847,22 +875,6 @@ function renderDetail() {
                 </div>
               `;
             })()}
-          </div>
-          <div class="side-block attach-block">
-            <div class="side-label-row">
-              <span class="side-label">Anexos</span>
-              <button type="button" class="download-all-btn" id="downloadAllBtn" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
-              ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>` : ""}
-            </div>
-            <div class="attach-box">
-              <div class="attach-list" id="attachList">
-                ${task.id
-                  ? (task.attachmentsCount
-                      ? `<p class="attach-empty">Carregando anexos...</p>`
-                      : `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`)
-                  : `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`}
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1167,6 +1179,7 @@ function renderDetail() {
   document.getElementById("tabDesc").addEventListener("click", () => {
     descMaeAberta = false;
     originalAberta = false;
+    anexosAberta = false;
     applyCommentsState();
   });
   const tabDescMae = document.getElementById("tabDescMae");
@@ -1174,6 +1187,7 @@ function renderDetail() {
     tabDescMae.addEventListener("click", () => {
       descMaeAberta = true;
       originalAberta = false;
+      anexosAberta = false;
       applyCommentsState();
       carregarDescricaoCardMae(tasks[detailIdx] || task);
     });
@@ -1183,8 +1197,24 @@ function renderDetail() {
     tabOriginal.addEventListener("click", () => {
       originalAberta = true;
       descMaeAberta = false;
+      anexosAberta = false;
       applyCommentsState();
       carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
+    });
+  }
+  const tabAnexos = document.getElementById("tabAnexos");
+  if (tabAnexos) {
+    tabAnexos.addEventListener("click", () => {
+      anexosAberta = true;
+      descMaeAberta = false;
+      originalAberta = false;
+      applyCommentsState();
+      // Já buscou antes (voltou pra essa aba de novo)? Não busca de novo
+      // — evita repetir a busca da família inteira (card mãe + irmãs) a
+      // cada troca de aba. redesenharAnexosGuardados no fim do
+      // renderDetail cobre o caso de reabrir depois de um re-render.
+      const alvo = tasks[detailIdx] || task;
+      if (!anexosJaBuscados.has(String(alvo.id))) carregarAnexos(alvo);
     });
   }
 
@@ -1196,6 +1226,8 @@ function renderDetail() {
   // aba ficava selecionada mas vazia/"Carregando..." pra sempre. Busca
   // nada aqui se não tiver nada carregado ainda; se já tiver
   // (cardMaeCache/cache da alteração), volta na hora, sem esperar rede.
+  // Anexos tem o mesmo cuidado, mas via redesenharAnexosGuardados no
+  // fim desta função (chamado sempre, não só quando anexosAberta).
   if (descMaeAberta) carregarDescricaoCardMae(tasks[detailIdx] || task);
   if (originalAberta) carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
 
@@ -1524,6 +1556,12 @@ function renderDetail() {
   const beeConferirBtn = document.getElementById("beeConferirBtn");
   if (beeConferirBtn) beeConferirBtn.addEventListener("click", () => conferirEntregaComABee(tasks[detailIdx] || task, beeConferirBtn));
 
+  const beeCompararVersoesBtn = document.getElementById("beeCompararVersoesBtn");
+  if (beeCompararVersoesBtn) beeCompararVersoesBtn.addEventListener("click", () => compararVersoesComABee(tasks[detailIdx] || task, beeCompararVersoesBtn));
+
+  const gerarLinkAprovacaoBtn = document.getElementById("gerarLinkAprovacaoBtn");
+  if (gerarLinkAprovacaoBtn) gerarLinkAprovacaoBtn.addEventListener("click", () => gerarLinkDeAprovacaoParaTarefa(tasks[detailIdx] || task, gerarLinkAprovacaoBtn));
+
   // Um botão só, que vai e volta: nos comentários ele leva pra Bee, e
   // dentro da Bee ele traz de volta pros comentários.
   const chatIconeBee = document.getElementById("chatIconeBee");
@@ -1552,18 +1590,22 @@ function applyCommentsState() {
   const childrenPanel = document.getElementById("childrenPanel");
   const tabDescMae = document.getElementById("tabDescMae");
   const tabOriginal = document.getElementById("tabOriginal");
+  const tabAnexos = document.getElementById("tabAnexos");
   const descContent = document.getElementById("descContent");
   const descMaeContent = document.getElementById("descMaeContent");
   const originalContent = document.getElementById("originalContent");
+  const anexosContent = document.getElementById("anexosContent");
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
   // Abas mutuamente exclusivas: Descrição (a padrão), Descrição card mãe,
-  // Tarefa original (só em subtarefa de alteração).
-  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta);
+  // Tarefa original (só em subtarefa de alteração), Anexos.
+  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta && !anexosAberta);
   if (tabDescMae) tabDescMae.classList.toggle("active", descMaeAberta);
   if (tabOriginal) tabOriginal.classList.toggle("active", originalAberta);
-  if (descContent) descContent.hidden = descMaeAberta || originalAberta;
+  if (tabAnexos) tabAnexos.classList.toggle("active", anexosAberta);
+  if (descContent) descContent.hidden = descMaeAberta || originalAberta || anexosAberta;
   if (descMaeContent) descMaeContent.hidden = !descMaeAberta;
   if (originalContent) originalContent.hidden = !originalAberta;
+  if (anexosContent) anexosContent.hidden = !anexosAberta;
 }
 
 /**
@@ -1671,6 +1713,204 @@ function closeDetail() {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeDetail();
 });
+
+/**
+ * Arrastar arquivo pro card — sobe pro Drive na pasta certa e comenta
+ * sozinho (pedido do Cláudio, 2026-08-03). Jogar um arquivo do computador
+ * em cima do card aberto sobe ele pra pasta do Drive dela (cria a pasta na
+ * hora se ainda não existir, mesmo caminho do botão "Criar pasta do
+ * card") e posta um comentário avisando — sem precisar abrir o Drive nem
+ * escrever nada.
+ *
+ * Ligado UMA vez só, no #taskDetail (elemento fixo que nunca é recriado —
+ * só o innerHTML dele é redesenhado a cada renderDetail), em vez de
+ * religar a cada render como os botões de dentro do card.
+ */
+const LIMITE_UPLOAD_ARRASTADO_BYTES = 30 * 1024 * 1024; // 30MB — folgado pra imagem/PSD comum, sem travar o navegador com vídeo grande
+
+function temArquivoNoDrag(e) {
+  return e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+}
+
+function wireArrastarArquivoParaCard() {
+  const panel = document.getElementById("taskDetail");
+  if (!panel) return;
+  let dragDepth = 0;
+
+  panel.addEventListener("dragenter", e => {
+    if (!temArquivoNoDrag(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    panel.classList.add("arquivo-sobre-card");
+  });
+  panel.addEventListener("dragover", e => {
+    if (!temArquivoNoDrag(e)) return;
+    e.preventDefault();
+  });
+  panel.addEventListener("dragleave", () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) panel.classList.remove("arquivo-sobre-card");
+  });
+  panel.addEventListener("drop", e => {
+    if (!temArquivoNoDrag(e)) return;
+    e.preventDefault();
+    // Já tratado aqui — a rede de segurança do documento (logo abaixo)
+    // não precisa (e não deve) repetir o aviso de "abra uma tarefa".
+    e.stopPropagation();
+    dragDepth = 0;
+    panel.classList.remove("arquivo-sobre-card");
+    const task = tasks[detailIdx];
+    if (!task || !task.id) return;
+    Array.from(e.dataTransfer.files || []).forEach(arquivo => subirArquivoArrastadoParaCard(task, arquivo));
+  });
+}
+
+/**
+ * Rede de segurança pra QUALQUER arquivo arrastado sobre o Colmeia, não
+ * só dentro do card: sem isso, soltar um arquivo um pixel fora do
+ * #taskDetail (ou em qualquer outro canto do app — sidebar, quadro,
+ * gaps entre elementos) faz o PRÓPRIO NAVEGADOR assumir o drop e abrir o
+ * arquivo direto na aba, saindo do Colmeia inteiro. Foi exatamente isso
+ * que aconteceu quando o Cláudio testou (2026-08-04): "arrastei pro
+ * card, não funcionou, a foto abriu no navegador".
+ *
+ * `#taskDetail` já chama stopPropagation() quando trata o drop de
+ * verdade (ver wireArrastarArquivoParaCard, acima) — só chega até aqui
+ * um drop que caiu FORA de um card aberto, daí o aviso.
+ *
+ * Só entra em ação pra ARQUIVO (dataTransfer.types inclui "Files") — não
+ * interfere no arrastar card entre colunas do quadro (setupDragAndDrop,
+ * js/kanban-board.js), que usa "text/plain", nunca "Files".
+ */
+document.addEventListener("dragover", e => {
+  if (temArquivoNoDrag(e)) e.preventDefault();
+});
+document.addEventListener("drop", e => {
+  if (!temArquivoNoDrag(e)) return;
+  e.preventDefault();
+  mostrarToast("Abra uma tarefa primeiro pra soltar o arquivo nela.", "erro");
+});
+
+async function subirArquivoArrastadoParaCard(task, arquivo) {
+  if (arquivo.size > LIMITE_UPLOAD_ARRASTADO_BYTES) {
+    mostrarToast(`"${arquivo.name}" passa de 30MB — sobe direto pela pasta do Drive.`, "erro");
+    return;
+  }
+  const idAoSoltar = task.id;
+  try {
+    const base64Dados = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = () => reject(new Error("Falha ao ler o arquivo"));
+      reader.readAsDataURL(arquivo);
+    });
+    const data = await chamarBackend({
+      acao: "subirArquivoNoCard",
+      dados: {
+        taskId: idAoSoltar,
+        cliente: task.client,
+        tituloCard: task.title,
+        projeto: task.projeto,
+        nomeArquivo: arquivo.name,
+        mimeType: arquivo.type || "application/octet-stream",
+        base64Dados,
+      },
+    });
+    if (!data.ok) {
+      mostrarToast(data.error || `Não consegui subir "${arquivo.name}" pro Drive agora.`, "erro");
+      return;
+    }
+    // A tarefa pode ter trocado enquanto o upload rodava (fechou o card,
+    // abriu outro) — o comentário vai pra tarefa CERTA (idAoSoltar) do
+    // mesmo jeito; só a pílula da pasta na tela é que só faz sentido
+    // atualizar se o card daquele arquivo ainda for o que está aberto.
+    if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(idAoSoltar)) {
+      tasks[detailIdx].pastaUrlSalva = data.pastaUrl;
+      mostrarPillCopiarLinkDaPasta(data.pastaUrl);
+    }
+    mostrarToast(`"${data.nomeFinal}" enviado pro Drive.`, "sucesso");
+    enviarEscritaNoBackend(
+      { acao: "adicionarComentario", taskId: idAoSoltar, texto: `📎 Novo arquivo na pasta do card: ${data.nomeFinal}` },
+      "avisar sobre o arquivo novo"
+    );
+    avisarBeeSobreUploadNovo(idAoSoltar, data.nomeFinal);
+  } catch (err) {
+    console.error("Falha ao subir arquivo arrastado:", err);
+    mostrarToast(`Falha de conexão ao subir "${arquivo.name}".`, "erro");
+  }
+}
+
+/**
+ * Depois de subir um arquivo arrastado, a Bee registra uma fala DE
+ * VERDADE (persistida — ver beeAvisarUploadNovo, Bee.gs) oferecendo as
+ * 3 ações da pasta do card. Pedido do Cláudio (2026-08-04): "esse é um
+ * comentário real da Bee, que fica ali". beeConversas/desenharThreadBee
+ * são de js/bee.js, carregado DEPOIS deste arquivo — daí o typeof-guard.
+ */
+async function avisarBeeSobreUploadNovo(taskId, nomeArquivo) {
+  const dataBee = await chamarBackend({ acao: "beeAvisarUploadNovo", taskId, nomeArquivo });
+  if (!dataBee || !dataBee.ok) return;
+  if (typeof beeConversas === "undefined") return;
+  beeConversas.set(taskId, dataBee.conversa);
+  // Se a Bee dessa MESMA tarefa já está aberta na tela, mostra a fala
+  // nova na hora — senão ela já está salva, e aparece quando a pessoa
+  // abrir a aba da Bee.
+  if (
+    tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId) &&
+    chatThreadAtivo === "bee" && typeof desenharThreadBee === "function"
+  ) {
+    desenharThreadBee(tasks[detailIdx]);
+  }
+}
+
+wireArrastarArquivoParaCard();
+
+/**
+ * "Link de aprovação": gera um link sem login pro cliente aprovar (ou
+ * pedir ajuste) na peça mais recente da pasta do card do Drive (ver
+ * gerarLinkDeAprovacao, Aprovacao.gs) e já copia pro clipboard, pronto
+ * pra colar no WhatsApp/e-mail do cliente.
+ *
+ * A URL completa é montada AQUI, não no backend: só o navegador sabe o
+ * endereço de onde o Colmeia está publicado agora (mesma técnica do
+ * ROTA_BASE em js/roteador-url.js) — assim não quebra quando o domínio
+ * mudar pra colmeia.beeon.com.br.
+ *
+ * O comentário automático (quando o cliente responder) sempre sai pela
+ * conta do coordenador, com um cabeçalho fixo "Alterações do cliente"
+ * deixando claro que é o cliente falando, relayed — não a conta de
+ * quem gerou o link (ver responderAprovacaoPublica, Aprovacao.gs).
+ */
+async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
+  if (!task || !task.id) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Gerando link...";
+
+  const data = await chamarBackend({
+    acao: "gerarLinkDeAprovacao",
+    taskId: task.id,
+    cliente: task.client,
+    tituloTarefa: task.title,
+  });
+
+  btn.disabled = false;
+  btn.textContent = original;
+
+  if (!data.ok) {
+    mostrarToast(data.error || "Não consegui gerar o link de aprovação agora.", "erro");
+    return;
+  }
+
+  const base = new URL(".", location.href).href;
+  const url = base + "aprovar.html?codigo=" + data.codigo;
+  try {
+    await navigator.clipboard.writeText(url);
+    mostrarToast(`Link de aprovação copiado — "${data.nomeArquivo}"`, "sucesso");
+  } catch (err) {
+    mostrarToast(`Link gerado (não consegui copiar sozinho): ${url}`);
+  }
+}
 
 function updateNowPlaying() {
   const el = document.getElementById("nowPlaying");

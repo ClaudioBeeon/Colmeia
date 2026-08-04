@@ -212,15 +212,18 @@ const ACOES_DEMORADAS = [
   "beeConversarLivre",
   "beeInspirar",           // IA lendo a tarefa inteira
   "beeConferirEntrega",    // IA + varredura da pasta do card no Drive
+  "beeCompararVersoes",    // IA vendo duas imagens (Gemini vision) + varredura do Drive
   "beeMemoriaCliente",     // le os comentarios de ate 15 tarefas do cliente
   "montarIndiceDeLinks",   // so usado manualmente pelo editor do Apps Script
   "buscarExtrasRunrunCompleto", // pagina 15 dias de entregues dos 3 designers
   "listarPastasClientesDrive",  // varre pastas do Drive
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive
   "buscarProgressoClientes",
+  "buscarTermometroClientes", // varre todas as tarefas dos 3 designers, igual buscarProgressoClientes
   "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
   "buscarImagemCheiaDrive", // idem, mas pra imagem do Drive ampliada (ver js/notificacoes-uploads.js)
-  "beeGerarImagem",       // gera imagem de verdade pela Firefly
+  "beeGerarImagem",       // gera imagem de verdade (Gemini, ver NanoBanana.gs)
+  "subirArquivoNoCard",   // arquivo arrastado pro card, sobe pro Drive (ver js/detalhe-modal.js)
 ];
 
 async function chamarBackend(corpo, opcoes) {

@@ -781,6 +781,126 @@ function beeConferirEntrega(taskId, idOriginal, cliente) {
   return { ok: true, resposta: resultado.texto.trim(), conversa: conversa };
 }
 
+// ============ 5c) COMPARAR VERSÕES (diff visual) ============
+//
+// Pedido do Cláudio (2026-08-03): "o que mudou da V1 pra V2, escrito
+// sozinho". Pega as duas imagens mais recentes da pasta do card com o
+// nome no padrão "<título> - vN.<extensão>" (ver nomeArquivoPadronizado,
+// Drive.gs — todo upload feito arrastando um arquivo pro card já nasce
+// com esse padrão) e manda as DUAS pro Gemini de uma vez, pedindo pra
+// apontar as diferenças — é a primeira vez que a Bee realmente OLHA o
+// conteúdo de uma imagem, não só o nome do arquivo (ver a ressalva "você
+// não vê o conteúdo" em beeConferirEntrega, logo acima).
+//
+// Só funciona com IMAGEM (PNG/JPG/etc — o que o Gemini consegue ver).
+// PSD/AI cru não entra na comparação.
+function compararVersoesDoCard(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  var pastaInfo = buscarPastaSalvaDoCard(taskId);
+  if (!pastaInfo.ok || !pastaInfo.url) {
+    return { ok: false, error: 'Essa tarefa ainda não tem uma pasta do card vinculada no Drive.' };
+  }
+
+  var pasta;
+  try {
+    pasta = DriveApp.getFolderById(extrairIdDeUrlDrive(pastaInfo.url));
+  } catch (e) {
+    return { ok: false, error: 'Não consegui acessar a pasta do card no Drive.' };
+  }
+
+  var versoes = [];
+  var re = / - v(\d+)\.[^.]+$/i;
+  var arquivos = pasta.getFiles();
+  while (arquivos.hasNext()) {
+    var arq = arquivos.next();
+    if (arq.getMimeType().indexOf('image/') !== 0) continue;
+    var m = arq.getName().match(re);
+    if (m) versoes.push({ versao: parseInt(m[1], 10), arquivo: arq });
+  }
+
+  if (versoes.length < 2) {
+    return {
+      ok: false,
+      poucasVersoes: true,
+      error: versoes.length === 0
+        ? 'Não achei nenhuma imagem com o padrão de nome "- v1", "- v2" etc nessa pasta — só arquivo subido arrastando pro card ganha esse padrão sozinho.'
+        : 'Só achei uma versão com esse padrão de nome — precisa de pelo menos duas pra comparar.'
+    };
+  }
+
+  versoes.sort(function (a, b) { return b.versao - a.versao; });
+  var nova = versoes[0];
+  var anterior = versoes[1];
+
+  var imagens = [nova, anterior].map(function (v) {
+    var blob = v.arquivo.getBlob();
+    return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: blob.getContentType() };
+  });
+
+  var prompt = 'Estas são duas versões da mesma peça de design, NESTA ORDEM: a PRIMEIRA imagem é a versão ' +
+    'mais nova (v' + nova.versao + '), a SEGUNDA é a versão anterior (v' + anterior.versao + ').\n\n' +
+    'Compare as duas e liste, em português do Brasil, de forma curta e objetiva, o que mudou da versão ' +
+    'anterior pra nova (texto, cor, layout, imagem usada, proporção, elementos que sumiram/apareceram). ' +
+    'Se não conseguir ver nenhuma diferença real, diga isso em vez de inventar.\n\n' +
+    'Responda SOMENTE em JSON, neste formato: {"resumo": "uma frase curta resumindo", "mudancas": ["mudança 1", "mudança 2"]}';
+
+  var resultado = chamarGeminiComImagens(prompt, imagens);
+  if (!resultado.ok) return resultado;
+
+  var resumo = (resultado.dados && resultado.dados.resumo) || '';
+  var mudancas = (resultado.dados && resultado.dados.mudancas) || [];
+  var textoBee = resumo + (mudancas.length ? '\n\n' + mudancas.map(function (m) { return '• ' + m; }).join('\n') : '');
+
+  // Entra na conversa como uma fala dela, igual beeConferirEntrega —
+  // fica registrado, sobrevive a fechar e reabrir o card. Só o TEXTO
+  // fica salvo; os thumbnails (idArquivoNovo/idArquivoAnterior, devolvidos
+  // abaixo) são só pra essa resposta na hora, não persistem no histórico.
+  var conversa = lerConversaBee(taskId);
+  var agora = new Date().getTime();
+  conversa.push({ autor: 'designer', texto: 'Compara a versão v' + nova.versao + ' com a v' + anterior.versao + '.', quando: agora });
+  conversa.push({ autor: 'bee', texto: textoBee.trim(), quando: agora + 1 });
+  salvarConversaBee(taskId, conversa);
+
+  return {
+    ok: true,
+    versaoNova: nova.versao,
+    versaoAnterior: anterior.versao,
+    nomeArquivoNovo: nova.arquivo.getName(),
+    nomeArquivoAnterior: anterior.arquivo.getName(),
+    idArquivoNovo: nova.arquivo.getId(),
+    idArquivoAnterior: anterior.arquivo.getId(),
+    resumo: resumo,
+    mudancas: mudancas,
+    conversa: conversa
+  };
+}
+
+// ============ 5d) AVISAR SOBRE UPLOAD NOVO (arquivo arrastado pro card) ============
+//
+// Pedido do Cláudio (2026-08-04): depois que um arquivo é arrastado pro
+// card (ver subirArquivoNoCard, Drive.gs — que já comenta sozinho no
+// Runrun.it), a Bee registra uma fala DE VERDADE oferecendo as 3 ações
+// relacionadas à pasta do card. "De verdade" quer dizer: fica salva na
+// conversa (lerConversaBee/salvarConversaBee), sobrevive a fechar e
+// reabrir o card — diferente do aviso antigo de upload (ver
+// js/notificacoes-uploads.js), que é só um lembrete na tela, não uma
+// fala persistida.
+
+function beeAvisarUploadNovo(taskId, nomeArquivo) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var conversa = lerConversaBee(taskId);
+  var agora = new Date().getTime();
+  conversa.push({
+    autor: 'bee',
+    texto: 'Subiu "' + (nomeArquivo || 'um arquivo novo') + '" na pasta do card. Quer que eu faça algo com isso?',
+    quando: agora,
+    _acoesPasta: true
+  });
+  salvarConversaBee(taskId, conversa);
+  return { ok: true, conversa: conversa };
+}
+
 // ============ 5b) INSPIRAR ============
 //
 // O Colmeia NÃO consegue entrar no Behance/Pinterest e trazer as

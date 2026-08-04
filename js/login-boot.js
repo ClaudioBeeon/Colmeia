@@ -8,6 +8,7 @@ function iniciarAppPosLogin() {
   // e as duas chamam atualizarAvatarDaSidebar() quando terminam.
   document.getElementById("sidebarAvatarIniciais").textContent = initials(DESIGNER_LOGADO);
   atualizarAvatarDaSidebar();
+  precarregarFotosConhecidas();
   document.getElementById("sidebarProfileLink").title = PAPEL_LOGADO === "coordenador" ? "Configurações" : DESIGNER_LOGADO;
 
   // Fila de repasse é só do Cláudio (ele que atende os clientes e

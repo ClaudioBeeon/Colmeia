@@ -244,6 +244,7 @@ document.addEventListener("click", e => {
 function renderMensagemDaConversa(m, indice, chaveConversa) {
   if (m.autor === "bee") {
     if (m._funcional) return bolhaDaBee(renderRespostaFuncional(m._funcional), indice);
+    if (m._acoesPasta) return bolhaDaBee(renderAcoesPastaHTML(m), indice);
     const extra = m._inspiracao ? renderLinksDeInspiracao(m._inspiracao.termos) : "";
     return bolhaDaBee(formatarFalaDaBee(m.texto, chaveConversa, indice) + extra, indice);
   }
@@ -390,9 +391,10 @@ async function beeReconhecerPerguntaFuncional(pergunta, contexto) {
   const clienteCitado = clientes.find(c => texto.includes(normalizarParaComparar(c)));
   const cliente = clienteCitado || clienteDoContexto;
 
-  // "Gera uma imagem de...", "cria uma imagem com..." — pela Firefly de
-  // verdade (ver Firefly.gs), não é o "Gerar prompt de imagem" (esse
-  // outro só monta o texto pra colar no Firefly manualmente). Tira o
+  // "Gera uma imagem de...", "cria uma imagem com..." — gera a imagem DE
+  // VERDADE pelo Gemini (ver NanoBanana.gs). Não confundir com o atalho
+  // "Gerar prompt de imagem", que só monta o texto pra colar no site do
+  // Firefly na mão — os dois convivem de propósito. Tira o
   // pedido do começo da frase pra sobrar só a descrição do que a
   // imagem deve ter; se não bater o padrão, manda a frase inteira mesmo
   // (funciona, só perde a limpeza da extração).
@@ -479,13 +481,20 @@ function beeMensagemFuncional(resultado) {
 function renderRespostaFuncional(f) {
   if (f.tipo === "imagem") {
     const resultado = f.resultado;
-    if (!resultado || !resultado.ok || !resultado.urls || !resultado.urls.length) {
+    // O backend devolve a imagem em base64 (gerarImagemNanoBanana,
+    // NanoBanana.gs), não um endereço — o Gemini manda os bytes na
+    // própria resposta. Vira um "data:" que o navegador desenha
+    // direto, sem precisar hospedar em lugar nenhum.
+    if (!resultado || !resultado.ok || !resultado.base64) {
       const motivo = resultado && resultado.error ? escaparHTML(resultado.error) : "Não consegui gerar a imagem agora.";
       return `<p>${motivo}</p>`;
     }
+    const src = `data:${resultado.mimeType || "image/png"};base64,${resultado.base64}`;
     return `<p class="bee-titulo">Gerei isso pra "${escaparHTML(f.prompt)}"</p>` +
-      resultado.urls.map(url => `<img src="${escaparHTML(url)}" alt="${escaparHTML(f.prompt)}">`).join("") +
-      `<div class="bee-pastilhas">${resultado.urls.map(url => `<a class="bee-acao principal" href="${escaparHTML(url)}" target="_blank" rel="noopener">Abrir em tamanho grande</a>`).join("")}</div>`;
+      `<img src="${src}" alt="${escaparHTML(f.prompt)}">` +
+      `<div class="bee-pastilhas">
+         <a class="bee-acao principal" href="${src}" download="bee-${Date.now()}.png">Baixar</a>
+       </div>`;
   }
 
   if (f.tipo === "link") {
@@ -711,6 +720,87 @@ async function conferirEntregaComABee(task, btn) {
   }
 }
 
+/**
+ * "Comparar versões": pega as duas imagens mais recentes da pasta do
+ * card com nome "- v1", "- v2"... (ver nomeArquivoPadronizado, Drive.gs
+ * — todo arquivo arrastado pro card já nasce com esse padrão, ver
+ * subirArquivoArrastadoParaCard em js/detalhe-modal.js) e pede pra Bee
+ * apontar o que mudou. Primeira vez que ela realmente OLHA o conteúdo
+ * de uma imagem, não só o nome do arquivo. Só roda no clique.
+ */
+async function compararVersoesComABee(task, btn) {
+  if (!task || !task.id) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Comparando...";
+  abrirThreadBee(task);
+
+  const data = await chamarBackend({ acao: "beeCompararVersoes", taskId: task.id });
+
+  const btnAgora = document.getElementById("beeCompararVersoesBtn");
+  if (btnAgora) { btnAgora.disabled = false; btnAgora.textContent = original; }
+
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "A Bee não conseguiu comparar agora.", "erro");
+    return;
+  }
+  beeConversas.set(task.id, data.conversa || beeConversas.get(task.id) || []);
+  if (chatThreadAtivo === "bee" && tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
+    desenharThreadBee(task);
+    inserirThumbnailsDoComparativo(task, data);
+  }
+}
+
+/**
+ * As duas miniaturas (versão nova/anterior) na última fala da Bee — só
+ * pra essa resposta, na hora; não fica salvo no histórico da conversa
+ * (ver compararVersoesDoCard, Bee.gs — só o texto é persistido). Reusa o
+ * mesmo preview clicável já usado no aviso de upload novo (ver
+ * carregarThumbnailDoUpload/abrirImagemAmpliadaDoDrive, js/notificacoes-uploads.js).
+ */
+function inserirThumbnailsDoComparativo(task, data) {
+  const thread = document.getElementById("commentsThread");
+  if (!thread || !data.idArquivoNovo || !data.idArquivoAnterior) return;
+  const conversa = beeConversas.get(task.id) || [];
+  const ultimaBolha = thread.querySelector(`.bee-bubble[data-bee-indice="${conversa.length - 1}"] .comment-text`);
+  if (!ultimaBolha) return;
+  ultimaBolha.insertAdjacentHTML("beforeend", `
+    <div class="bee-comparativo-thumbs">
+      <div class="bee-comparativo-item">
+        <span class="bee-comparativo-label">v${data.versaoAnterior}</span>
+        <img class="upload-notif-thumb" data-file-id="${escaparHTML(data.idArquivoAnterior)}" data-nome="${escaparHTML(data.nomeArquivoAnterior)}" alt="Versão v${data.versaoAnterior}">
+      </div>
+      <div class="bee-comparativo-item">
+        <span class="bee-comparativo-label">v${data.versaoNova}</span>
+        <img class="upload-notif-thumb" data-file-id="${escaparHTML(data.idArquivoNovo)}" data-nome="${escaparHTML(data.nomeArquivoNovo)}" alt="Versão v${data.versaoNova}">
+      </div>
+    </div>
+  `);
+  ultimaBolha.querySelectorAll(".upload-notif-thumb").forEach(img => {
+    const fileId = img.dataset.fileId;
+    carregarThumbnailDoUpload(fileId, img);
+    img.addEventListener("click", () => abrirImagemAmpliadaDoDrive(fileId, img.dataset.nome));
+  });
+}
+
+/**
+ * Fala da Bee oferecendo as 3 ações da pasta do card (conferir o que
+ * falta / comparar versões / link de aprovação) — disparada depois de
+ * um upload arrastado pro card (ver avisarBeeSobreUploadNovo,
+ * js/detalhe-modal.js, e beeAvisarUploadNovo, Bee.gs). Os botões
+ * chamam as MESMAS funções já usadas na aba Anexos — ver wireThreadBee.
+ */
+function renderAcoesPastaHTML(m) {
+  return `
+    <p>${escaparHTML(m.texto)}</p>
+    <div class="bee-pastilhas">
+      <button type="button" class="bee-acao" data-acao-pasta="conferir">🐝 conferir o que falta</button>
+      <button type="button" class="bee-acao" data-acao-pasta="comparar">🔍 comparar versões</button>
+      <button type="button" class="bee-acao" data-acao-pasta="aprovacao">🔗 link de aprovação</button>
+    </div>
+  `;
+}
+
 // ===== Cliques =====
 
 function wireThreadBee(task) {
@@ -722,6 +812,15 @@ function wireThreadBee(task) {
     btn.addEventListener("click", () => {
       const item = (resumo.itens || [])[Number(btn.dataset.item)];
       if (item) irParaOrigemDoItem(task, item);
+    });
+  });
+
+  thread.querySelectorAll("[data-acao-pasta]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const alvo = tasks[detailIdx] || task;
+      if (btn.dataset.acaoPasta === "conferir") conferirEntregaComABee(alvo, btn);
+      else if (btn.dataset.acaoPasta === "comparar") compararVersoesComABee(alvo, btn);
+      else if (btn.dataset.acaoPasta === "aprovacao") gerarLinkDeAprovacaoParaTarefa(alvo, btn);
     });
   });
 
@@ -872,8 +971,8 @@ const BEE_ATALHOS = [
   {
     icone: "🖼️",
     titulo: "Gerar<br>imagem",
-    // Diferente do atalho de cima: esse gera a imagem DE VERDADE, pela
-    // Firefly (ver Firefly.gs) — por isso não manda sozinho (faltaria a
+    // Diferente do atalho de cima: esse gera a imagem DE VERDADE, pelo
+    // Gemini (ver NanoBanana.gs) — por isso não manda sozinho (faltaria a
     // descrição): só prepara o campo, a pessoa completa e aperta enviar.
     pergunta: "Gerar imagem: ",
     naoEnviar: true,

@@ -58,6 +58,7 @@ async function carregarPessoasSalvas() {
       // barra lateral ficaria nas iniciais pra sempre, porque ela é
       // desenhada no login, antes desta busca terminar.
       atualizarAvatarDaSidebar();
+      precarregarFotosConhecidas();
     }
   } catch (err) {
     console.error("Falha ao carregar pessoas salvas:", err);
@@ -111,6 +112,43 @@ function atualizarAvatarDaSidebar() {
     el.textContent = initials(DESIGNER_LOGADO);
   };
   teste.src = foto;
+}
+
+const _fotosJaPrecarregadas = new Set();
+
+/**
+ * Precarrega no navegador as fotos conhecidas da equipe (designers,
+ * atendimento, gente cadastrada manualmente, e quem aparece na lista de
+ * "adicionar pessoa" da regra) — pedido do Cláudio (2026-08-04): a foto
+ * de quem entra numa Sequência de responsáveis (ou pra quem a tarefa é
+ * transferida) demorava pra aparecer. A animação em si já é instantânea
+ * (ver adicionarPessoaOtimista, js/regras-briefing.js, e as animações
+ * otimistas em wireWorkflowArrows, js/detalhe-modal.js) — o que demorava
+ * era o `<img src="...">` baixando a foto pela PRIMEIRA vez, só no
+ * instante em que a animação precisava dela. Isso busca os bytes de
+ * antemão, uma vez, e deixa no cache do próprio navegador — quando a
+ * animação precisa mostrar a foto, ela já está lá, sem esperar rede.
+ *
+ * Chamado nos mesmos lugares que já chamam atualizarAvatarDaSidebar()
+ * (assim que cada fonte de foto termina de carregar) + quando a lista de
+ * usuários do Runrun.it chega (buscarUsuariosRunrun, js/regras-briefing.js
+ * — carrega DEPOIS deste arquivo, daí o typeof-guard ali dentro).
+ */
+function precarregarFotosConhecidas() {
+  const urls = new Set();
+  pessoasSalvas.forEach(p => { if (p.foto) urls.add(p.foto); });
+  Object.values(ATENDIMENTO_PHOTOS_BEEON).forEach(u => urls.add(u));
+  if (painelBeeonData && painelBeeonData.photos) {
+    Object.values(painelBeeonData.photos).forEach(u => { if (u) urls.add(u); });
+  }
+  if (typeof usuariosRunrunCache !== "undefined" && usuariosRunrunCache) {
+    usuariosRunrunCache.forEach(u => { if (u.foto) urls.add(u.foto); });
+  }
+  urls.forEach(url => {
+    if (_fotosJaPrecarregadas.has(url)) return;
+    _fotosJaPrecarregadas.add(url);
+    new Image().src = url;
+  });
 }
 
 async function salvarPessoaNoBackend(nome, foto, aliases, discord) {
