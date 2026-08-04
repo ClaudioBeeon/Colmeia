@@ -13,217 +13,435 @@
    * não por senha — por isso essa página não pede nada além de já vir com
    * o link certo.
    *
-   * De propósito um arquivo SOZINHO, sem carregar os 24 arquivos de js/
+   * De propósito um arquivo SOZINHO, sem carregar os 26 arquivos de js/
    * do app principal: quem abre isso é o cliente, geralmente pelo celular
-   * (link mandado por WhatsApp/e-mail), então tem que ser leve e não
-   * depender de estar logado em nada.
+   * (link mandado por WhatsApp), então tem que ser leve e não depender de
+   * estar logado em nada.
+   *
+   * ------------------------------------------------------------------
+   * REDESENHO (2026-08-04) — protótipo aprovado pelo Cláudio
+   * ------------------------------------------------------------------
+   * Antes era uma coluna estreita com as peças empilhadas uma embaixo da
+   * outra; o cliente rolava a página inteira pra ver a arte e rolava de
+   * novo pra achar os botões. Agora:
+   *
+   *   - A PEÇA NUNCA ROLA. Ela se ajusta à altura da janela e cabe
+   *     inteira, sempre. Quem está decidindo se aprova uma arte não pode
+   *     ter que rolar pra ver o rodapé dela — é assim que passa um
+   *     detalhe errado.
+   *   - VÁRIAS PEÇAS VIRAM CARROSSEL, com miniatura de cada uma embaixo,
+   *     em vez de empilhadas. Uma de cada vez, grande.
+   *   - As informações e os botões saem de baixo da arte e vão pra uma
+   *     coluna ao lado, que fica sempre visível.
+   *
+   * No CELULAR a trava de altura sai (ver o media query no fim): espremer
+   * peça + painel + botões numa tela pequena deixaria a arte miúda demais
+   * pra decidir qualquer coisa, que é o contrário do objetivo. Lá a peça
+   * ocupa a maior parte da tela e a página rola normalmente.
+   *
+   * Continua SÓ CLARO (color-scheme: light), sem tema escuro: o cliente
+   * não tem onde trocar de tema aqui, e a peça precisa ser julgada sempre
+   * sobre o mesmo fundo neutro — dois fundos diferentes mudariam a
+   * percepção da própria arte.
    */
   * { box-sizing: border-box; }
   :root {
     color-scheme: light;
-    --bg: #f4f3f0;
-    --card-bg: #ffffff;
-    --text: #1c1b1f;
-    --text-secondary: #6b6a70;
-    --border: #e6e4e0;
-    --amarelo: #ffcc00;
-    --verde: #1f9d55;
-    --verde-bg: #e8f7ee;
-    --laranja: #c9720a;
-    --laranja-bg: #fdf1e2;
+    /* Mesma paleta do Colmeia (css/01-base.css) — a página do cliente é
+       a cara da Beeon pra fora, então não inventa cor própria. */
+    --bg: #F3F4F6;
+    --card: #FFFFFF;
+    --stage: #E9EAEE;
+    --border: #ECEDF2;
+    --border-forte: #E1E2E7;
+    --superficie-2: #F8F8FA;
+    --text: #16181D;
+    --text-2: #6E7180;
+    --text-3: #9A9DAE;
+    --amarelo: #FFC700;
+    --amarelo-suave: #FFF6D6;
+    --amarelo-texto: #8A6D00;
+    --verde: #22B07D;
+    --verde-bg: #E5F5ED;
+    --laranja: #C9720A;
+    --laranja-bg: #FDF1E2;
+    --vermelho: #E5484D;
+    --sombra: 0 1px 3px rgba(20,20,30,0.07), 0 4px 14px rgba(20,20,30,0.06);
+    --sombra-alta: 0 8px 24px rgba(20,20,30,0.12);
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --mola: cubic-bezier(0.16, 1, 0.3, 1);
   }
-  html, body {
-    margin: 0; padding: 0; min-height: 100%;
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
     background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;               /* solto de novo no celular, lá embaixo */
   }
-  .wrap {
-    max-width: 560px; margin: 0 auto; padding: 28px 18px 60px;
-    display: flex; flex-direction: column; gap: 16px;
+  img, svg { display: block; max-width: 100%; }
+  button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 6px; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
   }
-  .marca {
-    display: flex; align-items: center; gap: 8px;
-    font-weight: 700; font-size: 14px; color: var(--text-secondary);
-    letter-spacing: 0.02em; text-transform: uppercase;
-  }
-  .marca-selo {
-    width: 22px; height: 22px; border-radius: 7px; background: var(--amarelo);
-    display: flex; align-items: center; justify-content: center; font-size: 13px;
-  }
-  .card {
-    background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px;
-    padding: 20px; box-shadow: 0 10px 30px rgba(20,18,10,0.06);
-  }
-  .titulo { font-size: 19px; font-weight: 700; margin: 0 0 2px; }
-  .subtitulo { font-size: 14px; color: var(--text-secondary); margin: 0 0 16px; }
-  .imagem-box {
-    position: relative;
-    border-radius: 12px; overflow: hidden; background: var(--bg);
-    border: 1px solid var(--border); margin-bottom: 10px;
-  }
-  .imagem-box img, .imagem-box video { display: block; width: 100%; height: auto; }
-  /* O player do Drive (vídeo) não tem altura própria — sem uma proporção
-     fixa o iframe nasce com 0px e o cliente vê um quadrado vazio. */
-  .imagem-box iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; }
-  .imagem-box.marcavel { cursor: crosshair; }
-  .nome-peca { font-size: 12px; color: var(--text-secondary); margin: 0 0 14px; text-align: center; }
-  .peca-erro { padding: 22px 16px; text-align: center; font-size: 13px; color: var(--text-secondary); }
 
-  /* Pins: marcar um ponto exato na imagem (pedido do Cláudio,
-     2026-08-04) — clica na imagem, solta um pino numerado, escreve o
-     que precisa mudar ali. Posição em PORCENTAGEM (não pixel), pra
-     acompanhar a imagem em qualquer tamanho de tela. */
-  #pinsOverlay { position: absolute; inset: 0; pointer-events: none; }
-  .pin-marcador {
-    position: absolute; transform: translate(-50%, -50%);
-    width: 26px; height: 26px; border-radius: 50%;
-    background: var(--amarelo); color: #16181d; font-weight: 800; font-size: 12px;
+  /* ===== Telas de carregando / erro ===== */
+  .tela-cheia {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 24px; background: var(--bg); z-index: 20;
+  }
+  .aviso {
+    max-width: 440px; width: 100%; text-align: center;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; padding: 34px 26px; box-shadow: var(--sombra);
+  }
+  .aviso-icone { font-size: 40px; margin-bottom: 12px; }
+  .aviso-titulo { font-size: 19px; font-weight: 700; margin: 0 0 8px; }
+  .aviso-texto { font-size: 14px; line-height: 1.55; color: var(--text-2); margin: 0; }
+  .aviso-acoes { display: flex; gap: 10px; margin-top: 20px; }
+  .aviso-acoes .btn { flex: 1; }
+
+  /* ===== Botões ===== */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: 12px; padding: 13px 18px; font-size: 14.5px; font-weight: 700;
+    transition: background .15s var(--ease), opacity .15s var(--ease), transform .12s var(--ease);
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+  .btn-aprovar { background: var(--verde); color: #fff; }
+  .btn-aprovar:hover { background: #1C9A6D; }
+  .btn-ajuste { background: var(--laranja-bg); color: var(--laranja); }
+  .btn-ajuste:hover { filter: brightness(0.97); }
+  .btn-neutro { background: var(--superficie-2); color: var(--text); border: 1px solid var(--border-forte); }
+  .btn-neutro:hover { background: var(--stage); }
+  .btn-whats { background: #25D366; color: #0A2E17; }
+  .btn-whats:hover { background: #1FBB59; }
+  .btn-texto { background: none; color: var(--text-2); font-weight: 600; }
+  .btn-texto:hover { color: var(--text); }
+  .btn-bloco { width: 100%; }
+
+  /* ===== Moldura do app ===== */
+  .app { height: 100%; display: flex; flex-direction: column; }
+  .topo {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 14px 24px; background: var(--card); border-bottom: 1px solid var(--border);
+  }
+  .marca { display: flex; align-items: center; gap: 9px; }
+  .marca-selo {
+    width: 26px; height: 26px; border-radius: 8px; background: var(--amarelo);
+    display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+  }
+  .marca-nome { font-size: 14px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-2); }
+  .topo-tarefa { display: flex; align-items: baseline; gap: 9px; min-width: 0; text-align: right; }
+  .topo-cliente { font-size: 15px; font-weight: 700; }
+  .topo-titulo { font-size: 13.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ===== Miolo: peça grande + painel do lado ===== */
+  .miolo {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px;
+    padding: 18px 24px 20px;
+  }
+  .coluna-peca { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+
+  /* `min-height: 0` é o que deixa o visor ENCOLHER abaixo do tamanho
+     natural do conteúdo — sem ele, um item flex se recusa a ficar menor
+     que o que tem dentro, e a peça empurraria a legenda e as miniaturas
+     pra fora da tela. */
+  .visor {
+    flex: 1 1 auto; min-height: 0; position: relative;
     display: flex; align-items: center; justify-content: center;
-    border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    background: var(--stage); border: 1px solid var(--border);
+    border-radius: 18px; overflow: hidden;
+  }
+  .visor.marcavel { cursor: crosshair; }
+  .visor-slot { width: 100%; height: 100%; min-height: 0; padding: 14px; display: flex; align-items: center; justify-content: center; }
+  /* `contain`: a peça cabe inteira, NUNCA é cortada, e a proporção dela é
+     que decide o tamanho final. Vale igual pra imagem e pra vídeo. */
+  .visor-slot img,
+  .visor-slot video {
+    max-width: 100%; max-height: 100%; width: auto; height: auto;
+    object-fit: contain; border-radius: 8px; box-shadow: var(--sombra-alta);
+  }
+  /* O player do Drive (iframe) não tem tamanho natural — sem uma altura
+     declarada ele nasce com 0px e o cliente vê um quadrado vazio. */
+  .visor-slot iframe { width: 100%; height: 100%; border: 0; border-radius: 8px; }
+  .visor-erro { padding: 26px; text-align: center; font-size: 13.5px; line-height: 1.55; color: var(--text-2); }
+  .visor.trocou { animation: troca .22s var(--ease); }
+  @keyframes troca { from { opacity: .35; transform: scale(.99); } to { opacity: 1; transform: scale(1); } }
+
+  .seta {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 6;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border);
+    box-shadow: var(--sombra); display: flex; align-items: center; justify-content: center;
+    transition: background .15s var(--ease), box-shadow .15s var(--ease);
+  }
+  .seta:hover { background: var(--superficie-2); box-shadow: var(--sombra-alta); }
+  .seta.esq { left: 14px; }
+  .seta.dir { right: 14px; }
+
+  .legenda {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 12px 18px; box-shadow: var(--sombra);
+  }
+  .legenda-nome { font-size: 15px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legenda-conta { font-size: 12.5px; color: var(--text-2); white-space: nowrap; flex-shrink: 0; }
+
+  /* Carrossel: uma miniatura por peça. Só aparece quando o link tem mais
+     de uma — com uma peça só ele seria uma fileira de um item, que não
+     informa nada. */
+  .filme { flex: 0 0 auto; display: flex; gap: 10px; overflow-x: auto; padding: 2px; }
+  .filme-item {
+    flex: 0 0 auto; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    opacity: .55; transition: opacity .15s var(--ease); padding: 0;
+  }
+  .filme-item:hover { opacity: .85; }
+  .filme-item.ativa { opacity: 1; }
+  .filme-mini {
+    width: 62px; height: 76px; border-radius: 12px; overflow: hidden; position: relative;
+    border: 2px solid var(--border); background: var(--stage); box-shadow: var(--sombra);
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color .15s var(--ease);
+  }
+  .filme-item.ativa .filme-mini { border-color: var(--amarelo); }
+  .filme-mini img { width: 100%; height: 100%; object-fit: cover; }
+  .filme-mini-icone { font-size: 20px; }
+  .filme-rotulo {
+    font-size: 10.5px; font-weight: 600; color: var(--text-2);
+    max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .filme-item.ativa .filme-rotulo { color: var(--text); }
+  .filme-marca {
+    position: absolute; top: 3px; right: 3px; min-width: 16px; height: 16px; padding: 0 4px;
+    border-radius: 999px; background: var(--amarelo); color: #16181D;
+    font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ===== Painel do lado ===== */
+  .painel { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
+  .cartao {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px; box-shadow: var(--sombra);
+  }
+  .cartao-rotulo {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--text-3); margin: 0 0 10px;
+  }
+  .cartao-texto { font-size: 13.5px; line-height: 1.55; color: var(--text-2); margin: 0; }
+  .acoes-coluna { display: flex; flex-direction: column; gap: 10px; }
+
+  /* ===== Pontos marcados na peça =====
+     Clica na imagem, solta um pino numerado, escreve o que muda ali.
+     Posição em PORCENTAGEM da imagem (não pixel), pra acompanhar
+     qualquer tamanho de tela. Com carrossel, cada ponto guarda também DE
+     QUAL PEÇA ele é (campo `peca`) — sem isso, marcar no Feed e no
+     Stories misturaria tudo numa lista só, sem dizer onde era cada um.
+     O backend guarda os pontos como texto JSON e só lê o campo `texto`,
+     então esse campo extra viaja junto sem precisar mexer lá. */
+  #pinsOverlay { position: absolute; inset: 0; pointer-events: none; }
+  .pin {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--amarelo); color: #16181D; font-weight: 800; font-size: 12.5px;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff; box-shadow: 0 3px 10px rgba(20,20,30,0.35);
     pointer-events: auto; cursor: pointer;
   }
-  .dica-pins {
-    font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px;
-    display: flex; align-items: center; gap: 6px;
+  .dica {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12.5px; color: var(--amarelo-texto);
+    background: var(--amarelo-suave); border-radius: 10px; padding: 9px 12px; margin: 0 0 12px;
   }
-  .pins-lista { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
+  .pins-lista { display: flex; flex-direction: column; gap: 8px; }
   .pin-linha { display: flex; align-items: center; gap: 8px; }
-  .pin-linha-numero {
-    width: 22px; height: 22px; border-radius: 50%; background: var(--amarelo); color: #16181d;
-    font-weight: 800; font-size: 11px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  .pin-num {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    background: var(--amarelo); color: #16181D; font-weight: 800; font-size: 11px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
   }
   .pin-linha input {
-    font: inherit; font-size: 13.5px; flex: 1; min-width: 0;
-    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    font: inherit; font-size: 13px; flex: 1; min-width: 0; color: var(--text);
+    border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; background: var(--superficie-2);
   }
-  .pin-linha-texto { flex: 1; font-size: 13.5px; }
-  .pin-linha-remover {
-    flex: 0; min-width: auto; width: 26px; height: 26px; padding: 0;
-    border-radius: 50%; background: var(--bg); color: var(--text-secondary); font-size: 15px;
+  .pin-linha input:focus { outline: none; border-color: var(--text-3); background: var(--card); }
+  .pin-texto { flex: 1; font-size: 13px; line-height: 1.45; }
+  .pin-remover {
+    width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%;
+    color: var(--text-3); font-size: 16px; line-height: 1;
   }
-  .acoes { display: flex; gap: 10px; flex-wrap: wrap; }
-  button {
-    font: inherit; cursor: pointer; border: none; border-radius: 12px;
-    padding: 14px 18px; font-weight: 700; font-size: 15px; flex: 1;
-    min-width: 140px; transition: opacity 0.15s ease, transform 0.15s ease;
-  }
-  button:active { transform: scale(0.98); }
-  button:disabled { opacity: 0.55; cursor: default; transform: none; }
-  .btn-aprovar { background: var(--verde); color: #fff; }
-  .btn-ajuste { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
-  .ajuste-form { display: none; flex-direction: column; gap: 10px; margin-top: 4px; }
-  .ajuste-form.aberto { display: flex; }
+  .pin-remover:hover { background: var(--superficie-2); color: var(--vermelho); }
+  .pin-de-peca { font-size: 11px; color: var(--text-3); display: block; margin-top: 1px; }
+  .pins-vazio { font-size: 12.5px; color: var(--text-3); font-style: italic; margin: 0; }
+
+  /* ===== Pedir ajuste ===== */
+  .form-ajuste { display: none; flex-direction: column; gap: 10px; }
+  .form-ajuste.aberto { display: flex; }
   textarea {
-    font: inherit; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
-    resize: vertical; min-height: 80px;
+    font: inherit; font-size: 13.5px; color: var(--text); background: var(--superficie-2);
+    border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px;
+    resize: vertical; min-height: 84px; width: 100%;
   }
-  .ajuste-form-botoes { display: flex; gap: 10px; }
-  .ajuste-form-botoes button { flex: 1; }
-  .btn-cancelar { background: transparent; color: var(--text-secondary); }
-  .estado {
-    display: flex; flex-direction: column; align-items: center; text-align: center;
-    gap: 10px; padding: 40px 10px;
-  }
-  .estado-icone { font-size: 40px; }
-  .estado-titulo { font-size: 18px; font-weight: 700; margin: 0; }
-  .estado-texto { font-size: 14px; color: var(--text-secondary); margin: 0; }
-  .pill-status {
+  textarea:focus { outline: none; border-color: var(--text-3); background: var(--card); }
+  .erro-envio { color: var(--vermelho); font-size: 13px; margin: 8px 0 0; display: none; }
+
+  /* ===== Depois de responder ===== */
+  .pill {
     display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
-    border-radius: 999px; font-size: 14px; font-weight: 700; align-self: flex-start;
+    border-radius: 999px; font-size: 14px; font-weight: 700; margin-bottom: 10px;
   }
   .pill-aprovado { background: var(--verde-bg); color: var(--verde); }
   .pill-ajuste { background: var(--laranja-bg); color: var(--laranja); }
-  .erro-texto { color: #b3261e; font-size: 14px; margin-top: 8px; display: none; }
+  .respondido-texto { font-size: 13.5px; line-height: 1.5; color: var(--text-2); margin: 0; }
 
   /* "Nosso sistema está fora do ar" — tom calmo de propósito: pro cliente
-     isso não é um erro dele nem um problema dele, e a resposta que ele
-     acabou de dar está salva. Amarelo (a cor da casa), não vermelho. */
+     isso não é erro dele nem problema dele, e a resposta que ele acabou
+     de dar está salva. Amarelo (a cor da casa), nunca vermelho. */
   .aviso-servidor {
-    display: flex; gap: 12px; align-items: flex-start; margin-top: 14px;
-    background: #FFF9E6; border: 1px solid #FFE9A8; border-radius: 14px; padding: 14px 16px;
+    display: flex; gap: 11px; align-items: flex-start; margin-top: 14px;
+    background: var(--amarelo-suave); border-radius: 12px; padding: 13px 15px;
   }
-  .aviso-servidor-ico { font-size: 20px; line-height: 1.2; flex-shrink: 0; }
-  .aviso-servidor b { font-size: 14px; display: block; margin-bottom: 4px; }
-  .aviso-servidor p { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
-  [hidden] { display: none !important; }
+  .aviso-servidor-ico { font-size: 19px; line-height: 1.2; flex-shrink: 0; }
+  .aviso-servidor b { font-size: 13.5px; display: block; margin-bottom: 4px; }
+  .aviso-servidor p { margin: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+
+  /* ===== Celular ===== */
+  @media (max-width: 860px) {
+    body { overflow: auto; }
+    html, body { height: auto; }
+    .app { height: auto; min-height: 100%; }
+    .topo { padding: 12px 16px; flex-wrap: wrap; }
+    .topo-tarefa { text-align: left; width: 100%; }
+    .miolo { grid-template-columns: 1fr; padding: 14px 14px 32px; }
+    .coluna-peca { min-height: 0; }
+    .visor { flex: none; height: 58vh; min-height: 240px; }
+    .painel { overflow-y: visible; }
+    .seta { width: 38px; height: 38px; }
+    .seta.esq { left: 8px; }
+    .seta.dir { right: 8px; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="marca"><span class="marca-selo">🐝</span> Beeon</div>
 
-  <div id="telaCarregando" class="card estado">
-    <div class="estado-icone">⏳</div>
-    <p class="estado-titulo">Carregando a peça...</p>
+<!-- ===== Carregando ===== -->
+<div class="tela-cheia" id="telaCarregando">
+  <div class="aviso">
+    <div class="aviso-icone">⏳</div>
+    <p class="aviso-titulo">Carregando a peça...</p>
   </div>
+</div>
 
-  <div id="telaErro" class="card estado" hidden>
-    <div class="estado-icone" id="telaErroIcone">😕</div>
-    <p class="estado-titulo" id="telaErroTitulo">Não consegui abrir esse link</p>
-    <p class="estado-texto" id="telaErroTexto">Confere se o link está completo e certo.</p>
+<!-- ===== Erro (link errado OU nosso servidor fora do ar) ===== -->
+<div class="tela-cheia" id="telaErro" hidden>
+  <div class="aviso">
+    <div class="aviso-icone" id="telaErroIcone">😕</div>
+    <p class="aviso-titulo" id="telaErroTitulo">Não consegui abrir esse link</p>
+    <p class="aviso-texto" id="telaErroTexto">Confere se o link está completo e certo.</p>
     <!-- Fora do ar (≠ link errado): aí faz sentido oferecer o WhatsApp e
          um "tentar de novo", em vez de mandar conferir o link. -->
-    <div class="acoes" id="telaErroAcoes" hidden style="margin-top:6px;">
-      <button type="button" id="btnTentarDeNovo" class="btn-ajuste">Tentar de novo</button>
-      <button type="button" id="btnErroWhatsapp" style="background:#25D366;color:#fff;">📱 Falar no WhatsApp</button>
+    <div class="aviso-acoes" id="telaErroAcoes" hidden>
+      <button type="button" class="btn btn-neutro" id="btnTentarDeNovo">Tentar de novo</button>
+      <button type="button" class="btn btn-whats" id="btnErroWhatsapp">📱 Falar no WhatsApp</button>
     </div>
   </div>
+</div>
 
-  <div id="telaAprovacao" class="card" hidden>
-    <p class="titulo" id="tituloTarefa"></p>
-    <p class="subtitulo" id="nomeCliente"></p>
-    <!-- Peças extras (quando o link tem mais de uma) são desenhadas aqui,
-         ANTES da principal — ver desenharPecasExtras() lá embaixo. -->
-    <div id="pecasExtras"></div>
-    <div class="imagem-box" id="imagemBox">
-      <img id="imagemPeca" alt="Peça pra aprovação" hidden>
-      <video id="videoPeca" controls playsinline hidden></video>
-      <iframe id="framePeca" allow="autoplay" allowfullscreen hidden></iframe>
-      <div id="pinsOverlay"></div>
+<!-- ===== A tela de verdade ===== -->
+<div class="app" id="telaAprovacao" hidden>
+  <header class="topo">
+    <div class="marca">
+      <span class="marca-selo">🐝</span>
+      <span class="marca-nome">Beeon</span>
     </div>
-    <p class="nome-peca" id="nomePecaPrincipal"></p>
-    <p class="dica-pins" id="dicaPins" hidden>📍 Clique na imagem pra marcar um ponto exato</p>
-    <div class="pins-lista" id="pinsLista" hidden></div>
+    <div class="topo-tarefa">
+      <span class="topo-cliente" id="nomeCliente"></span>
+      <span class="topo-titulo" id="tituloTarefa"></span>
+    </div>
+  </header>
 
-    <div id="blocoPendente">
-      <div class="acoes">
-        <button type="button" class="btn-aprovar" id="btnAprovar">✅ Aprovar</button>
-        <button type="button" class="btn-ajuste" id="btnPedirAjuste">✏️ Pedir ajuste</button>
+  <main class="miolo">
+    <div class="coluna-peca">
+      <div class="visor" id="visor">
+        <div class="visor-slot" id="visorSlot"></div>
+        <div id="pinsOverlay"></div>
+        <button type="button" class="seta esq" id="setaAnterior" aria-label="Peça anterior" hidden>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" class="seta dir" id="setaProxima" aria-label="Próxima peça" hidden>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
       </div>
-      <div class="ajuste-form" id="formAjuste">
-        <textarea id="textoAjuste" placeholder="O que precisa mudar? (opcional)"></textarea>
-        <div class="ajuste-form-botoes">
-          <button type="button" class="btn-cancelar" id="btnCancelarAjuste">Cancelar</button>
-          <button type="button" class="btn-ajuste" id="btnConfirmarAjuste" style="background:var(--laranja-bg);color:var(--laranja);">Enviar pedido de ajuste</button>
+
+      <div class="legenda">
+        <span class="legenda-nome" id="legendaNome"></span>
+        <span class="legenda-conta" id="legendaConta"></span>
+      </div>
+
+      <div class="filme" id="filme" hidden></div>
+    </div>
+
+    <aside class="painel">
+      <!-- Enquanto não respondeu -->
+      <div id="blocoPendente">
+        <div class="cartao" id="cartaoPins" hidden>
+          <p class="cartao-rotulo" id="pinsRotulo">Pontos marcados</p>
+          <p class="dica" id="dicaPins" hidden>📍 Clique na peça pra marcar um ponto exato</p>
+          <div class="pins-lista" id="pinsLista"></div>
+          <p class="pins-vazio" id="pinsVazio">Nenhum ponto marcado ainda.</p>
+        </div>
+
+        <div class="cartao" style="margin-top:12px;">
+          <p class="cartao-rotulo">O que você achou?</p>
+          <div class="acoes-coluna" id="acoesPrincipais">
+            <button type="button" class="btn btn-aprovar btn-bloco" id="btnAprovar">✅ Aprovar</button>
+            <button type="button" class="btn btn-ajuste btn-bloco" id="btnPedirAjuste">✏️ Pedir ajuste</button>
+          </div>
+          <div class="form-ajuste" id="formAjuste">
+            <textarea id="textoAjuste" placeholder="O que precisa mudar? (opcional)"></textarea>
+            <button type="button" class="btn btn-ajuste btn-bloco" id="btnConfirmarAjuste">Enviar pedido de ajuste</button>
+            <button type="button" class="btn btn-texto btn-bloco" id="btnCancelarAjuste">Cancelar</button>
+          </div>
+          <p class="erro-envio" id="erroEnvio"></p>
         </div>
       </div>
-      <p class="erro-texto" id="erroEnvio"></p>
-    </div>
 
-    <div id="blocoRespondido" hidden>
-      <span class="pill-status" id="pillStatus"></span>
-      <p class="estado-texto" id="textoRespondido" style="margin-top:10px;"></p>
+      <!-- Depois de responder -->
+      <div id="blocoRespondido" hidden>
+        <div class="cartao">
+          <span class="pill" id="pillStatus"></span>
+          <p class="respondido-texto" id="textoRespondido"></p>
 
-      <!-- Só aparece quando o sistema da equipe (Runrun.it) estava fora
-           do ar na hora: a resposta do cliente FOI salva, mas o recado
-           automático não chegou. Melhor contar do que dizer "já avisamos
-           o time" e ninguém ficar sabendo. -->
-      <div class="aviso-servidor" id="avisoServidor" hidden>
-        <span class="aviso-servidor-ico">🐝</span>
-        <div>
-          <b>Sua resposta está salva com a gente.</b>
-          <p>Só que o nosso sistema está fora do ar agora, então o time ainda não foi avisado
-             automaticamente. Assim que voltar, o recado chega sozinho — mas se for urgente,
-             manda pelo WhatsApp aqui embaixo que a gente vê na hora.</p>
+          <!-- Só aparece quando o sistema da equipe (Runrun.it) estava
+               fora do ar na hora: a resposta do cliente FOI salva, mas o
+               recado automático não chegou. Melhor contar do que dizer
+               "já avisamos o time" e ninguém ficar sabendo. -->
+          <div class="aviso-servidor" id="avisoServidor" hidden>
+            <span class="aviso-servidor-ico">🐝</span>
+            <div>
+              <b>Sua resposta está salva com a gente.</b>
+              <p>Só que o nosso sistema está fora do ar agora, então o time ainda não foi avisado
+                 automaticamente. Assim que voltar, o recado chega sozinho — mas se for urgente,
+                 manda pelo WhatsApp aqui embaixo que a gente vê na hora.</p>
+            </div>
+          </div>
+
+          <div class="acoes-coluna" id="acoesWhatsapp" hidden style="margin-top:14px;">
+            <button type="button" class="btn btn-whats btn-bloco" id="btnWhatsapp">📱 Enviar no WhatsApp também</button>
+            <button type="button" class="btn btn-texto btn-bloco" id="btnConcluir">Concluir</button>
+          </div>
+        </div>
+
+        <div class="cartao" id="cartaoPinsLeitura" hidden style="margin-top:12px;">
+          <p class="cartao-rotulo" id="pinsRotuloLeitura">Pontos marcados</p>
+          <div class="pins-lista" id="pinsListaLeitura"></div>
         </div>
       </div>
-
-      <div class="acoes" id="acoesWhatsapp" hidden style="margin-top:14px;">
-        <button type="button" id="btnWhatsapp" style="background:#25D366;color:#fff;">📱 Enviar no WhatsApp também</button>
-        <button type="button" class="btn-cancelar" id="btnConcluir">Concluir</button>
-      </div>
-    </div>
-  </div>
+    </aside>
+  </main>
 </div>
 
 <script>
@@ -246,6 +464,19 @@
     });
   }
 
+  function escaparTexto(t) {
+    var div = document.createElement("div");
+    div.textContent = t;
+    return div.innerHTML;
+  }
+
+  // ===== Estado =====
+  var codigo = pegarCodigo();
+  var pecas = [];          // todas as peças do link
+  var pecaAtual = 0;       // qual está no visor
+  var pins = [];           // [{x, y, texto, peca}] — `peca` = índice da peça
+  var modoLeitura = false; // link já respondido: mostra os pontos, não deixa mexer
+
   /**
    * A peça nem chegou a carregar porque o nosso lado está fora do ar.
    * Tom calmo e sem jargão: o cliente não errou nada, e ele tem dois
@@ -266,17 +497,210 @@
     };
   }
 
+  // ===== O visor: uma peça de cada vez, sempre inteira na tela =====
+
+  /** Essa peça aceita ponto marcado? Só imagem embutida aceita — no
+   *  player do Drive (vídeo) o clique é do player, não nosso, e não dá
+   *  pra saber onde ele caiu. */
+  function aceitaPins(peca) {
+    return !!peca && !peca.erro && !peca.previewUrl && !peca.ehVideo;
+  }
+
+  function desenharPeca(indice, animar) {
+    var peca = pecas[indice];
+    if (!peca) return;
+    var slot = document.getElementById("visorSlot");
+    slot.innerHTML = "";
+
+    if (peca.erro) {
+      var aviso = document.createElement("p");
+      aviso.className = "visor-erro";
+      aviso.textContent = peca.erro;
+      slot.appendChild(aviso);
+    } else if (peca.previewUrl) {
+      // Player do Drive: todo vídeo, e imagem grande demais pra vir embutida.
+      var frame = document.createElement("iframe");
+      frame.src = peca.previewUrl;
+      frame.setAttribute("allow", "autoplay");
+      frame.setAttribute("allowfullscreen", "");
+      slot.appendChild(frame);
+    } else {
+      var fonte = "data:" + peca.mimeType + ";base64," + peca.base64;
+      var el = document.createElement(peca.ehVideo ? "video" : "img");
+      if (peca.ehVideo) { el.controls = true; el.playsInline = true; }
+      else { el.alt = peca.nome || "Peça pra aprovação"; }
+      el.src = fonte;
+      slot.appendChild(el);
+    }
+
+    document.getElementById("legendaNome").textContent = peca.nome || "Peça pra aprovação";
+    document.getElementById("legendaConta").textContent =
+      pecas.length > 1 ? ("Peça " + (indice + 1) + " de " + pecas.length) : "";
+
+    var visor = document.getElementById("visor");
+    visor.classList.toggle("marcavel", !modoLeitura && aceitaPins(peca));
+    if (animar) {
+      visor.classList.remove("trocou");
+      void visor.offsetWidth;   // reinicia a animação
+      visor.classList.add("trocou");
+    }
+
+    var dica = document.getElementById("dicaPins");
+    if (dica) dica.hidden = modoLeitura || !aceitaPins(peca);
+
+    document.querySelectorAll(".filme-item").forEach(function (b, i) {
+      b.classList.toggle("ativa", i === indice);
+    });
+    renderPins();
+  }
+
+  function irParaPeca(indice, animar) {
+    if (indice < 0 || indice >= pecas.length || indice === pecaAtual) return;
+    pecaAtual = indice;
+    desenharPeca(pecaAtual, animar !== false);
+  }
+
+  function passarPeca(passo) {
+    if (pecas.length < 2) return;
+    irParaPeca((pecaAtual + passo + pecas.length) % pecas.length);
+  }
+
+  /** As miniaturas embaixo — só aparecem quando o link tem mais de uma peça. */
+  function montarCarrossel() {
+    var filme = document.getElementById("filme");
+    var temVarias = pecas.length > 1;
+    filme.hidden = !temVarias;
+    document.getElementById("setaAnterior").hidden = !temVarias;
+    document.getElementById("setaProxima").hidden = !temVarias;
+    if (!temVarias) return;
+
+    filme.innerHTML = pecas.map(function (p, i) {
+      var miolo;
+      if (p.erro) miolo = '<span class="filme-mini-icone">⚠️</span>';
+      else if (p.previewUrl || p.ehVideo) miolo = '<span class="filme-mini-icone">▶️</span>';
+      else miolo = '<img alt="" src="data:' + p.mimeType + ";base64," + p.base64 + '">';
+      return '<button type="button" class="filme-item" data-peca="' + i + '">' +
+        '<span class="filme-mini">' + miolo + '<span class="filme-marca" data-marca="' + i + '" hidden></span></span>' +
+        '<span class="filme-rotulo">' + escaparTexto(p.nome || ("Peça " + (i + 1))) + "</span>" +
+      "</button>";
+    }).join("");
+
+    filme.querySelectorAll("[data-peca]").forEach(function (b) {
+      b.addEventListener("click", function () { irParaPeca(Number(b.dataset.peca)); });
+    });
+  }
+
+  document.getElementById("setaAnterior").addEventListener("click", function () { passarPeca(-1); });
+  document.getElementById("setaProxima").addEventListener("click", function () { passarPeca(1); });
+  document.addEventListener("keydown", function (e) {
+    if (document.getElementById("telaAprovacao").hidden) return;
+    if (e.target && (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT")) return;
+    if (e.key === "ArrowLeft") passarPeca(-1);
+    else if (e.key === "ArrowRight") passarPeca(1);
+  });
+
+  // ===== Pontos marcados =====
+  // Cada ponto guarda de QUAL peça ele é (`peca`), porque com carrossel o
+  // cliente pode marcar no Feed e no Stories — sem isso viraria uma lista
+  // só, sem dizer onde era cada um. A numeração é GLOBAL (a ordem em que
+  // foram marcados) de propósito: é essa a numeração que aparece no
+  // comentário que chega pro time, então tem que bater com o que o
+  // cliente viu na tela.
+
+  function renderPins() {
+    // No visor, só os pontos DA PEÇA que está aparecendo.
+    var overlay = document.getElementById("pinsOverlay");
+    overlay.innerHTML = pins.map(function (p, i) {
+      if (p.peca !== pecaAtual) return "";
+      return '<div class="pin" style="left:' + p.x + '%;top:' + p.y + '%" title="Ponto ' + (i + 1) + '">' + (i + 1) + "</div>";
+    }).join("");
+
+    // Na miniatura, quantos pontos cada peça tem.
+    document.querySelectorAll("[data-marca]").forEach(function (marca) {
+      var qtd = pins.filter(function (p) { return p.peca === Number(marca.dataset.marca); }).length;
+      marca.hidden = qtd === 0;
+      marca.textContent = qtd;
+    });
+
+    var lista = document.getElementById(modoLeitura ? "pinsListaLeitura" : "pinsLista");
+    var rotulo = document.getElementById(modoLeitura ? "pinsRotuloLeitura" : "pinsRotulo");
+    if (rotulo) {
+      rotulo.textContent = pins.length
+        ? "Pontos marcados · " + pins.length
+        : "Pontos marcados";
+    }
+    if (modoLeitura) {
+      document.getElementById("cartaoPinsLeitura").hidden = pins.length === 0;
+    } else {
+      var vazio = document.getElementById("pinsVazio");
+      if (vazio) vazio.hidden = pins.length > 0;
+    }
+    if (!lista) return;
+
+    lista.innerHTML = pins.map(function (p, i) {
+      var dePeca = pecas.length > 1
+        ? '<span class="pin-de-peca">' + escaparTexto((pecas[p.peca] && pecas[p.peca].nome) || ("Peça " + (p.peca + 1))) + "</span>"
+        : "";
+      if (modoLeitura) {
+        return '<div class="pin-linha">' +
+          '<span class="pin-num" data-ir-peca="' + p.peca + '">' + (i + 1) + "</span>" +
+          '<span class="pin-texto">' + (p.texto ? escaparTexto(p.texto) : "(sem descrição)") + dePeca + "</span>" +
+        "</div>";
+      }
+      return '<div class="pin-linha">' +
+        '<span class="pin-num" data-ir-peca="' + p.peca + '" title="Ver na peça">' + (i + 1) + "</span>" +
+        '<input type="text" placeholder="O que precisa mudar aqui?" value="' + escaparTexto(p.texto || "") + '" data-pin="' + i + '">' +
+        '<button type="button" class="pin-remover" data-remover="' + i + '" aria-label="Remover ponto">×</button>' +
+      "</div>";
+    }).join("");
+
+    // Clicar no número leva pra peça daquele ponto — com várias peças, é
+    // o que responde "onde mesmo era esse aqui?" sem ficar caçando.
+    lista.querySelectorAll("[data-ir-peca]").forEach(function (n) {
+      n.addEventListener("click", function () { irParaPeca(Number(n.dataset.irPeca)); });
+    });
+    if (modoLeitura) return;
+
+    lista.querySelectorAll("input[data-pin]").forEach(function (input) {
+      input.addEventListener("input", function () { pins[Number(input.dataset.pin)].texto = input.value; });
+    });
+    lista.querySelectorAll("[data-remover]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        pins.splice(Number(btn.dataset.remover), 1);
+        renderPins();
+      });
+    });
+  }
+
+  document.getElementById("visor").addEventListener("click", function (e) {
+    if (modoLeitura || !aceitaPins(pecas[pecaAtual])) return;
+    if (e.target.closest(".pin") || e.target.closest(".seta")) return;
+    // Mede pela IMAGEM, não pela caixa: com object-fit: contain sobra
+    // fundo dos lados (ou em cima e embaixo), e medir pela caixa poria o
+    // ponto deslocado em relação à arte.
+    var alvo = document.querySelector("#visorSlot img") || document.getElementById("visorSlot");
+    var caixa = alvo.getBoundingClientRect();
+    var x = ((e.clientX - caixa.left) / caixa.width) * 100;
+    var y = ((e.clientY - caixa.top) / caixa.height) * 100;
+    if (x < 0 || x > 100 || y < 0 || y > 100) return;   // clicou no fundo, fora da arte
+    pins.push({ x: x, y: y, texto: "", peca: pecaAtual });
+    renderPins();
+    var novo = document.querySelector('input[data-pin="' + (pins.length - 1) + '"]');
+    if (novo) novo.focus();
+  });
+
+  // ===== Depois de responder =====
   function mostrarComoRespondido(status, respostaTexto, avisoChegou) {
     if (avisoChegou === undefined) avisoChegou = true; // link já respondido antes
     document.getElementById("blocoPendente").hidden = true;
-    var bloco = document.getElementById("blocoRespondido");
-    bloco.hidden = false;
+    document.getElementById("blocoRespondido").hidden = false;
+
     var pill = document.getElementById("pillStatus");
     var acoesWhatsapp = document.getElementById("acoesWhatsapp");
     var avisoServidor = document.getElementById("avisoServidor");
 
     if (status === "aprovado") {
-      pill.className = "pill-status pill-aprovado";
+      pill.className = "pill pill-aprovado";
       pill.textContent = "✅ Aprovado";
       document.getElementById("textoRespondido").textContent = avisoChegou
         ? "Obrigado! Já avisamos o time."
@@ -285,7 +709,7 @@
       // a ser o caminho recomendado — então aparece também no "aprovado".
       acoesWhatsapp.hidden = avisoChegou;
     } else {
-      pill.className = "pill-status pill-ajuste";
+      pill.className = "pill pill-ajuste";
       pill.textContent = "✏️ Ajuste pedido";
       document.getElementById("textoRespondido").textContent = respostaTexto
         ? "Você pediu: “" + respostaTexto + "”"
@@ -300,13 +724,12 @@
     // A mensagem honesta: a resposta está salva (nunca se perde), mas o
     // sistema da equipe não recebeu o recado agora.
     if (avisoServidor) avisoServidor.hidden = avisoChegou;
-    if (!avisoChegou) {
-      document.getElementById("btnWhatsapp").textContent = "💬 Avisar pelo WhatsApp";
-    }
+    if (!avisoChegou) document.getElementById("btnWhatsapp").textContent = "💬 Avisar pelo WhatsApp";
+
     modoLeitura = true;
-    document.getElementById("imagemBox").classList.remove("marcavel");
+    document.getElementById("visor").classList.remove("marcavel");
     document.getElementById("dicaPins").hidden = true;
-    renderPins();
+    desenharPeca(pecaAtual, false);
   }
 
   // Pedido do Cláudio (2026-08-04): "usamos o whatsapp" — depois de pedir
@@ -323,9 +746,10 @@
     partes.push(document.getElementById("tituloTarefa").textContent || "");
     if (respostaTexto) partes.push('"' + respostaTexto + '"');
     if (pins.length) {
-      partes.push((pins.length === 1 ? "1 ponto marcado" : pins.length + " pontos marcados") + " na imagem:");
+      partes.push((pins.length === 1 ? "1 ponto marcado" : pins.length + " pontos marcados") + " na peça:");
       pins.forEach(function (p, i) {
-        partes.push((i + 1) + ". " + (p.texto || "(sem descrição)"));
+        var onde = pecas.length > 1 && pecas[p.peca] ? " [" + (pecas[p.peca].nome || ("peça " + (p.peca + 1))) + "]" : "";
+        partes.push((i + 1) + ". " + (p.texto || "(sem descrição)") + onde);
       });
     }
     partes.push(location.href);
@@ -336,137 +760,7 @@
     document.getElementById("acoesWhatsapp").hidden = true;
   });
 
-  // ===== Pins: marcar um ponto exato na imagem =====
-  // Clica na imagem -> solta um pino numerado -> escreve o que precisa
-  // mudar naquele ponto. Posição guardada em PORCENTAGEM da imagem (x,
-  // y de 0 a 100), não em pixel — assim funciona em qualquer tamanho de
-  // tela, do celular ao desktop. Depois de responder (ou se o link já
-  // veio respondido), vira só leitura: mostra onde foram marcados, sem
-  // deixar adicionar/editar mais nada.
-  var pins = [];
-  var modoLeitura = false;
-  // Pins são um recurso de IMAGEM (marcar um ponto exato na peça) — não
-  // fazem sentido num vídeo (Stories em vídeo, por exemplo), então ficam
-  // desligados inteiros quando a peça é vídeo (ver 2026-08-04).
-  var ehVideo = false;
-
-  function renderPins() {
-    var overlay = document.getElementById("pinsOverlay");
-    overlay.innerHTML = pins.map(function (p, i) {
-      return '<div class="pin-marcador" style="left:' + p.x + '%;top:' + p.y + '%" title="Ponto ' + (i + 1) + '">' + (i + 1) + '</div>';
-    }).join("");
-
-    var lista = document.getElementById("pinsLista");
-    if (!pins.length) {
-      lista.hidden = true;
-      lista.innerHTML = "";
-      return;
-    }
-    lista.hidden = false;
-    lista.innerHTML = pins.map(function (p, i) {
-      if (modoLeitura) {
-        return '<div class="pin-linha"><span class="pin-linha-numero">' + (i + 1) + '</span>' +
-          '<span class="pin-linha-texto">' + (p.texto ? escaparTexto(p.texto) : '(sem descrição)') + '</span></div>';
-      }
-      return '<div class="pin-linha">' +
-        '<span class="pin-linha-numero">' + (i + 1) + '</span>' +
-        '<input type="text" placeholder="O que precisa mudar aqui?" value="' + escaparTexto(p.texto || "") + '" data-pin-indice="' + i + '">' +
-        '<button type="button" class="pin-linha-remover" data-pin-remover="' + i + '" aria-label="Remover ponto">×</button>' +
-        '</div>';
-    }).join("");
-
-    if (!modoLeitura) {
-      lista.querySelectorAll("input[data-pin-indice]").forEach(function (input) {
-        input.addEventListener("input", function () {
-          pins[Number(input.dataset.pinIndice)].texto = input.value;
-        });
-      });
-      lista.querySelectorAll("[data-pin-remover]").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          pins.splice(Number(btn.dataset.pinRemover), 1);
-          renderPins();
-        });
-      });
-    }
-  }
-
-  function escaparTexto(t) {
-    var div = document.createElement("div");
-    div.textContent = t;
-    return div.innerHTML;
-  }
-
-  /**
-   * Põe UMA peça no quadro principal. Três caminhos possíveis:
-   *   - erro        -> só o aviso, sem quebrar o resto da página;
-   *   - previewUrl  -> player do Drive num iframe (todo vídeo, e imagem
-   *                    grande demais pra vir embutida);
-   *   - base64      -> imagem embutida (o caso mais comum).
-   */
-  function desenharPecaNoQuadro(peca) {
-    var img = document.getElementById("imagemPeca");
-    var video = document.getElementById("videoPeca");
-    var frame = document.getElementById("framePeca");
-    img.hidden = true; video.hidden = true; frame.hidden = true;
-
-    if (peca.erro) {
-      // Insere o aviso SEM usar innerHTML no box: isso apagaria o
-      // #pinsOverlay junto, e renderPins() (chamado depois, quando a
-      // aprovação já foi respondida) não acharia mais onde desenhar.
-      var aviso = document.createElement("p");
-      aviso.className = "peca-erro";
-      aviso.textContent = peca.erro;
-      document.getElementById("imagemBox").insertBefore(aviso, document.getElementById("pinsOverlay"));
-      return;
-    }
-    if (peca.previewUrl) {
-      frame.src = peca.previewUrl;
-      frame.hidden = false;
-      return;
-    }
-    var fonteDados = "data:" + peca.mimeType + ";base64," + peca.base64;
-    if (peca.ehVideo) {
-      video.src = fonteDados;
-      video.hidden = false;
-    } else {
-      img.src = fonteDados;
-      img.hidden = false;
-    }
-  }
-
-  /** As peças além da primeira — cada uma no seu quadro, sem pins. */
-  function desenharPecasExtras(extras) {
-    var alvo = document.getElementById("pecasExtras");
-    if (!extras.length) { alvo.innerHTML = ""; return; }
-    alvo.innerHTML = extras.map(function (p) {
-      var miolo;
-      if (p.erro) {
-        miolo = '<p class="peca-erro">' + p.erro + "</p>";
-      } else if (p.previewUrl) {
-        miolo = '<iframe src="' + p.previewUrl + '" allow="autoplay" allowfullscreen></iframe>';
-      } else if (p.ehVideo) {
-        miolo = '<video controls playsinline src="data:' + p.mimeType + ";base64," + p.base64 + '"></video>';
-      } else {
-        miolo = '<img alt="Peça pra aprovação" src="data:' + p.mimeType + ";base64," + p.base64 + '">';
-      }
-      var nome = (p.nome || "").replace(/[<>&]/g, "");
-      return '<div class="imagem-box">' + miolo + "</div>" +
-             '<p class="nome-peca">' + nome + "</p>";
-    }).join("");
-  }
-
-  document.getElementById("imagemBox").addEventListener("click", function (e) {
-    if (ehVideo || modoLeitura || e.target.closest(".pin-marcador")) return;
-    var box = document.getElementById("imagemBox").getBoundingClientRect();
-    var x = ((e.clientX - box.left) / box.width) * 100;
-    var y = ((e.clientY - box.top) / box.height) * 100;
-    pins.push({ x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)), texto: "" });
-    renderPins();
-    var novoInput = document.querySelector('input[data-pin-indice="' + (pins.length - 1) + '"]');
-    if (novoInput) novoInput.focus();
-  });
-
-  var codigo = pegarCodigo();
+  // ===== Carregamento =====
   if (!codigo) {
     mostrarTela("telaErro");
   } else {
@@ -483,35 +777,37 @@
         mostrarTela("telaErro");
         return;
       }
+
       document.getElementById("tituloTarefa").textContent = data.tituloTarefa || data.nomeArquivo || "Peça pra aprovação";
       document.getElementById("nomeCliente").textContent = data.cliente || "";
 
-      // Um link pode trazer VÁRIAS peças. A primeira ocupa o quadro
-      // principal (é a única que aceita pins, pra não confundir "pino 2"
-      // entre peças diferentes); as outras aparecem inteiras logo acima.
-      var pecas = data.pecas && data.pecas.length
+      // Um link pode trazer VÁRIAS peças. O formato antigo (uma peça só,
+      // solta no topo da resposta) continua sendo aceito — link gerado
+      // antes dessa mudança abre normal.
+      pecas = (data.pecas && data.pecas.length)
         ? data.pecas
         : [{ nome: data.nomeArquivo, mimeType: data.mimeType, base64: data.base64,
              ehVideo: (data.mimeType || "").indexOf("video/") === 0 }];
 
-      var principal = pecas[0];
-      ehVideo = !!principal.ehVideo;
-      desenharPecaNoQuadro(principal);
-      document.getElementById("nomePecaPrincipal").textContent =
-        pecas.length > 1 ? (principal.nome || "") : "";
-      desenharPecasExtras(pecas.slice(1));
+      // Pontos gravados antes do carrossel não têm o campo `peca` — sem
+      // isso eles sumiriam da tela (nenhuma peça daria match). Todos caem
+      // na primeira peça, que era a única que aceitava ponto antes.
+      pins = (data.pins || []).map(function (p) {
+        return { x: p.x, y: p.y, texto: p.texto, peca: typeof p.peca === "number" ? p.peca : 0 };
+      });
 
+      montarCarrossel();
       mostrarTela("telaAprovacao");
 
-      // Pin só faz sentido em imagem embutida: no player do Drive (vídeo)
-      // o clique é do player, não nosso, e não dá pra saber onde caiu.
-      var aceitaPins = !ehVideo && !principal.previewUrl && !principal.erro;
       if (data.status && data.status !== "pendente") {
-        pins = data.pins || [];
         mostrarComoRespondido(data.status, data.respostaTexto);
-      } else if (aceitaPins) {
-        document.getElementById("imagemBox").classList.add("marcavel");
-        document.getElementById("dicaPins").hidden = false;
+      } else {
+        // O cartão de pontos só aparece se ALGUMA peça do link aceitar
+        // ponto marcado. Num link só de vídeo ele seria um bloco vazio
+        // dizendo "nenhum ponto marcado" pra sempre — ruído puro numa
+        // tela que precisa ser óbvia pra quem nunca viu ela antes.
+        document.getElementById("cartaoPins").hidden = !pecas.some(aceitaPins);
+        desenharPeca(0, false);
       }
 
       document.getElementById("btnAprovar").addEventListener("click", function () {
@@ -519,9 +815,12 @@
       });
       document.getElementById("btnPedirAjuste").addEventListener("click", function () {
         document.getElementById("formAjuste").classList.add("aberto");
+        document.getElementById("acoesPrincipais").hidden = true;
+        document.getElementById("textoAjuste").focus();
       });
       document.getElementById("btnCancelarAjuste").addEventListener("click", function () {
         document.getElementById("formAjuste").classList.remove("aberto");
+        document.getElementById("acoesPrincipais").hidden = false;
       });
       document.getElementById("btnConfirmarAjuste").addEventListener("click", function () {
         enviarResposta(false, document.getElementById("textoAjuste").value.trim());
