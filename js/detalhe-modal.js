@@ -1876,12 +1876,10 @@ wireArrastarArquivoParaCard();
  * ROTA_BASE em js/roteador-url.js) — assim não quebra quando o domínio
  * mudar pra colmeia.beeon.com.br.
  *
- * Manda também o ATENDIMENTO do cliente (getAtendimentoDoCliente, já
- * usado no card pra mostrar "Atendimento responsável") — é quem vai
- * assinar o comentário automático quando o cliente responder, não quem
- * clicou aqui. Pedido do Cláudio (2026-08-04): o comentário tem que
- * aparecer no Runrun.it como o atendimento de verdade, já que é ele
- * quem fala com o cliente por lá — não com a cara de quem gerou o link.
+ * O comentário automático (quando o cliente responder) sempre sai pela
+ * conta do coordenador, com um cabeçalho fixo "Alterações do cliente"
+ * deixando claro que é o cliente falando, relayed — não a conta de
+ * quem gerou o link (ver responderAprovacaoPublica, Aprovacao.gs).
  */
 async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
   if (!task || !task.id) return;
@@ -1894,7 +1892,6 @@ async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
     taskId: task.id,
     cliente: task.client,
     tituloTarefa: task.title,
-    atendimento: getAtendimentoDoCliente(task.client) || null,
   });
 
   btn.disabled = false;

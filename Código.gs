@@ -240,7 +240,7 @@ function handleRequest(e, method) {
       } else if (body.acao === 'beeAvisarUploadNovo') {
         output = beeAvisarUploadNovo(body.taskId, body.nomeArquivo);
       } else if (body.acao === 'gerarLinkDeAprovacao') {
-        output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor, body.atendimento);
+        output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor);
       } else if (body.acao === 'buscarAprovacaoPublica') {
         // Ação PÚBLICA — chamada por aprovar.html, sem login nenhum do
         // Colmeia (ver Aprovacao.gs). Só o código aleatório protege.
