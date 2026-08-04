@@ -61,7 +61,7 @@
     border-radius: 12px; overflow: hidden; background: var(--bg);
     border: 1px solid var(--border); margin-bottom: 10px;
   }
-  .imagem-box img { display: block; width: 100%; height: auto; }
+  .imagem-box img, .imagem-box video { display: block; width: 100%; height: auto; }
   .imagem-box.marcavel { cursor: crosshair; }
 
   /* Pins: marcar um ponto exato na imagem (pedido do Cláudio,
@@ -151,7 +151,8 @@
     <p class="titulo" id="tituloTarefa"></p>
     <p class="subtitulo" id="nomeCliente"></p>
     <div class="imagem-box" id="imagemBox">
-      <img id="imagemPeca" alt="Peça pra aprovação">
+      <img id="imagemPeca" alt="Peça pra aprovação" hidden>
+      <video id="videoPeca" controls playsinline hidden></video>
       <div id="pinsOverlay"></div>
     </div>
     <p class="dica-pins" id="dicaPins" hidden>📍 Clique na imagem pra marcar um ponto exato</p>
@@ -267,6 +268,10 @@
   // deixar adicionar/editar mais nada.
   var pins = [];
   var modoLeitura = false;
+  // Pins são um recurso de IMAGEM (marcar um ponto exato na peça) — não
+  // fazem sentido num vídeo (Stories em vídeo, por exemplo), então ficam
+  // desligados inteiros quando a peça é vídeo (ver 2026-08-04).
+  var ehVideo = false;
 
   function renderPins() {
     var overlay = document.getElementById("pinsOverlay");
@@ -315,7 +320,7 @@
   }
 
   document.getElementById("imagemBox").addEventListener("click", function (e) {
-    if (modoLeitura || e.target.closest(".pin-marcador")) return;
+    if (ehVideo || modoLeitura || e.target.closest(".pin-marcador")) return;
     var box = document.getElementById("imagemBox").getBoundingClientRect();
     var x = ((e.clientX - box.left) / box.width) * 100;
     var y = ((e.clientY - box.top) / box.height) * 100;
@@ -337,13 +342,23 @@
       }
       document.getElementById("tituloTarefa").textContent = data.tituloTarefa || data.nomeArquivo || "Peça pra aprovação";
       document.getElementById("nomeCliente").textContent = data.cliente || "";
-      document.getElementById("imagemPeca").src = "data:" + data.mimeType + ";base64," + data.base64;
+      ehVideo = (data.mimeType || "").indexOf("video/") === 0;
+      var fonteDados = "data:" + data.mimeType + ";base64," + data.base64;
+      if (ehVideo) {
+        document.getElementById("videoPeca").src = fonteDados;
+        document.getElementById("videoPeca").hidden = false;
+        document.getElementById("imagemPeca").hidden = true;
+      } else {
+        document.getElementById("imagemPeca").src = fonteDados;
+        document.getElementById("imagemPeca").hidden = false;
+        document.getElementById("videoPeca").hidden = true;
+      }
       mostrarTela("telaAprovacao");
 
       if (data.status && data.status !== "pendente") {
         pins = data.pins || [];
         mostrarComoRespondido(data.status, data.respostaTexto);
-      } else {
+      } else if (!ehVideo) {
         document.getElementById("imagemBox").classList.add("marcavel");
         document.getElementById("dicaPins").hidden = false;
       }

@@ -44,11 +44,12 @@ function getAprovacoesSheet() {
 }
 
 /**
- * Cria um link novo pra uma peça específica — pega a IMAGEM mais recente
- * da pasta do card no Drive (mesma varredura de compararVersoesDoCard,
- * Bee.gs: procura o maior "- vN" no nome; se não achar nenhuma com esse
- * padrão — ex: pasta com upload feito por fora do Colmeia — usa a
- * imagem mais recente da pasta, sem exigir o padrão de nome).
+ * Cria um link novo pra uma peça específica — pega a IMAGEM (ou VÍDEO,
+ * ver 2026-08-04) mais recente da pasta do card no Drive (mesma
+ * varredura de compararVersoesDoCard, Bee.gs: procura o maior "- vN" no
+ * nome; se não achar nenhuma com esse padrão — ex: pasta com upload
+ * feito por fora do Colmeia — usa o arquivo mais recente da pasta, sem
+ * exigir o padrão de nome).
  *
  * Devolve só o CÓDIGO — quem chama (frontend) monta a URL completa,
  * porque só o frontend sabe o endereço de onde o Colmeia está publicado
@@ -76,7 +77,11 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor) {
   var arquivos = pasta.getFiles();
   while (arquivos.hasNext()) {
     var arq = arquivos.next();
-    if (arq.getMimeType().indexOf('image/') !== 0) continue;
+    var tipo = arq.getMimeType();
+    // Aceita imagem OU vídeo — antes só imagem, e um card com Stories em
+    // vídeo dava "não encontrei nenhuma imagem" mesmo tendo arquivo novo
+    // na pasta (pedido do Cláudio, 2026-08-04).
+    if (tipo.indexOf('image/') !== 0 && tipo.indexOf('video/') !== 0) continue;
     var m = arq.getName().match(re);
     if (m) comPadrao.push({ versao: parseInt(m[1], 10), arquivo: arq });
     else semPadrao.push({ atualizadoEm: arq.getLastUpdated().getTime(), arquivo: arq });
@@ -91,7 +96,7 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor) {
     escolhido = semPadrao[0].arquivo;
   }
   if (!escolhido) {
-    return { ok: false, error: 'Não encontrei nenhuma imagem na pasta do card pra gerar o link.' };
+    return { ok: false, error: 'Não encontrei nenhuma imagem ou vídeo na pasta do card pra gerar o link.' };
   }
 
   var codigo = Utilities.getUuid().replace(/-/g, '');
@@ -112,10 +117,11 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor) {
 
 /**
  * O que a página pública (aprovar.html) precisa pra se desenhar: nome do
- * arquivo/cliente/tarefa e a imagem em si (base64 — mesmo caminho de
- * buscarImagemCheiaDrive, Drive.gs). Devolve também o status atual —
- * se já foi respondido, a página mostra "você já respondeu" em vez dos
- * botões de novo, pra não deixar aprovar/pedir ajuste duas vezes.
+ * arquivo/cliente/tarefa e a peça em si (base64 — mesmo caminho de
+ * buscarImagemCheiaDrive, Drive.gs — imagem OU vídeo, ver 2026-08-04).
+ * Devolve também o status atual — se já foi respondido, a página mostra
+ * "você já respondeu" em vez dos botões de novo, pra não deixar
+ * aprovar/pedir ajuste duas vezes.
  */
 function buscarAprovacaoPublica(codigo) {
   if (!codigo) return { ok: false, error: 'Link inválido.' };
@@ -124,10 +130,19 @@ function buscarAprovacaoPublica(codigo) {
 
   var imagem;
   try {
-    var blob = DriveApp.getFileById(linha.fileId).getBlob();
-    imagem = { base64: Utilities.base64Encode(blob.getBytes()), mimeType: blob.getContentType() };
+    var arquivo = DriveApp.getFileById(linha.fileId);
+    var blob = arquivo.getBlob();
+    var bytes = blob.getBytes();
+    // Mesmo limite do buscarImagemCheiaDrive (Drive.gs) — um vídeo passa
+    // disso fácil, e acima desse tamanho não cabe direito na resposta do
+    // Apps Script.
+    var LIMITE_BYTES = 25 * 1024 * 1024;
+    if (bytes.length > LIMITE_BYTES) {
+      return { ok: false, error: 'Esse arquivo tem ' + Math.round(bytes.length / 1024 / 1024) + ' MB, grande demais pra abrir por este link. Manda o vídeo direto pelo Drive pra esse cliente.' };
+    }
+    imagem = { base64: Utilities.base64Encode(bytes), mimeType: blob.getContentType() };
   } catch (e) {
-    return { ok: false, error: 'Não consegui carregar a imagem dessa aprovação — pode ter sido movida ou apagada do Drive.' };
+    return { ok: false, error: 'Não consegui carregar essa peça — pode ter sido movida ou apagada do Drive.' };
   }
 
   return {
