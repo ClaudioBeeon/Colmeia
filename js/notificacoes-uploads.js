@@ -407,6 +407,7 @@ async function carregarDadosPainelBeeon() {
     // A bolinha da barra lateral também: a foto de quem está logado pode
     // vir daqui (painelBeeonData.photos), e não só do painel de Pessoas.
     atualizarAvatarDaSidebar();
+    precarregarFotosConhecidas();
     buildClientsPage();
     buildAtendimentoPage();
     buildTiposPage();

@@ -456,6 +456,12 @@ async function buscarUsuariosRunrun() {
       return [];
     }
     usuariosRunrunCache = data.usuarios || [];
+    // As fotos dessa lista são exatamente as que a animação de "adicionar
+    // pessoa" na regra vai precisar mostrar na hora (ver
+    // adicionarPessoaOtimista, mais abaixo) — precarrega pra não esperar
+    // o <img> baixar no meio da animação (ver precarregarFotosConhecidas,
+    // js/pessoas-fotos.js).
+    precarregarFotosConhecidas();
     return usuariosRunrunCache;
   } catch (err) {
     console.error("Falha ao listar usuários do Runrun.it:", err);
