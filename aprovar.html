@@ -62,7 +62,12 @@
     border: 1px solid var(--border); margin-bottom: 10px;
   }
   .imagem-box img, .imagem-box video { display: block; width: 100%; height: auto; }
+  /* O player do Drive (vídeo) não tem altura própria — sem uma proporção
+     fixa o iframe nasce com 0px e o cliente vê um quadrado vazio. */
+  .imagem-box iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; }
   .imagem-box.marcavel { cursor: crosshair; }
+  .nome-peca { font-size: 12px; color: var(--text-secondary); margin: 0 0 14px; text-align: center; }
+  .peca-erro { padding: 22px 16px; text-align: center; font-size: 13px; color: var(--text-secondary); }
 
   /* Pins: marcar um ponto exato na imagem (pedido do Cláudio,
      2026-08-04) — clica na imagem, solta um pino numerado, escreve o
@@ -129,6 +134,17 @@
   .pill-aprovado { background: var(--verde-bg); color: var(--verde); }
   .pill-ajuste { background: var(--laranja-bg); color: var(--laranja); }
   .erro-texto { color: #b3261e; font-size: 14px; margin-top: 8px; display: none; }
+
+  /* "Nosso sistema está fora do ar" — tom calmo de propósito: pro cliente
+     isso não é um erro dele nem um problema dele, e a resposta que ele
+     acabou de dar está salva. Amarelo (a cor da casa), não vermelho. */
+  .aviso-servidor {
+    display: flex; gap: 12px; align-items: flex-start; margin-top: 14px;
+    background: #FFF9E6; border: 1px solid #FFE9A8; border-radius: 14px; padding: 14px 16px;
+  }
+  .aviso-servidor-ico { font-size: 20px; line-height: 1.2; flex-shrink: 0; }
+  .aviso-servidor b { font-size: 14px; display: block; margin-bottom: 4px; }
+  .aviso-servidor p { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -142,19 +158,30 @@
   </div>
 
   <div id="telaErro" class="card estado" hidden>
-    <div class="estado-icone">😕</div>
-    <p class="estado-titulo">Não consegui abrir esse link</p>
+    <div class="estado-icone" id="telaErroIcone">😕</div>
+    <p class="estado-titulo" id="telaErroTitulo">Não consegui abrir esse link</p>
     <p class="estado-texto" id="telaErroTexto">Confere se o link está completo e certo.</p>
+    <!-- Fora do ar (≠ link errado): aí faz sentido oferecer o WhatsApp e
+         um "tentar de novo", em vez de mandar conferir o link. -->
+    <div class="acoes" id="telaErroAcoes" hidden style="margin-top:6px;">
+      <button type="button" id="btnTentarDeNovo" class="btn-ajuste">Tentar de novo</button>
+      <button type="button" id="btnErroWhatsapp" style="background:#25D366;color:#fff;">📱 Falar no WhatsApp</button>
+    </div>
   </div>
 
   <div id="telaAprovacao" class="card" hidden>
     <p class="titulo" id="tituloTarefa"></p>
     <p class="subtitulo" id="nomeCliente"></p>
+    <!-- Peças extras (quando o link tem mais de uma) são desenhadas aqui,
+         ANTES da principal — ver desenharPecasExtras() lá embaixo. -->
+    <div id="pecasExtras"></div>
     <div class="imagem-box" id="imagemBox">
       <img id="imagemPeca" alt="Peça pra aprovação" hidden>
       <video id="videoPeca" controls playsinline hidden></video>
+      <iframe id="framePeca" allow="autoplay" allowfullscreen hidden></iframe>
       <div id="pinsOverlay"></div>
     </div>
+    <p class="nome-peca" id="nomePecaPrincipal"></p>
     <p class="dica-pins" id="dicaPins" hidden>📍 Clique na imagem pra marcar um ponto exato</p>
     <div class="pins-lista" id="pinsLista" hidden></div>
 
@@ -176,6 +203,21 @@
     <div id="blocoRespondido" hidden>
       <span class="pill-status" id="pillStatus"></span>
       <p class="estado-texto" id="textoRespondido" style="margin-top:10px;"></p>
+
+      <!-- Só aparece quando o sistema da equipe (Runrun.it) estava fora
+           do ar na hora: a resposta do cliente FOI salva, mas o recado
+           automático não chegou. Melhor contar do que dizer "já avisamos
+           o time" e ninguém ficar sabendo. -->
+      <div class="aviso-servidor" id="avisoServidor" hidden>
+        <span class="aviso-servidor-ico">🐝</span>
+        <div>
+          <b>Sua resposta está salva com a gente.</b>
+          <p>Só que o nosso sistema está fora do ar agora, então o time ainda não foi avisado
+             automaticamente. Assim que voltar, o recado chega sozinho — mas se for urgente,
+             manda pelo WhatsApp aqui embaixo que a gente vê na hora.</p>
+        </div>
+      </div>
+
       <div class="acoes" id="acoesWhatsapp" hidden style="margin-top:14px;">
         <button type="button" id="btnWhatsapp" style="background:#25D366;color:#fff;">📱 Enviar no WhatsApp também</button>
         <button type="button" class="btn-cancelar" id="btnConcluir">Concluir</button>
@@ -204,27 +246,62 @@
     });
   }
 
-  function mostrarComoRespondido(status, respostaTexto) {
+  /**
+   * A peça nem chegou a carregar porque o nosso lado está fora do ar.
+   * Tom calmo e sem jargão: o cliente não errou nada, e ele tem dois
+   * caminhos (tentar de novo ou falar no WhatsApp) em vez de um beco.
+   */
+  function mostrarErroDeServidor() {
+    document.getElementById("telaErroIcone").textContent = "🐝";
+    document.getElementById("telaErroTitulo").textContent = "Nosso sistema está fora do ar";
+    document.getElementById("telaErroTexto").textContent =
+      "Não é nada com o seu link — é o nosso servidor que caiu agora. " +
+      "Tenta de novo daqui a pouco, ou fala com a gente pelo WhatsApp que resolvemos por lá.";
+    document.getElementById("telaErroAcoes").hidden = false;
+
+    document.getElementById("btnTentarDeNovo").onclick = function () { location.reload(); };
+    document.getElementById("btnErroWhatsapp").onclick = function () {
+      var texto = "Oi! Tentei abrir o link de aprovação da peça e apareceu que o sistema está fora do ar.\n\n" + location.href;
+      window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank");
+    };
+  }
+
+  function mostrarComoRespondido(status, respostaTexto, avisoChegou) {
+    if (avisoChegou === undefined) avisoChegou = true; // link já respondido antes
     document.getElementById("blocoPendente").hidden = true;
     var bloco = document.getElementById("blocoRespondido");
     bloco.hidden = false;
     var pill = document.getElementById("pillStatus");
     var acoesWhatsapp = document.getElementById("acoesWhatsapp");
+    var avisoServidor = document.getElementById("avisoServidor");
+
     if (status === "aprovado") {
       pill.className = "pill-status pill-aprovado";
       pill.textContent = "✅ Aprovado";
-      document.getElementById("textoRespondido").textContent = "Obrigado! Já avisamos o time.";
-      acoesWhatsapp.hidden = true;
+      document.getElementById("textoRespondido").textContent = avisoChegou
+        ? "Obrigado! Já avisamos o time."
+        : "Sua aprovação foi registrada, tudo certo.";
+      // Sem o aviso automático, o WhatsApp deixa de ser um extra e passa
+      // a ser o caminho recomendado — então aparece também no "aprovado".
+      acoesWhatsapp.hidden = avisoChegou;
     } else {
       pill.className = "pill-status pill-ajuste";
       pill.textContent = "✏️ Ajuste pedido";
       document.getElementById("textoRespondido").textContent = respostaTexto
         ? "Você pediu: “" + respostaTexto + "”"
-        : "Já avisamos o time — eles entram em contato.";
+        : (avisoChegou ? "Já avisamos o time — eles entram em contato." : "Seu pedido foi registrado.");
       acoesWhatsapp.hidden = false;
-      document.getElementById("btnWhatsapp").onclick = function () {
-        window.open("https://wa.me/?text=" + encodeURIComponent(montarTextoWhatsapp(respostaTexto)), "_blank");
-      };
+    }
+
+    document.getElementById("btnWhatsapp").onclick = function () {
+      window.open("https://wa.me/?text=" + encodeURIComponent(montarTextoWhatsapp(respostaTexto)), "_blank");
+    };
+
+    // A mensagem honesta: a resposta está salva (nunca se perde), mas o
+    // sistema da equipe não recebeu o recado agora.
+    if (avisoServidor) avisoServidor.hidden = avisoChegou;
+    if (!avisoChegou) {
+      document.getElementById("btnWhatsapp").textContent = "💬 Avisar pelo WhatsApp";
     }
     modoLeitura = true;
     document.getElementById("imagemBox").classList.remove("marcavel");
@@ -319,6 +396,65 @@
     return div.innerHTML;
   }
 
+  /**
+   * Põe UMA peça no quadro principal. Três caminhos possíveis:
+   *   - erro        -> só o aviso, sem quebrar o resto da página;
+   *   - previewUrl  -> player do Drive num iframe (todo vídeo, e imagem
+   *                    grande demais pra vir embutida);
+   *   - base64      -> imagem embutida (o caso mais comum).
+   */
+  function desenharPecaNoQuadro(peca) {
+    var img = document.getElementById("imagemPeca");
+    var video = document.getElementById("videoPeca");
+    var frame = document.getElementById("framePeca");
+    img.hidden = true; video.hidden = true; frame.hidden = true;
+
+    if (peca.erro) {
+      // Insere o aviso SEM usar innerHTML no box: isso apagaria o
+      // #pinsOverlay junto, e renderPins() (chamado depois, quando a
+      // aprovação já foi respondida) não acharia mais onde desenhar.
+      var aviso = document.createElement("p");
+      aviso.className = "peca-erro";
+      aviso.textContent = peca.erro;
+      document.getElementById("imagemBox").insertBefore(aviso, document.getElementById("pinsOverlay"));
+      return;
+    }
+    if (peca.previewUrl) {
+      frame.src = peca.previewUrl;
+      frame.hidden = false;
+      return;
+    }
+    var fonteDados = "data:" + peca.mimeType + ";base64," + peca.base64;
+    if (peca.ehVideo) {
+      video.src = fonteDados;
+      video.hidden = false;
+    } else {
+      img.src = fonteDados;
+      img.hidden = false;
+    }
+  }
+
+  /** As peças além da primeira — cada uma no seu quadro, sem pins. */
+  function desenharPecasExtras(extras) {
+    var alvo = document.getElementById("pecasExtras");
+    if (!extras.length) { alvo.innerHTML = ""; return; }
+    alvo.innerHTML = extras.map(function (p) {
+      var miolo;
+      if (p.erro) {
+        miolo = '<p class="peca-erro">' + p.erro + "</p>";
+      } else if (p.previewUrl) {
+        miolo = '<iframe src="' + p.previewUrl + '" allow="autoplay" allowfullscreen></iframe>';
+      } else if (p.ehVideo) {
+        miolo = '<video controls playsinline src="data:' + p.mimeType + ";base64," + p.base64 + '"></video>';
+      } else {
+        miolo = '<img alt="Peça pra aprovação" src="data:' + p.mimeType + ";base64," + p.base64 + '">';
+      }
+      var nome = (p.nome || "").replace(/[<>&]/g, "");
+      return '<div class="imagem-box">' + miolo + "</div>" +
+             '<p class="nome-peca">' + nome + "</p>";
+    }).join("");
+  }
+
   document.getElementById("imagemBox").addEventListener("click", function (e) {
     if (ehVideo || modoLeitura || e.target.closest(".pin-marcador")) return;
     var box = document.getElementById("imagemBox").getBoundingClientRect();
@@ -336,29 +472,44 @@
   } else {
     chamar({ acao: "buscarAprovacaoPublica", codigo: codigo }).then(function (data) {
       if (!data || !data.ok) {
-        document.getElementById("telaErroTexto").textContent = (data && data.error) || "Link inválido.";
+        // "Não deu pra perguntar" (servidor fora/sem rede) é diferente de
+        // "esse link não existe". Mandar o cliente conferir o link quando
+        // o problema é nosso só faz ele achar que errou alguma coisa.
+        if (!data || data.semRede) {
+          mostrarErroDeServidor();
+        } else {
+          document.getElementById("telaErroTexto").textContent = data.error || "Link inválido.";
+        }
         mostrarTela("telaErro");
         return;
       }
       document.getElementById("tituloTarefa").textContent = data.tituloTarefa || data.nomeArquivo || "Peça pra aprovação";
       document.getElementById("nomeCliente").textContent = data.cliente || "";
-      ehVideo = (data.mimeType || "").indexOf("video/") === 0;
-      var fonteDados = "data:" + data.mimeType + ";base64," + data.base64;
-      if (ehVideo) {
-        document.getElementById("videoPeca").src = fonteDados;
-        document.getElementById("videoPeca").hidden = false;
-        document.getElementById("imagemPeca").hidden = true;
-      } else {
-        document.getElementById("imagemPeca").src = fonteDados;
-        document.getElementById("imagemPeca").hidden = false;
-        document.getElementById("videoPeca").hidden = true;
-      }
+
+      // Um link pode trazer VÁRIAS peças. A primeira ocupa o quadro
+      // principal (é a única que aceita pins, pra não confundir "pino 2"
+      // entre peças diferentes); as outras aparecem inteiras logo acima.
+      var pecas = data.pecas && data.pecas.length
+        ? data.pecas
+        : [{ nome: data.nomeArquivo, mimeType: data.mimeType, base64: data.base64,
+             ehVideo: (data.mimeType || "").indexOf("video/") === 0 }];
+
+      var principal = pecas[0];
+      ehVideo = !!principal.ehVideo;
+      desenharPecaNoQuadro(principal);
+      document.getElementById("nomePecaPrincipal").textContent =
+        pecas.length > 1 ? (principal.nome || "") : "";
+      desenharPecasExtras(pecas.slice(1));
+
       mostrarTela("telaAprovacao");
 
+      // Pin só faz sentido em imagem embutida: no player do Drive (vídeo)
+      // o clique é do player, não nosso, e não dá pra saber onde caiu.
+      var aceitaPins = !ehVideo && !principal.previewUrl && !principal.erro;
       if (data.status && data.status !== "pendente") {
         pins = data.pins || [];
         mostrarComoRespondido(data.status, data.respostaTexto);
-      } else if (!ehVideo) {
+      } else if (aceitaPins) {
         document.getElementById("imagemBox").classList.add("marcavel");
         document.getElementById("dicaPins").hidden = false;
       }
@@ -392,7 +543,11 @@
           erro.style.display = "block";
           return;
         }
-        mostrarComoRespondido(data.status, respostaTexto);
+        // `avisoChegou: false` = a resposta FOI salva, mas o Runrun.it
+        // estava fora do ar e o time não foi avisado automaticamente.
+        // Contar isso é melhor que dizer "já avisamos o time" e ninguém
+        // ficar sabendo (ver responderAprovacaoPublica, Aprovacao.gs).
+        mostrarComoRespondido(data.status, respostaTexto, data.avisoChegou !== false);
       });
   }
 </script>

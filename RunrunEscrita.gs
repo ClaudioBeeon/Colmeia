@@ -408,8 +408,17 @@ function diagnosticoAlterarDataEntrega() {
  *           desiredDate (AAAA-MM-DD, opcional), descricao (opcional) }
  */
 function criarTarefaRunrun(dados) {
-  if (!dados || !dados.titulo || !dados.projectId) {
-    return { ok: false, error: 'Faltam campos obrigatórios (título ou cliente).' };
+  if (!dados || !dados.titulo) {
+    return { ok: false, error: 'Faltam campos obrigatórios (título).' };
+  }
+  // Subtarefa herda o projeto do card mãe: quem cria uma Alteração não
+  // deveria precisar escolher o cliente de novo — é sempre o mesmo do pai.
+  if (!dados.projectId && dados.parentTaskId) {
+    var pai = runrunFetch('/tasks/' + dados.parentTaskId);
+    if (pai && !pai.erroFetch && pai.project_id) dados.projectId = pai.project_id;
+  }
+  if (!dados.projectId) {
+    return { ok: false, error: 'Faltam campos obrigatórios (cliente/projeto).' };
   }
   var token = tokenRunrunDoAutor(dados.autor);
 
@@ -427,6 +436,11 @@ function criarTarefaRunrun(dados) {
     project_id: dados.projectId,
     title: dados.titulo,
   };
+  // SUBTAREFA de um card mãe (usado pelo fluxo de Alteração: o
+  // atendimento reprova e o Colmeia abre a subtarefa sozinho). Igual ao
+  // caso do `assignments`, o Runrun.it pode responder 200 e ignorar isso
+  // — por isso o vínculo é CONFERIDO depois, mais abaixo.
+  if (dados.parentTaskId) corpoTask.parent_task_id = dados.parentTaskId;
   // Alocar já na criação, no formato que a API documenta (`assignments`).
   // O `user_id` que estava aqui antes era aceito com 200 e ignorado — a
   // tarefa nascia com "Alocados" vazio.
@@ -468,6 +482,17 @@ function criarTarefaRunrun(dados) {
     }
   }
 
+  // CONFERIR o vínculo de subtarefa — mesmo cuidado da alocação: o
+  // Runrun.it já respondeu 200 e ignorou campo mais de uma vez (aconteceu
+  // com assignments, com a Entrega Desejada e com a Data de Publicação).
+  var virouSubtarefa = true;
+  var diagnosticoSubtarefa = '';
+  if (dados.parentTaskId) {
+    var r = vincularComoSubtarefa(novoId, dados.parentTaskId, dados.autor);
+    virouSubtarefa = !!r.ok;
+    diagnosticoSubtarefa = r.diagnostico || r.comoFoi || '';
+  }
+
   // Prioridade é só do Colmeia (planilha própria) — não é campo do
   // Runrun.it. Descrição vem numa segunda chamada, mesmo padrão de
   // salvarDescricao.
@@ -482,8 +507,269 @@ function criarTarefaRunrun(dados) {
     taskId: novoId,
     alocou: alocou,
     diagnosticoAlocacao: diagnosticoAlocacao,
+    virouSubtarefa: virouSubtarefa,
+    diagnosticoSubtarefa: diagnosticoSubtarefa,
     link: 'https://runrun.it/tasks/' + novoId
   };
+}
+
+/**
+ * Garante que a tarefa virou FILHA do card mãe — conferindo de verdade,
+ * não confiando no status 200. Mesma estratégia de
+ * alocarResponsavelNaTarefa: se o jeito da criação não pegou, tenta
+ * outros formatos e devolve um diagnóstico do que cada um respondeu.
+ */
+function vincularComoSubtarefa(taskId, parentTaskId, autor) {
+  if (!taskId || !parentTaskId) return { ok: false, error: 'taskId ou parentTaskId ausente.' };
+  var token = tokenRunrunDoAutor(autor);
+
+  // Já nasceu filha (o parent_task_id da criação funcionou)? Nada a fazer.
+  if (tarefaEhFilhaDe(taskId, parentTaskId)) {
+    return { ok: true, comoFoi: 'já nasceu como subtarefa' };
+  }
+
+  var tentativas = [
+    { nome: 'PUT parent_task_id', executar: function () {
+      return runrunRequest('/tasks/' + taskId, 'put', { parent_task_id: parentTaskId }, token);
+    } },
+    { nome: 'PUT task.parent_task_id', executar: function () {
+      return runrunRequest('/tasks/' + taskId, 'put', { task: { parent_task_id: parentTaskId } }, token);
+    } },
+    { nome: 'POST /subtasks no pai', executar: function () {
+      return runrunRequest('/tasks/' + parentTaskId + '/subtasks', 'post', { subtask_id: taskId }, token);
+    } }
+  ];
+
+  var log = [];
+  for (var i = 0; i < tentativas.length; i++) {
+    var r = tentativas[i].executar();
+    if (r.ok && tarefaEhFilhaDe(taskId, parentTaskId)) {
+      return { ok: true, comoFoi: tentativas[i].nome };
+    }
+    log.push(tentativas[i].nome + ' → ' + (r.ok ? 'respondeu 200 mas não vinculou' : 'status ' + r.status));
+  }
+  return { ok: false, error: 'Runrun.it não vinculou como subtarefa.', diagnostico: log.join(' | ') };
+}
+
+/** Lê a tarefa de volta e confere de quem ela é filha de verdade. */
+function tarefaEhFilhaDe(taskId, parentTaskId) {
+  var t = runrunFetch('/tasks/' + taskId);
+  if (!t || t.erroFetch) return false;
+  return String(t.parent_task_id || '') === String(parentTaskId);
+}
+
+/**
+ * DIAGNÓSTICO — rode esta função no editor do Apps Script pra confirmar,
+ * contra o Runrun.it de verdade, duas coisas de uma vez:
+ *   1) dá pra criar uma tarefa já como SUBTAREFA de um card mãe;
+ *   2) dá pra ela nascer com o responsável ALOCADO.
+ *
+ * É o teste que decide se o fluxo de Alteração (o atendimento reprova e o
+ * Colmeia abre a subtarefa sozinho) é viável — não dá pra confiar na
+ * documentação aqui: este backend já foi enganado pelo Runrun.it com
+ * status 200 ignorando campo em pelo menos três casos.
+ *
+ * CRIA UMA TAREFA DE VERDADE. O título começa com "TESTE —" e o log
+ * termina dizendo como apagar.
+ */
+function testarCriarSubtarefaAlteracao() {
+  // Troque aqui se quiser testar em outro card mãe.
+  var CARD_MAE = 112383;
+  var QUEM = 'Cláudio';
+
+  Logger.log('=== TESTE: criar subtarefa alocada ===');
+  Logger.log('Card mãe: ' + CARD_MAE + ' | Alocar pra: ' + QUEM);
+  Logger.log('');
+
+  var pai = runrunFetch('/tasks/' + CARD_MAE);
+  if (!pai || pai.erroFetch) {
+    Logger.log('!! Não consegui ler o card mãe. Resposta: ' + JSON.stringify(pai));
+    return;
+  }
+  Logger.log('Card mãe lido: "' + pai.title + '"');
+  Logger.log('  project_id: ' + pai.project_id);
+  Logger.log('  subtarefas hoje: ' + ((pai.subtask_ids || []).length));
+
+  // O Runrun.it recusa criar tarefa em projeto FECHADO ("O projeto da
+  // tarefa deve estar aberto", 422) — conferir isso antes evita gastar a
+  // tentativa e, mais importante, é o mesmo problema que o fluxo de
+  // Alteração vai encontrar em peça de mês antigo.
+  var projeto = runrunFetch('/projects/' + pai.project_id);
+  if (projeto && !projeto.erroFetch) {
+    Logger.log('  projeto: "' + (projeto.name || '?') + '" | is_closed: ' + projeto.is_closed);
+    if (projeto.is_closed) {
+      Logger.log('');
+      Logger.log('❌ ESSE PROJETO ESTÁ FECHADO — o Runrun.it não deixa criar tarefa nele.');
+      Logger.log('   Não é problema de subtarefa; a criação nem chega a ser testada.');
+      Logger.log('   Rode listarProjetosAbertosParaTeste() pra achar um card mãe testável.');
+      return;
+    }
+  }
+  Logger.log('');
+
+  var meuId = idDoUsuarioRunrunPorNome(QUEM);
+  Logger.log('ID de ' + QUEM + ' no Runrun.it: ' + meuId);
+  if (!meuId) Logger.log('  !! sem id, a alocação vai falhar');
+  Logger.log('');
+
+  Logger.log('--- Criando... ---');
+  var r = criarTarefaRunrun({
+    titulo: 'TESTE — Alteração V1 (pode apagar)',
+    parentTaskId: CARD_MAE,
+    responsavelId: meuId,
+    descricao: 'Tarefa de teste criada pelo Colmeia pra validar o fluxo de Alteração. Pode apagar.',
+    autor: QUEM
+  });
+
+  Logger.log('Resposta: ' + JSON.stringify(r));
+  Logger.log('');
+  Logger.log('--- RESULTADO ---');
+  if (!r.ok) {
+    Logger.log('❌ Não criou. Motivo: ' + r.error);
+    return;
+  }
+  Logger.log('✅ Tarefa criada: ' + r.link);
+  Logger.log((r.virouSubtarefa ? '✅' : '❌') + ' Virou subtarefa do card mãe' +
+    (r.diagnosticoSubtarefa ? ' (' + r.diagnosticoSubtarefa + ')' : ''));
+  Logger.log((r.alocou ? '✅' : '❌') + ' Alocou ' + QUEM +
+    (r.diagnosticoAlocacao ? ' (' + r.diagnosticoAlocacao + ')' : ''));
+  Logger.log('');
+
+  // Confere lendo de volta — a prova final, independente do que a
+  // resposta da criação disse.
+  var nova = runrunFetch('/tasks/' + r.taskId);
+  if (nova && !nova.erroFetch) {
+    Logger.log('Conferindo a tarefa criada:');
+    Logger.log('  parent_task_id: ' + nova.parent_task_id + (String(nova.parent_task_id) === String(CARD_MAE) ? '  ← certo' : '  ← NÃO é filha!'));
+    Logger.log('  responsible_name: ' + nova.responsible_name);
+    Logger.log('  assignments: ' + JSON.stringify(nova.assignments || []));
+  }
+
+  Logger.log('');
+  Logger.log('Pra apagar: abre ' + r.link + ' e exclui, ou roda no editor:');
+  Logger.log('  runrunRequest("/tasks/' + r.taskId + '", "delete", null, RUNRUN_USER_TOKEN)');
+  Logger.log('=== FIM. Copie TUDO acima e mande pro Claude. ===');
+}
+
+/**
+ * DIAGNÓSTICO — o projeto fechado bloqueia SÓ criar tarefa, ou bloqueia
+ * também comentar e reatribuir?
+ *
+ * Isso decide o plano B do fluxo de Alteração (ideia do Cláudio): quando
+ * o projeto estiver fechado e não der pra abrir a subtarefa, o Colmeia
+ * comenta no card mãe marcando o designer e passa o card pra ele.
+ *
+ * SEGURANÇA: o comentário é aditivo (dá pra apagar). A reatribuição é
+ * testada alocando a tarefa pra QUEM JÁ É O DONO dela — se a API aceitar,
+ * sabemos que reatribuir funciona em projeto fechado, sem trocar o
+ * responsável de ninguém nem disparar notificação indevida.
+ */
+function testarComentarEReatribuirEmProjetoFechado() {
+  var CARD_FECHADO = 110172; // o do teste anterior, projeto arquivado
+  var QUEM_MARCAR = 'Cláudio';
+
+  Logger.log('=== TESTE: projeto fechado bloqueia o quê? ===');
+  Logger.log('Card: ' + CARD_FECHADO);
+  Logger.log('');
+
+  var t = runrunFetch('/tasks/' + CARD_FECHADO);
+  if (!t || t.erroFetch) {
+    Logger.log('!! Não consegui ler a tarefa: ' + JSON.stringify(t));
+    return;
+  }
+  Logger.log('Tarefa: "' + t.title + '"');
+  Logger.log('  responsável atual: ' + t.responsible_name + ' (' + t.responsible_id + ')');
+
+  var p = runrunFetch('/projects/' + t.project_id);
+  Logger.log('  projeto: "' + (p && p.name) + '" | is_closed: ' + (p && p.is_closed));
+  if (p && !p.is_closed) {
+    Logger.log('');
+    Logger.log('⚠ Esse projeto NÃO está fechado — o teste não prova nada.');
+    Logger.log('  Troque CARD_FECHADO por uma tarefa de projeto arquivado.');
+    return;
+  }
+  Logger.log('');
+
+  // ---- 1) Dá pra COMENTAR? ----
+  Logger.log('--- 1) Comentar (com menção) ---');
+  var texto = 'TESTE do Colmeia (pode apagar) — <mention>@' + QUEM_MARCAR + '</mention> ' +
+    'conferindo se dá pra comentar em projeto fechado.';
+  var c = adicionarComentario(CARD_FECHADO, texto, null);
+  Logger.log('Resposta: ' + JSON.stringify(c));
+  Logger.log(c && c.ok ? '✅ COMENTAR FUNCIONA em projeto fechado' : '❌ Comentar TAMBÉM é bloqueado');
+  Logger.log('');
+
+  // ---- 2) Dá pra REATRIBUIR? ----
+  // Aloca pro MESMO dono atual: inofensivo, mas passa pelo mesmo caminho
+  // de API que uma reatribuição de verdade passaria.
+  Logger.log('--- 2) Reatribuir (pro mesmo dono, sem mudar nada) ---');
+  if (!t.responsible_id) {
+    Logger.log('⚠ A tarefa não tem responsável — não dá pra testar sem trocar o dono de verdade.');
+  } else {
+    var r = alocarResponsavelNaTarefa(CARD_FECHADO, t.responsible_id, QUEM_MARCAR);
+    Logger.log('Resposta: ' + JSON.stringify(r));
+    Logger.log(r && r.ok ? '✅ REATRIBUIR FUNCIONA em projeto fechado' : '❌ Reatribuir é bloqueado');
+  }
+
+  Logger.log('');
+  Logger.log('--- CONCLUSÃO ---');
+  Logger.log('Se os dois deram ✅, o plano B do Cláudio funciona:');
+  Logger.log('  projeto fechado → comenta no card mãe marcando o designer + passa o card pra ele.');
+  Logger.log('');
+  Logger.log('Lembre de apagar o comentário de teste no card ' + CARD_FECHADO + '.');
+  Logger.log('=== FIM. Copie TUDO acima e mande pro Claude. ===');
+}
+
+/**
+ * DIAGNÓSTICO — acha sozinho um card mãe que dê pra usar no teste acima,
+ * pra ninguém precisar caçar isso na mão: varre as tarefas ABERTAS do
+ * time, pega as que têm subtarefas (ou seja, são card mãe) e confere se
+ * o projeto delas está aberto.
+ */
+function listarProjetosAbertosParaTeste() {
+  Logger.log('=== Procurando um card mãe testável ===');
+  Logger.log('(card mãe = tem subtarefas; testável = projeto aberto)');
+  Logger.log('');
+
+  var lote = runrunFetch('/tasks?is_closed=false&sort=updated_at&sortDir=desc&limit=100');
+  if (!Array.isArray(lote)) {
+    Logger.log('!! Não consegui listar tarefas: ' + JSON.stringify(lote));
+    return;
+  }
+  Logger.log('Tarefas abertas lidas: ' + lote.length);
+
+  var projetosVistos = {};
+  var achados = 0;
+
+  for (var i = 0; i < lote.length && achados < 5; i++) {
+    var t = lote[i];
+    if (!t.subtask_ids || !t.subtask_ids.length) continue; // não é card mãe
+    if (!t.project_id) continue;
+
+    var aberto = projetosVistos[t.project_id];
+    if (aberto === undefined) {
+      var p = runrunFetch('/projects/' + t.project_id);
+      aberto = !!(p && !p.erroFetch && !p.is_closed);
+      projetosVistos[t.project_id] = aberto;
+    }
+    if (!aberto) continue;
+
+    achados++;
+    Logger.log('');
+    Logger.log('✅ ' + achados + ') CARD_MAE = ' + t.id);
+    Logger.log('   "' + t.title + '"');
+    Logger.log('   cliente: ' + (t.client_name || '?') + ' | subtarefas: ' + t.subtask_ids.length);
+    Logger.log('   https://runrun.it/tasks/' + t.id);
+  }
+
+  Logger.log('');
+  if (!achados) {
+    Logger.log('❌ Não achei nenhum card mãe em projeto aberto entre as 100 tarefas mais recentes.');
+    Logger.log('   Isso já é uma resposta importante — ver a conversa.');
+  } else {
+    Logger.log('Pegue um ID acima, troque o CARD_MAE em testarCriarSubtarefaAlteracao e rode de novo.');
+  }
+  Logger.log('=== FIM. Copie TUDO acima e mande pro Claude. ===');
 }
 
 /**

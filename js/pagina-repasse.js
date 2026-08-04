@@ -1,23 +1,86 @@
+// ===== "Ficar comigo": quais tarefas você já decidiu assumir =====
+//
+// Isso ficava SÓ no localStorage — e por isso a fila inteira voltou a
+// aparecer quando o Colmeia mudou de endereço (claudiobeeon.github.io ->
+// colmeia.beeon.com.br): localStorage é separado por domínio, então o
+// endereço novo começou do zero. Agora a fonte de verdade é a planilha
+// (aba RepasseIgnorados, ver Planilha.gs); o localStorage continua aqui
+// como cópia local, pra tela desenhar na hora sem esperar a rede e pra
+// continuar funcionando com a internet fora.
 const REPASSE_IGNORADOS_KEY = "colmeia_repasse_ignorados_ids";
+
+// Começa com o que estiver salvo no navegador; a busca no backend (ver
+// carregarRepasseIgnoradosDoBackend) junta o resto assim que responde.
+let repasseIgnoradosCache = null;
+
 function idsRepasseIgnorados() {
-  try { return new Set(JSON.parse(localStorage.getItem(REPASSE_IGNORADOS_KEY) || "[]")); }
-  catch (e) { return new Set(); }
+  if (repasseIgnoradosCache) return repasseIgnoradosCache;
+  try { repasseIgnoradosCache = new Set(JSON.parse(localStorage.getItem(REPASSE_IGNORADOS_KEY) || "[]").map(String)); }
+  catch (e) { repasseIgnoradosCache = new Set(); }
+  return repasseIgnoradosCache;
 }
+
+function salvarIgnoradosNoNavegador() {
+  try {
+    localStorage.setItem(REPASSE_IGNORADOS_KEY, JSON.stringify(Array.from(idsRepasseIgnorados())));
+  } catch (e) { /* sem problema */ }
+}
+
 // Usado quando você clica "Ficar comigo" — a tarefa continua com você
 // (assignee não muda), então sem isso ela voltaria a aparecer na fila
 // pra sempre mesmo depois de você decidir assumir ela de propósito.
 function ignorarNaRepasse(taskId) {
-  try {
-    const ignorados = idsRepasseIgnorados();
-    ignorados.add(taskId);
-    localStorage.setItem(REPASSE_IGNORADOS_KEY, JSON.stringify(Array.from(ignorados)));
-  } catch (e) { /* sem problema */ }
+  idsRepasseIgnorados().add(String(taskId));
+  salvarIgnoradosNoNavegador();
+  // Passa pela fila de escrita: se a internet estiver fora, a decisão vai
+  // sozinha quando voltar, em vez de se perder (js/fila-offline.js).
+  if (typeof enviarEscritaNoBackend === "function") {
+    enviarEscritaNoBackend(
+      { acao: "ignorarNoRepasse", designer: DESIGNER_LOGADO, taskIds: [String(taskId)] },
+      "guardar o 'ficar comigo'"
+    );
+  }
+}
+
+/**
+ * Junta o que a planilha sabe com o que este navegador já tinha, e SOBE
+ * a diferença. É isso que recupera, sozinho, quem tinha decisões antigas
+ * guardadas só no navegador — inclusive as do endereço antigo, se a
+ * pessoa abrir o Colmeia por lá uma vez.
+ *
+ * Chamada no login (js/login-boot.js). Falha de rede não apaga nada: sem
+ * resposta, segue valendo só o que já estava no navegador.
+ */
+async function carregarRepasseIgnoradosDoBackend() {
+  if (!DESIGNER_LOGADO) return;
+  const doNavegador = new Set(idsRepasseIgnorados());
+
+  const resposta = await chamarBackend({ acao: "listarRepasseIgnorados", designer: DESIGNER_LOGADO });
+  if (caiuARede(resposta) || !resposta.ok) return;
+
+  const doBackend = new Set((resposta.ids || []).map(String));
+  doBackend.forEach(id => repasseIgnoradosCache.add(id));
+  salvarIgnoradosNoNavegador();
+
+  // O que só existia neste navegador ainda não está na planilha — sobe
+  // tudo de uma vez (uma chamada só, não uma por tarefa).
+  const sóAqui = Array.from(doNavegador).filter(id => !doBackend.has(id));
+  if (sóAqui.length) {
+    chamarBackend({ acao: "ignorarNoRepasse", designer: DESIGNER_LOGADO, taskIds: sóAqui });
+  }
+
+  if (typeof atualizarBadgeRepasse === "function") atualizarBadgeRepasse();
+  if (!document.getElementById("page-repasse").hidden && typeof buildRepassePage === "function") {
+    buildRepassePage();
+  }
 }
 
 function tarefaEstaComAtendimento(t) {
   if (!t.id || !t.assignee) return false;
   if (ehTarefaDeCoordenacao(t)) return false; // a sua tarefa fixa de coordenação não é "repasse"
-  if (idsRepasseIgnorados().has(t.id)) return false; // você já decidiu ficar com essa
+  // String() dos dois lados: o id vem como número do backend, mas o
+  // conjunto guarda texto (é como sai do JSON/da planilha).
+  if (idsRepasseIgnorados().has(String(t.id))) return false; // você já decidiu ficar com essa
   return ehMinhaTarefa(t);
 }
 
@@ -191,6 +254,17 @@ function buildRepassePage() {
   // o contador só volta a subir quando chegar tarefa nova de verdade.
   marcarRepasseComoVisto(tarefasParaRepasse());
   atualizarBadgeRepasse();
+
+  // O contador da aba "Aprovações" é buscado mesmo sem entrar nela — é o
+  // que faz o número aparecer já na chegada ("tem 4 esperando resposta").
+  // Sem travar nada: se falhar, a aba continua funcionando quando aberta.
+  if (repasseViewMode !== "aprovacoes") {
+    carregarAprovacoesDoRepasse().then(lista => {
+      if (lista === null) return;
+      aprovacoesCache = lista;
+      atualizarBadgeAprovacoes();
+    });
+  }
 }
 
 // Formato curto (dd/mm, sem ano) usado no "pill" de datas do card de
@@ -705,6 +779,14 @@ function renderRepasse() {
   const board = document.getElementById("repasseBoard");
   if (!board) return;
 
+  // A aba "Aprovações" não olha pras tarefas do quadro: ela vem da
+  // planilha de aprovações (o que foi mandado pro cliente). Por isso sai
+  // antes de todo o filtro de tarefas abaixo.
+  if (repasseViewMode === "aprovacoes") {
+    renderAprovacoesRepasse(board);
+    return;
+  }
+
   let lista = tarefasParaRepasse();
 
   if (repasseSearch.trim()) {
@@ -968,6 +1050,216 @@ function wireRepasseCards(lista) {
 
 }
 
+// ============================================
+// ABA "APROVAÇÕES" — o que foi mandado pro cliente e ainda não voltou
+// ============================================
+//
+// Protótipo aprovado pelo Cláudio (2026-08-04): três colunas por
+// situação, em vez de uma lista só — "o que preciso cobrar" e "o que
+// voltou pedindo ajuste" ficam separados do que já está resolvido.
+//
+// Diferente das outras abas, essa NÃO sai das tarefas do quadro: os
+// dados vêm da planilha de aprovações (listarAprovacoesPendentes,
+// Aprovacao.gs), porque um link de aprovação existe independente de a
+// tarefa ainda estar aberta no Runrun.it.
+
+let aprovacoesCache = null;   // null = ainda não buscou nesta sessão
+
+// Depois de quantos dias esperando o tempo vira alerta vermelho. É isso
+// que faz a aba responder "o que eu preciso cobrar hoje" em vez de ser
+// só um histórico.
+const APROVACAO_DIAS_ALERTA = 3;
+
+const APROVACAO_COLUNAS = [
+  { chave: "pendente", nome: "Aguardando o cliente", dot: "esperando" },
+  { chave: "ajuste", nome: "Pediu ajuste", dot: "ajuste" },
+  { chave: "aprovado", nome: "Aprovadas", dot: "aprovado" },
+];
+
+async function carregarAprovacoesDoRepasse() {
+  const data = await chamarBackend({ acao: "listarAprovacoesPendentes" });
+  if (caiuARede(data) || !data.ok) return null;
+  return data.aprovacoes || [];
+}
+
+function renderAprovacoesRepasse(board) {
+  // Primeira vez na aba: mostra o esqueleto e busca. Nas próximas, já
+  // desenha o que tem e atualiza por baixo (a lista muda quando o
+  // cliente responde, então rebusca sempre que a aba é aberta).
+  if (aprovacoesCache === null) {
+    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Buscando as aprovações...</p>`;
+  } else {
+    desenharAprovacoesRepasse(board);
+  }
+
+  carregarAprovacoesDoRepasse().then(lista => {
+    // Trocou de aba enquanto buscava? Não desenha por cima da outra.
+    if (repasseViewMode !== "aprovacoes") return;
+    if (lista === null) {
+      // Sem rede: mantém o que já estava na tela em vez de zerar.
+      if (aprovacoesCache === null) {
+        board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Não consegui buscar as aprovações agora.</p>`;
+      }
+      return;
+    }
+    aprovacoesCache = lista;
+    atualizarBadgeAprovacoes();
+    desenharAprovacoesRepasse(board);
+  });
+}
+
+function desenharAprovacoesRepasse(board) {
+  let lista = aprovacoesCache || [];
+
+  if (repasseSearch.trim()) {
+    const alvo = normalizarParaComparar(repasseSearch);
+    lista = lista.filter(a =>
+      normalizarParaComparar(a.cliente || "").includes(alvo) ||
+      normalizarParaComparar(a.tituloTarefa || "").includes(alvo) ||
+      normalizarParaComparar(a.nomeArquivo || "").includes(alvo));
+  }
+
+  if (!lista.length) {
+    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">${repasseSearch.trim()
+      ? "Nenhuma aprovação com esse termo."
+      : "Nenhum link de aprovação enviado ainda. Eles aparecem aqui assim que você gerar um pelo card da tarefa."}</p>`;
+    return;
+  }
+
+  board.innerHTML = APROVACAO_COLUNAS.map(col => {
+    const daColuna = lista.filter(a => (a.status || "pendente") === col.chave);
+    return `
+      <section class="repasse-column aprov-column">
+        <div class="repasse-column-header">
+          <span class="repasse-column-nome"><span class="aprov-dot ${col.dot}"></span>${col.nome}</span>
+          <span class="repasse-column-count">${daColuna.length}</span>
+        </div>
+        <div class="repasse-column-body">
+          ${daColuna.length
+            ? daColuna.map(a => cardDeAprovacaoHTML(a)).join("")
+            : `<p class="aprov-vazio">${textoVazioDaColuna(col.chave)}</p>`}
+        </div>
+      </section>
+    `;
+  }).join("");
+
+  wireCardsDeAprovacao(board);
+}
+
+function textoVazioDaColuna(chave) {
+  if (chave === "pendente") return "Nada esperando resposta agora.";
+  if (chave === "ajuste") return "Quando o cliente pede ajuste, a peça cai aqui — e o comentário dele já entra na tarefa sozinho.";
+  return "Nenhuma aprovada nos últimos 7 dias.";
+}
+
+/** "há 2 dias" / "hoje, 09:40" — e se passou do limite, vira alerta. */
+function tempoDeEsperaDaAprovacao(a) {
+  const quando = Number(a.respondidoEm || a.criadoEm) || 0;
+  if (!quando) return { texto: "", alerta: false };
+
+  const dias = Math.floor((Date.now() - quando) / 86400000);
+  const hora = new Date(quando).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  if ((a.status || "pendente") === "pendente") {
+    if (dias === 0) return { texto: `⏱ enviado hoje, ${hora}`, alerta: false };
+    if (dias === 1) return { texto: "⏱ esperando desde ontem", alerta: false };
+    return { texto: `⏱ esperando há ${dias} dias`, alerta: dias >= APROVACAO_DIAS_ALERTA };
+  }
+
+  const prefixo = a.status === "aprovado" ? "✅ aprovado" : "respondeu";
+  if (dias === 0) return { texto: `${prefixo} hoje, ${hora}`, alerta: false };
+  if (dias === 1) return { texto: `${prefixo} ontem`, alerta: false };
+  return { texto: `${prefixo} há ${dias} dias`, alerta: false };
+}
+
+function cardDeAprovacaoHTML(a) {
+  const tempo = tempoDeEsperaDaAprovacao(a);
+  const status = a.status || "pendente";
+  const nomes = String(a.nomeArquivo || "").split("|").filter(Boolean);
+  const legendaPecas = a.quantasPecas > 1
+    ? `${a.quantasPecas} peças · ${nomes.join(", ")}`
+    : (nomes[0] || "");
+
+  return `
+    <article class="repasse-card aprov-card ${tempo.alerta ? "urgente" : ""}" data-codigo="${escaparHTML(a.codigo)}" data-task-id="${escaparHTML(String(a.taskId || ""))}">
+      <div class="repasse-card-top">
+        <span class="repasse-client-pill">${escaparHTML(a.cliente || "Sem cliente")}</span>
+        <span class="aprov-thumb ${a.ehVideo ? "video" : "img"}">${a.ehVideo ? "🎬" : "🖼️"}</span>
+      </div>
+      <div class="repasse-card-title">${escaparHTML(a.tituloTarefa || "Peça pra aprovação")}</div>
+      ${legendaPecas ? `<div class="aprov-peca">${escaparHTML(legendaPecas)}</div>` : ""}
+      <div class="repasse-card-tempo ${tempo.alerta ? "aprov-alerta" : ""}">${tempo.texto}</div>
+      ${a.avisoPendente ? `<div class="aprov-preso">⚠️ O cliente já respondeu, mas o Runrun.it estava fora do ar e o aviso ainda não entrou na tarefa. O Colmeia reenvia sozinho assim que eles voltarem.</div>` : ""}
+      ${a.respostaTexto ? `<div class="aprov-resposta">“${escaparHTML(a.respostaTexto)}”</div>` : ""}
+      ${a.quantosPins ? `<span class="aprov-pins">📍 ${a.quantosPins} ponto${a.quantosPins > 1 ? "s" : ""} marcado${a.quantosPins > 1 ? "s" : ""}</span>` : ""}
+      <div class="repasse-card-actions">
+        ${status === "pendente"
+          ? `<button type="button" class="repasse-btn ${tempo.alerta ? "repasse-btn-ficar" : ""}" data-acao="whats">💬 Cobrar no WhatsApp</button>
+             <button type="button" class="repasse-btn" data-acao="copiar">🔗 copiar link</button>`
+          : status === "ajuste"
+            ? `<button type="button" class="repasse-btn repasse-btn-ficar" data-acao="abrir">Abrir tarefa</button>
+               <button type="button" class="repasse-btn" data-acao="copiar">🔗 novo link</button>`
+            : `<button type="button" class="repasse-btn" data-acao="abrir">Abrir tarefa</button>`}
+      </div>
+    </article>
+  `;
+}
+
+function urlDeAprovacao(codigo) {
+  // Mesma técnica do resto do app: a base vem do endereço em que o
+  // Colmeia está publicado agora (ver ROTA_BASE, js/roteador-url.js).
+  return new URL(".", location.href).href + "aprovar.html?codigo=" + codigo;
+}
+
+function wireCardsDeAprovacao(board) {
+  board.querySelectorAll(".aprov-card").forEach(card => {
+    const codigo = card.dataset.codigo;
+    const taskId = card.dataset.taskId;
+
+    card.querySelectorAll("[data-acao]").forEach(btn => {
+      btn.addEventListener("click", async ev => {
+        ev.stopPropagation();
+        const acao = btn.dataset.acao;
+
+        if (acao === "abrir") {
+          if (taskId) abrirTarefaPorId(Number(taskId));
+          return;
+        }
+
+        if (acao === "copiar") {
+          const url = urlDeAprovacao(codigo);
+          try {
+            await navigator.clipboard.writeText(url);
+            mostrarToast("Link de aprovação copiado.", "sucesso");
+          } catch (err) {
+            mostrarToast(`Link (não consegui copiar sozinho): ${url}`);
+          }
+          return;
+        }
+
+        if (acao === "whats") {
+          // Sem número no link (wa.me/?text=...), igual já é feito na
+          // página de aprovação: abre o seletor de conversa do próprio
+          // WhatsApp pra você escolher o grupo do cliente, em vez de o
+          // Colmeia decidir um número.
+          const titulo = card.querySelector(".repasse-card-title")?.textContent || "a peça";
+          const texto = `Oi! Passando pra saber se conseguiu dar uma olhada em "${titulo}".\n\n${urlDeAprovacao(codigo)}`;
+          window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+        }
+      });
+    });
+  });
+}
+
+/** O contador vermelho na aba: só o que precisa de você (esperando + ajuste). */
+function atualizarBadgeAprovacoes() {
+  const badge = document.getElementById("repasseAprovBadge");
+  if (!badge) return;
+  const precisamDeMim = (aprovacoesCache || []).filter(a => (a.status || "pendente") !== "aprovado").length;
+  badge.textContent = precisamDeMim > 99 ? "99+" : String(precisamDeMim);
+  badge.hidden = precisamDeMim === 0;
+}
+
 // Acha, na sequência já carregada, quem vem logo depois do responsável
 // atual e ainda não concluiu a etapa dele — é pra essa pessoa que o
 // "Repassar" vai perguntar antes de avançar de verdade.
@@ -1023,6 +1315,13 @@ function mostrarPagina(page) {
   // resto da sessão (ver iniciarRelogioDaPaginaHoras, js/pagina-horas.js).
   if (page === "horas") abrirPaginaHoras();
   else if (typeof fecharPaginaHoras === "function") fecharPaginaHoras();
+
+  // A aba Bee abre o painel de verdade dela (o mesmo #beePainel da
+  // bolinha flutuante) já aberto, ocupando o lugar do chat ao lado do
+  // feed — e fecha sozinho ao sair, senão ficaria aberto em cima de
+  // qualquer outra página (ver js/pagina-bee.js).
+  if (page === "bee" && typeof abrirPaginaBee === "function") abrirPaginaBee();
+  else if (typeof fecharPaginaBee === "function") fecharPaginaBee();
 
   // Deixa o endereço lá em cima do navegador combinando com a página
   // (ver js/roteador-url.js) — permite link direto, F5 sem perder o

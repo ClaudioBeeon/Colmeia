@@ -161,6 +161,55 @@
 .repasse-btn:disabled { opacity: 0.6; cursor: default; }
 .repasse-btn-ficar { background: var(--page-bg); color: var(--text-primary); }
 
+/* ===== Aba "Aprovações" da Fila de repasse (2026-08-04) =====
+   Reaproveita .repasse-column/.repasse-card (mesma linguagem visual das
+   outras abas); só o que é específico de aprovação mora aqui. */
+.repasse-tab-badge {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; margin-left: 6px;
+}
+.repasse-tab.active .repasse-tab-badge { background: rgba(0,0,0,.22); color: #16181D; }
+.repasse-tab-badge[hidden] { display: none; }
+
+.aprov-column { min-width: 288px; max-width: 288px; }
+.aprov-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+.aprov-dot.esperando { background: var(--warning); }
+.aprov-dot.ajuste { background: var(--danger); }
+.aprov-dot.aprovado { background: var(--success); }
+
+/* Passou do prazo de espera: a borda avisa sem precisar ler a data. */
+.aprov-card.urgente { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.repasse-card-tempo.aprov-alerta { color: var(--danger); font-weight: 600; }
+
+.aprov-thumb {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.aprov-thumb.video { background: linear-gradient(135deg, #8AD1FF, #5C5CFF); }
+.aprov-thumb.img { background: linear-gradient(135deg, #FFD36E, #FF8A5B); }
+
+.aprov-peca { font-size: 11.5px; color: var(--text-muted); margin: -6px 0 10px; }
+.aprov-resposta {
+  background: var(--page-bg); border-radius: 10px; padding: 9px 11px;
+  font-size: 12px; color: var(--text-secondary); font-style: italic;
+  margin-bottom: 11px; line-height: 1.45;
+}
+.aprov-pins {
+  font-size: 11px; font-weight: 600; color: var(--purple); background: var(--purple-soft);
+  border-radius: 999px; padding: 3px 9px; display: inline-block; margin-bottom: 11px;
+}
+.aprov-vazio { font-size: 12.5px; color: var(--text-muted); padding: 18px 4px; text-align: center; line-height: 1.5; }
+
+/* O cliente respondeu, mas o recado não chegou na tarefa (Runrun.it fora
+   do ar na hora). Fica no card pra você não achar que ninguém respondeu —
+   e o Colmeia reenvia sozinho, ver reenviarAvisosDeAprovacaoPendentes. */
+.aprov-preso {
+  background: var(--warning-soft); color: #8A5B00; border-radius: 10px;
+  padding: 9px 11px; font-size: 11.5px; line-height: 1.45; margin-bottom: 11px;
+}
+[data-theme="dark"] .aprov-preso { color: var(--warning); }
+
 /* Fileira de fotinhos (Sequência de responsáveis) dentro do card de
    repasse — mesmo conceito visual do pop-up de detalhe da tarefa
    (wf-dot/wf-line/wf-check, reaproveitados como estão), só que com
@@ -617,6 +666,42 @@ body.bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
 }
 body.bee-aberta .bee-painel { margin-right: 0; opacity: 1; pointer-events: auto; }
 body.card-aberto .bee-painel { display: none; }
+
+/* ===== O MESMO painel, quando mora dentro da página Bee =====
+   js/pagina-bee.js MOVE o #beePainel pra dentro de #beePainelSlot (em
+   vez de recriar o chat lá) — então tudo que faz dele um painel LATERAL
+   (largura fixa, margem negativa que o esconde, transição de entrada)
+   precisa ser desligado aqui, senão ele continuaria escondido/empurrando
+   como antes. Vira só um quadro branco que preenche a coluna dele. */
+.bee-painel.bee-painel-na-pagina {
+  width: auto; max-width: none; flex: 1; min-width: 0;
+  margin-right: 0; opacity: 1; pointer-events: auto;
+  border-radius: 26px; transition: none;
+  /* Branco liso, sem o degradê creme do painel lateral: numa área grande
+     como essa aquele topo puxava pro acinzentado e ficava sujo. */
+  background: var(--card-bg);
+}
+[data-theme="dark"] .bee-painel.bee-painel-na-pagina { background: #201F27; }
+/* Sem o "x" de fechar aqui: essa página é a casa da Bee, não tem pra
+   onde fechar — quem sai daqui troca de aba na barra lateral. */
+.bee-painel-na-pagina #beeFechar { display: none; }
+/* A bolinha flutuante também não faz sentido aqui: ela serve pra CHAMAR
+   a Bee de outra tela, e nesta ela já está aberta na frente. */
+body.pagina-bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
+
+/* Os atalhos em QUADRADOS de tamanho fixo, numa linha só (como aprovado
+   no protótipo). O `1fr 1fr` original foi desenhado pro painel lateral
+   de 500px; aqui o painel passa de 800px e cada célula virava um bloco
+   enorme, com o último atalho sobrando cortado numa terceira fileira. */
+.bee-painel-na-pagina .bee-grid {
+  display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 18px 6px;
+}
+.bee-painel-na-pagina .bee-card {
+  width: 108px; height: 108px; flex: 0 0 auto; border-radius: 18px; padding: 13px;
+}
+/* Nas outras páginas o painel some com o card aberto (lá vale a Bee do
+   card). Dentro da página Bee isso não se aplica — ela É a tela. */
+body.card-aberto .bee-painel.bee-painel-na-pagina { display: flex; }
 /* Precisa ser COR SÓLIDA: --card-bg no escuro é branco translúcido
    (rgba .045), e usar ele aqui deixava o painel inteiro transparente,
    com o quadro aparecendo por trás da conversa. */
@@ -1390,4 +1475,53 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 .pecas-escolha-item span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pecas-escolha-item:hover { background: var(--page-bg); }
 [data-theme="dark"] .pecas-escolha-item:hover { background: rgba(255,255,255,0.08); }
+
+/* Marcar VÁRIAS peças pro mesmo link (2026-08-04): o item virou <label>
+   com checkbox, então clicar em qualquer lugar da linha marca/desmarca. */
+.pecas-escolha-item input[type="checkbox"] {
+  width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--kanban-yellow); cursor: pointer;
+}
+.pecas-escolha-confirmar {
+  margin-top: 6px; border: none; border-radius: 10px; padding: 9px;
+  background: var(--kanban-yellow); color: #16181D; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+}
+.pecas-escolha-confirmar:hover { filter: brightness(0.96); }
+
+/* O link de aprovação escrito por extenso na fala da Bee — antes ele só
+   existia dentro de um toast que sumia. Quebra no meio da URL pra não
+   estourar a largura da bolha. */
+.bee-link-aprovacao { margin-top: 6px; word-break: break-all; }
+.bee-link-aprovacao a { color: var(--accent); font-size: 12px; }
+
+/* ===== "O Runrun.it está fora do ar" (2026-08-04) =====
+   Faixa fixa no topo, acima de tudo. NÃO some sozinha (diferente do
+   toast): enquanto eles estão caídos, play/comentar/entregar não
+   funcionam, e a pessoa precisa disso na frente o tempo todo. Amarelo da
+   casa, não vermelho: é um aviso de "espera aí", não um erro do usuário. */
+.aviso-runrun-fora {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 900;
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 18px;
+  background: var(--kanban-yellow); color: #16181D;
+  font-family: var(--font-body); font-size: 13px; line-height: 1.45;
+  box-shadow: 0 2px 14px rgba(20,20,30,.18);
+  animation: avisoRunrunDesce .28s var(--ease-apple);
+}
+@keyframes avisoRunrunDesce { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+.aviso-runrun-ico { font-size: 17px; flex-shrink: 0; }
+.aviso-runrun-txt { flex: 1; min-width: 0; }
+.aviso-runrun-txt b { font-weight: 700; margin-right: 4px; }
+.aviso-runrun-x {
+  flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: rgba(0,0,0,.1); color: #16181D; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.aviso-runrun-x svg { width: 14px; height: 14px; }
+.aviso-runrun-x:hover { background: rgba(0,0,0,.18); }
+/* Empurra o app pra baixo pra faixa não cobrir a barra do topo. */
+body.com-aviso-runrun .page { padding-top: 46px; }
+@media (prefers-reduced-motion: reduce) {
+  .aviso-runrun-fora { animation: none; }
+}
 

@@ -858,9 +858,20 @@ async function buscarComentariosDoBackend(taskId) {
 async function enviarComentarioNoBackend(taskId, texto) {
   if (!COLMEIA_API_URL || !taskId || !texto) return false;
   try {
+    // donoDaTarefa/tituloDaTarefa não mudam o comentário em nada — são só
+    // o contexto pro feed da aba Bee saber quem deve ver "fulano comentou
+    // em X" (ver registrarEventosDoFeed em Código.gs). O backend já ignora
+    // sozinho quando o autor é o próprio dono.
+    const t = (typeof tasks !== "undefined" ? tasks.find(x => String(x.id) === String(taskId)) : null)
+      || (typeof tasksTodas !== "undefined" ? tasksTodas.find(x => String(x.id) === String(taskId)) : null);
     // Passa pela fila de ações: se a internet estiver fora, isso fica
     // guardado e vai sozinho quando voltar (ver js/fila-offline.js).
-    const data = await enviarEscritaNoBackend({ acao: "adicionarComentario", taskId, texto }, "enviar o comentário");
+    const data = await enviarEscritaNoBackend({
+      acao: "adicionarComentario", taskId, texto,
+      autorDoFeed: DESIGNER_LOGADO,
+      donoDaTarefa: t ? t.assignee : null,
+      tituloDaTarefa: t ? t.title : "",
+    }, "enviar o comentário");
     if (!data.ok) console.error("Runrun.it recusou o comentário:", data.error);
     return data.ok;
   } catch (err) {

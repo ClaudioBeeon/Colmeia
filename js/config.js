@@ -532,6 +532,47 @@ async function buscarAtividadesPainelBeeon() {
 const JANELA_NOTIFICACAO_UPLOAD_MS = 30 * 60 * 1000;
 
 /**
+ * Faixa fixa no topo avisando que o Runrun.it (não o Colmeia) está fora
+ * do ar. Diferente do toast, ela NÃO some sozinha: enquanto eles estão
+ * caídos, play/pause, comentário, entregar e repassar não funcionam — e
+ * a pessoa precisa saber disso o tempo todo, não por 4 segundos.
+ *
+ * Some sozinha assim que a próxima varredura do quadro (a cada 60s)
+ * conseguir falar com eles de novo (ver atualizarKanbanEmBackground).
+ */
+function mostrarAvisoRunrunFora(estaFora) {
+  const existente = document.getElementById("avisoRunrunFora");
+
+  if (!estaFora) {
+    if (existente) existente.remove();
+    document.body.classList.remove("com-aviso-runrun");
+    return;
+  }
+  if (existente) return; // já está na tela, não precisa redesenhar
+
+  const faixa = document.createElement("div");
+  faixa.id = "avisoRunrunFora";
+  faixa.className = "aviso-runrun-fora";
+  faixa.innerHTML = `
+    <span class="aviso-runrun-ico">🐝</span>
+    <span class="aviso-runrun-txt">
+      <b>O Runrun.it está fora do ar.</b>
+      Você continua vendo suas tarefas, mas dar play, comentar e entregar não vão funcionar até eles voltarem.
+      O Colmeia tenta sozinho de tempos em tempos.
+    </span>
+    <button type="button" class="aviso-runrun-x" title="Esconder este aviso" aria-label="Esconder">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  `;
+  faixa.querySelector(".aviso-runrun-x").addEventListener("click", () => {
+    faixa.remove();
+    document.body.classList.remove("com-aviso-runrun");
+  });
+  document.body.appendChild(faixa);
+  document.body.classList.add("com-aviso-runrun");
+}
+
+/**
  * Aviso rápido (toast) que aparece embaixo da tela e some sozinho —
  * usado quando uma ação que mexe em dado de verdade (mover etapa,
  * salvar comentário, repassar tarefa, etc) falha de verdade. Antes

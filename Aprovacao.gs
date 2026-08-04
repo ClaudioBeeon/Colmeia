@@ -40,6 +40,9 @@ function getAprovacoesSheet() {
   // cria ela sozinha na primeira vez que alguém ler/gravar depois dessa
   // versão (mesmo padrão de getLinksClientesSheet, Planilha.gs).
   if (sheet.getLastColumn() < 13) sheet.getRange(1, 13).setValue('pins');
+  // Coluna N: "1" enquanto o aviso na tarefa não saiu porque o Runrun.it
+  // estava fora do ar (ver reenviarAvisosDeAprovacaoPendentes).
+  if (sheet.getLastColumn() < 14) sheet.getRange(1, 14).setValue('aviso_pendente');
   return sheet;
 }
 
@@ -121,10 +124,33 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
 
   var escolhido = null;
+  // `fileId` pode vir como LISTA (o Cláudio escolheu 2 vídeos pra mandar
+  // no mesmo link) ou como um id só (caminho de sempre). Normaliza os
+  // dois no mesmo formato pra não ter dois caminhos de código.
+  var idsEscolhidos = Array.isArray(fileId) ? fileId.filter(function (x) { return !!x; }) : (fileId ? [fileId] : []);
 
-  if (fileId) {
+  if (idsEscolhidos.length > 1) {
+    var arquivos = [];
+    for (var iId = 0; iId < idsEscolhidos.length; iId++) {
+      var arqEscolhido;
+      try {
+        arqEscolhido = DriveApp.getFileById(idsEscolhidos[iId]);
+      } catch (eMulti) {
+        return { ok: false, error: 'Não consegui acessar um dos arquivos escolhidos no Drive.' };
+      }
+      var tipoMulti = arqEscolhido.getMimeType();
+      if (tipoMulti.indexOf('image/') !== 0 && tipoMulti.indexOf('video/') !== 0) {
+        return { ok: false, error: 'Um dos arquivos escolhidos não é imagem nem vídeo.' };
+      }
+      liberarArquivoParaAprovacao(arqEscolhido);
+      arquivos.push(arqEscolhido);
+    }
+    return gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, arquivos);
+  }
+
+  if (idsEscolhidos.length === 1) {
     try {
-      escolhido = DriveApp.getFileById(fileId);
+      escolhido = DriveApp.getFileById(idsEscolhidos[0]);
     } catch (e) {
       return { ok: false, error: 'Não consegui acessar esse arquivo no Drive.' };
     }
@@ -173,20 +199,69 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
     }
   }
 
+  liberarArquivoParaAprovacao(escolhido);
+  return gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, [escolhido]);
+}
+
+/**
+ * Grava a linha da aprovação. Vários arquivos são guardados na MESMA
+ * célula, separados por "|" — id do Drive nunca tem esse caractere, e
+ * assim nada muda pra quem lê uma linha antiga (um id só continua sendo
+ * uma lista de um item, ver idsDaLinhaDeAprovacao).
+ */
+function gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, arquivos) {
+  var ids = arquivos.map(function (a) { return a.getId(); }).join('|');
+  var nomes = arquivos.map(function (a) { return a.getName(); }).join('|');
+  var tipos = arquivos.map(function (a) { return a.getMimeType(); }).join('|');
+
   var codigo = Utilities.getUuid().replace(/-/g, '');
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
     var sheet = getAprovacoesSheet();
     sheet.appendRow([
-      codigo, taskId, cliente || '', tituloTarefa || '', escolhido.getId(), escolhido.getName(),
-      escolhido.getMimeType(), new Date().getTime(), 'pendente', '', '', autor || ''
+      codigo, taskId, cliente || '', tituloTarefa || '', ids, nomes,
+      tipos, new Date().getTime(), 'pendente', '', '', autor || ''
     ]);
   } finally {
     lock.releaseLock();
   }
 
-  return { ok: true, codigo: codigo, nomeArquivo: escolhido.getName() };
+  return {
+    ok: true,
+    codigo: codigo,
+    nomeArquivo: arquivos.map(function (a) { return a.getName(); }).join(', '),
+    quantasPecas: arquivos.length
+  };
+}
+
+/**
+ * Deixa o arquivo visível por "qualquer pessoa com o link" — decisão do
+ * Cláudio (2026-08-04), e é o que faz VÍDEO funcionar na página pública.
+ *
+ * Por que é obrigatório pra vídeo: a página de aprovação não tem login, e
+ * o cliente não tem conta no Drive da Beeon. Imagem a gente consegue
+ * mandar embutida na resposta (base64), mas vídeo estoura o limite de
+ * 25MB do Apps Script na primeira tentativa — a única forma que funciona
+ * é o player do próprio Drive, que exige o arquivo acessível.
+ *
+ * Libera SÓ o arquivo mandado pra aprovação, nunca a pasta: o resto do
+ * Drive continua privado. Falhar aqui não impede gerar o link (imagem
+ * continua funcionando por base64) — por isso não estoura erro.
+ */
+function liberarArquivoParaAprovacao(arquivo) {
+  try {
+    arquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {
+    // Drive compartilhado com política restritiva, arquivo de terceiro,
+    // etc. A imagem ainda vai por base64; o vídeo é que não vai abrir.
+    Logger.log('Não consegui liberar o arquivo pra aprovação: ' + e.message);
+  }
+}
+
+/** Uma célula pode ter vários ids separados por "|" (ver gravarLinhaDeAprovacao). */
+function idsDaLinhaDeAprovacao(valor) {
+  return String(valor || '').split('|').filter(function (x) { return !!x; });
 }
 
 /**
@@ -202,23 +277,65 @@ function buscarAprovacaoPublica(codigo) {
   var linha = acharLinhaDeAprovacao(codigo);
   if (!linha) return { ok: false, error: 'Não encontrei essa aprovação — o link pode estar errado.' };
 
-  var imagem;
-  try {
-    var arquivo = DriveApp.getFileById(linha.fileId);
-    var blob = arquivo.getBlob();
-    var bytes = blob.getBytes();
-    // Mesmo limite do buscarImagemCheiaDrive (Drive.gs) — um vídeo passa
-    // disso fácil, e acima desse tamanho não cabe direito na resposta do
-    // Apps Script.
-    var LIMITE_BYTES = 25 * 1024 * 1024;
-    if (bytes.length > LIMITE_BYTES) {
-      return { ok: false, error: 'Esse arquivo tem ' + Math.round(bytes.length / 1024 / 1024) + ' MB, grande demais pra abrir por este link. Manda o vídeo direto pelo Drive pra esse cliente.' };
-    }
-    imagem = { base64: Utilities.base64Encode(bytes), mimeType: blob.getContentType() };
-  } catch (e) {
-    return { ok: false, error: 'Não consegui carregar essa peça — pode ter sido movida ou apagada do Drive.' };
+  // Um link pode ter VÁRIAS peças (ver gravarLinhaDeAprovacao). Uma peça
+  // que falhar não derruba as outras: ela vira um item com `erro`, e a
+  // página mostra o aviso só naquele quadro.
+  var ids = idsDaLinhaDeAprovacao(linha.fileId);
+  var nomes = String(linha.nomeArquivo || '').split('|');
+  if (!ids.length) {
+    return { ok: false, error: 'Esse link não tem nenhuma peça vinculada.' };
   }
 
+  var pecas = ids.map(function (id, i) {
+    var nomeFallback = nomes[i] || linha.nomeArquivo || '';
+    var arquivo;
+    try {
+      arquivo = DriveApp.getFileById(id);
+    } catch (e) {
+      return { nome: nomeFallback, erro: 'Não consegui carregar essa peça — pode ter sido movida ou apagada do Drive.' };
+    }
+
+    var tipo = arquivo.getMimeType();
+
+    // VÍDEO nunca vai embutido: um vídeo passa dos 25MB que cabem na
+    // resposta do Apps Script já na primeira tentativa (era exatamente
+    // isso que dava "pode ter sido movida ou apagada do Drive" mesmo com
+    // o arquivo lá — o erro real era de tamanho, não de arquivo sumido).
+    // Em vez disso, o player do próprio Drive por iframe.
+    if (tipo.indexOf('video/') === 0) {
+      liberarArquivoParaAprovacao(arquivo); // garante links antigos também
+      return {
+        nome: arquivo.getName(),
+        mimeType: tipo,
+        ehVideo: true,
+        previewUrl: 'https://drive.google.com/file/d/' + id + '/preview'
+      };
+    }
+
+    try {
+      var blob = arquivo.getBlob();
+      var bytes = blob.getBytes();
+      var LIMITE_BYTES = 25 * 1024 * 1024;
+      if (bytes.length > LIMITE_BYTES) {
+        // Imagem gigante: em vez de falhar, cai no mesmo player do Drive.
+        liberarArquivoParaAprovacao(arquivo);
+        return {
+          nome: arquivo.getName(), mimeType: tipo, ehVideo: false,
+          previewUrl: 'https://drive.google.com/file/d/' + id + '/preview'
+        };
+      }
+      return {
+        nome: arquivo.getName(),
+        mimeType: blob.getContentType(),
+        ehVideo: false,
+        base64: Utilities.base64Encode(bytes)
+      };
+    } catch (e2) {
+      return { nome: nomeFallback, erro: 'Não consegui carregar essa peça — pode ter sido movida ou apagada do Drive.' };
+    }
+  });
+
+  var primeira = pecas[0];
   return {
     ok: true,
     cliente: linha.cliente,
@@ -227,8 +344,11 @@ function buscarAprovacaoPublica(codigo) {
     status: linha.status,
     respostaTexto: linha.respostaTexto,
     pins: parsearPins(linha.pins),
-    base64: imagem.base64,
-    mimeType: imagem.mimeType
+    pecas: pecas,
+    // Campos antigos, só pra uma aba já aberta com a versão anterior do
+    // aprovar.html não quebrar de vez enquanto o GitHub Pages atualiza.
+    base64: primeira.base64 || null,
+    mimeType: primeira.mimeType || null
   };
 }
 
@@ -285,6 +405,7 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
     lock.releaseLock();
   }
 
+  var avisoChegou = false;
   try {
     var pinsList = parsearPins(linha.pins);
     // Cabeçalho fixo "Alterações do cliente" — pedido do Cláudio
@@ -306,10 +427,96 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
     }
     // Sem "autor" — cai sozinho na conta padrão (o coordenador), de
     // propósito: não é a conta de quem gerou o link, é sempre a mesma.
-    adicionarComentario(linha.taskId, partes.join('\n'), null);
-  } catch (e) { /* a resposta já foi salva na planilha — o comentário é um extra, não trava por causa dele */ }
+    var envio = adicionarComentario(linha.taskId, partes.join('\n'), null);
+    avisoChegou = !!(envio && envio.ok);
+  } catch (e) {
+    // A resposta do cliente já está salva na planilha (acima) — ela nunca
+    // se perde por causa disso. O que falhou foi só AVISAR a equipe.
+    avisoChegou = false;
+  }
 
-  return { ok: true, status: linha.status };
+  // O Runrun.it estava fora: marca pra reenviar depois (ver
+  // reenviarAvisosDeAprovacaoPendentes) e conta a verdade pro cliente, em
+  // vez de mostrar "deu tudo certo" e ninguém ficar sabendo — que era
+  // exatamente o que acontecia antes: silencioso dos dois lados.
+  if (!avisoChegou) {
+    marcarAvisoDeAprovacaoPendente(codigo);
+  }
+
+  return { ok: true, status: linha.status, avisoChegou: avisoChegou };
+}
+
+// Coluna N da aba Aprovacoes: "1" enquanto o aviso na tarefa não saiu.
+var COLUNA_AVISO_PENDENTE = 14;
+
+function marcarAvisoDeAprovacaoPendente(codigo) {
+  try {
+    var lock = LockService.getScriptLock();
+    pegarTravaDaPlanilha(lock);
+    try {
+      var sheet = getAprovacoesSheet();
+      var linhas = sheet.getDataRange().getValues();
+      for (var i = 1; i < linhas.length; i++) {
+        if (String(linhas[i][0]) === String(codigo)) {
+          sheet.getRange(i + 1, COLUNA_AVISO_PENDENTE).setValue('1');
+          return;
+        }
+      }
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (e) { /* nem isso deu — o cliente ainda vai ser orientado a mandar no WhatsApp */ }
+}
+
+/**
+ * Reenvia pras tarefas os avisos que não saíram porque o Runrun.it estava
+ * fora do ar na hora em que o cliente respondeu.
+ *
+ * Roda junto do backup diário e também quando alguém abre a aba
+ * "Aprovações" (listarAprovacoesPendentes) — assim, na prática, o aviso
+ * chega poucos minutos depois do Runrun.it voltar, sem ninguém fazer nada.
+ */
+function reenviarAvisosDeAprovacaoPendentes() {
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var reenviados = 0;
+
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][COLUNA_AVISO_PENDENTE - 1] || '') !== '1') continue;
+    var obj = linhaParaObjetoDeAprovacao(linhas[i]);
+    if (!obj.taskId) continue;
+
+    var partes = ['Alterações do cliente (via link de aprovação):'];
+    partes.push(obj.status === 'aprovado'
+      ? '✅ Aprovou "' + obj.nomeArquivo + '".'
+      : '✏️ Pediu ajuste em "' + obj.nomeArquivo + '".');
+    if (obj.respostaTexto) partes.push(obj.respostaTexto);
+    var pinsList = parsearPins(obj.pins);
+    if (pinsList.length) {
+      partes.push((pinsList.length === 1 ? '1 ponto marcado' : pinsList.length + ' pontos marcados') +
+        ' na imagem — abre o link de aprovação de novo pra ver exatamente onde:');
+      pinsList.forEach(function (p, n) { partes.push((n + 1) + '. ' + (p.texto || '(sem descrição)')); });
+    }
+    // Deixa claro que é um aviso atrasado: quem lê precisa saber que o
+    // cliente respondeu ANTES, não agora.
+    partes.push('(aviso atrasado — o Runrun.it estava fora do ar quando o cliente respondeu, em ' +
+      Utilities.formatDate(new Date(Number(obj.respondidoEm) || new Date().getTime()),
+        'America/Sao_Paulo', 'dd/MM à\'s\' HH:mm') + ')');
+
+    var envio;
+    try {
+      envio = adicionarComentario(obj.taskId, partes.join('\n'), null);
+    } catch (e) {
+      envio = null;
+    }
+    // Ainda fora do ar: para por aqui e tenta tudo de novo na próxima —
+    // insistir nas outras linhas só ia falhar igual e gastar tempo.
+    if (!envio || !envio.ok) break;
+
+    try { sheet.getRange(i + 1, COLUNA_AVISO_PENDENTE).setValue(''); } catch (e) { /* segue */ }
+    reenviados++;
+  }
+  return { ok: true, reenviados: reenviados };
 }
 
 function linhaParaObjetoDeAprovacao(linha) {
@@ -351,6 +558,72 @@ function listarAprovacoesDoCliente(cliente) {
   }
   lista.sort(function (a, b) { return b.criadoEm - a.criadoEm; });
   return { ok: true, aprovacoes: lista.slice(0, 30) };
+}
+
+/**
+ * TODAS as aprovações que ainda pedem atenção, de todos os clientes —
+ * é o que alimenta a aba "Aprovações" da Fila de repasse (protótipo
+ * aprovado pelo Cláudio em 2026-08-04).
+ *
+ * O que entra:
+ *   - `pendente` e `ajuste`: sempre, independente da idade. Enquanto o
+ *     cliente não responde (ou pediu ajuste e ninguém mexeu), continua
+ *     sendo trabalho em aberto.
+ *   - `aprovado`: só os últimos 7 dias. Serve pra fechar o ciclo ("saiu
+ *     hoje"), não pra virar um arquivo morto que só cresce.
+ */
+var APROVADAS_JANELA_DIAS = 7;
+
+function listarAprovacoesPendentes() {
+  // Aproveita a abertura da aba pra tentar mandar os avisos que ficaram
+  // presos (Runrun.it fora do ar quando o cliente respondeu). Na prática
+  // é o que faz o aviso chegar poucos minutos depois dele voltar, sem
+  // ninguém precisar fazer nada. Nunca derruba a listagem.
+  try { reenviarAvisosDeAprovacaoPendentes(); } catch (e) { /* segue */ }
+
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var corteAprovadas = new Date().getTime() - APROVADAS_JANELA_DIAS * 24 * 60 * 60 * 1000;
+  var lista = [];
+
+  for (var i = 1; i < linhas.length; i++) {
+    if (!linhas[i][0]) continue;
+    var obj = linhaParaObjetoDeAprovacao(linhas[i]);
+    var status = obj.status || 'pendente';
+
+    if (status === 'aprovado') {
+      var quando = Number(obj.respondidoEm || obj.criadoEm) || 0;
+      if (quando < corteAprovadas) continue;
+    }
+
+    lista.push({
+      codigo: obj.codigo,
+      taskId: obj.taskId,
+      cliente: obj.cliente,
+      tituloTarefa: obj.tituloTarefa,
+      // Vários arquivos vão separados por "|" na mesma célula (ver
+      // gravarLinhaDeAprovacao) — o front mostra "2 peças · nome, nome".
+      nomeArquivo: obj.nomeArquivo,
+      quantasPecas: idsDaLinhaDeAprovacao(obj.fileId).length || 1,
+      ehVideo: String(obj.mimeType || '').indexOf('video/') !== -1,
+      status: status,
+      criadoEm: obj.criadoEm,
+      respondidoEm: obj.respondidoEm,
+      respostaTexto: obj.respostaTexto,
+      quantosPins: parsearPins(obj.pins).length,
+      // O cliente respondeu, mas o aviso ainda não chegou na tarefa (o
+      // Runrun.it estava fora) — a aba mostra isso pra você não achar
+      // que ninguém respondeu.
+      avisoPendente: String(linhas[i][COLUNA_AVISO_PENDENTE - 1] || '') === '1'
+    });
+  }
+
+  // Mais recente primeiro dentro de cada coluna — quem agrupa por status
+  // é o front-end (ver renderAprovacoesRepasse, js/pagina-repasse.js).
+  lista.sort(function (a, b) {
+    return Number(b.respondidoEm || b.criadoEm || 0) - Number(a.respondidoEm || a.criadoEm || 0);
+  });
+  return { ok: true, aprovacoes: lista };
 }
 
 function acharLinhaDeAprovacao(codigo) {

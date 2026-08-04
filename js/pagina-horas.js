@@ -91,13 +91,17 @@ function iniciarRelogioDaPaginaHoras() {
 async function carregarDadosDaPaginaHoras() {
   const inicio = dataISOLocal(horasSemanaAtual);
 
-  // As quatro buscas em paralelo — nenhuma depende da outra, e esperar em
-  // fila indiana só deixaria a página lenta à toa.
-  const [horas, agenda, entregues, atividades] = await Promise.all([
+  // As três buscas em paralelo — nenhuma depende da outra, e esperar em
+  // fila indiana só deixaria a página lenta à toa. "Atividades recentes"
+  // fica de FORA desse grupo de propósito: ela varre o Drive (busca +
+  // subir pasta por pasta pra achar o cliente de cada arquivo), é
+  // sabidamente a mais lenta das quatro, e só tem 3 min de cache — se ela
+  // entrasse aqui, a página inteira ficaria esperando ela pra mostrar até
+  // as horas e as entregues, que são rápidas.
+  const [horas, agenda, entregues] = await Promise.all([
     chamarBackend({ acao: "buscarHorasDaSemana", designer: DESIGNER_LOGADO, inicio }),
     chamarBackend({ acao: "buscarAgendaDaSemana", designer: DESIGNER_LOGADO, inicio }),
     chamarBackend({ acao: "buscarEntreguesDoDesigner", designer: DESIGNER_LOGADO, limite: 12 }),
-    chamarBackend({ acao: "buscarAtividadesDrive", designer: DESIGNER_LOGADO }),
   ]);
 
   // Trocou de semana enquanto carregava? Descarta — senão a resposta
@@ -107,9 +111,16 @@ async function carregarDadosDaPaginaHoras() {
   if (!caiuARede(horas)) horasDadosSemana = horas;
   if (!caiuARede(agenda)) horasAgendaSemana = agenda;
   if (!caiuARede(entregues)) horasEntregues = entregues;
-  if (!caiuARede(atividades)) horasAtividades = atividades;
 
   renderPaginaHoras();
+
+  // Atividades do Drive, à parte e em segundo plano: só redesenha o card
+  // dela quando terminar, sem seguar o resto da página que já apareceu.
+  chamarBackend({ acao: "buscarAtividadesDrive", designer: DESIGNER_LOGADO }).then(atividades => {
+    if (dataISOLocal(horasSemanaAtual) !== inicio) return;
+    if (!caiuARede(atividades)) horasAtividades = atividades;
+    renderAtividadesRecentesHoras();
+  });
 
   // A semana anterior vem DEPOIS, em segundo plano: ela só alimenta a
   // métrica "últimas 2 semanas" no topo, e esperar por ela atrasaria a

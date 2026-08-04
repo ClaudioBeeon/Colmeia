@@ -452,7 +452,9 @@ function attachCardDragHandlers() {
           ev.stopPropagation();
           const nomeEscolhido = opt.dataset.userNome;
           menu.classList.remove("open");
-          const ok = await reatribuirTarefaNoBackend(task.id, opt.dataset.userId);
+          // 3º argumento: só alimenta o feed da aba Bee ("fulano te passou
+          // a tarefa X") — ver reatribuirTarefaNoBackend em js/kanban-polling.js.
+          const ok = await reatribuirTarefaNoBackend(task.id, opt.dataset.userId, nomeEscolhido);
           if (ok) {
             task.assignee = nomeEscolhido;
             task.assigneeAvatarUrl = null; // deixa a próxima carga real trazer a foto certa

@@ -84,11 +84,11 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
 entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; o
-roteador de URL, 22; a história da peça, 23; o modo foco, 24; e a aprovação do atendimento, 25)
-menores dentro da pasta `js/`, cada
-um cuidando de um assunto. **Não é um sistema de build** — não tem bundler, TypeScript, nem npm
-envolvido no frontend. É só HTML puro: o `index.html` carrega os 25 arquivos com várias tags
-`<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
+roteador de URL, 22; a história da peça, 23; o modo foco, 24; a página Bee, 25; e a aprovação do
+atendimento, 26) menores dentro
+da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não tem bundler,
+TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os 26 arquivos
+com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
 
@@ -141,9 +141,11 @@ Arquivos, na ordem em que são carregados (`js/`):
 22. `detalhe-historia.js` — os **eventos do sistema** (criada, começou a trabalhar, arquivo, entregue)
     que alimentam a pílula "Linha do tempo" do painel de comentários. Ver seção própria abaixo.
 23. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
-24. `pagina-aprovacao.js` — a **aprovação interna do atendimento**. Hoje é só um ESQUELETO
+24. `pagina-bee.js` — a página **Bee** (feed de atividades + o painel de verdade da Bee do lado).
+    Ver seção própria abaixo.
+25. `pagina-aprovacao.js` — a **aprovação interna do atendimento**. Hoje é só um ESQUELETO
     documentado (a camada visual está pronta, a funcional não) — ver seção própria abaixo.
-25. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+26. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -504,6 +506,179 @@ painel do devolver, conteúdo diferente).
 - **Os botões de envio nascem apagados até "Ver como o cliente vê" ser usado uma vez.** Botão
   grande sozinho é sugestão, não proteção. É fácil de tirar se incomodar (parar de pôr a classe
   `.apv-envio-travado`) — foi combinado assim com o Cláudio, pra reavaliar depois de uso real.
+## A página "Bee" (2026-08-04)
+
+`js/pagina-bee.js` + o bloco no fim de `css/04-paginas.css`. Uma aba própria na barra lateral
+(`page-bee`) com dois lados: um feed de atividades à esquerda, e o **painel de verdade da Bee**
+(o mesmo `#beePainel` da bolinha flutuante, `js/bee.js`) aberto do lado direito.
+
+**O chat não tem markup próprio nessa página — o painel de verdade é MOVIDO pra cá.**
+`abrirPaginaBee()` faz `slot.appendChild(painel)`, tirando o `#beePainel` de onde ele mora (irmão
+do `.main`) e colocando dentro de `#beePainelSlot`, na coluna da direita; `fecharPaginaBee()`
+devolve pro lugar. Mover em vez de recriar mantém os MESMOS ids, listeners e estado de conversa —
+a Bee daqui é literalmente a mesma da bolinha flutuante, sem uma linha de lógica duplicada.
+
+**A primeira versão tentou só chamar `beeAbrirPainel()` e deu errado:** aquilo liga
+`body.bee-aberta`, que é o modo "painel lateral" — ele empurrava o conteúdo pro lado e o feed
+ficava perdido no meio da tela, nada a ver com o protótipo aprovado. Por isso `abrirPaginaBee()`
+REMOVE `body.bee-aberta` e a classe `.bee-painel-na-pagina` (css/05-componentes.css) desliga tudo
+que faz dele um painel lateral: largura fixa, a margem negativa que o esconde, e a transição de
+entrada. Ao mexer no CSS do `.bee-painel`, conferir se a regra nova também precisa ser desligada lá.
+
+O layout é `.bee-pagina` (css/04-paginas.css): grid de duas colunas — feed à esquerda numa moldura
+cinza própria, chat à direita. Dentro da página, `.bee-grid` também é reescrito pra quadrados de
+tamanho fixo numa linha só: o `1fr 1fr` original foi desenhado pro painel lateral de 500px e, num
+painel de 800px+, virava blocos enormes com o último atalho cortado.
+
+**O feed junta DOIS grupos de evento, e a diferença entre eles importa:**
+
+1. **O que VOCÊ fez** — reconstruído do estado atual, não precisa de log nenhum. Reaproveita as
+   MESMAS buscas que "Minhas horas" já usa: `buscarEntreguesDoDesigner` (entregas) e
+   `buscarAtividadesDrive` (uploads). Tem histórico desde sempre.
+2. **O que OS OUTROS fizeram nas suas tarefas** — anotado na hora que acontece, na aba
+   `FeedEventos` da planilha (`registrarEventoFeed`/`buscarFeedEventos`, Planilha.gs). Hoje:
+   `comentario`, `prioridade` e `recebida` (alguém te passou uma tarefa, por sequência ou
+   reatribuição).
+
+**Por que o grupo 2 precisa de log:** a API do Runrun.it devolve o ESTADO atual (a prioridade é
+alta), nunca a história (fulano mudou pra alta às 14h). Duas consequências, de propósito: só entra
+o que passou PELO COLMEIA (comentário feito direto no site do Runrun.it não aparece), e o feed
+começa vazio e vai enchendo a partir de agora — não dá pra reconstruir o passado.
+
+**A anotação acontece num lugar só:** `registrarEventosDoFeed` (Código.gs), chamada no fim do
+`handleRequest` depois da ação dar certo. Nenhuma função de escrita precisou mudar — o contexto
+(de quem é a tarefa, qual o título) vem no próprio `body` que o front-end mandou.
+
+**`autorDoFeed`, nunca `autor`:** `autor` decide com qual conta do Runrun.it a ação é executada
+(`tokenRunrunDoAutor`) — mandá-lo em ações que hoje não o mandam trocaria a conta que
+comenta/repassa de verdade. Por isso o feed tem um campo próprio, sem efeito colateral. Ao
+adicionar um tipo de evento novo, seguir esse mesmo cuidado.
+
+`registrarEventoFeed` ignora sozinho quando autor == dono (ninguém precisa ser avisado do que
+acabou de fazer), e a aba é podada em 14 dias junto do backup diário (`limparFeedEventosAntigos`).
+
+## "Ficar comigo" da Fila de repasse foi pro backend (2026-08-04)
+
+**O que aconteceu:** ao trocar o endereço do Colmeia (`claudiobeeon.github.io` →
+`colmeia.beeon.com.br`), a Fila de repasse voltou a mostrar TUDO que já tinha sido resolvido.
+Causa: `colmeia_repasse_ignorados_ids` (a lista de "Ficar comigo") morava só no `localStorage`, que
+é **separado por domínio** — o endereço novo começou do zero.
+
+O que NÃO se perdeu: as tarefas realmente repassadas/entregues mudaram de responsável no
+Runrun.it, que é dado de verdade. Só a lista de "decidi ficar com essa" (que não muda nada no
+Runrun.it de propósito) evaporou.
+
+**Correção:** a fonte de verdade passou a ser a planilha (aba `RepasseIgnorados`, ver Planilha.gs).
+O `localStorage` continua existindo como cópia local — a tela desenha na hora, sem esperar a rede, e
+segue funcionando com a internet fora. `carregarRepasseIgnoradosDoBackend` (js/pagina-repasse.js,
+chamada no login) faz a UNIÃO dos dois lados e **sobe o que só existia no navegador**, então nada
+precisa ser reclicado — inclusive as decisões antigas, se a pessoa abrir o endereço velho uma vez.
+
+**Isso contraria a regra "preferências vão em localStorage" do CLAUDE.md? Não.** Aquela regra vale
+pra preferência VISUAL por designer (ordem de abas etc.), que pode se perder sem prejuízo. "Ficar
+comigo" é uma decisão de trabalho — o incidente é a prova de que não podia estar só no navegador.
+Ao criar algo novo, usar esse critério: preferência de exibição → localStorage; decisão que doeria
+perder → planilha.
+
+## Link de aprovação: várias peças, e vídeo pelo player do Drive (2026-08-04)
+
+Três coisas quebradas no link de aprovação, corrigidas juntas:
+
+**1. Não dava pra mandar mais de uma peça.** O menu de escolha era de item único (clicava numa peça
+e fechava), então "dois vídeos no mesmo link" era impossível. Agora é caixa de seleção, **todas
+marcadas por padrão** (quem abre esse menu quase sempre quer mandar tudo que subiu), com um botão
+"Gerar link" no fim. Na planilha, vários arquivos vão na MESMA célula separados por `|`
+(`gravarLinhaDeAprovacao`/`idsDaLinhaDeAprovacao`, Aprovacao.gs) — id do Drive nunca tem esse
+caractere, e linha antiga com um id só continua sendo lida como uma lista de um item, sem migração.
+
+**2. O link aparecia num aviso que sumia.** Quando o navegador recusava a cópia automática
+(`navigator.clipboard` falha sem permissão/foco), o único lugar onde o link existia era um toast de
+alguns segundos — o Cláudio via "o link aparecer rápido e sumir". Agora o link vira uma **fala da
+Bee** (`mostrarLinkDeAprovacaoDaBee`, js/detalhe-modal.js), escrito por extenso e com botão de
+copiar, no mesmo `#beeInlineAvisos` das outras falas dela — não some e sobrevive à lista de
+comentários ser redesenhada.
+
+**3. Vídeo nunca abria** ("Não consegui carregar essa peça — pode ter sido movida ou apagada do
+Drive", com o arquivo lá). A mensagem era enganosa: `buscarAprovacaoPublica` mandava a peça
+embutida em base64, e qualquer vídeo estoura o limite de 25MB do Apps Script — o `catch` genérico
+traduzia o erro de tamanho como "arquivo sumido". Agora **vídeo nunca vai embutido**: o arquivo é
+liberado como "qualquer pessoa com o link" (`liberarArquivoParaAprovacao`) e a página mostra o
+player do próprio Drive num iframe. Imagem continua em base64 (funciona bem e não precisa expor);
+imagem grande demais cai no mesmo player, em vez de falhar.
+
+**Sobre liberar o arquivo** (decisão do Cláudio, 2026-08-04): libera SÓ o arquivo mandado pra
+aprovação, nunca a pasta. É o único jeito de vídeo funcionar numa página sem login — e o cliente ia
+ver a peça de qualquer forma. Falhar aqui não impede gerar o link (imagem segue por base64), por
+isso `liberarArquivoParaAprovacao` não estoura erro.
+
+Uma peça que falhar não derruba as outras: ela vira um item com `erro` e o aviso aparece só naquele
+quadro. Pins continuam só na primeira peça e só em imagem embutida — no player do Drive o clique é
+do player, não dá pra saber onde caiu.
+
+## Aba "Aprovações" na Fila de repasse (2026-08-04)
+
+Protótipo aprovado pelo Cláudio antes de implementar. Uma 5ª aba na Fila de repasse com o que foi
+mandado pro cliente e ainda não voltou — três colunas por situação (**Aguardando o cliente** /
+**Pediu ajuste** / **Aprovadas**), em vez de uma lista só: assim "o que preciso cobrar" e "o que
+voltou pedindo ajuste" não se misturam com o que já está resolvido.
+
+**Diferente das outras abas, essa não sai das tarefas do quadro.** `renderRepasse()` desvia pra
+`renderAprovacoesRepasse()` ANTES de qualquer filtro de tarefa: os dados vêm da planilha de
+aprovações (`listarAprovacoesPendentes`, Aprovacao.gs), porque um link de aprovação existe
+independente de a tarefa ainda estar aberta no Runrun.it.
+
+- **`pendente` e `ajuste` entram sempre**, independente da idade (enquanto o cliente não responde,
+  é trabalho em aberto). **`aprovado` só dos últimos 7 dias** (`APROVADAS_JANELA_DIAS`) — serve pra
+  fechar o ciclo, não pra virar arquivo morto que só cresce.
+- **O tempo de espera vira alerta vermelho depois de 3 dias** (`APROVACAO_DIAS_ALERTA`, borda do
+  card + cor do texto). É isso que faz a aba responder "o que preciso cobrar hoje" em vez de ser um
+  histórico passivo.
+- **"Cobrar no WhatsApp" usa `wa.me/?text=` SEM número**, igual já é feito na página de aprovação
+  (aprovar.html): abre o seletor de conversa do próprio WhatsApp pra pessoa escolher o grupo do
+  cliente, em vez de o Colmeia decidir um número.
+- O contador vermelho da aba conta **pendente + ajuste** (o que precisa de você), nunca as
+  aprovadas — e é buscado já ao abrir a página, mesmo sem entrar na aba.
+- Reaproveita `.repasse-column`/`.repasse-card`/`.repasse-btn` no CSS; só o que é específico de
+  aprovação (`.aprov-*`) foi criado.
+
+## Quando o Runrun.it cai (2026-08-04)
+
+Eles saem do ar de vez em quando, e aí TUDO que depende deles falha junto. Antes cada tela
+inventava a própria mensagem técnica, e — pior — a página de aprovação **mentia** pro cliente.
+
+**O buraco silencioso que existia:** `responderAprovacaoPublica` (Aprovacao.gs) grava a resposta na
+planilha PRIMEIRO e só depois comenta na tarefa do Runrun.it, dentro de um `try/catch` que engolia o
+erro. Com o Runrun.it fora: a resposta do cliente era salva (bom), mas o comentário não chegava, o
+cliente via "já avisamos o time" e o designer nunca ficava sabendo. Ninguém dos dois lados
+descobria — só quando o cliente cobrasse.
+
+**A logística agora, ponta a ponta:**
+
+1. **Detectar** — `runrunFetch` (RunrunLeitura.gs) marca `runrunForaDoAr` no cache (2 min) quando a
+   resposta é 5xx/429/0 ou nem chega a responder, e LIMPA a marca em qualquer resposta boa. Só
+   isso conta como queda: 401/403/404 são problema nosso (token, id que não existe) e não acendem
+   o aviso. `runrunPareceForaDoAr()` é quem responde a pergunta.
+2. **A resposta do cliente nunca se perde** — ela já era salva antes do Runrun.it entrar na
+   história, e isso não mudou.
+3. **Contar a verdade pro cliente** — `responderAprovacaoPublica` agora devolve `avisoChegou`.
+   Sendo `false`, a página mostra "Sua resposta está salva com a gente, mas o nosso sistema está
+   fora do ar" e oferece o WhatsApp (que passa a aparecer também no "aprovado", onde normalmente
+   fica escondido). Se nem a peça carregar, `mostrarErroDeServidor()` (aprovar.html) diferencia
+   "servidor fora" de "link errado" — mandar o cliente conferir o link quando o problema é nosso
+   só faz ele achar que errou.
+4. **Reenviar sozinho** — o que não saiu fica marcado na coluna N da aba `Aprovacoes`
+   (`marcarAvisoDeAprovacaoPendente`) e `reenviarAvisosDeAprovacaoPendentes` tenta de novo em dois
+   momentos: quando alguém abre a aba "Aprovações" e no backup diário. O comentário reenviado diz
+   que é atrasado e quando o cliente respondeu de verdade — quem lê precisa saber disso.
+5. **Avisar quem está no Colmeia** — `mostrarAvisoRunrunFora` (js/config.js) põe uma faixa fixa no
+   topo dizendo o que funciona e o que não funciona. NÃO some sozinha (diferente do toast): some
+   quando a próxima varredura do quadro conseguir falar com eles de novo.
+6. **Mostrar o preso na aba Aprovações** — o card ganha `.aprov-preso` avisando que o cliente já
+   respondeu mas o recado ainda não entrou na tarefa, pra ninguém achar que não houve resposta.
+
+**Tom das mensagens, de propósito:** amarelo (a cor da casa), nunca vermelho, e sem jargão. Pro
+cliente, "fora do ar" não é erro dele nem problema dele — e a resposta que ele acabou de dar está
+salva. Ele sempre tem dois caminhos (tentar de novo / WhatsApp), nunca um beco sem saída.
 
 ## Bug recorrente conhecido
 

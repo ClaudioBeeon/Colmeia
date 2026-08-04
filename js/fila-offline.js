@@ -35,6 +35,12 @@ const ACOES_QUE_PODEM_ESPERAR = [
   "ajustarEstimativa",
   "salvarDescricao",
   "adicionarComentario",
+  // "Ficar comigo" da Fila de repasse: a tela já esconde o card na hora
+  // (a decisão fica no localStorage), então esperar a internet voltar pra
+  // gravar na planilha não atrapalha ninguém — e sem isso a decisão só
+  // existiria neste navegador, que é exatamente o problema que levou essa
+  // lista pra planilha (ver Planilha.gs, seção "FICAR COMIGO").
+  "ignorarNoRepasse",
 ];
 
 function lerFilaOffline() {

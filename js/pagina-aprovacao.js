@@ -67,10 +67,19 @@
 //   - `adicionarComentario`       (RunrunEscrita.gs)
 //
 // Falta criar (sugestão de nome e de responsabilidade):
-//   - `listarAprovacoesPendentes()` → o que alimenta a fila.
+//   - `listarConferenciasPendentes()` → o que alimenta a fila desta tela.
 //   - `aprovarInternamente(taskId, fileId, aprovadoPor)` → registra o carimbo.
 //   - `devolverParaDesigner(taskId, motivo, pins)` → cria a subtarefa de
 //     alteração e já aloca pro designer que fez a peça.
+//
+// CUIDADO COM UM NOME PARECIDO: já existe `listarAprovacoesPendentes`
+// (Aprovacao.gs), e ela NÃO serve aqui — é de outra etapa do fluxo. Aquela
+// lista o que JÁ FOI mandado pro cliente e ainda não voltou (alimenta a aba
+// "Aprovações" da Fila de repasse). Esta tela é o passo ANTERIOR: o que o
+// designer terminou e o atendimento ainda não conferiu. As duas são
+// complementares e olham lados opostos do mesmo fluxo — por isso a sugestão
+// acima é `listarConferenciasPendentes`, pra ninguém ligar uma na outra sem
+// perceber.
 //
 // TRÊS DECISÕES QUE AINDA NÃO FORAM TOMADAS — resolver antes de codar:
 //

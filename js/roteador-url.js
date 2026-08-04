@@ -67,6 +67,7 @@ const ROTEADOR_SLUGS = {
   runrun: "runrun-completo",
   horas: "minhas-horas",
   repasse: "fila-de-repasse",
+  bee: "bee",
   aprovacao: "aprovacoes",
 };
 const ROTEADOR_SLUGS_INVERSO = Object.fromEntries(
