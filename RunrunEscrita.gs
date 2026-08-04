@@ -408,8 +408,17 @@ function diagnosticoAlterarDataEntrega() {
  *           desiredDate (AAAA-MM-DD, opcional), descricao (opcional) }
  */
 function criarTarefaRunrun(dados) {
-  if (!dados || !dados.titulo || !dados.projectId) {
-    return { ok: false, error: 'Faltam campos obrigatórios (título ou cliente).' };
+  if (!dados || !dados.titulo) {
+    return { ok: false, error: 'Faltam campos obrigatórios (título).' };
+  }
+  // Subtarefa herda o projeto do card mãe: quem cria uma Alteração não
+  // deveria precisar escolher o cliente de novo — é sempre o mesmo do pai.
+  if (!dados.projectId && dados.parentTaskId) {
+    var pai = runrunFetch('/tasks/' + dados.parentTaskId);
+    if (pai && !pai.erroFetch && pai.project_id) dados.projectId = pai.project_id;
+  }
+  if (!dados.projectId) {
+    return { ok: false, error: 'Faltam campos obrigatórios (cliente/projeto).' };
   }
   var token = tokenRunrunDoAutor(dados.autor);
 
@@ -427,6 +436,11 @@ function criarTarefaRunrun(dados) {
     project_id: dados.projectId,
     title: dados.titulo,
   };
+  // SUBTAREFA de um card mãe (usado pelo fluxo de Alteração: o
+  // atendimento reprova e o Colmeia abre a subtarefa sozinho). Igual ao
+  // caso do `assignments`, o Runrun.it pode responder 200 e ignorar isso
+  // — por isso o vínculo é CONFERIDO depois, mais abaixo.
+  if (dados.parentTaskId) corpoTask.parent_task_id = dados.parentTaskId;
   // Alocar já na criação, no formato que a API documenta (`assignments`).
   // O `user_id` que estava aqui antes era aceito com 200 e ignorado — a
   // tarefa nascia com "Alocados" vazio.
@@ -468,6 +482,17 @@ function criarTarefaRunrun(dados) {
     }
   }
 
+  // CONFERIR o vínculo de subtarefa — mesmo cuidado da alocação: o
+  // Runrun.it já respondeu 200 e ignorou campo mais de uma vez (aconteceu
+  // com assignments, com a Entrega Desejada e com a Data de Publicação).
+  var virouSubtarefa = true;
+  var diagnosticoSubtarefa = '';
+  if (dados.parentTaskId) {
+    var r = vincularComoSubtarefa(novoId, dados.parentTaskId, dados.autor);
+    virouSubtarefa = !!r.ok;
+    diagnosticoSubtarefa = r.diagnostico || r.comoFoi || '';
+  }
+
   // Prioridade é só do Colmeia (planilha própria) — não é campo do
   // Runrun.it. Descrição vem numa segunda chamada, mesmo padrão de
   // salvarDescricao.
@@ -482,8 +507,55 @@ function criarTarefaRunrun(dados) {
     taskId: novoId,
     alocou: alocou,
     diagnosticoAlocacao: diagnosticoAlocacao,
+    virouSubtarefa: virouSubtarefa,
+    diagnosticoSubtarefa: diagnosticoSubtarefa,
     link: 'https://runrun.it/tasks/' + novoId
   };
+}
+
+/**
+ * Garante que a tarefa virou FILHA do card mãe — conferindo de verdade,
+ * não confiando no status 200. Mesma estratégia de
+ * alocarResponsavelNaTarefa: se o jeito da criação não pegou, tenta
+ * outros formatos e devolve um diagnóstico do que cada um respondeu.
+ */
+function vincularComoSubtarefa(taskId, parentTaskId, autor) {
+  if (!taskId || !parentTaskId) return { ok: false, error: 'taskId ou parentTaskId ausente.' };
+  var token = tokenRunrunDoAutor(autor);
+
+  // Já nasceu filha (o parent_task_id da criação funcionou)? Nada a fazer.
+  if (tarefaEhFilhaDe(taskId, parentTaskId)) {
+    return { ok: true, comoFoi: 'já nasceu como subtarefa' };
+  }
+
+  var tentativas = [
+    { nome: 'PUT parent_task_id', executar: function () {
+      return runrunRequest('/tasks/' + taskId, 'put', { parent_task_id: parentTaskId }, token);
+    } },
+    { nome: 'PUT task.parent_task_id', executar: function () {
+      return runrunRequest('/tasks/' + taskId, 'put', { task: { parent_task_id: parentTaskId } }, token);
+    } },
+    { nome: 'POST /subtasks no pai', executar: function () {
+      return runrunRequest('/tasks/' + parentTaskId + '/subtasks', 'post', { subtask_id: taskId }, token);
+    } }
+  ];
+
+  var log = [];
+  for (var i = 0; i < tentativas.length; i++) {
+    var r = tentativas[i].executar();
+    if (r.ok && tarefaEhFilhaDe(taskId, parentTaskId)) {
+      return { ok: true, comoFoi: tentativas[i].nome };
+    }
+    log.push(tentativas[i].nome + ' → ' + (r.ok ? 'respondeu 200 mas não vinculou' : 'status ' + r.status));
+  }
+  return { ok: false, error: 'Runrun.it não vinculou como subtarefa.', diagnostico: log.join(' | ') };
+}
+
+/** Lê a tarefa de volta e confere de quem ela é filha de verdade. */
+function tarefaEhFilhaDe(taskId, parentTaskId) {
+  var t = runrunFetch('/tasks/' + taskId);
+  if (!t || t.erroFetch) return false;
+  return String(t.parent_task_id || '') === String(parentTaskId);
 }
 
 /**
