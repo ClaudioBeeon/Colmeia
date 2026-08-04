@@ -39,6 +39,25 @@
   --apv-borda-forte: rgba(255, 255, 255, 0.16);
 }
 
+/* ===== `hidden` tem que vencer, sempre =================================
+   O atributo `hidden` do HTML vale por uma regra do NAVEGADOR
+   (`[hidden] { display: none }`), que tem peso baixíssimo — qualquer
+   `display:` escrito numa classe aqui embaixo vence ela, e o elemento
+   aparece mesmo estando marcado como escondido.
+
+   Isso quebrou o app inteiro em 2026-08-04, na primeira vez que essa área
+   foi pro ar: os overlays desta tela nascem `hidden`, mas o `display:flex`
+   das classes deles os deixou visíveis por cima do quadro — e como a
+   camada funcional ainda não existe, não havia JavaScript nenhum pra
+   fechar. Ninguém do time conseguia clicar em nada.
+
+   O app já tinha esse cuidado em `.app-page[hidden]` (css/01-base.css) —
+   faltava aqui. A regra cobre a área inteira (o próprio elemento e
+   qualquer coisa dentro dele), então vale também pro que for criado
+   depois, sem precisar lembrar disso caso a caso. */
+.apv-area[hidden],
+.apv-area [hidden] { display: none !important; }
+
 /* ===== Peças de uso geral desta área ================================= */
 
 .apv-btn {
