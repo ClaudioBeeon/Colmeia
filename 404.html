@@ -24,6 +24,17 @@
    * "/Colmeia/11503" → pasta "/Colmeia/") quanto depois que o domínio
    * colmeia.beeon.com.br entrar no ar (algo como "/11503" → pasta "/"),
    * sem precisar mudar este arquivo quando isso acontecer.
+   *
+   * ⚠️ ISSO SOBE UMA PASTA SÓ. Toda rota do app tem que ter UM pedaço
+   * depois da base ("/11503", "/minhas-horas", "/aprovacoes"). Uma rota
+   * de dois pedaços ("/aprovacoes/114526") viraria "/aprovacoes/", que
+   * também não existe: o GitHub cai aqui de novo, e de novo, com a tela
+   * piscando sem parar. Aconteceu de verdade em 2026-08-04. Parâmetro
+   * extra vai na QUERY (?tarefa=114526), nunca como pedaço de caminho.
+   *
+   * O contador abaixo é o cinto de segurança: se por qualquer motivo o
+   * destino não existir, a pessoa vai parar na raiz do site em vez de
+   * ficar presa no laço. Ela perde a rota, mas o app abre.
    */
   try {
     sessionStorage.setItem("colmeiaRotaPendente", location.pathname + location.search + location.hash);
@@ -32,7 +43,23 @@
     // pessoa só cai na tela inicial normal, sem a tarefa/página abrindo
     // sozinha — não trava nada.
   }
-  location.replace(new URL(".", location.href).pathname);
+
+  var destino = new URL(".", location.href).pathname;
+  try {
+    var voltas = Number(sessionStorage.getItem("colmeiaBounce404") || 0) + 1;
+    sessionStorage.setItem("colmeiaBounce404", String(voltas));
+    // Duas passagens por aqui já significam que o destino calculado
+    // também não existe — não adianta tentar uma terceira.
+    if (voltas > 2) {
+      sessionStorage.removeItem("colmeiaBounce404");
+      sessionStorage.removeItem("colmeiaRotaPendente");
+      destino = "/";
+    }
+  } catch (e) {
+    // Sem sessionStorage não dá pra contar as voltas; segue o caminho
+    // normal, que é o que já acontecia antes deste cinto existir.
+  }
+  location.replace(destino);
 </script>
 </head>
 <body></body>

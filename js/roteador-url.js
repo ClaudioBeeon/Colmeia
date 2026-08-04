@@ -89,6 +89,11 @@ let roteadorReagindoAoHistorico = false;
   try {
     encomenda = sessionStorage.getItem("colmeiaRotaPendente");
     sessionStorage.removeItem("colmeiaRotaPendente");
+    // Chegamos no index.html de verdade: o contador de voltas do 404.html
+    // (o cinto de segurança contra laço de redirecionamento) cumpriu o
+    // papel e zera aqui. Sem zerar, a terceira visita legítima ao 404 numa
+    // mesma aba cairia na raiz achando que era laço.
+    sessionStorage.removeItem("colmeiaBounce404");
   } catch (e) {
     // Sem sessionStorage, segue sem restaurar nada — cai na tela normal.
   }
@@ -117,20 +122,27 @@ function roteadorInterpretarRota() {
   if (!caminho) return { tipo: "kanban" };
   if (/^\d+$/.test(caminho)) return { tipo: "tarefa", id: caminho };
 
-  // `.../aprovacoes/114526` abre a conferência daquela peça direto. É o
-  // link que a Bee põe no comentário da tarefa quando o designer manda a
-  // peça pra revisão — o atendimento trabalha no Runrun.it, então o
+  // `.../aprovacoes?tarefa=114526` abre a conferência daquela peça direto.
+  // É o link que a Bee põe no comentário da tarefa quando o designer manda
+  // a peça pra revisão — o atendimento trabalha no Runrun.it, então o
   // comentário de lá é o que traz eles pra cá, e cair na fila genérica
   // faria a pessoa ter que procurar a peça de novo.
   //
-  // O nome da peça vai na QUERY (?peca=Feed), não no caminho: nome de
-  // arquivo tem espaço, acento e barra, e nada disso sobrevive inteiro a
-  // um pedaço de caminho. Sem ele, abre a peça mexida por último.
-  const conferencia = caminho.match(/^aprovacoes\/(\d+)$/);
-  if (conferencia) {
-    let peca = "";
-    try { peca = new URLSearchParams(location.search).get("peca") || ""; } catch (e) { /* sem problema */ }
-    return { tipo: "conferencia", id: conferencia[1], peca };
+  // TUDO NA QUERY, NADA NO CAMINHO — e isso não é estilo, é obrigatório:
+  // toda rota deste app tem que ter UM pedaço só. O 404.html (que é quem
+  // atende link colado e F5) sobe exatamente UMA pasta pra achar o
+  // index.html. Com dois pedaços, "/Colmeia/aprovacoes/114526" virava
+  // "/Colmeia/aprovacoes/", que também não existe, e caía no 404 de novo:
+  // laço infinito, a tela piscando sem parar. Aconteceu de verdade em
+  // 2026-08-04. Ao criar rota nova, parâmetro vai na query.
+  //
+  // (O nome da peça também ganharia com isso de qualquer jeito: nome de
+  // arquivo tem espaço, acento e barra. Sem ele, abre a mexida por último.)
+  if (caminho === ROTEADOR_SLUGS.aprovacao) {
+    let params = null;
+    try { params = new URLSearchParams(location.search); } catch (e) { /* sem problema */ }
+    const tarefa = params && params.get("tarefa");
+    if (tarefa) return { tipo: "conferencia", id: tarefa, peca: (params.get("peca") || "") };
   }
 
   const pagina = ROTEADOR_SLUGS_INVERSO[caminho];
@@ -144,8 +156,9 @@ function roteadorInterpretarRota() {
  * certo quando o domínio virar colmeia.beeon.com.br, sem mexer aqui.
  */
 function roteadorLinkDaConferencia(taskId, nomePeca) {
-  const base = location.origin + ROTA_BASE + "aprovacoes/" + taskId;
-  return nomePeca ? base + "?peca=" + encodeURIComponent(nomePeca) : base;
+  const url = location.origin + ROTA_BASE + ROTEADOR_SLUGS.aprovacao
+    + "?tarefa=" + encodeURIComponent(taskId);
+  return nomePeca ? url + "&peca=" + encodeURIComponent(nomePeca) : url;
 }
 
 /**

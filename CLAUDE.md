@@ -502,9 +502,16 @@ campo de comentário um texto com o **link direto da conferência daquela peça*
 atendimento trabalha no **Runrun.it** e não fica olhando a fila do Colmeia sozinho; é o comentário
 que avisa e traz eles até cá. **Nada vai pro Runrun.it sozinho:** o texto fica no campo pro designer
 revisar e clicar em enviar, mesmo comportamento do "Adicionar ao comentário" que a fala da Bee já
-tinha. O link é `.../aprovacoes/<taskId>?peca=<nome>` — aponta pra PEÇA, não pra fila, senão quem
-clica teria que procurar de novo numa lista. (O nome da peça vai na query, não no caminho: nome de
-arquivo tem espaço, acento e barra.)
+tinha. O link é `.../aprovacoes?tarefa=<taskId>&peca=<nome>` — aponta pra PEÇA, não pra fila, senão
+quem clica teria que procurar de novo numa lista.
+
+> ⚠️ **Toda rota do app tem UM pedaço só depois da base**, e os parâmetros vão na **query**. A
+> primeira versão desse link era `/aprovacoes/114526` e travou o app inteiro piscando sem parar: o
+> `404.html` (que é quem atende link colado e F5) sobe **uma** pasta pra achar o index.html, então
+> dois pedaços viravam `/aprovacoes/`, que também não existe — 404 de novo, e de novo. Desde então o
+> `404.html` tem um contador de voltas que, na terceira passagem, joga a pessoa na raiz em vez de
+> deixar ela presa (`colmeiaBounce404`, zerado por `restaurarRotaPendente` quando o app abre de
+> verdade). **Ao criar rota nova, parâmetro na query.**
 
 **Por que dois e não um:** a fala da Bee depende da varredura de 8s da pasta do Drive e some
 quando é dispensada. Se fosse o único caminho, uma peça ficaria parada só porque a notificação
