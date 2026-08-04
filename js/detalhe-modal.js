@@ -1720,6 +1720,9 @@ function wireArrastarArquivoParaCard() {
   panel.addEventListener("drop", e => {
     if (!temArquivoNoDrag(e)) return;
     e.preventDefault();
+    // Já tratado aqui — a rede de segurança do documento (logo abaixo)
+    // não precisa (e não deve) repetir o aviso de "abra uma tarefa".
+    e.stopPropagation();
     dragDepth = 0;
     panel.classList.remove("arquivo-sobre-card");
     const task = tasks[detailIdx];
@@ -1727,6 +1730,32 @@ function wireArrastarArquivoParaCard() {
     Array.from(e.dataTransfer.files || []).forEach(arquivo => subirArquivoArrastadoParaCard(task, arquivo));
   });
 }
+
+/**
+ * Rede de segurança pra QUALQUER arquivo arrastado sobre o Colmeia, não
+ * só dentro do card: sem isso, soltar um arquivo um pixel fora do
+ * #taskDetail (ou em qualquer outro canto do app — sidebar, quadro,
+ * gaps entre elementos) faz o PRÓPRIO NAVEGADOR assumir o drop e abrir o
+ * arquivo direto na aba, saindo do Colmeia inteiro. Foi exatamente isso
+ * que aconteceu quando o Cláudio testou (2026-08-04): "arrastei pro
+ * card, não funcionou, a foto abriu no navegador".
+ *
+ * `#taskDetail` já chama stopPropagation() quando trata o drop de
+ * verdade (ver wireArrastarArquivoParaCard, acima) — só chega até aqui
+ * um drop que caiu FORA de um card aberto, daí o aviso.
+ *
+ * Só entra em ação pra ARQUIVO (dataTransfer.types inclui "Files") — não
+ * interfere no arrastar card entre colunas do quadro (setupDragAndDrop,
+ * js/kanban-board.js), que usa "text/plain", nunca "Files".
+ */
+document.addEventListener("dragover", e => {
+  if (temArquivoNoDrag(e)) e.preventDefault();
+});
+document.addEventListener("drop", e => {
+  if (!temArquivoNoDrag(e)) return;
+  e.preventDefault();
+  mostrarToast("Abra uma tarefa primeiro pra soltar o arquivo nela.", "erro");
+});
 
 async function subirArquivoArrastadoParaCard(task, arquivo) {
   if (arquivo.size > LIMITE_UPLOAD_ARRASTADO_BYTES) {
