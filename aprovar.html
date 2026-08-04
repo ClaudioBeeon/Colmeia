@@ -62,7 +62,12 @@
     border: 1px solid var(--border); margin-bottom: 10px;
   }
   .imagem-box img, .imagem-box video { display: block; width: 100%; height: auto; }
+  /* O player do Drive (vídeo) não tem altura própria — sem uma proporção
+     fixa o iframe nasce com 0px e o cliente vê um quadrado vazio. */
+  .imagem-box iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; }
   .imagem-box.marcavel { cursor: crosshair; }
+  .nome-peca { font-size: 12px; color: var(--text-secondary); margin: 0 0 14px; text-align: center; }
+  .peca-erro { padding: 22px 16px; text-align: center; font-size: 13px; color: var(--text-secondary); }
 
   /* Pins: marcar um ponto exato na imagem (pedido do Cláudio,
      2026-08-04) — clica na imagem, solta um pino numerado, escreve o
@@ -150,11 +155,16 @@
   <div id="telaAprovacao" class="card" hidden>
     <p class="titulo" id="tituloTarefa"></p>
     <p class="subtitulo" id="nomeCliente"></p>
+    <!-- Peças extras (quando o link tem mais de uma) são desenhadas aqui,
+         ANTES da principal — ver desenharPecasExtras() lá embaixo. -->
+    <div id="pecasExtras"></div>
     <div class="imagem-box" id="imagemBox">
       <img id="imagemPeca" alt="Peça pra aprovação" hidden>
       <video id="videoPeca" controls playsinline hidden></video>
+      <iframe id="framePeca" allow="autoplay" allowfullscreen hidden></iframe>
       <div id="pinsOverlay"></div>
     </div>
+    <p class="nome-peca" id="nomePecaPrincipal"></p>
     <p class="dica-pins" id="dicaPins" hidden>📍 Clique na imagem pra marcar um ponto exato</p>
     <div class="pins-lista" id="pinsLista" hidden></div>
 
@@ -319,6 +329,65 @@
     return div.innerHTML;
   }
 
+  /**
+   * Põe UMA peça no quadro principal. Três caminhos possíveis:
+   *   - erro        -> só o aviso, sem quebrar o resto da página;
+   *   - previewUrl  -> player do Drive num iframe (todo vídeo, e imagem
+   *                    grande demais pra vir embutida);
+   *   - base64      -> imagem embutida (o caso mais comum).
+   */
+  function desenharPecaNoQuadro(peca) {
+    var img = document.getElementById("imagemPeca");
+    var video = document.getElementById("videoPeca");
+    var frame = document.getElementById("framePeca");
+    img.hidden = true; video.hidden = true; frame.hidden = true;
+
+    if (peca.erro) {
+      // Insere o aviso SEM usar innerHTML no box: isso apagaria o
+      // #pinsOverlay junto, e renderPins() (chamado depois, quando a
+      // aprovação já foi respondida) não acharia mais onde desenhar.
+      var aviso = document.createElement("p");
+      aviso.className = "peca-erro";
+      aviso.textContent = peca.erro;
+      document.getElementById("imagemBox").insertBefore(aviso, document.getElementById("pinsOverlay"));
+      return;
+    }
+    if (peca.previewUrl) {
+      frame.src = peca.previewUrl;
+      frame.hidden = false;
+      return;
+    }
+    var fonteDados = "data:" + peca.mimeType + ";base64," + peca.base64;
+    if (peca.ehVideo) {
+      video.src = fonteDados;
+      video.hidden = false;
+    } else {
+      img.src = fonteDados;
+      img.hidden = false;
+    }
+  }
+
+  /** As peças além da primeira — cada uma no seu quadro, sem pins. */
+  function desenharPecasExtras(extras) {
+    var alvo = document.getElementById("pecasExtras");
+    if (!extras.length) { alvo.innerHTML = ""; return; }
+    alvo.innerHTML = extras.map(function (p) {
+      var miolo;
+      if (p.erro) {
+        miolo = '<p class="peca-erro">' + p.erro + "</p>";
+      } else if (p.previewUrl) {
+        miolo = '<iframe src="' + p.previewUrl + '" allow="autoplay" allowfullscreen></iframe>';
+      } else if (p.ehVideo) {
+        miolo = '<video controls playsinline src="data:' + p.mimeType + ";base64," + p.base64 + '"></video>';
+      } else {
+        miolo = '<img alt="Peça pra aprovação" src="data:' + p.mimeType + ";base64," + p.base64 + '">';
+      }
+      var nome = (p.nome || "").replace(/[<>&]/g, "");
+      return '<div class="imagem-box">' + miolo + "</div>" +
+             '<p class="nome-peca">' + nome + "</p>";
+    }).join("");
+  }
+
   document.getElementById("imagemBox").addEventListener("click", function (e) {
     if (ehVideo || modoLeitura || e.target.closest(".pin-marcador")) return;
     var box = document.getElementById("imagemBox").getBoundingClientRect();
@@ -342,23 +411,31 @@
       }
       document.getElementById("tituloTarefa").textContent = data.tituloTarefa || data.nomeArquivo || "Peça pra aprovação";
       document.getElementById("nomeCliente").textContent = data.cliente || "";
-      ehVideo = (data.mimeType || "").indexOf("video/") === 0;
-      var fonteDados = "data:" + data.mimeType + ";base64," + data.base64;
-      if (ehVideo) {
-        document.getElementById("videoPeca").src = fonteDados;
-        document.getElementById("videoPeca").hidden = false;
-        document.getElementById("imagemPeca").hidden = true;
-      } else {
-        document.getElementById("imagemPeca").src = fonteDados;
-        document.getElementById("imagemPeca").hidden = false;
-        document.getElementById("videoPeca").hidden = true;
-      }
+
+      // Um link pode trazer VÁRIAS peças. A primeira ocupa o quadro
+      // principal (é a única que aceita pins, pra não confundir "pino 2"
+      // entre peças diferentes); as outras aparecem inteiras logo acima.
+      var pecas = data.pecas && data.pecas.length
+        ? data.pecas
+        : [{ nome: data.nomeArquivo, mimeType: data.mimeType, base64: data.base64,
+             ehVideo: (data.mimeType || "").indexOf("video/") === 0 }];
+
+      var principal = pecas[0];
+      ehVideo = !!principal.ehVideo;
+      desenharPecaNoQuadro(principal);
+      document.getElementById("nomePecaPrincipal").textContent =
+        pecas.length > 1 ? (principal.nome || "") : "";
+      desenharPecasExtras(pecas.slice(1));
+
       mostrarTela("telaAprovacao");
 
+      // Pin só faz sentido em imagem embutida: no player do Drive (vídeo)
+      // o clique é do player, não nosso, e não dá pra saber onde caiu.
+      var aceitaPins = !ehVideo && !principal.previewUrl && !principal.erro;
       if (data.status && data.status !== "pendente") {
         pins = data.pins || [];
         mostrarComoRespondido(data.status, data.respostaTexto);
-      } else if (!ehVideo) {
+      } else if (aceitaPins) {
         document.getElementById("imagemBox").classList.add("marcavel");
         document.getElementById("dicaPins").hidden = false;
       }

@@ -1391,3 +1391,21 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 .pecas-escolha-item:hover { background: var(--page-bg); }
 [data-theme="dark"] .pecas-escolha-item:hover { background: rgba(255,255,255,0.08); }
 
+/* Marcar VÁRIAS peças pro mesmo link (2026-08-04): o item virou <label>
+   com checkbox, então clicar em qualquer lugar da linha marca/desmarca. */
+.pecas-escolha-item input[type="checkbox"] {
+  width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--kanban-yellow); cursor: pointer;
+}
+.pecas-escolha-confirmar {
+  margin-top: 6px; border: none; border-radius: 10px; padding: 9px;
+  background: var(--kanban-yellow); color: #16181D; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+}
+.pecas-escolha-confirmar:hover { filter: brightness(0.96); }
+
+/* O link de aprovação escrito por extenso na fala da Bee — antes ele só
+   existia dentro de um toast que sumia. Quebra no meio da URL pra não
+   estourar a largura da bolha. */
+.bee-link-aprovacao { margin-top: 6px; word-break: break-all; }
+.bee-link-aprovacao a { color: var(--accent); font-size: 12px; }
+

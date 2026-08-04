@@ -1976,23 +1976,38 @@ function abrirEscolhaDePeca(task, btn, pecas) {
   menu.className = "pecas-escolha-menu";
   menu.style.top = Math.round(rect.bottom + 6) + "px";
   menu.style.left = Math.round(Math.max(8, rect.right - 240)) + "px";
+  // Dá pra marcar VÁRIAS peças e mandar todas no MESMO link (pedido do
+  // Cláudio, 2026-08-04: "são dois vídeos"). Antes era escolha única —
+  // clicava numa e o menu fechava, então não tinha como mandar as duas.
+  // Começa com todas marcadas: quem abriu esse menu quase sempre quer
+  // mandar tudo que subiu; desmarcar é o caso raro.
   menu.innerHTML = `
-    <div class="pecas-escolha-titulo">Mais de uma peça na pasta — qual vai nesse link?</div>
+    <div class="pecas-escolha-titulo">Quais peças vão nesse link?</div>
     ${pecas.map((p, i) => `
-      <button type="button" class="pecas-escolha-item" data-idx="${i}">
+      <label class="pecas-escolha-item">
+        <input type="checkbox" data-idx="${i}" checked>
         <span>${p.mimeType.indexOf("video/") === 0 ? "🎬" : "🖼️"}</span>
         <span>${escaparHTML(p.nome)}</span>
-      </button>
+      </label>
     `).join("")}
+    <button type="button" class="pecas-escolha-confirmar" id="pecasEscolhaOk">Gerar link</button>
   `;
   document.body.appendChild(menu);
 
-  menu.querySelectorAll("[data-idx]").forEach(item => {
-    item.addEventListener("click", () => {
-      const p = pecas[Number(item.dataset.idx)];
-      menu.remove();
-      gerarECopiarLinkDeAprovacao(task, btn, p.fileId, p.nome);
-    });
+  menu.querySelector("#pecasEscolhaOk").addEventListener("click", () => {
+    const escolhidas = Array.from(menu.querySelectorAll("input[type=checkbox]"))
+      .filter(c => c.checked)
+      .map(c => pecas[Number(c.dataset.idx)]);
+    if (!escolhidas.length) {
+      mostrarToast("Marca pelo menos uma peça pra mandar no link.", "erro");
+      return;
+    }
+    menu.remove();
+    gerarECopiarLinkDeAprovacao(
+      task, btn,
+      escolhidas.map(p => p.fileId),
+      escolhidas.map(p => p.nome).join(", ")
+    );
   });
 
   // Clicar fora fecha — a mesma técnica do resto do app (ex: chatHdrMenu),
@@ -2031,12 +2046,60 @@ async function gerarECopiarLinkDeAprovacao(task, btn, fileId, nomeArquivo) {
 
   const base = new URL(".", location.href).href;
   const url = base + "aprovar.html?codigo=" + data.codigo;
+
+  // O link vira uma FALA DA BEE que fica na tela — antes ele só existia
+  // dentro de um toast que sumia em segundos (e quando o navegador
+  // recusava a cópia automática, o link ia embora junto com o aviso, sem
+  // ninguém conseguir ler). Copiar continua acontecendo; agora é um
+  // extra, não o único caminho pro link.
+  mostrarLinkDeAprovacaoDaBee(task, url, data.nomeArquivo || nomeArquivo || "");
+
   try {
     await navigator.clipboard.writeText(url);
-    mostrarToast(`Link de aprovação copiado — "${data.nomeArquivo}"`, "sucesso");
+    mostrarToast("Link de aprovação copiado.", "sucesso");
   } catch (err) {
-    mostrarToast(`Link gerado (não consegui copiar sozinho): ${url}`);
+    // Sem toast de erro aqui de propósito: o link já está na tela, na
+    // fala da Bee, com um botão de copiar do lado.
   }
+}
+
+/**
+ * A fala da Bee com o link pronto pra mandar pro cliente. Mora no mesmo
+ * #beeInlineAvisos das outras falas dela (ver mostrarAvisoAcoesPastaInline
+ * acima), então fica visível no chat de Comentários sem trocar de aba e
+ * sem ser apagada quando a lista de comentários é redesenhada sozinha.
+ */
+function mostrarLinkDeAprovacaoDaBee(task, url, nomeArquivo) {
+  const avisos = document.getElementById("beeInlineAvisos");
+  if (!avisos || typeof bolhaDaBee !== "function") {
+    // Card fechado (a ação pode ter saído da paleta//da conversa da Bee):
+    // sem lugar pra bolha, o toast com o link inteiro é o plano B.
+    mostrarToast(`Link de aprovação: ${url}`, "sucesso");
+    return;
+  }
+  document.getElementById("beeLinkAprovacaoAviso")?.remove();
+
+  const quais = nomeArquivo ? ` de <b>${escaparHTML(nomeArquivo)}</b>` : "";
+  const corpo = `
+    <p>Link pra aprovação${quais}:</p>
+    <p class="bee-link-aprovacao"><a href="${url}" target="_blank" rel="noopener">${escaparHTML(url)}</a></p>
+    <div class="bee-pastilhas">
+      <button type="button" class="bee-acao" data-copiar-link="1">📋 copiar link</button>
+    </div>
+  `;
+  avisos.insertAdjacentHTML("beforeend", `<div id="beeLinkAprovacaoAviso">${bolhaDaBee(corpo, -1)}</div>`);
+
+  const wrap = document.getElementById("beeLinkAprovacaoAviso");
+  wrap.querySelector("[data-copiar-link]")?.addEventListener("click", async ev => {
+    try {
+      await navigator.clipboard.writeText(url);
+      mostrarToast("Link copiado.", "sucesso");
+    } catch (err) {
+      // Navegador recusou a cópia — o link continua ali pra selecionar
+      // e copiar na mão, que é o motivo de ele estar escrito por extenso.
+      mostrarToast("Seu navegador não deixou copiar sozinho — seleciona o link e copia na mão.", "erro");
+    }
+  });
 }
 
 function updateNowPlaying() {

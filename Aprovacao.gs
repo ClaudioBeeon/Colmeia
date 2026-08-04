@@ -121,10 +121,33 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
 
   var escolhido = null;
+  // `fileId` pode vir como LISTA (o Cláudio escolheu 2 vídeos pra mandar
+  // no mesmo link) ou como um id só (caminho de sempre). Normaliza os
+  // dois no mesmo formato pra não ter dois caminhos de código.
+  var idsEscolhidos = Array.isArray(fileId) ? fileId.filter(function (x) { return !!x; }) : (fileId ? [fileId] : []);
 
-  if (fileId) {
+  if (idsEscolhidos.length > 1) {
+    var arquivos = [];
+    for (var iId = 0; iId < idsEscolhidos.length; iId++) {
+      var arqEscolhido;
+      try {
+        arqEscolhido = DriveApp.getFileById(idsEscolhidos[iId]);
+      } catch (eMulti) {
+        return { ok: false, error: 'Não consegui acessar um dos arquivos escolhidos no Drive.' };
+      }
+      var tipoMulti = arqEscolhido.getMimeType();
+      if (tipoMulti.indexOf('image/') !== 0 && tipoMulti.indexOf('video/') !== 0) {
+        return { ok: false, error: 'Um dos arquivos escolhidos não é imagem nem vídeo.' };
+      }
+      liberarArquivoParaAprovacao(arqEscolhido);
+      arquivos.push(arqEscolhido);
+    }
+    return gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, arquivos);
+  }
+
+  if (idsEscolhidos.length === 1) {
     try {
-      escolhido = DriveApp.getFileById(fileId);
+      escolhido = DriveApp.getFileById(idsEscolhidos[0]);
     } catch (e) {
       return { ok: false, error: 'Não consegui acessar esse arquivo no Drive.' };
     }
@@ -173,20 +196,69 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
     }
   }
 
+  liberarArquivoParaAprovacao(escolhido);
+  return gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, [escolhido]);
+}
+
+/**
+ * Grava a linha da aprovação. Vários arquivos são guardados na MESMA
+ * célula, separados por "|" — id do Drive nunca tem esse caractere, e
+ * assim nada muda pra quem lê uma linha antiga (um id só continua sendo
+ * uma lista de um item, ver idsDaLinhaDeAprovacao).
+ */
+function gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, arquivos) {
+  var ids = arquivos.map(function (a) { return a.getId(); }).join('|');
+  var nomes = arquivos.map(function (a) { return a.getName(); }).join('|');
+  var tipos = arquivos.map(function (a) { return a.getMimeType(); }).join('|');
+
   var codigo = Utilities.getUuid().replace(/-/g, '');
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
     var sheet = getAprovacoesSheet();
     sheet.appendRow([
-      codigo, taskId, cliente || '', tituloTarefa || '', escolhido.getId(), escolhido.getName(),
-      escolhido.getMimeType(), new Date().getTime(), 'pendente', '', '', autor || ''
+      codigo, taskId, cliente || '', tituloTarefa || '', ids, nomes,
+      tipos, new Date().getTime(), 'pendente', '', '', autor || ''
     ]);
   } finally {
     lock.releaseLock();
   }
 
-  return { ok: true, codigo: codigo, nomeArquivo: escolhido.getName() };
+  return {
+    ok: true,
+    codigo: codigo,
+    nomeArquivo: arquivos.map(function (a) { return a.getName(); }).join(', '),
+    quantasPecas: arquivos.length
+  };
+}
+
+/**
+ * Deixa o arquivo visível por "qualquer pessoa com o link" — decisão do
+ * Cláudio (2026-08-04), e é o que faz VÍDEO funcionar na página pública.
+ *
+ * Por que é obrigatório pra vídeo: a página de aprovação não tem login, e
+ * o cliente não tem conta no Drive da Beeon. Imagem a gente consegue
+ * mandar embutida na resposta (base64), mas vídeo estoura o limite de
+ * 25MB do Apps Script na primeira tentativa — a única forma que funciona
+ * é o player do próprio Drive, que exige o arquivo acessível.
+ *
+ * Libera SÓ o arquivo mandado pra aprovação, nunca a pasta: o resto do
+ * Drive continua privado. Falhar aqui não impede gerar o link (imagem
+ * continua funcionando por base64) — por isso não estoura erro.
+ */
+function liberarArquivoParaAprovacao(arquivo) {
+  try {
+    arquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {
+    // Drive compartilhado com política restritiva, arquivo de terceiro,
+    // etc. A imagem ainda vai por base64; o vídeo é que não vai abrir.
+    Logger.log('Não consegui liberar o arquivo pra aprovação: ' + e.message);
+  }
+}
+
+/** Uma célula pode ter vários ids separados por "|" (ver gravarLinhaDeAprovacao). */
+function idsDaLinhaDeAprovacao(valor) {
+  return String(valor || '').split('|').filter(function (x) { return !!x; });
 }
 
 /**
@@ -202,23 +274,65 @@ function buscarAprovacaoPublica(codigo) {
   var linha = acharLinhaDeAprovacao(codigo);
   if (!linha) return { ok: false, error: 'Não encontrei essa aprovação — o link pode estar errado.' };
 
-  var imagem;
-  try {
-    var arquivo = DriveApp.getFileById(linha.fileId);
-    var blob = arquivo.getBlob();
-    var bytes = blob.getBytes();
-    // Mesmo limite do buscarImagemCheiaDrive (Drive.gs) — um vídeo passa
-    // disso fácil, e acima desse tamanho não cabe direito na resposta do
-    // Apps Script.
-    var LIMITE_BYTES = 25 * 1024 * 1024;
-    if (bytes.length > LIMITE_BYTES) {
-      return { ok: false, error: 'Esse arquivo tem ' + Math.round(bytes.length / 1024 / 1024) + ' MB, grande demais pra abrir por este link. Manda o vídeo direto pelo Drive pra esse cliente.' };
-    }
-    imagem = { base64: Utilities.base64Encode(bytes), mimeType: blob.getContentType() };
-  } catch (e) {
-    return { ok: false, error: 'Não consegui carregar essa peça — pode ter sido movida ou apagada do Drive.' };
+  // Um link pode ter VÁRIAS peças (ver gravarLinhaDeAprovacao). Uma peça
+  // que falhar não derruba as outras: ela vira um item com `erro`, e a
+  // página mostra o aviso só naquele quadro.
+  var ids = idsDaLinhaDeAprovacao(linha.fileId);
+  var nomes = String(linha.nomeArquivo || '').split('|');
+  if (!ids.length) {
+    return { ok: false, error: 'Esse link não tem nenhuma peça vinculada.' };
   }
 
+  var pecas = ids.map(function (id, i) {
+    var nomeFallback = nomes[i] || linha.nomeArquivo || '';
+    var arquivo;
+    try {
+      arquivo = DriveApp.getFileById(id);
+    } catch (e) {
+      return { nome: nomeFallback, erro: 'Não consegui carregar essa peça — pode ter sido movida ou apagada do Drive.' };
+    }
+
+    var tipo = arquivo.getMimeType();
+
+    // VÍDEO nunca vai embutido: um vídeo passa dos 25MB que cabem na
+    // resposta do Apps Script já na primeira tentativa (era exatamente
+    // isso que dava "pode ter sido movida ou apagada do Drive" mesmo com
+    // o arquivo lá — o erro real era de tamanho, não de arquivo sumido).
+    // Em vez disso, o player do próprio Drive por iframe.
+    if (tipo.indexOf('video/') === 0) {
+      liberarArquivoParaAprovacao(arquivo); // garante links antigos também
+      return {
+        nome: arquivo.getName(),
+        mimeType: tipo,
+        ehVideo: true,
+        previewUrl: 'https://drive.google.com/file/d/' + id + '/preview'
+      };
+    }
+
+    try {
+      var blob = arquivo.getBlob();
+      var bytes = blob.getBytes();
+      var LIMITE_BYTES = 25 * 1024 * 1024;
+      if (bytes.length > LIMITE_BYTES) {
+        // Imagem gigante: em vez de falhar, cai no mesmo player do Drive.
+        liberarArquivoParaAprovacao(arquivo);
+        return {
+          nome: arquivo.getName(), mimeType: tipo, ehVideo: false,
+          previewUrl: 'https://drive.google.com/file/d/' + id + '/preview'
+        };
+      }
+      return {
+        nome: arquivo.getName(),
+        mimeType: blob.getContentType(),
+        ehVideo: false,
+        base64: Utilities.base64Encode(bytes)
+      };
+    } catch (e2) {
+      return { nome: nomeFallback, erro: 'Não consegui carregar essa peça — pode ter sido movida ou apagada do Drive.' };
+    }
+  });
+
+  var primeira = pecas[0];
   return {
     ok: true,
     cliente: linha.cliente,
@@ -227,8 +341,11 @@ function buscarAprovacaoPublica(codigo) {
     status: linha.status,
     respostaTexto: linha.respostaTexto,
     pins: parsearPins(linha.pins),
-    base64: imagem.base64,
-    mimeType: imagem.mimeType
+    pecas: pecas,
+    // Campos antigos, só pra uma aba já aberta com a versão anterior do
+    // aprovar.html não quebrar de vez enquanto o GitHub Pages atualiza.
+    base64: primeira.base64 || null,
+    mimeType: primeira.mimeType || null
   };
 }
 

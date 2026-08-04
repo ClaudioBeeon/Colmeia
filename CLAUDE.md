@@ -524,6 +524,41 @@ comigo" é uma decisão de trabalho — o incidente é a prova de que não podia
 Ao criar algo novo, usar esse critério: preferência de exibição → localStorage; decisão que doeria
 perder → planilha.
 
+## Link de aprovação: várias peças, e vídeo pelo player do Drive (2026-08-04)
+
+Três coisas quebradas no link de aprovação, corrigidas juntas:
+
+**1. Não dava pra mandar mais de uma peça.** O menu de escolha era de item único (clicava numa peça
+e fechava), então "dois vídeos no mesmo link" era impossível. Agora é caixa de seleção, **todas
+marcadas por padrão** (quem abre esse menu quase sempre quer mandar tudo que subiu), com um botão
+"Gerar link" no fim. Na planilha, vários arquivos vão na MESMA célula separados por `|`
+(`gravarLinhaDeAprovacao`/`idsDaLinhaDeAprovacao`, Aprovacao.gs) — id do Drive nunca tem esse
+caractere, e linha antiga com um id só continua sendo lida como uma lista de um item, sem migração.
+
+**2. O link aparecia num aviso que sumia.** Quando o navegador recusava a cópia automática
+(`navigator.clipboard` falha sem permissão/foco), o único lugar onde o link existia era um toast de
+alguns segundos — o Cláudio via "o link aparecer rápido e sumir". Agora o link vira uma **fala da
+Bee** (`mostrarLinkDeAprovacaoDaBee`, js/detalhe-modal.js), escrito por extenso e com botão de
+copiar, no mesmo `#beeInlineAvisos` das outras falas dela — não some e sobrevive à lista de
+comentários ser redesenhada.
+
+**3. Vídeo nunca abria** ("Não consegui carregar essa peça — pode ter sido movida ou apagada do
+Drive", com o arquivo lá). A mensagem era enganosa: `buscarAprovacaoPublica` mandava a peça
+embutida em base64, e qualquer vídeo estoura o limite de 25MB do Apps Script — o `catch` genérico
+traduzia o erro de tamanho como "arquivo sumido". Agora **vídeo nunca vai embutido**: o arquivo é
+liberado como "qualquer pessoa com o link" (`liberarArquivoParaAprovacao`) e a página mostra o
+player do próprio Drive num iframe. Imagem continua em base64 (funciona bem e não precisa expor);
+imagem grande demais cai no mesmo player, em vez de falhar.
+
+**Sobre liberar o arquivo** (decisão do Cláudio, 2026-08-04): libera SÓ o arquivo mandado pra
+aprovação, nunca a pasta. É o único jeito de vídeo funcionar numa página sem login — e o cliente ia
+ver a peça de qualquer forma. Falhar aqui não impede gerar o link (imagem segue por base64), por
+isso `liberarArquivoParaAprovacao` não estoura erro.
+
+Uma peça que falhar não derruba as outras: ela vira um item com `erro` e o aviso aparece só naquele
+quadro. Pins continuam só na primeira peça e só em imagem embutida — no player do Drive o clique é
+do player, não dá pra saber onde caiu.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização
