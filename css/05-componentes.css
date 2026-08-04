@@ -668,7 +668,11 @@ body.card-aberto .bee-painel { display: none; }
   width: auto; max-width: none; flex: 1; min-width: 0;
   margin-right: 0; opacity: 1; pointer-events: auto;
   border-radius: 26px; transition: none;
+  /* Branco liso, sem o degradê creme do painel lateral: numa área grande
+     como essa aquele topo puxava pro acinzentado e ficava sujo. */
+  background: var(--card-bg);
 }
+[data-theme="dark"] .bee-painel.bee-painel-na-pagina { background: #201F27; }
 /* Sem o "x" de fechar aqui: essa página é a casa da Bee, não tem pra
    onde fechar — quem sai daqui troca de aba na barra lateral. */
 .bee-painel-na-pagina #beeFechar { display: none; }

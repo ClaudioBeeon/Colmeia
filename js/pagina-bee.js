@@ -25,7 +25,39 @@
 // porque o Runrun.it não conta depois do fato quem fez o quê e quando
 // (ver a explicação inteira em Planilha.gs, seção FEED DA ABA "BEE").
 
-let beeFeedEventos = null; // null = ainda não buscou
+let beeFeedEventos = null;      // null = ainda não tem nada pra mostrar
+let beeFeedAtualizando = false; // true = tem uma busca em andamento
+
+// O feed guardado no navegador. Sem isso, cada vez que a aba abria a
+// pessoa via "Carregando..." numa tela em branco e esperava o Drive/
+// Runrun.it responderem — mesmo tendo visto a mesma lista minutos antes.
+// Mesmo padrão do snapshot do quadro (js/pessoas-fotos.js): guarda por
+// designer (o computador pode ser compartilhado) e com data.
+const BEE_FEED_CACHE_KEY = "colmeia_bee_feed_v1";
+const BEE_FEED_CACHE_VALIDADE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function salvarFeedNoNavegador(eventos) {
+  if (!DESIGNER_LOGADO || !Array.isArray(eventos)) return;
+  try {
+    localStorage.setItem(BEE_FEED_CACHE_KEY, JSON.stringify({
+      designer: DESIGNER_LOGADO, quando: Date.now(), eventos,
+    }));
+  } catch (err) {
+    // Espaço cheio/aba privada: sem cache o feed só volta a abrir vazio.
+    try { localStorage.removeItem(BEE_FEED_CACHE_KEY); } catch (e) { /* segue */ }
+  }
+}
+
+function restaurarFeedDoNavegador() {
+  if (!DESIGNER_LOGADO) return null;
+  let salvo = null;
+  try { salvo = JSON.parse(localStorage.getItem(BEE_FEED_CACHE_KEY) || "null"); }
+  catch (err) { return null; }
+  if (!salvo || !Array.isArray(salvo.eventos) || !salvo.eventos.length) return null;
+  if (!nomesCorrespondem(salvo.designer, DESIGNER_LOGADO)) return null;
+  if (!salvo.quando || (Date.now() - salvo.quando) > BEE_FEED_CACHE_VALIDADE_MS) return null;
+  return salvo.eventos;
+}
 
 // Onde o #beePainel morava antes de ser trazido pra cá — guardado pra
 // devolver ele exatamente no mesmo lugar quando a pessoa sai da página
@@ -61,6 +93,13 @@ function abrirPaginaBee() {
     carregarRecentesDaBee();
   }
 
+  // Mostra na hora o que já foi visto da última vez (guardado no
+  // navegador) e atualiza por baixo — em vez de deixar a tela em branco
+  // esperando o Drive/Runrun.it responderem.
+  if (beeFeedEventos === null) {
+    const doCache = restaurarFeedDoNavegador();
+    if (doCache) beeFeedEventos = doCache;
+  }
   renderFeedDaBee();
   carregarFeedDaBee();
 }
@@ -76,14 +115,27 @@ function fecharPaginaBee() {
 }
 
 async function carregarFeedDaBee() {
+  beeFeedAtualizando = true;
+  renderFeedDaBee(); // acende a faixinha "atualizando" por cima do que já está lá
+
   const [entregues, atividades, anotados] = await Promise.all([
     chamarBackend({ acao: "buscarEntreguesDoDesigner", designer: DESIGNER_LOGADO, limite: 20 }),
     chamarBackend({ acao: "buscarAtividadesDrive", designer: DESIGNER_LOGADO }),
     chamarBackend({ acao: "buscarFeedEventos", designer: DESIGNER_LOGADO }),
   ]);
 
+  beeFeedAtualizando = false;
+
   // Trocou de página enquanto carregava — não teria mais onde desenhar.
   if (document.getElementById("page-bee").hidden) return;
+
+  // Nenhuma das três respondeu (internet fora): mantém na tela o que já
+  // estava, em vez de apagar tudo e mostrar "nada por aqui" — que seria
+  // mentira. Distinguir "não tem" de "não sei" é a regra do chamarBackend.
+  if (caiuARede(entregues) && caiuARede(atividades) && caiuARede(anotados)) {
+    renderFeedDaBee();
+    return;
+  }
 
   const eventos = [];
   if (!caiuARede(entregues) && entregues.ok) {
@@ -107,6 +159,7 @@ async function carregarFeedDaBee() {
   }
   eventos.sort((a, b) => b.quando - a.quando);
   beeFeedEventos = eventos;
+  salvarFeedNoNavegador(eventos);
   renderFeedDaBee();
 }
 
@@ -128,17 +181,29 @@ function renderFeedDaBee() {
   const alvo = document.getElementById("beeFeedLista");
   if (!alvo) return;
 
+  // A faixinha de "atualizando" fica POR CIMA do feed que já está na
+  // tela — o conteúdo antigo continua visível e legível embaixo dela,
+  // em vez de sumir e virar um "Carregando..." numa tela vazia.
+  const faixa = beeFeedAtualizando
+    ? `<div class="bee-feed-atualizando"><span class="bee-feed-spinner"></span>Buscando o que rolou...</div>`
+    : "";
+
+  // Primeira vez de todas (sem nada guardado no navegador): aí sim não
+  // tem o que mostrar além do aviso.
   if (beeFeedEventos === null) {
-    alvo.innerHTML = `<p class="bee-feed-vazio">Carregando...</p>`;
+    alvo.innerHTML = beeFeedAtualizando
+      ? `<div class="bee-feed-atualizando primeira"><span class="bee-feed-spinner"></span>Buscando o que rolou nas suas tarefas...</div>`
+      : `<p class="bee-feed-vazio">Nada pra mostrar agora.</p>`;
     return;
   }
   if (!beeFeedEventos.length) {
-    alvo.innerHTML = `<p class="bee-feed-vazio">Nada por aqui ainda — assim que você entregar uma tarefa, subir um arquivo ou alguém mexer numa tarefa sua, aparece nesse feed.</p>`;
+    alvo.innerHTML = faixa +
+      `<p class="bee-feed-vazio">Nada por aqui ainda — assim que você entregar uma tarefa, subir um arquivo ou alguém mexer numa tarefa sua, aparece nesse feed.</p>`;
     return;
   }
 
   let ultimoLabel = null;
-  const blocos = [];
+  const blocos = [faixa];
   beeFeedEventos.forEach(ev => {
     const label = beeFeedDataLabel(ev.quando);
     if (label !== ultimoLabel) {

@@ -1644,16 +1644,14 @@ body.card-aberto .quick-access-panel { display: none; }
 }
 .bee-painel-slot { min-width: 0; min-height: 0; display: flex; }
 
-/* A moldura do feed: fundo um tiquinho mais escuro que o da página, pra
-   os cards brancos "flutuarem" dentro dela (é o que dá o ar clean da
-   referência). Sem isso o card branco encostava direto no fundo. */
+/* Sem moldura cinza: os cards brancos sentam direto no fundo da página
+   (o cinza atrás deles ficava estranho — pedido do Cláudio). Mesmo
+   princípio de .column no quadro, que também é transparente. */
 .bee-feed-col {
   min-height: 0; overflow-y: auto;
-  background: var(--page-bg-fundo, rgba(0, 0, 0, 0.025));
-  border-radius: 26px; padding: 16px 14px 20px;
+  background: transparent; padding: 2px 4px 20px;
   display: flex; flex-direction: column; gap: 16px;
 }
-[data-theme="dark"] .bee-feed-col { background: rgba(0, 0, 0, 0.18); }
 
 /* Barra de rolagem discreta: some em repouso, aparece só com o mouse
    em cima (pedido do Cláudio no protótipo). */
@@ -1669,6 +1667,31 @@ body.card-aberto .quick-access-panel { display: none; }
   .bee-painel-slot { min-height: 420px; }
 }
 .bee-feed-vazio { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 20px; }
+
+/* "Buscando o que rolou..." — fica GRUDADA no topo da lista enquanto
+   rola (position: sticky), por cima do feed que já está na tela. O
+   conteúdo antigo continua visível embaixo: quem já viu o feed não
+   perde ele de vista só porque uma atualização começou. */
+.bee-feed-atualizando {
+  position: sticky; top: 0; z-index: 3; align-self: center;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 999px; padding: 7px 15px;
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  box-shadow: var(--shadow-card);
+}
+.bee-feed-atualizando.primeira {
+  position: static; margin: 40px auto; /* tela vazia: centralizada, sem grudar */
+}
+.bee-feed-spinner {
+  width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--border); border-top-color: var(--kanban-yellow);
+  animation: beeFeedGira 0.7s linear infinite;
+}
+@keyframes beeFeedGira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .bee-feed-spinner { animation-duration: 2.4s; }
+}
 
 .bee-feed-dia {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
