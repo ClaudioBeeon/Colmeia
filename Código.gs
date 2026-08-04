@@ -237,6 +237,14 @@ function handleRequest(e, method) {
         output = beeInspirar(body.taskId, body.idOriginal);
       } else if (body.acao === 'beeCompararVersoes') {
         output = compararVersoesDoCard(body.taskId);
+      } else if (body.acao === 'gerarLinkDeAprovacao') {
+        output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor);
+      } else if (body.acao === 'buscarAprovacaoPublica') {
+        // Ação PÚBLICA — chamada por aprovar.html, sem login nenhum do
+        // Colmeia (ver Aprovacao.gs). Só o código aleatório protege.
+        output = buscarAprovacaoPublica(body.codigo);
+      } else if (body.acao === 'responderAprovacaoPublica') {
+        output = responderAprovacaoPublica(body.codigo, body.aprovado, body.respostaTexto);
       } else if (body.acao === 'beeGerarImagem') {
         // Gemini 2.5 Flash Image ("Nano Banana") — ver NanoBanana.gs. O
         // caminho pela Adobe Firefly foi abandonado: o produto que a Beeon

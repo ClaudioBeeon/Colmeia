@@ -854,6 +854,7 @@ function renderDetail() {
               <button type="button" class="download-all-btn" id="downloadAllBtn" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
               ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>` : ""}
               ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="beeCompararVersoesBtn" title="A Bee compara as duas versões mais recentes (arquivos '- v1', '- v2'...) da pasta do card">🔍 comparar versões</button>` : ""}
+              ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="gerarLinkAprovacaoBtn" title="Gera um link sem login pro cliente aprovar (ou pedir ajuste) na peça mais recente da pasta do card">🔗 link de aprovação</button>` : ""}
             </div>
             <div class="attach-box">
               <div class="attach-list" id="attachList">
@@ -1528,6 +1529,9 @@ function renderDetail() {
   const beeCompararVersoesBtn = document.getElementById("beeCompararVersoesBtn");
   if (beeCompararVersoesBtn) beeCompararVersoesBtn.addEventListener("click", () => compararVersoesComABee(tasks[detailIdx] || task, beeCompararVersoesBtn));
 
+  const gerarLinkAprovacaoBtn = document.getElementById("gerarLinkAprovacaoBtn");
+  if (gerarLinkAprovacaoBtn) gerarLinkAprovacaoBtn.addEventListener("click", () => gerarLinkDeAprovacaoParaTarefa(tasks[detailIdx] || task, gerarLinkAprovacaoBtn));
+
   // Um botão só, que vai e volta: nos comentários ele leva pra Bee, e
   // dentro da Bee ele traz de volta pros comentários.
   const chatIconeBee = document.getElementById("chatIconeBee");
@@ -1773,6 +1777,48 @@ async function subirArquivoArrastadoParaCard(task, arquivo) {
 }
 
 wireArrastarArquivoParaCard();
+
+/**
+ * "Link de aprovação": gera um link sem login pro cliente aprovar (ou
+ * pedir ajuste) na peça mais recente da pasta do card do Drive (ver
+ * gerarLinkDeAprovacao, Aprovacao.gs) e já copia pro clipboard, pronto
+ * pra colar no WhatsApp/e-mail do cliente.
+ *
+ * A URL completa é montada AQUI, não no backend: só o navegador sabe o
+ * endereço de onde o Colmeia está publicado agora (mesma técnica do
+ * ROTA_BASE em js/roteador-url.js) — assim não quebra quando o domínio
+ * mudar pra colmeia.beeon.com.br.
+ */
+async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
+  if (!task || !task.id) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Gerando link...";
+
+  const data = await chamarBackend({
+    acao: "gerarLinkDeAprovacao",
+    taskId: task.id,
+    cliente: task.client,
+    tituloTarefa: task.title,
+  });
+
+  btn.disabled = false;
+  btn.textContent = original;
+
+  if (!data.ok) {
+    mostrarToast(data.error || "Não consegui gerar o link de aprovação agora.", "erro");
+    return;
+  }
+
+  const base = new URL(".", location.href).href;
+  const url = base + "aprovar.html?codigo=" + data.codigo;
+  try {
+    await navigator.clipboard.writeText(url);
+    mostrarToast(`Link de aprovação copiado — "${data.nomeArquivo}"`, "sucesso");
+  } catch (err) {
+    mostrarToast(`Link gerado (não consegui copiar sozinho): ${url}`);
+  }
+}
 
 function updateNowPlaying() {
   const el = document.getElementById("nowPlaying");
