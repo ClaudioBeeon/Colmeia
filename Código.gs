@@ -327,6 +327,8 @@ function handleRequest(e, method) {
         output = buscarAtividadesDrive(body.designer);
       } else if (body.acao === 'buscarProgressoClientes') {
         output = buscarProgressoMensalClientes();
+      } else if (body.acao === 'buscarTermometroClientes') {
+        output = buscarTermometroClientes();
       } else if (body.acao === 'listarClientesOcultos') {
         output = listarClientesOcultos();
       } else if (body.acao === 'ocultarCliente') {

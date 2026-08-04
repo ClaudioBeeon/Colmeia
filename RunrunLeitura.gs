@@ -799,6 +799,113 @@ function buscarProgressoMensalClientes() {
   return resultado;
 }
 
+var CACHE_TERMOMETRO_CLIENTES = 'termometroClientes_v1';
+
+/**
+ * "Termômetro do cliente" — pedido do Cláudio (2026-08-03): "está mais
+ * exigente que o normal esse mês?". Mede isso de forma OBJETIVA, sem IA
+ * opinando: a TAXA DE ALTERAÇÃO de cada cliente (quantas tarefas viraram
+ * subtarefa "Alteração", ver ehAlteracao abaixo — mesma regra de
+ * ehTarefaDeAlteracao, js/detalhe-alteracao.js) nesse mês, comparada com
+ * a média dos meses anteriores que a varredura consegue enxergar.
+ *
+ * Reusa o MESMO jeito de buscar de buscarProgressoMensalClientes, logo
+ * acima (todas as tarefas abertas+fechadas dos 3 designers) mas bucketa
+ * por MÊS (a partir da tag [MES+ANO] no campo Projeto — ver
+ * extrairMesAnoDoProjeto, Drive.gs) em vez de olhar só o mês atual —
+ * dado separado, cache próprio (mesmos 10 min).
+ *
+ * Só roda quando a página que mostra isso é aberta — NUNCA no polling de
+ * 60s do quadro (mesmo cuidado de buscarExtrasRunrunCompleto).
+ */
+function buscarTermometroClientes() {
+  var cache = CacheService.getScriptCache();
+  var cacheado = cache.get(CACHE_TERMOMETRO_CLIENTES);
+  if (cacheado) {
+    try { return JSON.parse(cacheado); } catch (e) { /* recalcula abaixo */ }
+  }
+
+  var idsPorEmail = buscarIdsResponsaveisRunrun();
+  var mapaVinculos = buscarVinculosDoPainel();
+  var buckets = {}; // "cliente||anoMesIndex" -> { cliente, mesChave, originais, alteracoes }
+
+  function ehAlteracao(t) {
+    return !!t.parent_task_id && normalizarNomeParaComparar(t.title || '').indexOf('alteracao') !== -1;
+  }
+  function garantir(cliente, mesChave) {
+    var k = cliente + '||' + mesChave;
+    if (!buckets[k]) buckets[k] = { cliente: cliente, mesChave: mesChave, originais: 0, alteracoes: 0 };
+    return buckets[k];
+  }
+  function processar(t) {
+    if (tarefaEhCardMae(t)) return;
+    var mesInfo = extrairMesAnoDoProjeto(extrairNomeProjeto(t));
+    if (!mesInfo) return; // sem tag de mês no projeto — não dá pra bucketar, ignora
+    var mesChave = mesInfo.ano + '-' + mesInfo.mesIndex;
+    var cliente = resolverNomeCanonico(t.client_name || 'Sem cliente', mapaVinculos);
+    var reg = garantir(cliente, mesChave);
+    if (ehAlteracao(t)) reg.alteracoes++;
+    else reg.originais++;
+  }
+
+  Object.keys(RUNRUN_USUARIOS).forEach(function (email) {
+    var runrunId = idsPorEmail[email];
+    if (!runrunId) return;
+    ['false', 'true'].forEach(function (fechada) {
+      var pagina = 1;
+      while (pagina <= 5) {
+        var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
+          '&is_closed=' + fechada + '&limit=100&page=' + pagina);
+        if (!Array.isArray(lote) || lote.length === 0) break;
+        lote.forEach(processar);
+        if (lote.length < 100) break;
+        pagina++;
+      }
+    });
+  });
+
+  var mesAtualInfo = extrairMesAnoDoProjeto(tagDoMesAtual());
+  var mesAtualChave = mesAtualInfo ? (mesAtualInfo.ano + '-' + mesAtualInfo.mesIndex) : null;
+
+  var porCliente = {};
+  Object.keys(buckets).forEach(function (k) {
+    var b = buckets[k];
+    if (!porCliente[b.cliente]) porCliente[b.cliente] = { atual: null, anteriores: [] };
+    var totalMes = b.originais + b.alteracoes;
+    var registro = { taxa: totalMes > 0 ? (b.alteracoes / totalMes) : null, total: totalMes };
+    if (b.mesChave === mesAtualChave) porCliente[b.cliente].atual = registro;
+    else if (registro.taxa !== null) porCliente[b.cliente].anteriores.push(registro);
+  });
+
+  var lista = Object.keys(porCliente)
+    .map(function (cliente) {
+      var reg = porCliente[cliente];
+      var mediaAnterior = reg.anteriores.length
+        ? reg.anteriores.reduce(function (s, r) { return s + r.taxa; }, 0) / reg.anteriores.length
+        : null;
+      return {
+        cliente: cliente,
+        taxaAtual: reg.atual ? reg.atual.taxa : null,
+        totalAtual: reg.atual ? reg.atual.total : 0,
+        mediaAnterior: mediaAnterior,
+        mesesAnteriores: reg.anteriores.length
+      };
+    })
+    // Só entra quem tem volume mínimo esse mês (senão 1 tarefa virando
+    // alteração já dá "100%" e assusta à toa sem significar nada) e
+    // histórico suficiente pra ter uma média de verdade pra comparar.
+    .filter(function (r) { return r.totalAtual >= 2 && r.taxaAtual !== null && r.mediaAnterior !== null; })
+    .map(function (r) {
+      r.diferenca = r.taxaAtual - r.mediaAnterior; // positivo = pedindo mais alteração que o normal
+      return r;
+    })
+    .sort(function (a, b) { return b.diferenca - a.diferenca; });
+
+  var resultado = { ok: true, clientes: lista, mesAtual: mesAtualChave };
+  try { cache.put(CACHE_TERMOMETRO_CLIENTES, JSON.stringify(resultado), 600); } catch (e) { /* segue sem cache */ }
+  return resultado;
+}
+
 function buscarDescricao(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
   var bruto = runrunFetch('/tasks/' + taskId + '/description');

@@ -1244,6 +1244,16 @@ body.card-aberto .quick-access-panel { display: none; }
 .ch-modal-body { gap: 16px; font-family: 'Questrial', var(--font-body); }
 .ch-section-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: -6px; }
 .ch-atend-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--page-bg); border-radius: 14px; }
+
+/* Termômetro do cliente — só aparece quando a taxa de alteração desse
+   mês está bem acima da média (ver atualizarTermometroDoCliente,
+   js/paginas-designers.js) */
+.ch-termometro {
+  padding: 10px 14px; border-radius: 14px; font-size: 13px; font-weight: 600;
+  margin-top: 10px;
+}
+.ch-termometro-alto { background: #fdf1e2; color: #c9720a; }
+[data-theme="dark"] .ch-termometro-alto { background: rgba(201,114,10,0.16); color: #f0a850; }
 .ch-atend-foto { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #D9D9D9; }
 .ch-atend-label { font-size: 11px; color: var(--text-muted); }
 .ch-atend-nome { font-size: 14px; color: var(--text-primary); }

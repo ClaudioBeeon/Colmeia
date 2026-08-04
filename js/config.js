@@ -219,6 +219,7 @@ const ACOES_DEMORADAS = [
   "listarPastasClientesDrive",  // varre pastas do Drive
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive
   "buscarProgressoClientes",
+  "buscarTermometroClientes", // varre todas as tarefas dos 3 designers, igual buscarProgressoClientes
   "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
   "buscarImagemCheiaDrive", // idem, mas pra imagem do Drive ampliada (ver js/notificacoes-uploads.js)
   "beeGerarImagem",       // gera imagem de verdade (Gemini, ver NanoBanana.gs)
