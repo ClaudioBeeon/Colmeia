@@ -254,6 +254,17 @@ function buildRepassePage() {
   // o contador só volta a subir quando chegar tarefa nova de verdade.
   marcarRepasseComoVisto(tarefasParaRepasse());
   atualizarBadgeRepasse();
+
+  // O contador da aba "Aprovações" é buscado mesmo sem entrar nela — é o
+  // que faz o número aparecer já na chegada ("tem 4 esperando resposta").
+  // Sem travar nada: se falhar, a aba continua funcionando quando aberta.
+  if (repasseViewMode !== "aprovacoes") {
+    carregarAprovacoesDoRepasse().then(lista => {
+      if (lista === null) return;
+      aprovacoesCache = lista;
+      atualizarBadgeAprovacoes();
+    });
+  }
 }
 
 // Formato curto (dd/mm, sem ano) usado no "pill" de datas do card de
@@ -768,6 +779,14 @@ function renderRepasse() {
   const board = document.getElementById("repasseBoard");
   if (!board) return;
 
+  // A aba "Aprovações" não olha pras tarefas do quadro: ela vem da
+  // planilha de aprovações (o que foi mandado pro cliente). Por isso sai
+  // antes de todo o filtro de tarefas abaixo.
+  if (repasseViewMode === "aprovacoes") {
+    renderAprovacoesRepasse(board);
+    return;
+  }
+
   let lista = tarefasParaRepasse();
 
   if (repasseSearch.trim()) {
@@ -1029,6 +1048,215 @@ function wireRepasseCards(lista) {
     });
   });
 
+}
+
+// ============================================
+// ABA "APROVAÇÕES" — o que foi mandado pro cliente e ainda não voltou
+// ============================================
+//
+// Protótipo aprovado pelo Cláudio (2026-08-04): três colunas por
+// situação, em vez de uma lista só — "o que preciso cobrar" e "o que
+// voltou pedindo ajuste" ficam separados do que já está resolvido.
+//
+// Diferente das outras abas, essa NÃO sai das tarefas do quadro: os
+// dados vêm da planilha de aprovações (listarAprovacoesPendentes,
+// Aprovacao.gs), porque um link de aprovação existe independente de a
+// tarefa ainda estar aberta no Runrun.it.
+
+let aprovacoesCache = null;   // null = ainda não buscou nesta sessão
+
+// Depois de quantos dias esperando o tempo vira alerta vermelho. É isso
+// que faz a aba responder "o que eu preciso cobrar hoje" em vez de ser
+// só um histórico.
+const APROVACAO_DIAS_ALERTA = 3;
+
+const APROVACAO_COLUNAS = [
+  { chave: "pendente", nome: "Aguardando o cliente", dot: "esperando" },
+  { chave: "ajuste", nome: "Pediu ajuste", dot: "ajuste" },
+  { chave: "aprovado", nome: "Aprovadas", dot: "aprovado" },
+];
+
+async function carregarAprovacoesDoRepasse() {
+  const data = await chamarBackend({ acao: "listarAprovacoesPendentes" });
+  if (caiuARede(data) || !data.ok) return null;
+  return data.aprovacoes || [];
+}
+
+function renderAprovacoesRepasse(board) {
+  // Primeira vez na aba: mostra o esqueleto e busca. Nas próximas, já
+  // desenha o que tem e atualiza por baixo (a lista muda quando o
+  // cliente responde, então rebusca sempre que a aba é aberta).
+  if (aprovacoesCache === null) {
+    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Buscando as aprovações...</p>`;
+  } else {
+    desenharAprovacoesRepasse(board);
+  }
+
+  carregarAprovacoesDoRepasse().then(lista => {
+    // Trocou de aba enquanto buscava? Não desenha por cima da outra.
+    if (repasseViewMode !== "aprovacoes") return;
+    if (lista === null) {
+      // Sem rede: mantém o que já estava na tela em vez de zerar.
+      if (aprovacoesCache === null) {
+        board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">Não consegui buscar as aprovações agora.</p>`;
+      }
+      return;
+    }
+    aprovacoesCache = lista;
+    atualizarBadgeAprovacoes();
+    desenharAprovacoesRepasse(board);
+  });
+}
+
+function desenharAprovacoesRepasse(board) {
+  let lista = aprovacoesCache || [];
+
+  if (repasseSearch.trim()) {
+    const alvo = normalizarParaComparar(repasseSearch);
+    lista = lista.filter(a =>
+      normalizarParaComparar(a.cliente || "").includes(alvo) ||
+      normalizarParaComparar(a.tituloTarefa || "").includes(alvo) ||
+      normalizarParaComparar(a.nomeArquivo || "").includes(alvo));
+  }
+
+  if (!lista.length) {
+    board.innerHTML = `<p class="workflow-seq-empty" style="padding:24px;">${repasseSearch.trim()
+      ? "Nenhuma aprovação com esse termo."
+      : "Nenhum link de aprovação enviado ainda. Eles aparecem aqui assim que você gerar um pelo card da tarefa."}</p>`;
+    return;
+  }
+
+  board.innerHTML = APROVACAO_COLUNAS.map(col => {
+    const daColuna = lista.filter(a => (a.status || "pendente") === col.chave);
+    return `
+      <section class="repasse-column aprov-column">
+        <div class="repasse-column-header">
+          <span class="repasse-column-nome"><span class="aprov-dot ${col.dot}"></span>${col.nome}</span>
+          <span class="repasse-column-count">${daColuna.length}</span>
+        </div>
+        <div class="repasse-column-body">
+          ${daColuna.length
+            ? daColuna.map(a => cardDeAprovacaoHTML(a)).join("")
+            : `<p class="aprov-vazio">${textoVazioDaColuna(col.chave)}</p>`}
+        </div>
+      </section>
+    `;
+  }).join("");
+
+  wireCardsDeAprovacao(board);
+}
+
+function textoVazioDaColuna(chave) {
+  if (chave === "pendente") return "Nada esperando resposta agora.";
+  if (chave === "ajuste") return "Quando o cliente pede ajuste, a peça cai aqui — e o comentário dele já entra na tarefa sozinho.";
+  return "Nenhuma aprovada nos últimos 7 dias.";
+}
+
+/** "há 2 dias" / "hoje, 09:40" — e se passou do limite, vira alerta. */
+function tempoDeEsperaDaAprovacao(a) {
+  const quando = Number(a.respondidoEm || a.criadoEm) || 0;
+  if (!quando) return { texto: "", alerta: false };
+
+  const dias = Math.floor((Date.now() - quando) / 86400000);
+  const hora = new Date(quando).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  if ((a.status || "pendente") === "pendente") {
+    if (dias === 0) return { texto: `⏱ enviado hoje, ${hora}`, alerta: false };
+    if (dias === 1) return { texto: "⏱ esperando desde ontem", alerta: false };
+    return { texto: `⏱ esperando há ${dias} dias`, alerta: dias >= APROVACAO_DIAS_ALERTA };
+  }
+
+  const prefixo = a.status === "aprovado" ? "✅ aprovado" : "respondeu";
+  if (dias === 0) return { texto: `${prefixo} hoje, ${hora}`, alerta: false };
+  if (dias === 1) return { texto: `${prefixo} ontem`, alerta: false };
+  return { texto: `${prefixo} há ${dias} dias`, alerta: false };
+}
+
+function cardDeAprovacaoHTML(a) {
+  const tempo = tempoDeEsperaDaAprovacao(a);
+  const status = a.status || "pendente";
+  const nomes = String(a.nomeArquivo || "").split("|").filter(Boolean);
+  const legendaPecas = a.quantasPecas > 1
+    ? `${a.quantasPecas} peças · ${nomes.join(", ")}`
+    : (nomes[0] || "");
+
+  return `
+    <article class="repasse-card aprov-card ${tempo.alerta ? "urgente" : ""}" data-codigo="${escaparHTML(a.codigo)}" data-task-id="${escaparHTML(String(a.taskId || ""))}">
+      <div class="repasse-card-top">
+        <span class="repasse-client-pill">${escaparHTML(a.cliente || "Sem cliente")}</span>
+        <span class="aprov-thumb ${a.ehVideo ? "video" : "img"}">${a.ehVideo ? "🎬" : "🖼️"}</span>
+      </div>
+      <div class="repasse-card-title">${escaparHTML(a.tituloTarefa || "Peça pra aprovação")}</div>
+      ${legendaPecas ? `<div class="aprov-peca">${escaparHTML(legendaPecas)}</div>` : ""}
+      <div class="repasse-card-tempo ${tempo.alerta ? "aprov-alerta" : ""}">${tempo.texto}</div>
+      ${a.respostaTexto ? `<div class="aprov-resposta">“${escaparHTML(a.respostaTexto)}”</div>` : ""}
+      ${a.quantosPins ? `<span class="aprov-pins">📍 ${a.quantosPins} ponto${a.quantosPins > 1 ? "s" : ""} marcado${a.quantosPins > 1 ? "s" : ""}</span>` : ""}
+      <div class="repasse-card-actions">
+        ${status === "pendente"
+          ? `<button type="button" class="repasse-btn ${tempo.alerta ? "repasse-btn-ficar" : ""}" data-acao="whats">💬 Cobrar no WhatsApp</button>
+             <button type="button" class="repasse-btn" data-acao="copiar">🔗 copiar link</button>`
+          : status === "ajuste"
+            ? `<button type="button" class="repasse-btn repasse-btn-ficar" data-acao="abrir">Abrir tarefa</button>
+               <button type="button" class="repasse-btn" data-acao="copiar">🔗 novo link</button>`
+            : `<button type="button" class="repasse-btn" data-acao="abrir">Abrir tarefa</button>`}
+      </div>
+    </article>
+  `;
+}
+
+function urlDeAprovacao(codigo) {
+  // Mesma técnica do resto do app: a base vem do endereço em que o
+  // Colmeia está publicado agora (ver ROTA_BASE, js/roteador-url.js).
+  return new URL(".", location.href).href + "aprovar.html?codigo=" + codigo;
+}
+
+function wireCardsDeAprovacao(board) {
+  board.querySelectorAll(".aprov-card").forEach(card => {
+    const codigo = card.dataset.codigo;
+    const taskId = card.dataset.taskId;
+
+    card.querySelectorAll("[data-acao]").forEach(btn => {
+      btn.addEventListener("click", async ev => {
+        ev.stopPropagation();
+        const acao = btn.dataset.acao;
+
+        if (acao === "abrir") {
+          if (taskId) abrirTarefaPorId(Number(taskId));
+          return;
+        }
+
+        if (acao === "copiar") {
+          const url = urlDeAprovacao(codigo);
+          try {
+            await navigator.clipboard.writeText(url);
+            mostrarToast("Link de aprovação copiado.", "sucesso");
+          } catch (err) {
+            mostrarToast(`Link (não consegui copiar sozinho): ${url}`);
+          }
+          return;
+        }
+
+        if (acao === "whats") {
+          // Sem número no link (wa.me/?text=...), igual já é feito na
+          // página de aprovação: abre o seletor de conversa do próprio
+          // WhatsApp pra você escolher o grupo do cliente, em vez de o
+          // Colmeia decidir um número.
+          const titulo = card.querySelector(".repasse-card-title")?.textContent || "a peça";
+          const texto = `Oi! Passando pra saber se conseguiu dar uma olhada em "${titulo}".\n\n${urlDeAprovacao(codigo)}`;
+          window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+        }
+      });
+    });
+  });
+}
+
+/** O contador vermelho na aba: só o que precisa de você (esperando + ajuste). */
+function atualizarBadgeAprovacoes() {
+  const badge = document.getElementById("repasseAprovBadge");
+  if (!badge) return;
+  const precisamDeMim = (aprovacoesCache || []).filter(a => (a.status || "pendente") !== "aprovado").length;
+  badge.textContent = precisamDeMim > 99 ? "99+" : String(precisamDeMim);
+  badge.hidden = precisamDeMim === 0;
 }
 
 // Acha, na sequência já carregada, quem vem logo depois do responsável

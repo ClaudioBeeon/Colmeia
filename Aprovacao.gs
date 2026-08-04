@@ -470,6 +470,62 @@ function listarAprovacoesDoCliente(cliente) {
   return { ok: true, aprovacoes: lista.slice(0, 30) };
 }
 
+/**
+ * TODAS as aprovações que ainda pedem atenção, de todos os clientes —
+ * é o que alimenta a aba "Aprovações" da Fila de repasse (protótipo
+ * aprovado pelo Cláudio em 2026-08-04).
+ *
+ * O que entra:
+ *   - `pendente` e `ajuste`: sempre, independente da idade. Enquanto o
+ *     cliente não responde (ou pediu ajuste e ninguém mexeu), continua
+ *     sendo trabalho em aberto.
+ *   - `aprovado`: só os últimos 7 dias. Serve pra fechar o ciclo ("saiu
+ *     hoje"), não pra virar um arquivo morto que só cresce.
+ */
+var APROVADAS_JANELA_DIAS = 7;
+
+function listarAprovacoesPendentes() {
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var corteAprovadas = new Date().getTime() - APROVADAS_JANELA_DIAS * 24 * 60 * 60 * 1000;
+  var lista = [];
+
+  for (var i = 1; i < linhas.length; i++) {
+    if (!linhas[i][0]) continue;
+    var obj = linhaParaObjetoDeAprovacao(linhas[i]);
+    var status = obj.status || 'pendente';
+
+    if (status === 'aprovado') {
+      var quando = Number(obj.respondidoEm || obj.criadoEm) || 0;
+      if (quando < corteAprovadas) continue;
+    }
+
+    lista.push({
+      codigo: obj.codigo,
+      taskId: obj.taskId,
+      cliente: obj.cliente,
+      tituloTarefa: obj.tituloTarefa,
+      // Vários arquivos vão separados por "|" na mesma célula (ver
+      // gravarLinhaDeAprovacao) — o front mostra "2 peças · nome, nome".
+      nomeArquivo: obj.nomeArquivo,
+      quantasPecas: idsDaLinhaDeAprovacao(obj.fileId).length || 1,
+      ehVideo: String(obj.mimeType || '').indexOf('video/') !== -1,
+      status: status,
+      criadoEm: obj.criadoEm,
+      respondidoEm: obj.respondidoEm,
+      respostaTexto: obj.respostaTexto,
+      quantosPins: parsearPins(obj.pins).length
+    });
+  }
+
+  // Mais recente primeiro dentro de cada coluna — quem agrupa por status
+  // é o front-end (ver renderAprovacoesRepasse, js/pagina-repasse.js).
+  lista.sort(function (a, b) {
+    return Number(b.respondidoEm || b.criadoEm || 0) - Number(a.respondidoEm || a.criadoEm || 0);
+  });
+  return { ok: true, aprovacoes: lista };
+}
+
 function acharLinhaDeAprovacao(codigo) {
   var sheet = getAprovacoesSheet();
   var linhas = sheet.getDataRange().getValues();

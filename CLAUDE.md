@@ -570,6 +570,32 @@ Uma peça que falhar não derruba as outras: ela vira um item com `erro` e o avi
 quadro. Pins continuam só na primeira peça e só em imagem embutida — no player do Drive o clique é
 do player, não dá pra saber onde caiu.
 
+## Aba "Aprovações" na Fila de repasse (2026-08-04)
+
+Protótipo aprovado pelo Cláudio antes de implementar. Uma 5ª aba na Fila de repasse com o que foi
+mandado pro cliente e ainda não voltou — três colunas por situação (**Aguardando o cliente** /
+**Pediu ajuste** / **Aprovadas**), em vez de uma lista só: assim "o que preciso cobrar" e "o que
+voltou pedindo ajuste" não se misturam com o que já está resolvido.
+
+**Diferente das outras abas, essa não sai das tarefas do quadro.** `renderRepasse()` desvia pra
+`renderAprovacoesRepasse()` ANTES de qualquer filtro de tarefa: os dados vêm da planilha de
+aprovações (`listarAprovacoesPendentes`, Aprovacao.gs), porque um link de aprovação existe
+independente de a tarefa ainda estar aberta no Runrun.it.
+
+- **`pendente` e `ajuste` entram sempre**, independente da idade (enquanto o cliente não responde,
+  é trabalho em aberto). **`aprovado` só dos últimos 7 dias** (`APROVADAS_JANELA_DIAS`) — serve pra
+  fechar o ciclo, não pra virar arquivo morto que só cresce.
+- **O tempo de espera vira alerta vermelho depois de 3 dias** (`APROVACAO_DIAS_ALERTA`, borda do
+  card + cor do texto). É isso que faz a aba responder "o que preciso cobrar hoje" em vez de ser um
+  histórico passivo.
+- **"Cobrar no WhatsApp" usa `wa.me/?text=` SEM número**, igual já é feito na página de aprovação
+  (aprovar.html): abre o seletor de conversa do próprio WhatsApp pra pessoa escolher o grupo do
+  cliente, em vez de o Colmeia decidir um número.
+- O contador vermelho da aba conta **pendente + ajuste** (o que precisa de você), nunca as
+  aprovadas — e é buscado já ao abrir a página, mesmo sem entrar na aba.
+- Reaproveita `.repasse-column`/`.repasse-card`/`.repasse-btn` no CSS; só o que é específico de
+  aprovação (`.aprov-*`) foi criado.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

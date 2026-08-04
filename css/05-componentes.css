@@ -161,6 +161,46 @@
 .repasse-btn:disabled { opacity: 0.6; cursor: default; }
 .repasse-btn-ficar { background: var(--page-bg); color: var(--text-primary); }
 
+/* ===== Aba "Aprovações" da Fila de repasse (2026-08-04) =====
+   Reaproveita .repasse-column/.repasse-card (mesma linguagem visual das
+   outras abas); só o que é específico de aprovação mora aqui. */
+.repasse-tab-badge {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; margin-left: 6px;
+}
+.repasse-tab.active .repasse-tab-badge { background: rgba(0,0,0,.22); color: #16181D; }
+.repasse-tab-badge[hidden] { display: none; }
+
+.aprov-column { min-width: 288px; max-width: 288px; }
+.aprov-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+.aprov-dot.esperando { background: var(--warning); }
+.aprov-dot.ajuste { background: var(--danger); }
+.aprov-dot.aprovado { background: var(--success); }
+
+/* Passou do prazo de espera: a borda avisa sem precisar ler a data. */
+.aprov-card.urgente { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.repasse-card-tempo.aprov-alerta { color: var(--danger); font-weight: 600; }
+
+.aprov-thumb {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.aprov-thumb.video { background: linear-gradient(135deg, #8AD1FF, #5C5CFF); }
+.aprov-thumb.img { background: linear-gradient(135deg, #FFD36E, #FF8A5B); }
+
+.aprov-peca { font-size: 11.5px; color: var(--text-muted); margin: -6px 0 10px; }
+.aprov-resposta {
+  background: var(--page-bg); border-radius: 10px; padding: 9px 11px;
+  font-size: 12px; color: var(--text-secondary); font-style: italic;
+  margin-bottom: 11px; line-height: 1.45;
+}
+.aprov-pins {
+  font-size: 11px; font-weight: 600; color: var(--purple); background: var(--purple-soft);
+  border-radius: 999px; padding: 3px 9px; display: inline-block; margin-bottom: 11px;
+}
+.aprov-vazio { font-size: 12.5px; color: var(--text-muted); padding: 18px 4px; text-align: center; line-height: 1.5; }
+
 /* Fileira de fotinhos (Sequência de responsáveis) dentro do card de
    repasse — mesmo conceito visual do pop-up de detalhe da tarefa
    (wf-dot/wf-line/wf-check, reaproveitados como estão), só que com

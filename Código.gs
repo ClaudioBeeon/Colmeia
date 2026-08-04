@@ -295,6 +295,8 @@ function handleRequest(e, method) {
         output = ajustarEstimativaTarefa(body.taskId, body.minutos, body.autor);
       } else if (body.acao === 'buscarExtrasRunrunCompleto') {
         output = buscarExtrasRunrunCompleto();
+      } else if (body.acao === 'listarAprovacoesPendentes') {
+        output = listarAprovacoesPendentes();
       } else if (body.acao === 'buscarFeedEventos') {
         output = buscarFeedEventos(body.designer);
       } else if (body.acao === 'listarRepasseIgnorados') {
