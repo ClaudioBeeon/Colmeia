@@ -573,6 +573,7 @@ function tarefaEhFilhaDe(taskId, parentTaskId) {
  * termina dizendo como apagar.
  */
 function testarCriarSubtarefaAlteracao() {
+  // Troque aqui se quiser testar em outro card mãe.
   var CARD_MAE = 110172;
   var QUEM = 'Cláudio';
 
@@ -588,6 +589,22 @@ function testarCriarSubtarefaAlteracao() {
   Logger.log('Card mãe lido: "' + pai.title + '"');
   Logger.log('  project_id: ' + pai.project_id);
   Logger.log('  subtarefas hoje: ' + ((pai.subtask_ids || []).length));
+
+  // O Runrun.it recusa criar tarefa em projeto FECHADO ("O projeto da
+  // tarefa deve estar aberto", 422) — conferir isso antes evita gastar a
+  // tentativa e, mais importante, é o mesmo problema que o fluxo de
+  // Alteração vai encontrar em peça de mês antigo.
+  var projeto = runrunFetch('/projects/' + pai.project_id);
+  if (projeto && !projeto.erroFetch) {
+    Logger.log('  projeto: "' + (projeto.name || '?') + '" | is_closed: ' + projeto.is_closed);
+    if (projeto.is_closed) {
+      Logger.log('');
+      Logger.log('❌ ESSE PROJETO ESTÁ FECHADO — o Runrun.it não deixa criar tarefa nele.');
+      Logger.log('   Não é problema de subtarefa; a criação nem chega a ser testada.');
+      Logger.log('   Rode listarProjetosAbertosParaTeste() pra achar um card mãe testável.');
+      return;
+    }
+  }
   Logger.log('');
 
   var meuId = idDoUsuarioRunrunPorNome(QUEM);
@@ -631,6 +648,58 @@ function testarCriarSubtarefaAlteracao() {
   Logger.log('');
   Logger.log('Pra apagar: abre ' + r.link + ' e exclui, ou roda no editor:');
   Logger.log('  runrunRequest("/tasks/' + r.taskId + '", "delete", null, RUNRUN_USER_TOKEN)');
+  Logger.log('=== FIM. Copie TUDO acima e mande pro Claude. ===');
+}
+
+/**
+ * DIAGNÓSTICO — acha sozinho um card mãe que dê pra usar no teste acima,
+ * pra ninguém precisar caçar isso na mão: varre as tarefas ABERTAS do
+ * time, pega as que têm subtarefas (ou seja, são card mãe) e confere se
+ * o projeto delas está aberto.
+ */
+function listarProjetosAbertosParaTeste() {
+  Logger.log('=== Procurando um card mãe testável ===');
+  Logger.log('(card mãe = tem subtarefas; testável = projeto aberto)');
+  Logger.log('');
+
+  var lote = runrunFetch('/tasks?is_closed=false&sort=updated_at&sortDir=desc&limit=100');
+  if (!Array.isArray(lote)) {
+    Logger.log('!! Não consegui listar tarefas: ' + JSON.stringify(lote));
+    return;
+  }
+  Logger.log('Tarefas abertas lidas: ' + lote.length);
+
+  var projetosVistos = {};
+  var achados = 0;
+
+  for (var i = 0; i < lote.length && achados < 5; i++) {
+    var t = lote[i];
+    if (!t.subtask_ids || !t.subtask_ids.length) continue; // não é card mãe
+    if (!t.project_id) continue;
+
+    var aberto = projetosVistos[t.project_id];
+    if (aberto === undefined) {
+      var p = runrunFetch('/projects/' + t.project_id);
+      aberto = !!(p && !p.erroFetch && !p.is_closed);
+      projetosVistos[t.project_id] = aberto;
+    }
+    if (!aberto) continue;
+
+    achados++;
+    Logger.log('');
+    Logger.log('✅ ' + achados + ') CARD_MAE = ' + t.id);
+    Logger.log('   "' + t.title + '"');
+    Logger.log('   cliente: ' + (t.client_name || '?') + ' | subtarefas: ' + t.subtask_ids.length);
+    Logger.log('   https://runrun.it/tasks/' + t.id);
+  }
+
+  Logger.log('');
+  if (!achados) {
+    Logger.log('❌ Não achei nenhum card mãe em projeto aberto entre as 100 tarefas mais recentes.');
+    Logger.log('   Isso já é uma resposta importante — ver a conversa.');
+  } else {
+    Logger.log('Pegue um ID acima, troque o CARD_MAE em testarCriarSubtarefaAlteracao e rode de novo.');
+  }
   Logger.log('=== FIM. Copie TUDO acima e mande pro Claude. ===');
 }
 
