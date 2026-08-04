@@ -77,6 +77,19 @@ async function tocarTarefaNoBackend(taskId, taskTitle) {
     }
     if (typeof updateNowPlaying === "function") updateNowPlaying();
   }
+
+  // Dar play sempre avança a tarefa pra "Fazendo" (pedido do Cláudio): o
+  // /play do Runrun.it só liga o cronômetro, não move a etapa sozinho —
+  // sem isso o card ficava tocando mas preso em Pendentes/Prioridades até
+  // alguém arrastar ele na mão. Só move quem ainda não tinha começado —
+  // retomar uma tarefa que já está em Revisão/Ajustes continua onde está.
+  const tarefaViva = tasks.find(t => String(t.id) === String(taskId));
+  if (tarefaViva && (tarefaViva.status === "pendentes" || tarefaViva.status === "prioridades")) {
+    tarefaViva.status = "fazendo";
+    if (typeof render === "function") render();
+    if (typeof moverEtapaNoBackend === "function") moverEtapaNoBackend(taskId, "fazendo");
+  }
+
   try {
     const data = await chamarBackend({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO });
     if (!data.ok) console.error("Runrun.it recusou o play:", data.error);
