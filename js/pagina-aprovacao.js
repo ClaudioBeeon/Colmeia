@@ -1111,8 +1111,14 @@ apvLigarEventos();
  * @param {HTMLElement} btn  o botão clicado, pra mostrar o progresso nele mesmo
  * @param {string} nomePeca  opcional; sem isso vai a peça mexida por último
  */
-async function pedirAprovacaoDoAtendimento(task, btn, nomePeca) {
+async function pedirAprovacaoDoAtendimento(task, btn, nomesPecas) {
   if (!task || !task.id) return;
+
+  // Ainda não sabe quais peças? Pergunta antes — mas só quando há mais de
+  // uma na pasta. Com uma peça só, perguntar seria atrito à toa; é a mesma
+  // regra que o link de aprovação do cliente já segue.
+  if (!nomesPecas) return escolherPecasParaRevisao(task, btn);
+
   const original = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;
@@ -1126,7 +1132,7 @@ async function pedirAprovacaoDoAtendimento(task, btn, nomePeca) {
     tituloTarefa: task.title,
     designer: task.assignee || DESIGNER_LOGADO,
     designerId: task.assigneeId || DESIGNER_ID_LOGADO || "",
-    nomePeca: nomePeca || null,
+    nomesPecas: Array.isArray(nomesPecas) ? nomesPecas : [nomesPecas],
   });
 
   if (btn) {
@@ -1142,7 +1148,7 @@ async function pedirAprovacaoDoAtendimento(task, btn, nomePeca) {
   // Qual peça o backend realmente mandou — pode ser diferente do que veio
   // no parâmetro (sem `nomePeca`, ele escolhe a mexida por último).
   const pecaEnviada = (data.pecas || [])[0];
-  rascunharComentarioDeRevisao(task, pecaEnviada);
+  rascunharComentarioDeRevisao(task, data.pecas || []);
 
   // O botão passa a ser um atalho pra página de aprovação, na hora — sem
   // esperar reabrir o card. Guarda também na tarefa, pra sobreviver ao
@@ -1152,6 +1158,63 @@ async function pedirAprovacaoDoAtendimento(task, btn, nomePeca) {
 
   const nomes = (data.pecas || []).join(", ");
   mostrarToast(`${nomes || "A peça"} foi pro atendimento conferir.`, "sucesso");
+  return true;
+}
+
+/**
+ * Pergunta QUAIS peças da pasta vão pra revisão.
+ *
+ * Um card costuma ter mais de uma peça de verdade (Feed e Stories são
+ * coisas diferentes; "Feed - v1" e "Feed - v2" são a mesma). Mandando
+ * sempre a mexida por último, a outra ficava pra trás sem ninguém saber —
+ * era o que estava acontecendo.
+ *
+ * Reaproveita `abrirEscolhaDePeca` (js/detalhe-modal.js), o mesmo menu do
+ * link de aprovação do cliente: todas marcadas por padrão, porque quem
+ * terminou o trabalho quase sempre quer mandar tudo que subiu.
+ *
+ * O NOME DA PEÇA é o que vai pro backend, não o fileId: a fila guarda a
+ * peça, e qual arquivo dela está valendo é lido do Drive na hora — é isso
+ * que faz a tela perceber sozinha quando chega uma versão nova depois do
+ * pedido.
+ */
+async function escolherPecasParaRevisao(task, btn) {
+  const original = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Procurando peças...";
+  }
+
+  const data = await chamarBackend({ acao: "listarVersoesDasPecas", taskId: task.id });
+
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "Não consegui procurar a pasta do card agora.", "erro");
+    return false;
+  }
+
+  const pecas = data.pecas || [];
+  if (!pecas.length) {
+    mostrarToast("Não encontrei nenhuma imagem ou vídeo na pasta do card pra mandar pra revisão.", "erro");
+    return false;
+  }
+  if (pecas.length === 1) return pedirAprovacaoDoAtendimento(task, btn, [pecas[0].nomePeca]);
+
+  abrirEscolhaDePeca(
+    task, btn,
+    // O menu mostra o ARQUIVO mais recente de cada peça (é o que a pessoa
+    // reconhece), mas o que segue pro backend é o nome da peça.
+    pecas.map(p => ({ nome: p.ultima.nome, mimeType: p.ultima.mimeType, nomePeca: p.nomePeca })),
+    {
+      titulo: "Quais peças vão pra revisão?",
+      rotuloBotao: "Enviar para revisão",
+      aoConfirmar: escolhidas => pedirAprovacaoDoAtendimento(task, btn, escolhidas.map(p => p.nomePeca)),
+    }
+  );
   return true;
 }
 
@@ -1221,12 +1284,18 @@ function marcarBotaoComoJaEnviado(btn, taskId, nomePeca) {
  * mesmo gesto, e faria pouco sentido um deles avisar o atendimento e o
  * outro não.
  */
-function rascunharComentarioDeRevisao(task, nomePeca) {
+function rascunharComentarioDeRevisao(task, pecas) {
   const campo = document.getElementById("commentInput");
   if (!campo || typeof roteadorLinkDaConferencia !== "function") return;
 
-  const link = roteadorLinkDaConferencia(task.id, nomePeca);
-  const texto = `${nomePeca || "A peça"} está pronta pra revisão: ${link}`;
+  const lista = Array.isArray(pecas) ? pecas.filter(Boolean) : [pecas].filter(Boolean);
+  // O link abre a primeira peça; a fila mostra as outras logo ali do lado.
+  // Um link por peça encheria o comentário de endereços quase iguais.
+  const link = roteadorLinkDaConferencia(task.id, lista[0]);
+  const nomes = lista.join(" e ");
+  const texto = lista.length > 1
+    ? `${nomes} estão prontas pra revisão: ${link}`
+    : `${nomes || "A peça"} está pronta pra revisão: ${link}`;
 
   // Acrescenta em vez de apagar o que a pessoa já estava digitando —
   // mesmo cuidado de adicionarComentarioDeUpload.

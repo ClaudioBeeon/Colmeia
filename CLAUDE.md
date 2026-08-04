@@ -499,6 +499,14 @@ MESMA ação `pedirConferenciaInterna`.
    clica não tem como saber se já mandou. Fica na coluna da direita do card, junto do Hub do
    cliente (`#apvPedirBtn`, js/detalhe-modal.js).
 
+**Qual peça vai:** com mais de uma peça na pasta (Feed e Stories são peças diferentes; "Feed - v1" e
+"Feed - v2" são a mesma), abre o menu de escolha — todas marcadas por padrão. Com uma peça só, vai
+direto sem perguntar. É `abrirEscolhaDePeca` (js/detalhe-modal.js), **o mesmo menu do link de
+aprovação do cliente**, agora parametrizado (`titulo`/`rotuloBotao`/`aoConfirmar`) em vez de
+duplicado. O que segue pro backend é o **nome da peça**, nunca o `fileId`: a fila guarda a peça, e
+qual arquivo dela está valendo é lido do Drive na hora — é isso que faz a tela perceber sozinha
+quando chega versão nova depois do pedido.
+
 **Mandar pra revisão faz DUAS coisas:** põe a peça na fila da tela de conferência **e** deixa no
 campo de comentário um texto com o **link direto da conferência daquela peça**
 (`rascunharComentarioDeRevisao` + `roteadorLinkDaConferencia`). O comentário não é enfeite — o

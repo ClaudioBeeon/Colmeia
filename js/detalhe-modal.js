@@ -2009,8 +2009,22 @@ async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
  * criar do zero encostado no botão certo do que ter 3 cópias do menu no
  * index.html). `position:fixed` porque `getBoundingClientRect()` já é
  * relativo à tela, do mesmo jeito.
+ *
+ * Serve pros DOIS momentos em que a pessoa precisa dizer quais peças da
+ * pasta ela quer: gerar o link do cliente e mandar pra revisão interna.
+ * `opcoes` (título, rótulo do botão e o que fazer com a escolha) é o que
+ * muda entre os dois — o resto é idêntico, e ter duas cópias disso seria
+ * o começo de elas divergirem sem ninguém perceber.
  */
-function abrirEscolhaDePeca(task, btn, pecas) {
+function abrirEscolhaDePeca(task, btn, pecas, opcoes) {
+  opcoes = opcoes || {};
+  const titulo = opcoes.titulo || "Quais peças vão nesse link?";
+  const rotuloBotao = opcoes.rotuloBotao || "Gerar link";
+  const aoConfirmar = opcoes.aoConfirmar || ((escolhidas) => gerarECopiarLinkDeAprovacao(
+    task, btn,
+    escolhidas.map(p => p.fileId),
+    escolhidas.map(p => p.nome).join(", ")
+  ));
   document.getElementById("pecasEscolhaMenu")?.remove();
   const rect = btn.getBoundingClientRect();
   const menu = document.createElement("div");
@@ -2024,7 +2038,7 @@ function abrirEscolhaDePeca(task, btn, pecas) {
   // Começa com todas marcadas: quem abriu esse menu quase sempre quer
   // mandar tudo que subiu; desmarcar é o caso raro.
   menu.innerHTML = `
-    <div class="pecas-escolha-titulo">Quais peças vão nesse link?</div>
+    <div class="pecas-escolha-titulo">${escaparHTML(titulo)}</div>
     ${pecas.map((p, i) => `
       <label class="pecas-escolha-item">
         <input type="checkbox" data-idx="${i}" checked>
@@ -2032,7 +2046,7 @@ function abrirEscolhaDePeca(task, btn, pecas) {
         <span>${escaparHTML(p.nome)}</span>
       </label>
     `).join("")}
-    <button type="button" class="pecas-escolha-confirmar" id="pecasEscolhaOk">Gerar link</button>
+    <button type="button" class="pecas-escolha-confirmar" id="pecasEscolhaOk">${escaparHTML(rotuloBotao)}</button>
   `;
   document.body.appendChild(menu);
 
@@ -2041,15 +2055,11 @@ function abrirEscolhaDePeca(task, btn, pecas) {
       .filter(c => c.checked)
       .map(c => pecas[Number(c.dataset.idx)]);
     if (!escolhidas.length) {
-      mostrarToast("Marca pelo menos uma peça pra mandar no link.", "erro");
+      mostrarToast("Marca pelo menos uma peça.", "erro");
       return;
     }
     menu.remove();
-    gerarECopiarLinkDeAprovacao(
-      task, btn,
-      escolhidas.map(p => p.fileId),
-      escolhidas.map(p => p.nome).join(", ")
-    );
+    aoConfirmar(escolhidas);
   });
 
   // Clicar fora fecha — a mesma técnica do resto do app (ex: chatHdrMenu),

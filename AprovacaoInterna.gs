@@ -171,12 +171,18 @@ function pedirConferenciaInterna(dados) {
     return { ok: false, error: 'Não encontrei nenhuma imagem ou vídeo na pasta do card pra mandar pra conferência.' };
   }
 
-  // Sem peça escolhida, vai a que foi mexida por último — o caso normal,
-  // em que a pessoa acabou de subir o arquivo e não tem o que escolher.
-  var alvos = dados.nomePeca
-    ? lista.pecas.filter(function (p) { return p.nomePeca === dados.nomePeca; })
+  // A interface pode mandar VÁRIAS peças (o card tem Feed e Stories, e as
+  // duas ficaram prontas juntas) ou uma só. Sem nenhuma, vai a que foi
+  // mexida por último — o caso da pasta com uma peça só, em que não há o
+  // que escolher e perguntar seria atrito à toa.
+  var pedidas = [];
+  if (Array.isArray(dados.nomesPecas)) pedidas = dados.nomesPecas.filter(function (n) { return !!n; });
+  else if (dados.nomePeca) pedidas = [dados.nomePeca];
+
+  var alvos = pedidas.length
+    ? lista.pecas.filter(function (p) { return pedidas.indexOf(p.nomePeca) !== -1; })
     : [lista.pecas[0]];
-  if (!alvos.length) return { ok: false, error: 'Não achei a peça "' + dados.nomePeca + '" na pasta do card.' };
+  if (!alvos.length) return { ok: false, error: 'Não achei essa peça na pasta do card. Ela pode ter sido movida ou renomeada.' };
 
   var sheet = getConferenciasSheet();
   var lock = LockService.getScriptLock();
