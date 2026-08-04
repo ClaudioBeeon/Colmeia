@@ -44,18 +44,21 @@ function getAprovacoesSheet() {
 }
 
 /**
- * Cria um link novo pra uma peça específica — pega a IMAGEM mais recente
- * da pasta do card no Drive (mesma varredura de compararVersoesDoCard,
- * Bee.gs: procura o maior "- vN" no nome; se não achar nenhuma com esse
- * padrão — ex: pasta com upload feito por fora do Colmeia — usa a
- * imagem mais recente da pasta, sem exigir o padrão de nome).
+ * Agrupa as imagens/vídeos da pasta do card em PEÇAS distintas — pedido
+ * do Cláudio (2026-08-04): "quando sobe duas versões, stories e feed?
+ * já aparece no mesmo link quando tem mais de uma opção?". Não aparecia:
+ * antes, gerarLinkDeAprovacao varria a pasta inteira e escolhia UM
+ * arquivo (o de maior "- vN"), então "Feed - v1" e "Stories - v1" (duas
+ * peças de verdade, não duas versões da mesma) empatavam e uma delas
+ * sumia sem avisar.
  *
- * Devolve só o CÓDIGO — quem chama (frontend) monta a URL completa,
- * porque só o frontend sabe o endereço de onde o Colmeia está publicado
- * hoje (ver ROTA_BASE, js/roteador-url.js — mesmo motivo de lá: assim
- * não quebra quando o domínio mudar pra colmeia.beeon.com.br).
+ * O nome ANTES do "- vN" é o que define a peça (ex: "Feed - v1.png" e
+ * "Feed - v2.png" são a MESMA peça, fica só a v2; "Stories - v1.mp4" é
+ * outra peça). Arquivo sem esse padrão vira peça própria, pelo nome
+ * inteiro. Usado pelo front pra mostrar uma escolha quando tem mais de
+ * uma peça — com só uma, gera o link direto, sem perguntar nada.
  */
-function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor) {
+function listarPecasDaPastaDoCard(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
 
   var pastaInfo = buscarPastaSalvaDoCard(taskId);
@@ -70,28 +73,104 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor) {
     return { ok: false, error: 'Não consegui acessar a pasta do card no Drive.' };
   }
 
-  var comPadrao = [];
-  var semPadrao = [];
   var re = / - v(\d+)\.[^.]+$/i;
+  var grupos = {}; // nome-base -> {versao, atualizadoEm, arquivo}
   var arquivos = pasta.getFiles();
   while (arquivos.hasNext()) {
     var arq = arquivos.next();
-    if (arq.getMimeType().indexOf('image/') !== 0) continue;
-    var m = arq.getName().match(re);
-    if (m) comPadrao.push({ versao: parseInt(m[1], 10), arquivo: arq });
-    else semPadrao.push({ atualizadoEm: arq.getLastUpdated().getTime(), arquivo: arq });
+    var tipo = arq.getMimeType();
+    if (tipo.indexOf('image/') !== 0 && tipo.indexOf('video/') !== 0) continue;
+    var nome = arq.getName();
+    var m = nome.match(re);
+    var chave = m ? nome.slice(0, m.index) : nome;
+    var atual = grupos[chave];
+    if (m) {
+      var versao = parseInt(m[1], 10);
+      if (!atual || atual.versao === null || versao > atual.versao) {
+        grupos[chave] = { versao: versao, atualizadoEm: arq.getLastUpdated().getTime(), arquivo: arq };
+      }
+    } else {
+      var quando = arq.getLastUpdated().getTime();
+      if (!atual || quando > atual.atualizadoEm) {
+        grupos[chave] = { versao: null, atualizadoEm: quando, arquivo: arq };
+      }
+    }
   }
 
+  var lista = Object.keys(grupos).map(function (chave) {
+    var g = grupos[chave];
+    return { fileId: g.arquivo.getId(), nome: g.arquivo.getName(), mimeType: g.arquivo.getMimeType(), atualizadoEm: g.atualizadoEm };
+  });
+  lista.sort(function (a, b) { return b.atualizadoEm - a.atualizadoEm; });
+  return { ok: true, pecas: lista };
+}
+
+/**
+ * Cria um link novo pra uma peça específica. Se `fileId` vier (pessoa
+ * escolheu entre várias peças — ver listarPecasDaPastaDoCard), usa esse
+ * arquivo direto. Sem `fileId` (caminho de sempre, pasta com uma peça
+ * só), varre a pasta e pega a IMAGEM ou VÍDEO mais recente (mesma lógica
+ * de versão "- vN" de compararVersoesDoCard, Bee.gs).
+ *
+ * Devolve só o CÓDIGO — quem chama (frontend) monta a URL completa,
+ * porque só o frontend sabe o endereço de onde o Colmeia está publicado
+ * hoje (ver ROTA_BASE, js/roteador-url.js — mesmo motivo de lá: assim
+ * não quebra quando o domínio mudar pra colmeia.beeon.com.br).
+ */
+function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
   var escolhido = null;
-  if (comPadrao.length) {
-    comPadrao.sort(function (a, b) { return b.versao - a.versao; });
-    escolhido = comPadrao[0].arquivo;
-  } else if (semPadrao.length) {
-    semPadrao.sort(function (a, b) { return b.atualizadoEm - a.atualizadoEm; });
-    escolhido = semPadrao[0].arquivo;
-  }
-  if (!escolhido) {
-    return { ok: false, error: 'Não encontrei nenhuma imagem na pasta do card pra gerar o link.' };
+
+  if (fileId) {
+    try {
+      escolhido = DriveApp.getFileById(fileId);
+    } catch (e) {
+      return { ok: false, error: 'Não consegui acessar esse arquivo no Drive.' };
+    }
+    var tipoEscolhido = escolhido.getMimeType();
+    if (tipoEscolhido.indexOf('image/') !== 0 && tipoEscolhido.indexOf('video/') !== 0) {
+      return { ok: false, error: 'Esse arquivo não é imagem nem vídeo.' };
+    }
+  } else {
+    var pastaInfo = buscarPastaSalvaDoCard(taskId);
+    if (!pastaInfo.ok || !pastaInfo.url) {
+      return { ok: false, error: 'Essa tarefa ainda não tem uma pasta do card vinculada no Drive. Crie a pasta do card primeiro.' };
+    }
+
+    var pasta;
+    try {
+      pasta = DriveApp.getFolderById(extrairIdDeUrlDrive(pastaInfo.url));
+    } catch (e2) {
+      return { ok: false, error: 'Não consegui acessar a pasta do card no Drive.' };
+    }
+
+    var comPadrao = [];
+    var semPadrao = [];
+    var re = / - v(\d+)\.[^.]+$/i;
+    var arquivos = pasta.getFiles();
+    while (arquivos.hasNext()) {
+      var arq = arquivos.next();
+      var tipo = arq.getMimeType();
+      // Aceita imagem OU vídeo — antes só imagem, e um card com Stories
+      // em vídeo dava "não encontrei nenhuma imagem" mesmo tendo arquivo
+      // novo na pasta (pedido do Cláudio, 2026-08-04).
+      if (tipo.indexOf('image/') !== 0 && tipo.indexOf('video/') !== 0) continue;
+      var m = arq.getName().match(re);
+      if (m) comPadrao.push({ versao: parseInt(m[1], 10), arquivo: arq });
+      else semPadrao.push({ atualizadoEm: arq.getLastUpdated().getTime(), arquivo: arq });
+    }
+
+    if (comPadrao.length) {
+      comPadrao.sort(function (a, b) { return b.versao - a.versao; });
+      escolhido = comPadrao[0].arquivo;
+    } else if (semPadrao.length) {
+      semPadrao.sort(function (a, b) { return b.atualizadoEm - a.atualizadoEm; });
+      escolhido = semPadrao[0].arquivo;
+    }
+    if (!escolhido) {
+      return { ok: false, error: 'Não encontrei nenhuma imagem ou vídeo na pasta do card pra gerar o link.' };
+    }
   }
 
   var codigo = Utilities.getUuid().replace(/-/g, '');
@@ -112,10 +191,11 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor) {
 
 /**
  * O que a página pública (aprovar.html) precisa pra se desenhar: nome do
- * arquivo/cliente/tarefa e a imagem em si (base64 — mesmo caminho de
- * buscarImagemCheiaDrive, Drive.gs). Devolve também o status atual —
- * se já foi respondido, a página mostra "você já respondeu" em vez dos
- * botões de novo, pra não deixar aprovar/pedir ajuste duas vezes.
+ * arquivo/cliente/tarefa e a peça em si (base64 — mesmo caminho de
+ * buscarImagemCheiaDrive, Drive.gs — imagem OU vídeo, ver 2026-08-04).
+ * Devolve também o status atual — se já foi respondido, a página mostra
+ * "você já respondeu" em vez dos botões de novo, pra não deixar
+ * aprovar/pedir ajuste duas vezes.
  */
 function buscarAprovacaoPublica(codigo) {
   if (!codigo) return { ok: false, error: 'Link inválido.' };
@@ -124,10 +204,19 @@ function buscarAprovacaoPublica(codigo) {
 
   var imagem;
   try {
-    var blob = DriveApp.getFileById(linha.fileId).getBlob();
-    imagem = { base64: Utilities.base64Encode(blob.getBytes()), mimeType: blob.getContentType() };
+    var arquivo = DriveApp.getFileById(linha.fileId);
+    var blob = arquivo.getBlob();
+    var bytes = blob.getBytes();
+    // Mesmo limite do buscarImagemCheiaDrive (Drive.gs) — um vídeo passa
+    // disso fácil, e acima desse tamanho não cabe direito na resposta do
+    // Apps Script.
+    var LIMITE_BYTES = 25 * 1024 * 1024;
+    if (bytes.length > LIMITE_BYTES) {
+      return { ok: false, error: 'Esse arquivo tem ' + Math.round(bytes.length / 1024 / 1024) + ' MB, grande demais pra abrir por este link. Manda o vídeo direto pelo Drive pra esse cliente.' };
+    }
+    imagem = { base64: Utilities.base64Encode(bytes), mimeType: blob.getContentType() };
   } catch (e) {
-    return { ok: false, error: 'Não consegui carregar a imagem dessa aprovação — pode ter sido movida ou apagada do Drive.' };
+    return { ok: false, error: 'Não consegui carregar essa peça — pode ter sido movida ou apagada do Drive.' };
   }
 
   return {
@@ -230,6 +319,38 @@ function linhaParaObjetoDeAprovacao(linha) {
     status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11],
     pins: linha[12] || ''
   };
+}
+
+/**
+ * Lista as aprovações já enviadas de um cliente, mais recente primeiro —
+ * pedido do Cláudio (2026-08-04): "ver os que foram enviados daquele
+ * cliente, o que está esperando aprovação ou que teve ajustes", pra
+ * organizar isso dentro do Hub do cliente (ver abrirHubDoCliente,
+ * js/paginas-designers.js). Só as últimas 30, pra não devolver o
+ * histórico inteiro de um cliente antigo.
+ */
+function listarAprovacoesDoCliente(cliente) {
+  if (!cliente) return { ok: false, error: 'cliente não informado.' };
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var alvo = normalizarNomeParaComparar(cliente);
+  var lista = [];
+  for (var i = 1; i < linhas.length; i++) {
+    if (normalizarNomeParaComparar(linhas[i][2]) !== alvo) continue;
+    var obj = linhaParaObjetoDeAprovacao(linhas[i]);
+    lista.push({
+      codigo: obj.codigo,
+      taskId: obj.taskId,
+      tituloTarefa: obj.tituloTarefa,
+      nomeArquivo: obj.nomeArquivo,
+      status: obj.status,
+      criadoEm: obj.criadoEm,
+      respondidoEm: obj.respondidoEm,
+      respostaTexto: obj.respostaTexto
+    });
+  }
+  lista.sort(function (a, b) { return b.criadoEm - a.criadoEm; });
+  return { ok: true, aprovacoes: lista.slice(0, 30) };
 }
 
 function acharLinhaDeAprovacao(codigo) {

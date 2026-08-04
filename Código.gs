@@ -239,14 +239,20 @@ function handleRequest(e, method) {
         output = compararVersoesDoCard(body.taskId);
       } else if (body.acao === 'beeAvisarUploadNovo') {
         output = beeAvisarUploadNovo(body.taskId, body.nomeArquivo);
+      } else if (body.acao === 'beeAvisarLinkDriveNoComentario') {
+        output = beeAvisarLinkDriveNoComentario(body.taskId);
+      } else if (body.acao === 'listarPecasDaPastaDoCard') {
+        output = listarPecasDaPastaDoCard(body.taskId);
       } else if (body.acao === 'gerarLinkDeAprovacao') {
-        output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor);
+        output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor, body.fileId);
       } else if (body.acao === 'buscarAprovacaoPublica') {
         // Ação PÚBLICA — chamada por aprovar.html, sem login nenhum do
         // Colmeia (ver Aprovacao.gs). Só o código aleatório protege.
         output = buscarAprovacaoPublica(body.codigo);
       } else if (body.acao === 'responderAprovacaoPublica') {
         output = responderAprovacaoPublica(body.codigo, body.aprovado, body.respostaTexto, body.pins);
+      } else if (body.acao === 'listarAprovacoesDoCliente') {
+        output = listarAprovacoesDoCliente(body.cliente);
       } else if (body.acao === 'beeGerarImagem') {
         // Gemini 2.5 Flash Image ("Nano Banana") — ver NanoBanana.gs. O
         // caminho pela Adobe Firefly foi abandonado: o produto que a Beeon
