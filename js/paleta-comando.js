@@ -227,6 +227,7 @@ function paletaMontarLinhas(termo) {
     { page: "atendimento", nome: "Clientes por atendimento" },
     { page: "tipos", nome: "Tipos de tarefas" },
     { page: "runrun", nome: "Runrun completo" },
+    { page: "bee", nome: "Bee" },
   ];
 
   paginas

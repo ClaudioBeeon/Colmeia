@@ -1020,6 +1020,13 @@ function mostrarPagina(page) {
   if (page === "horas") abrirPaginaHoras();
   else if (typeof fecharPaginaHoras === "function") fecharPaginaHoras();
 
+  // A aba Bee abre o painel de verdade dela (o mesmo #beePainel da
+  // bolinha flutuante) já aberto, ocupando o lugar do chat ao lado do
+  // feed — e fecha sozinho ao sair, senão ficaria aberto em cima de
+  // qualquer outra página (ver js/pagina-bee.js).
+  if (page === "bee" && typeof abrirPaginaBee === "function") abrirPaginaBee();
+  else if (typeof fecharPaginaBee === "function") fecharPaginaBee();
+
   // Deixa o endereço lá em cima do navegador combinando com a página
   // (ver js/roteador-url.js) — permite link direto, F5 sem perder o
   // lugar, e o botão Voltar funcionando.

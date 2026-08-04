@@ -67,6 +67,7 @@ const ROTEADOR_SLUGS = {
   runrun: "runrun-completo",
   horas: "minhas-horas",
   repasse: "fila-de-repasse",
+  bee: "bee",
 };
 const ROTEADOR_SLUGS_INVERSO = Object.fromEntries(
   Object.entries(ROTEADOR_SLUGS).map(([pagina, slug]) => [slug, pagina])

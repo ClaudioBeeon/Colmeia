@@ -1631,3 +1631,69 @@ body.card-aberto .quick-access-panel { display: none; }
   .hr-cal-grade, .hr-cal-corpo { grid-template-columns: 42px repeat(7, 1fr); }
 }
 
+/* ===== PÁGINA "BEE" (feed) =====
+   Só o feed mora aqui — o chat é o #beePainel de verdade (ver
+   css/05-componentes.css/.bee-painel), aberto/fechado por
+   js/pagina-bee.js junto com essa página. Sem fundo cinza por baixo dos
+   cards de propósito: a .app-page já senta em cima do --page-bg do app
+   inteiro (mesmo princípio de .column, que também é transparent). */
+.bee-feed-col {
+  max-width: 640px; width: 100%; margin: 0 auto;
+  padding: 4px 4px 32px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.bee-feed-vazio { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 20px; }
+
+.bee-feed-dia {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-muted); margin: 6px 4px -2px;
+}
+
+.bee-ev-card {
+  position: relative; background: var(--card-bg); border-radius: 24px; padding: 22px 24px;
+  box-shadow: var(--shadow-card); cursor: pointer; transition: box-shadow .15s ease, transform .15s ease;
+  /* Corpo do card na mesma fonte que os comentários/o chat da tarefa já
+     usam (css/03-detalhe.css: .chat-panel) — diferente do Questrial que
+     é a fonte padrão do resto do app. Nome e função (abaixo) voltam pro
+     Questrial de propósito, é a identidade da pessoa, não conteúdo do chat. */
+  font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Inter", system-ui, var(--font-body), sans-serif;
+}
+.bee-ev-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+
+.bee-ev-abrir {
+  position: absolute; top: 18px; right: 18px; width: 30px; height: 30px; border-radius: 50%;
+  border: none; background: var(--page-bg); color: var(--text-secondary); display: flex;
+  align-items: center; justify-content: center; cursor: pointer; transition: background .12s, color .12s;
+}
+.bee-ev-abrir svg { width: 14px; height: 14px; }
+.bee-ev-abrir:hover { background: var(--accent-soft); color: var(--accent); }
+
+.bee-ev-head { display: flex; align-items: center; gap: 11px; padding-right: 38px; }
+.bee-ev-avatar { width: 44px; height: 44px; font-size: 15px; flex-shrink: 0; }
+.bee-ev-quem { min-width: 0; font-family: var(--font-body); }
+.bee-ev-nome { font-weight: 700; font-size: 14.5px; line-height: 1.25; }
+.bee-ev-papel { font-size: 12px; color: var(--text-muted); line-height: 1.25; }
+.bee-ev-hora {
+  font-size: 12px; color: var(--text-muted); margin-left: auto; flex-shrink: 0;
+  font-variant-numeric: tabular-nums; padding-top: 1px;
+}
+
+.bee-ev-corpo { padding-left: 55px; margin-top: 14px; }
+.bee-ev-titulo {
+  font-weight: 700; font-size: 14px; letter-spacing: .3px; text-transform: uppercase; line-height: 1.4;
+  color: var(--text-primary);
+}
+.bee-ev-chip {
+  text-transform: none; letter-spacing: 0; display: inline-flex; align-items: center;
+  background: var(--page-bg); border: 1px solid var(--border); border-radius: 8px; padding: 3px 10px 4px;
+  font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin-top: 6px;
+}
+.bee-ev-desc {
+  font-size: 13.5px; font-weight: 400; color: var(--text-secondary); margin-top: 8px; line-height: 1.55;
+}
+
+@media (max-width: 760px) {
+  .bee-ev-card { padding: 18px 18px; }
+  .bee-ev-corpo { padding-left: 0; margin-top: 12px; }
+}
+

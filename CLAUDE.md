@@ -83,10 +83,10 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
 entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; o
-roteador de URL, 22; a história da peça, 23; e o modo foco, 24) menores dentro da pasta `js/`, cada
-um cuidando de um assunto. **Não é um sistema de build** — não tem bundler, TypeScript, nem npm
-envolvido no frontend. É só HTML puro: o `index.html` carrega os 24 arquivos com várias tags
-`<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
+roteador de URL, 22; a história da peça, 23; o modo foco, 24; e a página Bee, 25) menores dentro
+da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não tem bundler,
+TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os 25 arquivos
+com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
 
@@ -139,7 +139,9 @@ Arquivos, na ordem em que são carregados (`js/`):
 22. `detalhe-historia.js` — os **eventos do sistema** (criada, começou a trabalhar, arquivo, entregue)
     que alimentam a pílula "Linha do tempo" do painel de comentários. Ver seção própria abaixo.
 23. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
-24. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+24. `pagina-bee.js` — a página **Bee** (feed de atividades + o painel de verdade da Bee do lado).
+    Ver seção própria abaixo.
+25. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -458,6 +460,35 @@ bem quando mais importa. **Só Photoshop/Illustrator por enquanto:** Premiere e 
 de fora — Reels/vídeo/animação sugeriria eles, mas não existe (ainda) um jeito de abrir eles direto
 igual o Photoshop/Illustrator têm; a estrutura (`SUGESTOES_DE_PROGRAMA`) já está pronta pra adicionar
 uma regra nova assim que tiver o link.
+
+## A página "Bee" (2026-08-04)
+
+`js/pagina-bee.js` + o bloco no fim de `css/04-paginas.css`. Uma aba própria na barra lateral
+(`page-bee`) com dois lados: um feed de atividades à esquerda, e o **painel de verdade da Bee**
+(o mesmo `#beePainel` da bolinha flutuante, `js/bee.js`) aberto do lado direito.
+
+**O chat não tem markup próprio nessa página — é reaproveitado, não duplicado.**
+`abrirPaginaBee()` chama `beeAbrirPainel()` (a mesma função que a bolinha flutuante usa em
+qualquer tela) e `fecharPaginaBee()` chama `beeFecharPainel()` ao sair. Como o `#beePainel` é um
+item flex IRMÃO do `.main` (empurra o quadro pra esquerda ao abrir, em vez de cobrir por cima — ver
+comentário no próprio HTML dele), abrir ele com a página Bee sozinha visível já produz o layout
+"feed à esquerda, chat à direita" sem escrever uma linha de lógica de conversa nova.
+
+**Primeira versão do feed é de propósito enxuta.** Só mostra os dois tipos de evento que já tinham
+dado de verdade pronto, sem precisar de nada novo no backend — reaproveita as MESMAS buscas que
+"Minhas horas" já usa (`buscarEntreguesDoDesigner`, `buscarAtividadesDrive`):
+- tarefas que o designer entregou;
+- arquivos que o designer subiu no Drive.
+
+Comentário de alguém, prioridade que mudou, "o coordenador reorganizou seu dia" — os outros tipos
+de evento pensados na conversa de design — ficaram de fora por enquanto: pedem um registro (log)
+novo no backend que ainda não existe (ex: `definirPrioridade`, Planilha.gs, hoje só sobrescreve a
+prioridade, não guarda histórico de quem mudou nem quando). Fica pra uma fase 2.
+
+Cada card do feed é uma leitura só (`Você entregou X` / `Você subiu um arquivo em X`) — sem
+subtítulo "quem" porque as duas buscas já são só do designer logado; o dia em que o feed também
+mostrar atividade do TIME (não só a sua), aí sim o nome/função de quem fez a coisa passam a
+importar de verdade.
 
 ## Bug recorrente conhecido
 

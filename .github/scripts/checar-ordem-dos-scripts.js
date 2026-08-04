@@ -46,6 +46,7 @@ const ORDEM_ESPERADA = [
   "js/roteador-url.js",
   "js/detalhe-historia.js",
   "js/modo-foco.js",
+  "js/pagina-bee.js",
   "js/login-boot.js",
 ];
 
