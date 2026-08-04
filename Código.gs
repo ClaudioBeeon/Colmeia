@@ -264,7 +264,7 @@ function handleRequest(e, method) {
       } else if (body.acao === 'devolverParaDesigner') {
         output = devolverParaDesigner(body);
       } else if (body.acao === 'buscarConferenciaDaTarefa') {
-        output = buscarConferenciaDaTarefa(body.taskId);
+        output = buscarConferenciaDaTarefa(body.taskId, body.idsRelacionados);
       } else if (body.acao === 'buscarDevolucaoDaTarefa') {
         output = buscarDevolucaoDaTarefa(body.taskId);
       } else if (body.acao === 'buscarDevolucaoPublica') {

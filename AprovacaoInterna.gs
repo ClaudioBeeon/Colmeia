@@ -295,13 +295,33 @@ function listarConferenciasPendentes() {
  * pasta do card já tinha ("Criar pasta" → "Acessar pasta") — um botão que
  * não muda depois de usado convida a clicar de novo sem querer.
  */
-function buscarConferenciaDaTarefa(taskId) {
+function buscarConferenciaDaTarefa(taskId, idsRelacionados) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  // A conferência é da PEÇA, e a peça mora na pasta do card — que é a
+  // MESMA pro card mãe e pras subtarefas dele (ver buscarOuHerdarPastaCard,
+  // Drive.gs, que resolve a pasta desse mesmo jeito). Então "essa peça já
+  // foi mandada" vale pra família inteira: mandar pela subtarefa e abrir o
+  // card mãe tem que mostrar o mesmo estado, senão a pessoa manda de novo
+  // achando que não tinha mandado.
+  var ids = {};
+  ids[String(taskId)] = true;
+  if (Array.isArray(idsRelacionados)) {
+    idsRelacionados.forEach(function (id) { if (id) ids[String(id)] = true; });
+  }
+
   var linhas = getConferenciasSheet().getDataRange().getValues();
   var achada = null;
   for (var i = 1; i < linhas.length; i++) {
-    if (String(linhas[i][0]) !== String(taskId)) continue;
-    var atual = { nomePeca: linhas[i][3], status: linhas[i][11], pedidoEm: linhas[i][10] };
+    if (!ids[String(linhas[i][0])]) continue;
+    var atual = {
+      // O id de quem REALMENTE tem a conferência — é pra ele que o link do
+      // botão precisa apontar, não pro card que está aberto agora.
+      taskId: String(linhas[i][0]),
+      nomePeca: linhas[i][3],
+      status: linhas[i][11],
+      pedidoEm: linhas[i][10]
+    };
     if (!achada || String(atual.pedidoEm) > String(achada.pedidoEm)) achada = atual;
   }
   return { ok: true, conferencia: achada };

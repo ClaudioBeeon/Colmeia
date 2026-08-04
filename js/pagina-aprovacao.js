@@ -1153,7 +1153,7 @@ async function pedirAprovacaoDoAtendimento(task, btn, nomesPecas) {
   // O botão passa a ser um atalho pra página de aprovação, na hora — sem
   // esperar reabrir o card. Guarda também na tarefa, pra sobreviver ao
   // pop-up ser redesenhado sozinho pela varredura do quadro.
-  task._conferenciaPeca = pecaEnviada || "";
+  task._conferenciaInfo = { taskId: String(task.id), nomePeca: pecaEnviada || "" };
   if (btn) marcarBotaoComoJaEnviado(btn, task.id, pecaEnviada);
 
   const nomes = (data.pecas || []).join(", ");
@@ -1229,7 +1229,7 @@ async function escolherPecasParaRevisao(task, btn) {
  * muda depois de usado convida a clicar de novo sem querer, e quem clica
  * não tem como saber se já mandou ou não.
  *
- * Guarda o resultado na própria tarefa (`_conferenciaPeca`), então reabrir
+ * Guarda o resultado na própria tarefa (`_conferenciaInfo`), então reabrir
  * o mesmo card não pergunta de novo. Falha de rede não vira "nunca foi
  * mandada": o botão só fica no texto de sempre e tenta na próxima abertura.
  */
@@ -1237,12 +1237,20 @@ async function verificarRevisaoJaEnviada(task, btn) {
   if (!task.id) return;
   const taskId = task.id;
 
-  if (task._conferenciaPeca !== undefined) {
-    if (task._conferenciaPeca !== null) marcarBotaoComoJaEnviado(btn, taskId, task._conferenciaPeca);
+  if (task._conferenciaInfo !== undefined) {
+    if (task._conferenciaInfo) marcarBotaoComoJaEnviado(btn, task._conferenciaInfo.taskId, task._conferenciaInfo.nomePeca);
     return;
   }
 
-  const data = await chamarBackend({ acao: "buscarConferenciaDaTarefa", taskId });
+  const data = await chamarBackend({
+    acao: "buscarConferenciaDaTarefa",
+    taskId,
+    // A pasta do card (e portanto as peças) é a MESMA do card mãe e das
+    // subtarefas dele. Sem mandar a família junto, mandar pela subtarefa e
+    // abrir o card mãe mostrava "Enviar para revisão" de novo, como se
+    // nada tivesse acontecido — foi o que o Cláudio viu.
+    idsRelacionados: await idsDaFamiliaDaTarefa(task),
+  });
   if (!data || !data.ok || caiuARede(data)) return;
 
   // Trocou de tarefa enquanto carregava? Compara por id, nunca por
@@ -1252,8 +1260,41 @@ async function verificarRevisaoJaEnviada(task, btn) {
   if (!btnAgora) return;
 
   const c = data.conferencia;
-  task._conferenciaPeca = c ? (c.nomePeca || "") : null;
-  if (c) marcarBotaoComoJaEnviado(btnAgora, taskId, c.nomePeca);
+  task._conferenciaInfo = c ? { taskId: c.taskId, nomePeca: c.nomePeca || "" } : null;
+  if (c) marcarBotaoComoJaEnviado(btnAgora, c.taskId, c.nomePeca);
+}
+
+/**
+ * Os ids do card mãe e das subtarefas em volta desta tarefa.
+ *
+ * Existe porque várias coisas do Colmeia são da FAMÍLIA e não da tarefa
+ * solta — a pasta do card já era assim (buscarOuHerdarPastaCard), e a
+ * conferência é igual: a peça é a mesma, esteja o card mãe ou a subtarefa
+ * aberto na frente. Reaproveita o cache que já é preenchido quando uma
+ * subtarefa abre (precarregarCardMaeEmBackground), então quase sempre não
+ * custa nenhuma ida a mais ao servidor.
+ */
+async function idsDaFamiliaDaTarefa(task) {
+  try {
+    if (task.parentTaskId) {
+      if (typeof cardMaeCache !== "undefined" && !cardMaeCache.has(task.id)
+          && typeof precarregarCardMaeEmBackground === "function") {
+        await precarregarCardMaeEmBackground(task.id);
+      }
+      const info = typeof cardMaeCache !== "undefined" ? cardMaeCache.get(task.id) : null;
+      if (info && info.ok && info.temPai && info.cardMae) {
+        return [info.cardMae.id, ...(info.subtarefas || []).map(s => s.id)]
+          .filter(id => String(id) !== String(task.id));
+      }
+      return [];
+    }
+    // A própria tarefa É o card mãe (ver carregarFilhosSeForCardMae).
+    if (Array.isArray(task.subtarefasResumo)) return task.subtarefasResumo.map(s => s.id);
+  } catch (err) {
+    // Não achar a família não é erro: o botão só deixa de reconhecer o
+    // estado dos parentes, e continua funcionando pra própria tarefa.
+  }
+  return [];
 }
 
 function marcarBotaoComoJaEnviado(btn, taskId, nomePeca) {

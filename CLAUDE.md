@@ -496,7 +496,12 @@ MESMA ação `pedirConferenciaInterna`.
 2. **O botão "Enviar para revisão"** — que vira **"Acessar página de aprovação"** depois de usado
    (`verificarRevisaoJaEnviada`), mesma ideia do "Criar pasta do card" → "Acessar pasta do card"
    logo acima dele: botão que não muda depois de usado convida a clicar de novo sem querer, e quem
-   clica não tem como saber se já mandou. Fica na coluna da direita do card, junto do Hub do
+   clica não tem como saber se já mandou. **O estado vale pra FAMÍLIA inteira** (card mãe +
+   subtarefas), porque a pasta do card — e portanto a peça — é a mesma pros três: mandar pela
+   subtarefa e abrir o card mãe tem que mostrar o mesmo estado, senão a pessoa manda de novo achando
+   que não tinha mandado. `idsDaFamiliaDaTarefa` reaproveita o `cardMaeCache` que já é preenchido
+   quando uma subtarefa abre, então quase nunca custa uma ida a mais ao servidor — mesma ideia do
+   `buscarOuHerdarPastaCard`. Fica na coluna da direita do card, junto do Hub do
    cliente (`#apvPedirBtn`, js/detalhe-modal.js).
 
 **Qual peça vai:** com mais de uma peça na pasta (Feed e Stories são peças diferentes; "Feed - v1" e
