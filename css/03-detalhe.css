@@ -1093,6 +1093,22 @@
   padding: 4px 9px; cursor: pointer; white-space: nowrap;
 }
 
+/* "Ações da pasta do card" (conferir o que falta / comparar versões /
+   link de aprovação) — bloco PRÓPRIO, separado do cabeçalho de Anexos.
+   Antes esses 3 botões viviam espremidos na mesma linha do rótulo
+   "Anexos" (.side-label-row, sem quebra de linha) — em uma coluna de
+   320-360px isso estourava a largura e o botão mais novo simplesmente
+   sumia da tela (foi o que o Cláudio relatou em 2026-08-04: "não achei
+   o link de aprovação"). flex-wrap aqui resolve de vez, não importa
+   quantos botões existam ou quão comprido for o texto de cada um. */
+.side-acoes-bee { display: flex; flex-wrap: wrap; gap: 6px; }
+.side-acao-btn {
+  font-size: 10.5px; font-weight: 600; color: #7A5C00;
+  background: #FFF4CC; border: none; border-radius: 999px;
+  padding: 4px 9px; cursor: pointer;
+}
+.side-acao-btn:disabled { opacity: 0.6; cursor: default; }
+
 .attach-box {
   background: var(--card-bg);
   border: 1px solid var(--border);

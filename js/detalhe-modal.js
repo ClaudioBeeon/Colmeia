@@ -848,13 +848,20 @@ function renderDetail() {
               `;
             })()}
           </div>
+          ${task.id ? `
+            <div class="side-block">
+              <span class="side-label">Ações da pasta do card</span>
+              <div class="side-acoes-bee">
+                <button type="button" class="side-acao-btn" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>
+                <button type="button" class="side-acao-btn" id="beeCompararVersoesBtn" title="A Bee compara as duas versões mais recentes (arquivos '- v1', '- v2'...) da pasta do card">🔍 comparar versões</button>
+                <button type="button" class="side-acao-btn" id="gerarLinkAprovacaoBtn" title="Gera um link sem login pro cliente aprovar (ou pedir ajuste) na peça mais recente da pasta do card">🔗 link de aprovação</button>
+              </div>
+            </div>
+          ` : ""}
           <div class="side-block attach-block">
             <div class="side-label-row">
               <span class="side-label">Anexos</span>
               <button type="button" class="download-all-btn" id="downloadAllBtn" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
-              ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>` : ""}
-              ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="beeCompararVersoesBtn" title="A Bee compara as duas versões mais recentes (arquivos '- v1', '- v2'...) da pasta do card">🔍 comparar versões</button>` : ""}
-              ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="gerarLinkAprovacaoBtn" title="Gera um link sem login pro cliente aprovar (ou pedir ajuste) na peça mais recente da pasta do card">🔗 link de aprovação</button>` : ""}
             </div>
             <div class="attach-box">
               <div class="attach-list" id="attachList">

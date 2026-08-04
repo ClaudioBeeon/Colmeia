@@ -869,9 +869,6 @@ a.bee-recente { text-decoration: none; }
 }
 .memoria-ok:hover { background: rgba(34,176,125,0.14); color: var(--success); }
 
-/* "🐝 conferir o que falta", no bloco de anexos do card. */
-.bee-conferir-btn { margin-left: 6px; }
-
 /* Os links de referência que o "Me inspirar" devolve. Cada linha é um
    termo de busca; os botões abrem esse termo já pesquisado em cada site. */
 .bee-inspirar { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
