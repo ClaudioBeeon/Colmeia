@@ -1285,6 +1285,12 @@ function renderDetail() {
       await recarregarThreadAtiva();
       agendarAtualizacaoKanban();
       if (ofereceRepetir && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, textoParaEnviar);
+      // Link do Drive colado num comentário normal (sem arrastar
+      // arquivo nenhum) — pedido do Cláudio (2026-08-04): "comentei o
+      // link do drive, mas não apareceu a mensagem da Bee". Mesmas 3
+      // ações da pasta, só que avisadas por PALAVRA, não por upload de
+      // verdade (ver beeAvisarLinkDriveNoComentario, Bee.gs).
+      if (texto && /drive\.google\.com\/\S+/i.test(texto)) avisarBeeSobreLinkDriveNoComentario(alvoId);
     } else {
       if (bolhaTemporaria) bolhaTemporaria.remove(); // não foi enviado — some a bolha
       mostrarToast("Não consegui enviar esse comentário agora.", "erro");
@@ -1722,9 +1728,21 @@ document.addEventListener("keydown", e => {
  * card") e posta um comentário avisando — sem precisar abrir o Drive nem
  * escrever nada.
  *
- * Ligado UMA vez só, no #taskDetail (elemento fixo que nunca é recriado —
- * só o innerHTML dele é redesenhado a cada renderDetail), em vez de
- * religar a cada render como os botões de dentro do card.
+ * TUDO ligado no `document` (nunca é recriado), não no `#taskDetail` —
+ * bug encontrado em 2026-08-04: `#taskDetail` É recriado do zero a cada
+ * `buildBoard()` (js/kanban-board.js, remove o painel antigo e cria um
+ * elemento novo com o mesmo id). `wireArrastarArquivoParaCard()` só roda
+ * UMA vez, na carga do script — antes de `buildBoard()` sequer ter
+ * rodado — então o `document.getElementById("taskDetail")` daquela hora
+ * dava `null` e a função saía sem religar nada em lugar nenhum. Todo
+ * drop, mesmo com o card aberto de verdade, caía direto na rede de
+ * segurança (o aviso "abra uma tarefa primeiro"), porque não existia
+ * NENHUM escutador preso no painel de verdade.
+ *
+ * A troca: em vez de escutar no painel (que muda de identidade), escuta
+ * no `document` sempre, e cada evento decide na hora se o mouse está
+ * `.closest("#taskDetail")` ou não — funciona não importa quantas vezes
+ * o painel for recriado depois.
  */
 const LIMITE_UPLOAD_ARRASTADO_BYTES = 30 * 1024 * 1024; // 30MB — folgado pra imagem/PSD comum, sem travar o navegador com vídeo grande
 
@@ -1733,63 +1751,39 @@ function temArquivoNoDrag(e) {
 }
 
 function wireArrastarArquivoParaCard() {
-  const panel = document.getElementById("taskDetail");
-  if (!panel) return;
-  let dragDepth = 0;
+  document.addEventListener("dragover", e => {
+    if (!temArquivoNoDrag(e)) return;
+    e.preventDefault();
+    const panel = e.target.closest && e.target.closest("#taskDetail");
+    document.querySelectorAll(".arquivo-sobre-card").forEach(el => {
+      if (el !== panel) el.classList.remove("arquivo-sobre-card");
+    });
+    if (panel) panel.classList.add("arquivo-sobre-card");
+  });
 
-  panel.addEventListener("dragenter", e => {
+  document.addEventListener("dragend", () => {
+    document.querySelectorAll(".arquivo-sobre-card").forEach(el => el.classList.remove("arquivo-sobre-card"));
+  });
+
+  document.addEventListener("drop", e => {
     if (!temArquivoNoDrag(e)) return;
     e.preventDefault();
-    dragDepth++;
-    panel.classList.add("arquivo-sobre-card");
-  });
-  panel.addEventListener("dragover", e => {
-    if (!temArquivoNoDrag(e)) return;
-    e.preventDefault();
-  });
-  panel.addEventListener("dragleave", () => {
-    dragDepth = Math.max(0, dragDepth - 1);
-    if (dragDepth === 0) panel.classList.remove("arquivo-sobre-card");
-  });
-  panel.addEventListener("drop", e => {
-    if (!temArquivoNoDrag(e)) return;
-    e.preventDefault();
-    // Já tratado aqui — a rede de segurança do documento (logo abaixo)
-    // não precisa (e não deve) repetir o aviso de "abra uma tarefa".
-    e.stopPropagation();
-    dragDepth = 0;
-    panel.classList.remove("arquivo-sobre-card");
+    document.querySelectorAll(".arquivo-sobre-card").forEach(el => el.classList.remove("arquivo-sobre-card"));
+
+    const panel = e.target.closest && e.target.closest("#taskDetail");
+    if (!panel) {
+      // Drop fora de qualquer card aberto — sem isso, o PRÓPRIO
+      // NAVEGADOR assume o drop e abre o arquivo direto na aba, saindo
+      // do Colmeia inteiro (foi o que aconteceu quando o Cláudio testou
+      // em 2026-08-03: "a foto abriu no navegador").
+      mostrarToast("Abra uma tarefa primeiro pra soltar o arquivo nela.", "erro");
+      return;
+    }
     const task = tasks[detailIdx];
     if (!task || !task.id) return;
     Array.from(e.dataTransfer.files || []).forEach(arquivo => subirArquivoArrastadoParaCard(task, arquivo));
   });
 }
-
-/**
- * Rede de segurança pra QUALQUER arquivo arrastado sobre o Colmeia, não
- * só dentro do card: sem isso, soltar um arquivo um pixel fora do
- * #taskDetail (ou em qualquer outro canto do app — sidebar, quadro,
- * gaps entre elementos) faz o PRÓPRIO NAVEGADOR assumir o drop e abrir o
- * arquivo direto na aba, saindo do Colmeia inteiro. Foi exatamente isso
- * que aconteceu quando o Cláudio testou (2026-08-04): "arrastei pro
- * card, não funcionou, a foto abriu no navegador".
- *
- * `#taskDetail` já chama stopPropagation() quando trata o drop de
- * verdade (ver wireArrastarArquivoParaCard, acima) — só chega até aqui
- * um drop que caiu FORA de um card aberto, daí o aviso.
- *
- * Só entra em ação pra ARQUIVO (dataTransfer.types inclui "Files") — não
- * interfere no arrastar card entre colunas do quadro (setupDragAndDrop,
- * js/kanban-board.js), que usa "text/plain", nunca "Files".
- */
-document.addEventListener("dragover", e => {
-  if (temArquivoNoDrag(e)) e.preventDefault();
-});
-document.addEventListener("drop", e => {
-  if (!temArquivoNoDrag(e)) return;
-  e.preventDefault();
-  mostrarToast("Abra uma tarefa primeiro pra soltar o arquivo nela.", "erro");
-});
 
 async function subirArquivoArrastadoParaCard(task, arquivo) {
   if (arquivo.size > LIMITE_UPLOAD_ARRASTADO_BYTES) {
@@ -1848,7 +1842,20 @@ async function subirArquivoArrastadoParaCard(task, arquivo) {
  * são de js/bee.js, carregado DEPOIS deste arquivo — daí o typeof-guard.
  */
 async function avisarBeeSobreUploadNovo(taskId, nomeArquivo) {
-  const dataBee = await chamarBackend({ acao: "beeAvisarUploadNovo", taskId, nomeArquivo });
+  registrarFalaDaBeeSobrePasta(taskId, await chamarBackend({ acao: "beeAvisarUploadNovo", taskId, nomeArquivo }));
+}
+
+/**
+ * Mesmas 3 ações da pasta do card, avisadas a partir de um link do Drive
+ * colado num comentário normal (em vez de um arquivo arrastado de
+ * verdade) — ver beeAvisarLinkDriveNoComentario, Bee.gs, e o gancho em
+ * enviarParaAlvo, acima.
+ */
+async function avisarBeeSobreLinkDriveNoComentario(taskId) {
+  registrarFalaDaBeeSobrePasta(taskId, await chamarBackend({ acao: "beeAvisarLinkDriveNoComentario", taskId }));
+}
+
+function registrarFalaDaBeeSobrePasta(taskId, dataBee) {
   if (!dataBee || !dataBee.ok) return;
   if (typeof beeConversas === "undefined") return;
   beeConversas.set(taskId, dataBee.conversa);

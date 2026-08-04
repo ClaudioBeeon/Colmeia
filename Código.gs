@@ -239,6 +239,8 @@ function handleRequest(e, method) {
         output = compararVersoesDoCard(body.taskId);
       } else if (body.acao === 'beeAvisarUploadNovo') {
         output = beeAvisarUploadNovo(body.taskId, body.nomeArquivo);
+      } else if (body.acao === 'beeAvisarLinkDriveNoComentario') {
+        output = beeAvisarLinkDriveNoComentario(body.taskId);
       } else if (body.acao === 'gerarLinkDeAprovacao') {
         output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor);
       } else if (body.acao === 'buscarAprovacaoPublica') {

@@ -901,6 +901,26 @@ function beeAvisarUploadNovo(taskId, nomeArquivo) {
   return { ok: true, conversa: conversa };
 }
 
+// Mesma fala/mesmos 3 botões de cima, mas pro outro caminho de chegar um
+// link do Drive na conversa: colar o link direto num comentário normal,
+// em vez de arrastar o arquivo (que já sobe pro Drive sozinho). Pedido do
+// Cláudio (2026-08-04): "comentei o link do drive, mas não apareceu a
+// mensagem da Bee". Texto diferente de propósito — aqui não foi o
+// Colmeia que subiu nada, só percebeu o link no que a pessoa escreveu.
+function beeAvisarLinkDriveNoComentario(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var conversa = lerConversaBee(taskId);
+  var agora = new Date().getTime();
+  conversa.push({
+    autor: 'bee',
+    texto: 'Vi que você colou um link do Drive aqui. Quer que eu faça algo com isso?',
+    quando: agora,
+    _acoesPasta: true
+  });
+  salvarConversaBee(taskId, conversa);
+  return { ok: true, conversa: conversa };
+}
+
 // ============ 5b) INSPIRAR ============
 //
 // O Colmeia NÃO consegue entrar no Behance/Pinterest e trazer as
