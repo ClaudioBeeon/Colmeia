@@ -559,6 +559,82 @@ function tarefaEhFilhaDe(taskId, parentTaskId) {
 }
 
 /**
+ * DIAGNÓSTICO — rode esta função no editor do Apps Script pra confirmar,
+ * contra o Runrun.it de verdade, duas coisas de uma vez:
+ *   1) dá pra criar uma tarefa já como SUBTAREFA de um card mãe;
+ *   2) dá pra ela nascer com o responsável ALOCADO.
+ *
+ * É o teste que decide se o fluxo de Alteração (o atendimento reprova e o
+ * Colmeia abre a subtarefa sozinho) é viável — não dá pra confiar na
+ * documentação aqui: este backend já foi enganado pelo Runrun.it com
+ * status 200 ignorando campo em pelo menos três casos.
+ *
+ * CRIA UMA TAREFA DE VERDADE. O título começa com "TESTE —" e o log
+ * termina dizendo como apagar.
+ */
+function testarCriarSubtarefaAlteracao() {
+  var CARD_MAE = 110172;
+  var QUEM = 'Cláudio';
+
+  Logger.log('=== TESTE: criar subtarefa alocada ===');
+  Logger.log('Card mãe: ' + CARD_MAE + ' | Alocar pra: ' + QUEM);
+  Logger.log('');
+
+  var pai = runrunFetch('/tasks/' + CARD_MAE);
+  if (!pai || pai.erroFetch) {
+    Logger.log('!! Não consegui ler o card mãe. Resposta: ' + JSON.stringify(pai));
+    return;
+  }
+  Logger.log('Card mãe lido: "' + pai.title + '"');
+  Logger.log('  project_id: ' + pai.project_id);
+  Logger.log('  subtarefas hoje: ' + ((pai.subtask_ids || []).length));
+  Logger.log('');
+
+  var meuId = idDoUsuarioRunrunPorNome(QUEM);
+  Logger.log('ID de ' + QUEM + ' no Runrun.it: ' + meuId);
+  if (!meuId) Logger.log('  !! sem id, a alocação vai falhar');
+  Logger.log('');
+
+  Logger.log('--- Criando... ---');
+  var r = criarTarefaRunrun({
+    titulo: 'TESTE — Alteração V1 (pode apagar)',
+    parentTaskId: CARD_MAE,
+    responsavelId: meuId,
+    descricao: 'Tarefa de teste criada pelo Colmeia pra validar o fluxo de Alteração. Pode apagar.',
+    autor: QUEM
+  });
+
+  Logger.log('Resposta: ' + JSON.stringify(r));
+  Logger.log('');
+  Logger.log('--- RESULTADO ---');
+  if (!r.ok) {
+    Logger.log('❌ Não criou. Motivo: ' + r.error);
+    return;
+  }
+  Logger.log('✅ Tarefa criada: ' + r.link);
+  Logger.log((r.virouSubtarefa ? '✅' : '❌') + ' Virou subtarefa do card mãe' +
+    (r.diagnosticoSubtarefa ? ' (' + r.diagnosticoSubtarefa + ')' : ''));
+  Logger.log((r.alocou ? '✅' : '❌') + ' Alocou ' + QUEM +
+    (r.diagnosticoAlocacao ? ' (' + r.diagnosticoAlocacao + ')' : ''));
+  Logger.log('');
+
+  // Confere lendo de volta — a prova final, independente do que a
+  // resposta da criação disse.
+  var nova = runrunFetch('/tasks/' + r.taskId);
+  if (nova && !nova.erroFetch) {
+    Logger.log('Conferindo a tarefa criada:');
+    Logger.log('  parent_task_id: ' + nova.parent_task_id + (String(nova.parent_task_id) === String(CARD_MAE) ? '  ← certo' : '  ← NÃO é filha!'));
+    Logger.log('  responsible_name: ' + nova.responsible_name);
+    Logger.log('  assignments: ' + JSON.stringify(nova.assignments || []));
+  }
+
+  Logger.log('');
+  Logger.log('Pra apagar: abre ' + r.link + ' e exclui, ou roda no editor:');
+  Logger.log('  runrunRequest("/tasks/' + r.taskId + '", "delete", null, RUNRUN_USER_TOKEN)');
+  Logger.log('=== FIM. Copie TUDO acima e mande pro Claude. ===');
+}
+
+/**
  * Ajusta a estimativa de horas de uma tarefa.
  */
 function ajustarEstimativaTarefa(taskId, minutos, autor) {
