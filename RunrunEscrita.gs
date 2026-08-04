@@ -652,6 +652,75 @@ function testarCriarSubtarefaAlteracao() {
 }
 
 /**
+ * DIAGNÓSTICO — o projeto fechado bloqueia SÓ criar tarefa, ou bloqueia
+ * também comentar e reatribuir?
+ *
+ * Isso decide o plano B do fluxo de Alteração (ideia do Cláudio): quando
+ * o projeto estiver fechado e não der pra abrir a subtarefa, o Colmeia
+ * comenta no card mãe marcando o designer e passa o card pra ele.
+ *
+ * SEGURANÇA: o comentário é aditivo (dá pra apagar). A reatribuição é
+ * testada alocando a tarefa pra QUEM JÁ É O DONO dela — se a API aceitar,
+ * sabemos que reatribuir funciona em projeto fechado, sem trocar o
+ * responsável de ninguém nem disparar notificação indevida.
+ */
+function testarComentarEReatribuirEmProjetoFechado() {
+  var CARD_FECHADO = 110172; // o do teste anterior, projeto arquivado
+  var QUEM_MARCAR = 'Cláudio';
+
+  Logger.log('=== TESTE: projeto fechado bloqueia o quê? ===');
+  Logger.log('Card: ' + CARD_FECHADO);
+  Logger.log('');
+
+  var t = runrunFetch('/tasks/' + CARD_FECHADO);
+  if (!t || t.erroFetch) {
+    Logger.log('!! Não consegui ler a tarefa: ' + JSON.stringify(t));
+    return;
+  }
+  Logger.log('Tarefa: "' + t.title + '"');
+  Logger.log('  responsável atual: ' + t.responsible_name + ' (' + t.responsible_id + ')');
+
+  var p = runrunFetch('/projects/' + t.project_id);
+  Logger.log('  projeto: "' + (p && p.name) + '" | is_closed: ' + (p && p.is_closed));
+  if (p && !p.is_closed) {
+    Logger.log('');
+    Logger.log('⚠ Esse projeto NÃO está fechado — o teste não prova nada.');
+    Logger.log('  Troque CARD_FECHADO por uma tarefa de projeto arquivado.');
+    return;
+  }
+  Logger.log('');
+
+  // ---- 1) Dá pra COMENTAR? ----
+  Logger.log('--- 1) Comentar (com menção) ---');
+  var texto = 'TESTE do Colmeia (pode apagar) — <mention>@' + QUEM_MARCAR + '</mention> ' +
+    'conferindo se dá pra comentar em projeto fechado.';
+  var c = adicionarComentario(CARD_FECHADO, texto, null);
+  Logger.log('Resposta: ' + JSON.stringify(c));
+  Logger.log(c && c.ok ? '✅ COMENTAR FUNCIONA em projeto fechado' : '❌ Comentar TAMBÉM é bloqueado');
+  Logger.log('');
+
+  // ---- 2) Dá pra REATRIBUIR? ----
+  // Aloca pro MESMO dono atual: inofensivo, mas passa pelo mesmo caminho
+  // de API que uma reatribuição de verdade passaria.
+  Logger.log('--- 2) Reatribuir (pro mesmo dono, sem mudar nada) ---');
+  if (!t.responsible_id) {
+    Logger.log('⚠ A tarefa não tem responsável — não dá pra testar sem trocar o dono de verdade.');
+  } else {
+    var r = alocarResponsavelNaTarefa(CARD_FECHADO, t.responsible_id, QUEM_MARCAR);
+    Logger.log('Resposta: ' + JSON.stringify(r));
+    Logger.log(r && r.ok ? '✅ REATRIBUIR FUNCIONA em projeto fechado' : '❌ Reatribuir é bloqueado');
+  }
+
+  Logger.log('');
+  Logger.log('--- CONCLUSÃO ---');
+  Logger.log('Se os dois deram ✅, o plano B do Cláudio funciona:');
+  Logger.log('  projeto fechado → comenta no card mãe marcando o designer + passa o card pra ele.');
+  Logger.log('');
+  Logger.log('Lembre de apagar o comentário de teste no card ' + CARD_FECHADO + '.');
+  Logger.log('=== FIM. Copie TUDO acima e mande pro Claude. ===');
+}
+
+/**
  * DIAGNÓSTICO — acha sozinho um card mãe que dê pra usar no teste acima,
  * pra ninguém precisar caçar isso na mão: varre as tarefas ABERTAS do
  * time, pega as que têm subtarefas (ou seja, são card mãe) e confere se
