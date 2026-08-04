@@ -57,10 +57,45 @@
   .titulo { font-size: 19px; font-weight: 700; margin: 0 0 2px; }
   .subtitulo { font-size: 14px; color: var(--text-secondary); margin: 0 0 16px; }
   .imagem-box {
+    position: relative;
     border-radius: 12px; overflow: hidden; background: var(--bg);
-    border: 1px solid var(--border); margin-bottom: 18px;
+    border: 1px solid var(--border); margin-bottom: 10px;
   }
   .imagem-box img { display: block; width: 100%; height: auto; }
+  .imagem-box.marcavel { cursor: crosshair; }
+
+  /* Pins: marcar um ponto exato na imagem (pedido do Cláudio,
+     2026-08-04) — clica na imagem, solta um pino numerado, escreve o
+     que precisa mudar ali. Posição em PORCENTAGEM (não pixel), pra
+     acompanhar a imagem em qualquer tamanho de tela. */
+  #pinsOverlay { position: absolute; inset: 0; pointer-events: none; }
+  .pin-marcador {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--amarelo); color: #16181d; font-weight: 800; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    pointer-events: auto; cursor: pointer;
+  }
+  .dica-pins {
+    font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pins-lista { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
+  .pin-linha { display: flex; align-items: center; gap: 8px; }
+  .pin-linha-numero {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--amarelo); color: #16181d;
+    font-weight: 800; font-size: 11px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .pin-linha input {
+    font: inherit; font-size: 13.5px; flex: 1; min-width: 0;
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  .pin-linha-texto { flex: 1; font-size: 13.5px; }
+  .pin-linha-remover {
+    flex: 0; min-width: auto; width: 26px; height: 26px; padding: 0;
+    border-radius: 50%; background: var(--bg); color: var(--text-secondary); font-size: 15px;
+  }
   .acoes { display: flex; gap: 10px; flex-wrap: wrap; }
   button {
     font: inherit; cursor: pointer; border: none; border-radius: 12px;
@@ -115,7 +150,12 @@
   <div id="telaAprovacao" class="card" hidden>
     <p class="titulo" id="tituloTarefa"></p>
     <p class="subtitulo" id="nomeCliente"></p>
-    <div class="imagem-box"><img id="imagemPeca" alt="Peça pra aprovação"></div>
+    <div class="imagem-box" id="imagemBox">
+      <img id="imagemPeca" alt="Peça pra aprovação">
+      <div id="pinsOverlay"></div>
+    </div>
+    <p class="dica-pins" id="dicaPins" hidden>📍 Clique na imagem pra marcar um ponto exato</p>
+    <div class="pins-lista" id="pinsLista" hidden></div>
 
     <div id="blocoPendente">
       <div class="acoes">
@@ -175,7 +215,78 @@
         ? "Você pediu: “" + respostaTexto + "”"
         : "Já avisamos o time — eles entram em contato.";
     }
+    modoLeitura = true;
+    document.getElementById("imagemBox").classList.remove("marcavel");
+    document.getElementById("dicaPins").hidden = true;
+    renderPins();
   }
+
+  // ===== Pins: marcar um ponto exato na imagem =====
+  // Clica na imagem -> solta um pino numerado -> escreve o que precisa
+  // mudar naquele ponto. Posição guardada em PORCENTAGEM da imagem (x,
+  // y de 0 a 100), não em pixel — assim funciona em qualquer tamanho de
+  // tela, do celular ao desktop. Depois de responder (ou se o link já
+  // veio respondido), vira só leitura: mostra onde foram marcados, sem
+  // deixar adicionar/editar mais nada.
+  var pins = [];
+  var modoLeitura = false;
+
+  function renderPins() {
+    var overlay = document.getElementById("pinsOverlay");
+    overlay.innerHTML = pins.map(function (p, i) {
+      return '<div class="pin-marcador" style="left:' + p.x + '%;top:' + p.y + '%" title="Ponto ' + (i + 1) + '">' + (i + 1) + '</div>';
+    }).join("");
+
+    var lista = document.getElementById("pinsLista");
+    if (!pins.length) {
+      lista.hidden = true;
+      lista.innerHTML = "";
+      return;
+    }
+    lista.hidden = false;
+    lista.innerHTML = pins.map(function (p, i) {
+      if (modoLeitura) {
+        return '<div class="pin-linha"><span class="pin-linha-numero">' + (i + 1) + '</span>' +
+          '<span class="pin-linha-texto">' + (p.texto ? escaparTexto(p.texto) : '(sem descrição)') + '</span></div>';
+      }
+      return '<div class="pin-linha">' +
+        '<span class="pin-linha-numero">' + (i + 1) + '</span>' +
+        '<input type="text" placeholder="O que precisa mudar aqui?" value="' + escaparTexto(p.texto || "") + '" data-pin-indice="' + i + '">' +
+        '<button type="button" class="pin-linha-remover" data-pin-remover="' + i + '" aria-label="Remover ponto">×</button>' +
+        '</div>';
+    }).join("");
+
+    if (!modoLeitura) {
+      lista.querySelectorAll("input[data-pin-indice]").forEach(function (input) {
+        input.addEventListener("input", function () {
+          pins[Number(input.dataset.pinIndice)].texto = input.value;
+        });
+      });
+      lista.querySelectorAll("[data-pin-remover]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          pins.splice(Number(btn.dataset.pinRemover), 1);
+          renderPins();
+        });
+      });
+    }
+  }
+
+  function escaparTexto(t) {
+    var div = document.createElement("div");
+    div.textContent = t;
+    return div.innerHTML;
+  }
+
+  document.getElementById("imagemBox").addEventListener("click", function (e) {
+    if (modoLeitura || e.target.closest(".pin-marcador")) return;
+    var box = document.getElementById("imagemBox").getBoundingClientRect();
+    var x = ((e.clientX - box.left) / box.width) * 100;
+    var y = ((e.clientY - box.top) / box.height) * 100;
+    pins.push({ x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)), texto: "" });
+    renderPins();
+    var novoInput = document.querySelector('input[data-pin-indice="' + (pins.length - 1) + '"]');
+    if (novoInput) novoInput.focus();
+  });
 
   var codigo = pegarCodigo();
   if (!codigo) {
@@ -193,7 +304,11 @@
       mostrarTela("telaAprovacao");
 
       if (data.status && data.status !== "pendente") {
+        pins = data.pins || [];
         mostrarComoRespondido(data.status, data.respostaTexto);
+      } else {
+        document.getElementById("imagemBox").classList.add("marcavel");
+        document.getElementById("dicaPins").hidden = false;
       }
 
       document.getElementById("btnAprovar").addEventListener("click", function () {
@@ -216,7 +331,7 @@
     botoes.forEach(function (b) { b.disabled = true; });
     document.getElementById("erroEnvio").style.display = "none";
 
-    chamar({ acao: "responderAprovacaoPublica", codigo: codigo, aprovado: aprovado, respostaTexto: respostaTexto })
+    chamar({ acao: "responderAprovacaoPublica", codigo: codigo, aprovado: aprovado, respostaTexto: respostaTexto, pins: pins })
       .then(function (data) {
         if (!data || !data.ok) {
           botoes.forEach(function (b) { b.disabled = false; });

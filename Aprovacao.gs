@@ -31,10 +31,16 @@ function getAprovacoesSheet() {
   var sheet = ss.getSheetByName('Aprovacoes');
   if (!sheet) {
     sheet = ss.insertSheet('Aprovacoes');
-    sheet.getRange('A1:L1').setValues([[
+    sheet.getRange('A1:M1').setValues([[
       'codigo', 'taskId', 'cliente', 'tituloTarefa', 'fileId', 'nomeArquivo',
-      'mimeType', 'criadoEm', 'status', 'respostaTexto', 'respondidoEm', 'autor'
+      'mimeType', 'criadoEm', 'status', 'respostaTexto', 'respondidoEm', 'autor', 'pins'
     ]]);
+  }
+  // Planilhas criadas antes dos pins (2026-08-04) não têm a coluna M —
+  // cria ela sozinha na primeira vez que alguém ler/gravar depois dessa
+  // versão (mesmo padrão de getLinksClientesSheet, Planilha.gs).
+  if (sheet.getLastColumn() < 13) {
+    sheet.getRange(1, 13).setValue('pins');
   }
   return sheet;
 }
@@ -133,18 +139,37 @@ function buscarAprovacaoPublica(codigo) {
     nomeArquivo: linha.nomeArquivo,
     status: linha.status,
     respostaTexto: linha.respostaTexto,
+    pins: parsearPins(linha.pins),
     base64: imagem.base64,
     mimeType: imagem.mimeType
   };
 }
 
+function parsearPins(json) {
+  if (!json) return [];
+  try {
+    var lista = JSON.parse(json);
+    return Array.isArray(lista) ? lista : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 /**
- * O cliente respondeu (Aprovar ou Pedir ajuste). Grava a resposta E avisa
+ * O cliente respondeu (Aprovar ou Pedir ajuste). Grava a resposta + os
+ * PINS (pontos marcados na imagem — ver aprovar.html, pedido do Cláudio
+ * 2026-08-04: "ícones de pins pro cliente marcar algo na arte") E avisa
  * o designer com um comentário automático na tarefa — fecha o ciclo sem
  * precisar de mais nenhuma tela (mesmo espírito do "comenta sozinho" do
  * upload arrastado, ver subirArquivoNoCard, Drive.gs).
+ *
+ * Os pins não viram imagem marcada dentro do comentário do Runrun.it
+ * (o Apps Script não tem como desenhar em cima da imagem) — o
+ * comentário lista o texto de cada pin numerado e aponta de volta pro
+ * MESMO link de aprovação, que passa a mostrar os pins de verdade,
+ * sobre a imagem, na posição exata onde o cliente marcou.
  */
-function responderAprovacaoPublica(codigo, aprovado, respostaTexto) {
+function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
   if (!codigo) return { ok: false, error: 'Link inválido.' };
 
   var lock = LockService.getScriptLock();
@@ -161,20 +186,33 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto) {
     linha = linhaParaObjetoDeAprovacao(linhas[indice]);
     if (linha.status !== 'pendente') {
       lock.releaseLock();
-      return { ok: true, jaRespondido: true, status: linha.status, respostaTexto: linha.respostaTexto };
+      return { ok: true, jaRespondido: true, status: linha.status, respostaTexto: linha.respostaTexto, pins: parsearPins(linha.pins) };
     }
     var status = aprovado ? 'aprovado' : 'ajuste';
+    var pinsTexto = (pins && pins.length) ? JSON.stringify(pins) : '';
     sheet.getRange(indice + 1, 9, 1, 3).setValues([[status, respostaTexto || '', new Date().getTime()]]);
+    sheet.getRange(indice + 1, 13).setValue(pinsTexto);
     linha.status = status;
+    linha.pins = pinsTexto;
   } finally {
     lock.releaseLock();
   }
 
   try {
-    var textoComentario = aprovado
+    var pinsList = parsearPins(linha.pins);
+    var partes = [];
+    partes.push(aprovado
       ? '✅ Cliente aprovou "' + linha.nomeArquivo + '" pelo link de aprovação.'
-      : '✏️ Cliente pediu ajuste em "' + linha.nomeArquivo + '"' + (respostaTexto ? ': ' + respostaTexto : '.');
-    adicionarComentario(linha.taskId, textoComentario, linha.autor || null);
+      : '✏️ Cliente pediu ajuste em "' + linha.nomeArquivo + '".');
+    if (respostaTexto) partes.push(respostaTexto);
+    if (pinsList.length) {
+      partes.push((pinsList.length === 1 ? '1 ponto marcado' : pinsList.length + ' pontos marcados') +
+        ' na imagem — abre o link de aprovação de novo pra ver exatamente onde:');
+      pinsList.forEach(function (p, i) {
+        partes.push((i + 1) + '. ' + (p.texto || '(sem descrição)'));
+      });
+    }
+    adicionarComentario(linha.taskId, partes.join('\n'), linha.autor || null);
   } catch (e) { /* a resposta já foi salva na planilha — o comentário é um extra, não trava por causa dele */ }
 
   return { ok: true, status: linha.status };
@@ -184,7 +222,8 @@ function linhaParaObjetoDeAprovacao(linha) {
   return {
     codigo: linha[0], taskId: linha[1], cliente: linha[2], tituloTarefa: linha[3],
     fileId: linha[4], nomeArquivo: linha[5], mimeType: linha[6], criadoEm: linha[7],
-    status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11]
+    status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11],
+    pins: linha[12] || ''
   };
 }
 
