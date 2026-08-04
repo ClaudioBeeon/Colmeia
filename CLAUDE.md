@@ -493,7 +493,10 @@ MESMA ação `pedirConferenciaInterna`.
 1. **A fala da Bee de "arquivo novo"** (js/notificacoes-uploads.js) ganhou a pastilha principal
    "Enviar para revisão". É o caminho automático — aparece na hora em que a peça
    acabou de ficar pronta, sem ninguém precisar lembrar de nada.
-2. **O botão "Enviar para revisão"** na coluna da direita do card, junto do Hub do
+2. **O botão "Enviar para revisão"** — que vira **"Acessar página de aprovação"** depois de usado
+   (`verificarRevisaoJaEnviada`), mesma ideia do "Criar pasta do card" → "Acessar pasta do card"
+   logo acima dele: botão que não muda depois de usado convida a clicar de novo sem querer, e quem
+   clica não tem como saber se já mandou. Fica na coluna da direita do card, junto do Hub do
    cliente (`#apvPedirBtn`, js/detalhe-modal.js).
 
 **Mandar pra revisão faz DUAS coisas:** põe a peça na fila da tela de conferência **e** deixa no

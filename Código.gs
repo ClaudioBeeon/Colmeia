@@ -263,6 +263,8 @@ function handleRequest(e, method) {
         output = aprovarInternamente(body.taskId, body.nomePeca, body.aprovadoPor);
       } else if (body.acao === 'devolverParaDesigner') {
         output = devolverParaDesigner(body);
+      } else if (body.acao === 'buscarConferenciaDaTarefa') {
+        output = buscarConferenciaDaTarefa(body.taskId);
       } else if (body.acao === 'buscarDevolucaoDaTarefa') {
         output = buscarDevolucaoDaTarefa(body.taskId);
       } else if (body.acao === 'buscarDevolucaoPublica') {

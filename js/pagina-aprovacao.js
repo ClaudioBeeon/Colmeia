@@ -1139,11 +1139,65 @@ async function pedirAprovacaoDoAtendimento(task, btn, nomePeca) {
     return false;
   }
 
-  rascunharComentarioDeRevisao(task, (data.pecas || [])[0]);
+  // Qual peça o backend realmente mandou — pode ser diferente do que veio
+  // no parâmetro (sem `nomePeca`, ele escolhe a mexida por último).
+  const pecaEnviada = (data.pecas || [])[0];
+  rascunharComentarioDeRevisao(task, pecaEnviada);
+
+  // O botão passa a ser um atalho pra página de aprovação, na hora — sem
+  // esperar reabrir o card. Guarda também na tarefa, pra sobreviver ao
+  // pop-up ser redesenhado sozinho pela varredura do quadro.
+  task._conferenciaPeca = pecaEnviada || "";
+  if (btn) marcarBotaoComoJaEnviado(btn, task.id, pecaEnviada);
 
   const nomes = (data.pecas || []).join(", ");
   mostrarToast(`${nomes || "A peça"} foi pro atendimento conferir.`, "sucesso");
   return true;
+}
+
+/**
+ * O botão do card sabe em que estado está: antes de mandar diz "Enviar
+ * para revisão"; depois vira "Acessar página de aprovação" e leva direto
+ * pra peça.
+ *
+ * É o mesmo comportamento que o botão da pasta do card já tinha ("Criar
+ * pasta do card" → "Acessar pasta do card", ver verificarPastaJaSalva em
+ * js/chat-comentarios.js) — e existe pelo mesmo motivo: um botão que não
+ * muda depois de usado convida a clicar de novo sem querer, e quem clica
+ * não tem como saber se já mandou ou não.
+ *
+ * Guarda o resultado na própria tarefa (`_conferenciaPeca`), então reabrir
+ * o mesmo card não pergunta de novo. Falha de rede não vira "nunca foi
+ * mandada": o botão só fica no texto de sempre e tenta na próxima abertura.
+ */
+async function verificarRevisaoJaEnviada(task, btn) {
+  if (!task.id) return;
+  const taskId = task.id;
+
+  if (task._conferenciaPeca !== undefined) {
+    if (task._conferenciaPeca !== null) marcarBotaoComoJaEnviado(btn, taskId, task._conferenciaPeca);
+    return;
+  }
+
+  const data = await chamarBackend({ acao: "buscarConferenciaDaTarefa", taskId });
+  if (!data || !data.ok || caiuARede(data)) return;
+
+  // Trocou de tarefa enquanto carregava? Compara por id, nunca por
+  // referência (bug recorrente do CLAUDE.md), e busca o botão de novo.
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
+  const btnAgora = document.getElementById("apvPedirBtn");
+  if (!btnAgora) return;
+
+  const c = data.conferencia;
+  task._conferenciaPeca = c ? (c.nomePeca || "") : null;
+  if (c) marcarBotaoComoJaEnviado(btnAgora, taskId, c.nomePeca);
+}
+
+function marcarBotaoComoJaEnviado(btn, taskId, nomePeca) {
+  if (typeof roteadorLinkDaConferencia !== "function") return;
+  btn.dataset.linkRevisao = roteadorLinkDaConferencia(taskId, nomePeca);
+  const label = document.getElementById("apvPedirBtnLabel");
+  if (label) label.textContent = "Acessar página de aprovação";
 }
 
 /**

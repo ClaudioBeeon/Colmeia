@@ -663,7 +663,12 @@
    Este é o caminho MANUAL de mandar uma peça pra conferência; o
    automático é a fala da Bee quando entra arquivo novo na pasta. Os dois
    existem porque a fala da Bee depende de uma varredura e pode ter sido
-   dispensada — e aí a peça ficaria parada sem ninguém perceber. */
+   dispensada — e aí a peça ficaria parada sem ninguém perceber.
+
+   Sem subtítulo explicativo: o bloco ficava alto demais no meio de uma
+   coluna que é toda de controles curtos (pedido do Cláudio). Depois de
+   usado, o rótulo vira "Acessar página de aprovação" — mesma ideia do
+   "Criar pasta do card" → "Acessar pasta do card" logo acima. */
 .apv-pedir-btn {
   width: 100%; display: flex; align-items: center; gap: 10px;
   padding: 11px 13px; cursor: pointer; text-align: left;
@@ -680,5 +685,4 @@
   display: flex; align-items: center; justify-content: center;
 }
 .apv-pedir-btn-icone svg { width: 15px; height: 15px; }
-.apv-pedir-btn-txt { display: flex; flex-direction: column; gap: 2px; font-size: 13px; font-weight: 600; }
-.apv-pedir-btn-sub { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.apv-pedir-btn-txt { font-size: 13px; font-weight: 600; line-height: 1.3; }

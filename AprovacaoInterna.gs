@@ -280,6 +280,28 @@ function listarConferenciasPendentes() {
 }
 
 /**
+ * Essa tarefa já foi mandada pra revisão? Devolve a linha mais recente,
+ * qualquer que seja a situação dela.
+ *
+ * Serve pro botão do card saber em que estado ele está: antes de mandar,
+ * ele diz "Enviar para revisão"; depois, vira "Acessar página de
+ * aprovação" e leva direto pra peça. Mesmo comportamento que o botão da
+ * pasta do card já tinha ("Criar pasta" → "Acessar pasta") — um botão que
+ * não muda depois de usado convida a clicar de novo sem querer.
+ */
+function buscarConferenciaDaTarefa(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var linhas = getConferenciasSheet().getDataRange().getValues();
+  var achada = null;
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) !== String(taskId)) continue;
+    var atual = { nomePeca: linhas[i][3], status: linhas[i][11], pedidoEm: linhas[i][10] };
+    if (!achada || String(atual.pedidoEm) > String(achada.pedidoEm)) achada = atual;
+  }
+  return { ok: true, conferencia: achada };
+}
+
+/**
  * Tudo que a tela de conferência precisa, numa chamada só.
  *
  * Junta o que foi PEDIDO (descrição da tarefa, prazo, card mãe) com o que

@@ -858,10 +858,7 @@ function renderDetail() {
                 <span class="apv-pedir-btn-icone">
                   <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </span>
-                <span class="apv-pedir-btn-txt">
-                  Enviar para revisão
-                  <span class="apv-pedir-btn-sub">A peça mais nova da pasta vai pro atendimento conferir</span>
-                </span>
+                <span class="apv-pedir-btn-txt" id="apvPedirBtnLabel">Enviar para revisão</span>
               </button>
             </div>
           ` : ""}
@@ -1061,7 +1058,14 @@ function renderDetail() {
   // batido. Mesmo par de "Criar pasta do card" + "Linkar pasta certa".
   const apvPedirBtn = document.getElementById("apvPedirBtn");
   if (apvPedirBtn && typeof pedirAprovacaoDoAtendimento === "function") {
-    apvPedirBtn.addEventListener("click", () => pedirAprovacaoDoAtendimento(task, apvPedirBtn));
+    apvPedirBtn.addEventListener("click", () => {
+      // Já mandada: o botão vira um atalho pra própria página de
+      // aprovação, em vez de mandar de novo (ver verificarRevisaoJaEnviada).
+      const link = apvPedirBtn.dataset.linkRevisao;
+      if (link) { window.open(link, "_blank", "noopener"); return; }
+      pedirAprovacaoDoAtendimento(task, apvPedirBtn);
+    });
+    verificarRevisaoJaEnviada(task, apvPedirBtn);
   }
 
   wireEdicaoEntregaDesejada(task);
