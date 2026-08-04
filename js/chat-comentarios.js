@@ -4,6 +4,9 @@ let descMaeAberta = false;
 // Aba "Tarefa original" aberta? (só existe em subtarefa de alteração — ver
 // ehTarefaDeAlteracao em js/detalhe-modal.js)
 let originalAberta = false;
+// Aba "Anexos" aberta? (pedido do Cláudio, 2026-08-04 — antes vivia
+// espremida na coluna da direita, agora é uma aba própria)
+let anexosAberta = false;
 
 // ===== Chat flutuante (comentários em pop-up separado, fora do card) =====
 // "aqui" (a tarefa aberta), "mae" (o card mãe dela), "todos" (Todos os
@@ -1090,11 +1093,16 @@ async function carregarTudoDaTarefa(task) {
     atualizarLabelLinkManual(true);
   }
 
-  // Anexos: vieram junto (no Runrun.it eles moram dentro dos comentários).
-  // Numa subtarefa de alteração ainda falta buscar os da tarefa original,
-  // então nesse caso deixa carregarAnexos cuidar de tudo.
-  if (ehTarefaDeAlteracao(task)) carregarAnexos(task);
-  else desenharAnexos(task, data.anexos || []);
+  // Anexos: agora é uma aba própria (ver tabAnexos, js/detalhe-modal.js),
+  // sob demanda — só busca de verdade quando a pessoa clica nela
+  // (carregarAnexos, mais abaixo, já junta a família inteira: card mãe +
+  // todas as subtarefas). Só desenha de graça aqui quando a tarefa NÃO
+  // tem família nenhuma (não é alteração, não tem card mãe, não é ela
+  // mesma um card mãe) — nesse caso os anexos já vieram nessa mesma
+  // resposta, sem custo nenhum, e é tudo que existe mesmo.
+  if (!ehTarefaDeAlteracao(task) && !task.parentTaskId && !data.temSubtarefas) {
+    desenharAnexos(task, data.anexos || []);
+  }
 
   // "É card mãe?" também já veio na mesma resposta.
   if (data.temSubtarefas) carregarFilhosSeForCardMae(task);
@@ -1105,48 +1113,83 @@ async function buscarAnexosDeUmaTarefa(taskId) {
   return data.ok ? (data.anexos || []) : [];
 }
 
-async function carregarAnexos(task) {
-  if (!task.id) return;
-  // Numa subtarefa de ALTERAÇÃO, os arquivos que o designer precisa (a peça
-  // que vai ser alterada) estão na tarefa ORIGINAL, não nela — então aqui
-  // busca nas duas e junta, marcando de onde cada arquivo veio. Por isso a
-  // checagem de attachmentsCount não pode mais barrar a busca de saída:
-  // a alteração costuma ter zero anexos próprios e é justamente aí que
-  // precisamos ir ver os da original.
-  const ehAlteracao = ehTarefaDeAlteracao(task);
-  if (!task.attachmentsCount && !ehAlteracao) return;
+/**
+ * Junta os anexos de TODA a família do card — a própria tarefa, o card
+ * mãe (se ela for subtarefa) e TODAS as subtarefas irmãs (se ela for
+ * card mãe, ou tiver irmãs) — cada anexo de fora marcado com de ONDE
+ * ele veio (_origemNome), pra desenharAnexos etiquetar o pill. Pedido do
+ * Cláudio (2026-08-04): "esses anexos precisam estar todos, de card
+ * mãe, subtarefas, o que tiver ali" — generaliza o que antes só existia
+ * pra "tarefa original" de uma alteração (a original é só mais uma
+ * irmã, então já cai aqui dentro sozinha).
+ */
+async function buscarTodosAnexosDaFamilia(task) {
+  const proprios = task.attachmentsCount ? await buscarAnexosDeUmaTarefa(task.id) : [];
 
-  let anexos = task.attachmentsCount ? await buscarAnexosDeUmaTarefa(task.id) : [];
+  let cardMae = null;
+  let irmas = [];
 
-  if (ehAlteracao) {
+  if (task.parentTaskId) {
     // O card mãe (e a lista de irmãs) já vem pré-carregado quando a
     // subtarefa abre; se ainda não chegou, espera.
     if (!cardMaeCache.has(task.id)) await precarregarCardMaeEmBackground(task.id);
-    const original = acharTarefaOriginalDaAlteracao(task);
-    if (original) {
-      const anexosOriginal = await buscarAnexosDeUmaTarefa(original.id);
-      anexos = anexos.concat(anexosOriginal.map(a => Object.assign({}, a, { _daOriginal: true })));
+    const info = cardMaeCache.get(task.id);
+    if (info && info.ok && info.temPai) {
+      cardMae = info.cardMae;
+      irmas = (info.subtarefas || []).filter(s => String(s.id) !== String(task.id));
     }
+  } else if (task.subtarefasResumo) {
+    // A própria tarefa É o card mãe (ver carregarFilhosSeForCardMae).
+    irmas = task.subtarefasResumo;
   }
+
+  const fontes = [];
+  if (cardMae) fontes.push({ id: cardMae.id, nome: "Card mãe" });
+  irmas.forEach(s => fontes.push({ id: s.id, nome: s.title || "Subtarefa" }));
+
+  const listas = await Promise.all(fontes.map(f => buscarAnexosDeUmaTarefa(f.id)));
+
+  const todos = proprios.slice();
+  fontes.forEach((f, i) => {
+    // _origemId: pra "abrir arquivo grande demais no Runrun.it" levar
+    // pra tarefa CERTA (a que tem o anexo), não pra tarefa que está
+    // aberta no Colmeia agora — ver desenharAnexos.
+    listas[i].forEach(a => todos.push(Object.assign({}, a, { _origemNome: f.nome, _origemId: f.id })));
+  });
+  return todos;
+}
+
+async function carregarAnexos(task) {
+  if (!task.id) return;
+  const anexos = await buscarTodosAnexosDaFamilia(task);
   if (!tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de tarefa enquanto carregava
   desenharAnexos(task, anexos);
 }
 
 /**
- * Desenha a lista de anexos na tela. Separado da BUSCA porque agora os
- * anexos podem chegar de dois caminhos: junto com todo o resto, no pedido
- * único de abrir o card (carregarTudoDaTarefa — no Runrun.it os anexos
- * moram dentro dos comentários, então vêm de graça), ou numa busca própria
- * (subtarefa de alteração, que também precisa dos anexos da tarefa
- * original). Os dois caminhos desenham igual, por aqui.
+ * Desenha a lista de anexos na tela, como pills — um por arquivo, com o
+ * nome, o tamanho e (quando veio de fora da própria tarefa) uma
+ * etiqueta de onde ele está: "Card mãe" ou o título da subtarefa (ver
+ * _origemNome, buscarTodosAnexosDaFamilia). Separado da BUSCA porque os
+ * anexos podem chegar de dois caminhos: junto com todo o resto, no
+ * pedido único de abrir o card (carregarTudoDaTarefa — só quando a
+ * tarefa não tem família nenhuma), ou na busca sob demanda da aba
+ * Anexos (carregarAnexos, que já junta a família inteira). Os dois
+ * caminhos desenham igual, por aqui.
  */
 function desenharAnexos(task, anexos) {
   if (task && task.id) anexosJaBuscados.set(String(task.id), anexos || []);
   const listaEl = document.getElementById("attachList");
-  if (!listaEl) return;
   const allBtn = document.getElementById("downloadAllBtn");
+  const contadorEl = document.getElementById("anexosTabCount");
+  if (contadorEl) {
+    const qtd = (anexos || []).length;
+    contadorEl.textContent = qtd;
+    contadorEl.hidden = qtd === 0;
+  }
+  if (!listaEl) return;
   if (!anexos || anexos.length === 0) {
-    listaEl.innerHTML = `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`;
+    listaEl.innerHTML = `<p class="attach-empty">Nenhum anexo na tarefa, no card mãe ou nas subtarefas.</p>`;
     if (allBtn) allBtn.hidden = true;
     return;
   }
@@ -1154,20 +1197,25 @@ function desenharAnexos(task, anexos) {
   listaEl.innerHTML = anexos.map(a => {
     const grande = anexoEhGrandeDemais(a.tamanho);
     return `
-    <button type="button" class="attach-item${grande ? " grande" : ""}" data-doc-id="${a.id}" data-nome="${escaparHTML(a.nome)}" data-grande="${grande ? "1" : ""}">
-      <span>${escaparHTML(a.nome)}${a._daOriginal ? ` <span class="attach-origem">da tarefa original</span>` : ""}${a.tamanho ? ` <span class="attach-size">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}${grande ? ` <span class="attach-runrun">abre no Runrun.it</span>` : ""}</span>
-      ${grande ? ICONE_ABRIR_FORA : ICONE_BAIXAR}
+    <button type="button" class="arquivo-pill${grande ? " grande" : ""}" data-doc-id="${a.id}" data-nome="${escaparHTML(a.nome)}" data-grande="${grande ? "1" : ""}" data-origem-id="${escaparHTML(a._origemId || task.id)}" title="${escaparHTML(a.nome)}">
+      <span class="arquivo-pill-icone">${grande ? ICONE_ABRIR_FORA : ICONE_BAIXAR}</span>
+      <span class="arquivo-pill-nome">${escaparHTML(a.nome)}</span>
+      ${a._origemNome ? `<span class="arquivo-pill-origem">${escaparHTML(a._origemNome)}</span>` : ""}
+      ${a.tamanho ? `<span class="arquivo-pill-tamanho">${formatarTamanhoArquivo(a.tamanho)}</span>` : ""}
+      ${grande ? `<span class="arquivo-pill-origem">abre no Runrun.it</span>` : ""}
     </button>
   `;
   }).join("");
-  listaEl.querySelectorAll(".attach-item").forEach(btn => {
+  listaEl.querySelectorAll(".arquivo-pill").forEach(btn => {
     btn.addEventListener("click", () => {
       // Arquivo grande já é desviado pro Runrun.it AQUI, no clique de
       // verdade — assim a aba nova nunca é barrada pelo navegador (o que
       // acontecia quando ela só era aberta depois de esperar a resposta
       // do backend, e sobrava só uma mensagem de erro vermelha na tela).
-      if (btn.dataset.grande) abrirAnexoNoRunrun(task.id, btn.dataset.nome);
-      else baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn, task.id);
+      // data-origem-id leva pra tarefa DONA do anexo (card mãe/subtarefa),
+      // não pra que está aberta no Colmeia agora.
+      if (btn.dataset.grande) abrirAnexoNoRunrun(btn.dataset.origemId, btn.dataset.nome);
+      else baixarAnexo(btn.dataset.docId, btn.dataset.nome, btn, btn.dataset.origemId);
     });
   });
   if (allBtn) allBtn.onclick = () => baixarTodosAnexos(anexos, allBtn, task.id);

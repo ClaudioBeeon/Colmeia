@@ -53,6 +53,7 @@ function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
   descMaeAberta = false;
+  anexosAberta = false;
   // Subtarefa de ALTERAÇÃO abre direto no contexto, não na Descrição (que
   // nessas subtarefas costuma ser genérica ou vazia): a aba "Tarefa
   // original" já vem aberta do lado da descrição, e o chat já abre na
@@ -725,6 +726,12 @@ function renderDetail() {
             ${ehTarefaDeAlteracao(task) ? `
               <button type="button" class="detail-tab" id="tabOriginal" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
             ` : ""}
+            <div class="detail-tabs-spacer"></div>
+            ${task.id ? `
+              <button type="button" class="detail-tab anexos-tab" id="tabAnexos" title="Arquivos da tarefa, do card mãe e das subtarefas, tudo junto">
+                Anexos <span class="anexos-tab-count" id="anexosTabCount" hidden>0</span>
+              </button>
+            ` : ""}
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
@@ -755,6 +762,27 @@ function renderDetail() {
                 <div class="descmae-titulo" id="originalTitulo">Procurando a tarefa original...</div>
                 <div class="original-meta" id="originalMeta"></div>
                 <div class="desc-text-real" id="originalTextReal"></div>
+              </div>
+            ` : ""}
+            ${task.id ? `
+              <div class="anexos-content" id="anexosContent" hidden>
+                <div class="anexos-secao">
+                  <div class="anexos-secao-label"><span>Ações da pasta do card</span></div>
+                  <div class="pill-row">
+                    <button type="button" class="acao-pill" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>
+                    <button type="button" class="acao-pill" id="beeCompararVersoesBtn" title="A Bee compara as duas versões mais recentes (arquivos '- v1', '- v2'...) da pasta do card">🔍 comparar versões</button>
+                    <button type="button" class="acao-pill" id="gerarLinkAprovacaoBtn" title="Gera um link sem login pro cliente aprovar (ou pedir ajuste) na peça mais recente da pasta do card">🔗 link de aprovação</button>
+                  </div>
+                </div>
+                <div class="anexos-secao">
+                  <div class="anexos-secao-label">
+                    <span>Arquivos</span>
+                    <button type="button" class="acao-pill baixar-todos-pill" id="downloadAllBtn" hidden>Baixar todos</button>
+                  </div>
+                  <div class="pill-row" id="attachList">
+                    <p class="attach-empty">Carregando anexos...</p>
+                  </div>
+                </div>
               </div>
             ` : ""}
           </div>
@@ -847,31 +875,6 @@ function renderDetail() {
                 </div>
               `;
             })()}
-          </div>
-          ${task.id ? `
-            <div class="side-block">
-              <span class="side-label">Ações da pasta do card</span>
-              <div class="side-acoes-bee">
-                <button type="button" class="side-acao-btn" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>
-                <button type="button" class="side-acao-btn" id="beeCompararVersoesBtn" title="A Bee compara as duas versões mais recentes (arquivos '- v1', '- v2'...) da pasta do card">🔍 comparar versões</button>
-                <button type="button" class="side-acao-btn" id="gerarLinkAprovacaoBtn" title="Gera um link sem login pro cliente aprovar (ou pedir ajuste) na peça mais recente da pasta do card">🔗 link de aprovação</button>
-              </div>
-            </div>
-          ` : ""}
-          <div class="side-block attach-block">
-            <div class="side-label-row">
-              <span class="side-label">Anexos</span>
-              <button type="button" class="download-all-btn" id="downloadAllBtn" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
-            </div>
-            <div class="attach-box">
-              <div class="attach-list" id="attachList">
-                ${task.id
-                  ? (task.attachmentsCount
-                      ? `<p class="attach-empty">Carregando anexos...</p>`
-                      : `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`)
-                  : `<p class="attach-empty">Nenhum anexo nessa tarefa.</p>`}
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1176,6 +1179,7 @@ function renderDetail() {
   document.getElementById("tabDesc").addEventListener("click", () => {
     descMaeAberta = false;
     originalAberta = false;
+    anexosAberta = false;
     applyCommentsState();
   });
   const tabDescMae = document.getElementById("tabDescMae");
@@ -1183,6 +1187,7 @@ function renderDetail() {
     tabDescMae.addEventListener("click", () => {
       descMaeAberta = true;
       originalAberta = false;
+      anexosAberta = false;
       applyCommentsState();
       carregarDescricaoCardMae(tasks[detailIdx] || task);
     });
@@ -1192,8 +1197,24 @@ function renderDetail() {
     tabOriginal.addEventListener("click", () => {
       originalAberta = true;
       descMaeAberta = false;
+      anexosAberta = false;
       applyCommentsState();
       carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
+    });
+  }
+  const tabAnexos = document.getElementById("tabAnexos");
+  if (tabAnexos) {
+    tabAnexos.addEventListener("click", () => {
+      anexosAberta = true;
+      descMaeAberta = false;
+      originalAberta = false;
+      applyCommentsState();
+      // Já buscou antes (voltou pra essa aba de novo)? Não busca de novo
+      // — evita repetir a busca da família inteira (card mãe + irmãs) a
+      // cada troca de aba. redesenharAnexosGuardados no fim do
+      // renderDetail cobre o caso de reabrir depois de um re-render.
+      const alvo = tasks[detailIdx] || task;
+      if (!anexosJaBuscados.has(String(alvo.id))) carregarAnexos(alvo);
     });
   }
 
@@ -1205,6 +1226,8 @@ function renderDetail() {
   // aba ficava selecionada mas vazia/"Carregando..." pra sempre. Busca
   // nada aqui se não tiver nada carregado ainda; se já tiver
   // (cardMaeCache/cache da alteração), volta na hora, sem esperar rede.
+  // Anexos tem o mesmo cuidado, mas via redesenharAnexosGuardados no
+  // fim desta função (chamado sempre, não só quando anexosAberta).
   if (descMaeAberta) carregarDescricaoCardMae(tasks[detailIdx] || task);
   if (originalAberta) carregarTarefaOriginalDaAlteracao(tasks[detailIdx] || task);
 
@@ -1567,18 +1590,22 @@ function applyCommentsState() {
   const childrenPanel = document.getElementById("childrenPanel");
   const tabDescMae = document.getElementById("tabDescMae");
   const tabOriginal = document.getElementById("tabOriginal");
+  const tabAnexos = document.getElementById("tabAnexos");
   const descContent = document.getElementById("descContent");
   const descMaeContent = document.getElementById("descMaeContent");
   const originalContent = document.getElementById("originalContent");
+  const anexosContent = document.getElementById("anexosContent");
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
   // Abas mutuamente exclusivas: Descrição (a padrão), Descrição card mãe,
-  // Tarefa original (só em subtarefa de alteração).
-  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta);
+  // Tarefa original (só em subtarefa de alteração), Anexos.
+  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta && !anexosAberta);
   if (tabDescMae) tabDescMae.classList.toggle("active", descMaeAberta);
   if (tabOriginal) tabOriginal.classList.toggle("active", originalAberta);
-  if (descContent) descContent.hidden = descMaeAberta || originalAberta;
+  if (tabAnexos) tabAnexos.classList.toggle("active", anexosAberta);
+  if (descContent) descContent.hidden = descMaeAberta || originalAberta || anexosAberta;
   if (descMaeContent) descMaeContent.hidden = !descMaeAberta;
   if (originalContent) originalContent.hidden = !originalAberta;
+  if (anexosContent) anexosContent.hidden = !anexosAberta;
 }
 
 /**
