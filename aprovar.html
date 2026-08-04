@@ -175,6 +175,10 @@
     <div id="blocoRespondido" hidden>
       <span class="pill-status" id="pillStatus"></span>
       <p class="estado-texto" id="textoRespondido" style="margin-top:10px;"></p>
+      <div class="acoes" id="acoesWhatsapp" hidden style="margin-top:14px;">
+        <button type="button" id="btnWhatsapp" style="background:#25D366;color:#fff;">📱 Enviar no WhatsApp também</button>
+        <button type="button" class="btn-cancelar" id="btnConcluir">Concluir</button>
+      </div>
     </div>
   </div>
 </div>
@@ -204,22 +208,55 @@
     var bloco = document.getElementById("blocoRespondido");
     bloco.hidden = false;
     var pill = document.getElementById("pillStatus");
+    var acoesWhatsapp = document.getElementById("acoesWhatsapp");
     if (status === "aprovado") {
       pill.className = "pill-status pill-aprovado";
       pill.textContent = "✅ Aprovado";
       document.getElementById("textoRespondido").textContent = "Obrigado! Já avisamos o time.";
+      acoesWhatsapp.hidden = true;
     } else {
       pill.className = "pill-status pill-ajuste";
       pill.textContent = "✏️ Ajuste pedido";
       document.getElementById("textoRespondido").textContent = respostaTexto
         ? "Você pediu: “" + respostaTexto + "”"
         : "Já avisamos o time — eles entram em contato.";
+      acoesWhatsapp.hidden = false;
+      document.getElementById("btnWhatsapp").onclick = function () {
+        window.open("https://wa.me/?text=" + encodeURIComponent(montarTextoWhatsapp(respostaTexto)), "_blank");
+      };
     }
     modoLeitura = true;
     document.getElementById("imagemBox").classList.remove("marcavel");
     document.getElementById("dicaPins").hidden = true;
     renderPins();
   }
+
+  // Pedido do Cláudio (2026-08-04): "usamos o whatsapp" — depois de pedir
+  // ajuste, oferecer mandar o mesmo texto pro WhatsApp também, além do
+  // aviso automático que já cai no Runrun.it (responderAprovacaoPublica,
+  // Aprovacao.gs). Sem número fixo no link (wa.me/?text=..., sem telefone
+  // antes do "?") — abre o seletor de conversa do próprio WhatsApp do
+  // cliente, pra ELE escolher o grupo da Beeon, não um número decidido
+  // pelo Colmeia.
+  function montarTextoWhatsapp(respostaTexto) {
+    var partes = [];
+    var cliente = document.getElementById("nomeCliente").textContent;
+    partes.push("✏️ Ajuste pedido" + (cliente ? " — " + cliente : ""));
+    partes.push(document.getElementById("tituloTarefa").textContent || "");
+    if (respostaTexto) partes.push('"' + respostaTexto + '"');
+    if (pins.length) {
+      partes.push((pins.length === 1 ? "1 ponto marcado" : pins.length + " pontos marcados") + " na imagem:");
+      pins.forEach(function (p, i) {
+        partes.push((i + 1) + ". " + (p.texto || "(sem descrição)"));
+      });
+    }
+    partes.push(location.href);
+    return partes.join("\n");
+  }
+
+  document.getElementById("btnConcluir").addEventListener("click", function () {
+    document.getElementById("acoesWhatsapp").hidden = true;
+  });
 
   // ===== Pins: marcar um ponto exato na imagem =====
   // Clica na imagem -> solta um pino numerado -> escreve o que precisa
