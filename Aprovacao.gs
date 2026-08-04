@@ -31,17 +31,17 @@ function getAprovacoesSheet() {
   var sheet = ss.getSheetByName('Aprovacoes');
   if (!sheet) {
     sheet = ss.insertSheet('Aprovacoes');
-    sheet.getRange('A1:M1').setValues([[
+    sheet.getRange('A1:N1').setValues([[
       'codigo', 'taskId', 'cliente', 'tituloTarefa', 'fileId', 'nomeArquivo',
-      'mimeType', 'criadoEm', 'status', 'respostaTexto', 'respondidoEm', 'autor', 'pins'
+      'mimeType', 'criadoEm', 'status', 'respostaTexto', 'respondidoEm', 'autor', 'pins', 'atendimento'
     ]]);
   }
-  // Planilhas criadas antes dos pins (2026-08-04) não têm a coluna M —
-  // cria ela sozinha na primeira vez que alguém ler/gravar depois dessa
-  // versão (mesmo padrão de getLinksClientesSheet, Planilha.gs).
-  if (sheet.getLastColumn() < 13) {
-    sheet.getRange(1, 13).setValue('pins');
-  }
+  // Planilhas criadas antes dos pins (2026-08-04) não têm a coluna M, e
+  // antes do atendimento (2026-08-04, mais tarde no mesmo dia) não têm a
+  // N — cria elas sozinhas na primeira vez que alguém ler/gravar depois
+  // dessa versão (mesmo padrão de getLinksClientesSheet, Planilha.gs).
+  if (sheet.getLastColumn() < 13) sheet.getRange(1, 13).setValue('pins');
+  if (sheet.getLastColumn() < 14) sheet.getRange(1, 14).setValue('atendimento');
   return sheet;
 }
 
@@ -56,8 +56,17 @@ function getAprovacoesSheet() {
  * porque só o frontend sabe o endereço de onde o Colmeia está publicado
  * hoje (ver ROTA_BASE, js/roteador-url.js — mesmo motivo de lá: assim
  * não quebra quando o domínio mudar pra colmeia.beeon.com.br).
+ *
+ * `atendimento`: quem vai "assinar" o comentário automático quando o
+ * cliente responder (ver responderAprovacaoPublica) — o atendimento
+ * responsável pelo CLIENTE, não o designer que gerou o link. Pedido do
+ * Cláudio (2026-08-04): "devia aparecer no runrun de verdade, já que o
+ * atendimento usa o runrun" — antes o comentário saía com a cara de
+ * quem tinha clicado em "gerar link", parecendo ele falando na terceira
+ * pessoa sobre o próprio cliente. `autor` continua guardado (é quem
+ * gerou o link, pra registro), mas quem assina é o atendimento.
  */
-function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor) {
+function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, atendimento) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
 
   var pastaInfo = buscarPastaSalvaDoCard(taskId);
@@ -103,7 +112,7 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor) {
     var sheet = getAprovacoesSheet();
     sheet.appendRow([
       codigo, taskId, cliente || '', tituloTarefa || '', escolhido.getId(), escolhido.getName(),
-      escolhido.getMimeType(), new Date().getTime(), 'pendente', '', '', autor || ''
+      escolhido.getMimeType(), new Date().getTime(), 'pendente', '', '', autor || '', '', atendimento || ''
     ]);
   } finally {
     lock.releaseLock();
@@ -212,7 +221,12 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
         partes.push((i + 1) + '. ' + (p.texto || '(sem descrição)'));
       });
     }
-    adicionarComentario(linha.taskId, partes.join('\n'), linha.autor || null);
+    // Assina como o ATENDIMENTO do cliente, não quem gerou o link — ver
+    // o comentário grande em gerarLinkDeAprovacao. tokenRunrunDoAutor já
+    // cai sozinho no token padrão se o atendimento ainda não tiver um
+    // configurado (ver RUNRUN_TOKENS_POR_EMAIL, Código.gs) — nada quebra
+    // enquanto o token dele não existir, só não assina certo ainda.
+    adicionarComentario(linha.taskId, partes.join('\n'), linha.atendimento || linha.autor || null);
   } catch (e) { /* a resposta já foi salva na planilha — o comentário é um extra, não trava por causa dele */ }
 
   return { ok: true, status: linha.status };
@@ -223,7 +237,7 @@ function linhaParaObjetoDeAprovacao(linha) {
     codigo: linha[0], taskId: linha[1], cliente: linha[2], tituloTarefa: linha[3],
     fileId: linha[4], nomeArquivo: linha[5], mimeType: linha[6], criadoEm: linha[7],
     status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11],
-    pins: linha[12] || ''
+    pins: linha[12] || '', atendimento: linha[13] || ''
   };
 }
 
