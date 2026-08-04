@@ -474,21 +474,55 @@ item flex IRMÃO do `.main` (empurra o quadro pra esquerda ao abrir, em vez de c
 comentário no próprio HTML dele), abrir ele com a página Bee sozinha visível já produz o layout
 "feed à esquerda, chat à direita" sem escrever uma linha de lógica de conversa nova.
 
-**Primeira versão do feed é de propósito enxuta.** Só mostra os dois tipos de evento que já tinham
-dado de verdade pronto, sem precisar de nada novo no backend — reaproveita as MESMAS buscas que
-"Minhas horas" já usa (`buscarEntreguesDoDesigner`, `buscarAtividadesDrive`):
-- tarefas que o designer entregou;
-- arquivos que o designer subiu no Drive.
+**O feed junta DOIS grupos de evento, e a diferença entre eles importa:**
 
-Comentário de alguém, prioridade que mudou, "o coordenador reorganizou seu dia" — os outros tipos
-de evento pensados na conversa de design — ficaram de fora por enquanto: pedem um registro (log)
-novo no backend que ainda não existe (ex: `definirPrioridade`, Planilha.gs, hoje só sobrescreve a
-prioridade, não guarda histórico de quem mudou nem quando). Fica pra uma fase 2.
+1. **O que VOCÊ fez** — reconstruído do estado atual, não precisa de log nenhum. Reaproveita as
+   MESMAS buscas que "Minhas horas" já usa: `buscarEntreguesDoDesigner` (entregas) e
+   `buscarAtividadesDrive` (uploads). Tem histórico desde sempre.
+2. **O que OS OUTROS fizeram nas suas tarefas** — anotado na hora que acontece, na aba
+   `FeedEventos` da planilha (`registrarEventoFeed`/`buscarFeedEventos`, Planilha.gs). Hoje:
+   `comentario`, `prioridade` e `recebida` (alguém te passou uma tarefa, por sequência ou
+   reatribuição).
 
-Cada card do feed é uma leitura só (`Você entregou X` / `Você subiu um arquivo em X`) — sem
-subtítulo "quem" porque as duas buscas já são só do designer logado; o dia em que o feed também
-mostrar atividade do TIME (não só a sua), aí sim o nome/função de quem fez a coisa passam a
-importar de verdade.
+**Por que o grupo 2 precisa de log:** a API do Runrun.it devolve o ESTADO atual (a prioridade é
+alta), nunca a história (fulano mudou pra alta às 14h). Duas consequências, de propósito: só entra
+o que passou PELO COLMEIA (comentário feito direto no site do Runrun.it não aparece), e o feed
+começa vazio e vai enchendo a partir de agora — não dá pra reconstruir o passado.
+
+**A anotação acontece num lugar só:** `registrarEventosDoFeed` (Código.gs), chamada no fim do
+`handleRequest` depois da ação dar certo. Nenhuma função de escrita precisou mudar — o contexto
+(de quem é a tarefa, qual o título) vem no próprio `body` que o front-end mandou.
+
+**`autorDoFeed`, nunca `autor`:** `autor` decide com qual conta do Runrun.it a ação é executada
+(`tokenRunrunDoAutor`) — mandá-lo em ações que hoje não o mandam trocaria a conta que
+comenta/repassa de verdade. Por isso o feed tem um campo próprio, sem efeito colateral. Ao
+adicionar um tipo de evento novo, seguir esse mesmo cuidado.
+
+`registrarEventoFeed` ignora sozinho quando autor == dono (ninguém precisa ser avisado do que
+acabou de fazer), e a aba é podada em 14 dias junto do backup diário (`limparFeedEventosAntigos`).
+
+## "Ficar comigo" da Fila de repasse foi pro backend (2026-08-04)
+
+**O que aconteceu:** ao trocar o endereço do Colmeia (`claudiobeeon.github.io` →
+`colmeia.beeon.com.br`), a Fila de repasse voltou a mostrar TUDO que já tinha sido resolvido.
+Causa: `colmeia_repasse_ignorados_ids` (a lista de "Ficar comigo") morava só no `localStorage`, que
+é **separado por domínio** — o endereço novo começou do zero.
+
+O que NÃO se perdeu: as tarefas realmente repassadas/entregues mudaram de responsável no
+Runrun.it, que é dado de verdade. Só a lista de "decidi ficar com essa" (que não muda nada no
+Runrun.it de propósito) evaporou.
+
+**Correção:** a fonte de verdade passou a ser a planilha (aba `RepasseIgnorados`, ver Planilha.gs).
+O `localStorage` continua existindo como cópia local — a tela desenha na hora, sem esperar a rede, e
+segue funcionando com a internet fora. `carregarRepasseIgnoradosDoBackend` (js/pagina-repasse.js,
+chamada no login) faz a UNIÃO dos dois lados e **sobe o que só existia no navegador**, então nada
+precisa ser reclicado — inclusive as decisões antigas, se a pessoa abrir o endereço velho uma vez.
+
+**Isso contraria a regra "preferências vão em localStorage" do CLAUDE.md? Não.** Aquela regra vale
+pra preferência VISUAL por designer (ordem de abas etc.), que pode se perder sem prejuízo. "Ficar
+comigo" é uma decisão de trabalho — o incidente é a prova de que não podia estar só no navegador.
+Ao criar algo novo, usar esse critério: preferência de exibição → localStorage; decisão que doeria
+perder → planilha.
 
 ## Bug recorrente conhecido
 

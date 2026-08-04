@@ -43,9 +43,20 @@ setInterval(() => {
 async function salvarPrioridadeNoBackend(taskId, prioridade) {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1 || !taskId) return;
   try {
+    // donoDaTarefa/tituloDaTarefa não mudam nada na prioridade em si —
+    // são só o contexto pro feed da aba Bee saber DE QUEM é essa tarefa
+    // (quem deve ver "fulano mudou a prioridade de X"). Ver
+    // registrarEventosDoFeed em Código.gs.
+    const t = tasks.find(x => String(x.id) === String(taskId))
+      || (typeof tasksTodas !== "undefined" ? tasksTodas.find(x => String(x.id) === String(taskId)) : null);
     // Passa pela fila: se a internet estiver fora, a prioridade fica
     // guardada e vai sozinha quando voltar (ver js/fila-offline.js).
-    await enviarEscritaNoBackend({ acao: "definirPrioridade", taskId, prioridade }, "mudar a prioridade");
+    await enviarEscritaNoBackend({
+      acao: "definirPrioridade", taskId, prioridade,
+      autorDoFeed: DESIGNER_LOGADO,
+      donoDaTarefa: t ? t.assignee : null,
+      tituloDaTarefa: t ? t.title : "",
+    }, "mudar a prioridade");
   } catch (err) {
     console.error("Não consegui salvar a prioridade no backend:", err);
   }
@@ -192,7 +203,16 @@ async function pararCronometroAoTransferir(task) {
 async function avancarWorkflowNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return { ok: false, novoResponsavel: null };
   try {
-    const data = await chamarBackend({ acao: "avancarWorkflow", taskId });
+    // autor/tituloDaTarefa: contexto pro feed da aba Bee ("fulano te
+    // passou a tarefa X"). Quem RECEBEU o backend descobre sozinho, pela
+    // resposta do Runrun.it. Ver registrarEventosDoFeed em Código.gs.
+    const t = tasks.find(x => String(x.id) === String(taskId))
+      || (typeof tasksTodas !== "undefined" ? tasksTodas.find(x => String(x.id) === String(taskId)) : null);
+    const data = await chamarBackend({
+      acao: "avancarWorkflow", taskId,
+      autorDoFeed: DESIGNER_LOGADO,
+      tituloDaTarefa: t ? t.title : "",
+    });
     if (!data.ok) console.error("Runrun.it recusou avançar a sequência:", data.error);
     return { ok: !!data.ok, novoResponsavel: data.novoResponsavel || null };
   } catch (err) {
@@ -201,10 +221,20 @@ async function avancarWorkflowNoBackend(taskId) {
   }
 }
 
-async function reatribuirTarefaNoBackend(taskId, responsavelId) {
+async function reatribuirTarefaNoBackend(taskId, responsavelId, nomeDoNovoResponsavel) {
   if (!COLMEIA_API_URL || !taskId || !responsavelId) return false;
   try {
-    const data = await chamarBackend({ acao: "reatribuir", taskId, responsavelId });
+    // nomeDoNovoResponsavel é opcional e só alimenta o feed da aba Bee —
+    // aqui, diferente do avancarWorkflow, o Runrun.it não devolve o nome
+    // de quem passou a ser o responsável, então quem sabe é quem clicou.
+    const t = tasks.find(x => String(x.id) === String(taskId))
+      || (typeof tasksTodas !== "undefined" ? tasksTodas.find(x => String(x.id) === String(taskId)) : null);
+    const data = await chamarBackend({
+      acao: "reatribuir", taskId, responsavelId,
+      autorDoFeed: DESIGNER_LOGADO,
+      nomeDoNovoResponsavel: nomeDoNovoResponsavel || null,
+      tituloDaTarefa: t ? t.title : "",
+    });
     if (!data.ok) console.error("Runrun.it recusou reatribuir:", data.error);
     return data.ok;
   } catch (err) {

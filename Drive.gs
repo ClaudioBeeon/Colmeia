@@ -691,6 +691,14 @@ function fazerBackupDaPlanilha() {
   } catch (err) {
     Logger.log('Erro ao limpar conversas antigas da Bee: ' + err.message);
   }
+  // E pro feed da aba Bee (ver FEED_RETENCAO_DIAS em Planilha.gs): sem
+  // poda, a aba só cresce e buscarFeedEventos lê ela inteira toda vez
+  // que alguém abre a aba.
+  try {
+    limparFeedEventosAntigos();
+  } catch (err) {
+    Logger.log('Erro ao limpar eventos antigos do feed: ' + err.message);
+  }
   // Reconstrói o índice de nomes do Drive (ver montarIndiceDoDrive em
   // Bee.gs) — é o que faz a busca da Bee ser instantânea em vez de
   // varrer o Drive a cada pergunta. Por último de propósito: é a parte

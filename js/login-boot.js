@@ -36,6 +36,12 @@ function iniciarAppPosLogin() {
   carregarLinksClientes();
   carregarProgressoClientes();
   carregarClientesOcultos();
+  // As decisões de "Ficar comigo" da Fila de repasse (aba RepasseIgnorados
+  // da planilha). Antes isso vivia só no localStorage — e sumiu inteiro
+  // quando o Colmeia mudou de endereço. Essa busca também SOBE o que
+  // ainda estiver guardado só neste navegador, então quem tinha decisões
+  // antigas não precisa clicar tudo de novo.
+  carregarRepasseIgnoradosDoBackend();
   // Avisos e agenda agora só são buscados com alguém logado (antes ficavam
   // rodando até na tela de senha, à toa). As duas checagens periódicas
   // continuam ligadas nos arquivos delas — aqui é só pra fazer a PRIMEIRA

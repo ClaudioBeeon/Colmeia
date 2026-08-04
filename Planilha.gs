@@ -448,6 +448,203 @@ function restaurarClienteDesigner(designer, cliente) {
   }
 }
 
+// ============ FILA DE REPASSE: "FICAR COMIGO" ============
+//
+// Quando alguém clica "Ficar comigo" num card da Fila de repasse, a tarefa
+// continua com a pessoa (o responsável não muda no Runrun.it) — então, sem
+// guardar essa decisão em algum lugar, ela voltaria pra fila pra sempre.
+//
+// Isso morava só no localStorage do navegador (`colmeia_repasse_ignorados_ids`)
+// e por isso SUMIU quando o Colmeia mudou de endereço (claudiobeeon.github.io
+// -> colmeia.beeon.com.br): localStorage é separado por domínio, então o
+// endereço novo começou do zero e a fila inteira voltou a aparecer.
+// Guardar na planilha resolve isso de vez — e de quebra funciona em qualquer
+// navegador/computador da pessoa, não só naquele onde ela clicou.
+//
+// Diferente das PREFERÊNCIAS por designer (ordem de abas etc.), que o
+// CLAUDE.md manda deixar em localStorage de propósito: isso aqui não é
+// preferência visual, é uma decisão de trabalho que não pode se perder.
+
+function getRepasseIgnoradosSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('RepasseIgnorados');
+  if (!sheet) {
+    sheet = ss.insertSheet('RepasseIgnorados');
+    sheet.getRange('A1:C1').setValues([['designer', 'task_id', 'quando']]);
+  }
+  return sheet;
+}
+
+function listarRepasseIgnorados(designer) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  var sheet = getRepasseIgnoradosSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var ids = [];
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) === String(designer) && linhas[i][1]) {
+      ids.push(String(linhas[i][1]));
+    }
+  }
+  return { ok: true, ids: ids };
+}
+
+/**
+ * `taskIds` é uma LISTA, não um id só, de propósito: além do clique normal
+ * ("ficar com essa"), o front-end manda de uma vez o que ainda estiver
+ * guardado no localStorage antigo na primeira vez que a pessoa entra (ver
+ * migrarIgnoradosDoNavegador em js/pagina-repasse.js) — mandar um pedido
+ * por tarefa nessa hora seria dezenas de chamadas de uma vez só.
+ */
+function ignorarNoRepasseBackend(designer, taskIds) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  var lista = Array.isArray(taskIds) ? taskIds : [taskIds];
+  lista = lista.filter(function (id) { return id !== null && id !== undefined && id !== ''; });
+  if (!lista.length) return { ok: true, gravados: 0 };
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getRepasseIgnoradosSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var jaTem = {};
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) === String(designer) && linhas[i][1]) {
+        jaTem[String(linhas[i][1])] = true;
+      }
+    }
+    var novas = [];
+    var agora = new Date().getTime();
+    lista.forEach(function (id) {
+      if (jaTem[String(id)]) return;
+      jaTem[String(id)] = true; // a própria lista pode vir com id repetido
+      novas.push([designer, String(id), agora]);
+    });
+    // Uma escrita só pro bloco inteiro, em vez de um appendRow por tarefa:
+    // appendRow em laço é a coisa mais lenta que existe no Apps Script.
+    if (novas.length) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, novas.length, 3).setValues(novas);
+    }
+    return { ok: true, gravados: novas.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Devolve a tarefa pra fila (desfaz o "Ficar comigo"). */
+function desfazerIgnorarNoRepasse(designer, taskId) {
+  if (!designer || !taskId) return { ok: false, error: 'designer ou taskId ausente.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getRepasseIgnoradosSheet();
+    var linhas = sheet.getDataRange().getValues();
+    // De trás pra frente: apagar uma linha muda o índice das de baixo.
+    for (var i = linhas.length - 1; i >= 1; i--) {
+      if (String(linhas[i][0]) === String(designer) && String(linhas[i][1]) === String(taskId)) {
+        sheet.deleteRow(i + 1);
+      }
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ============ FEED DA ABA "BEE" ============
+//
+// O feed mostra o que aconteceu NAS SUAS TAREFAS. Boa parte disso o
+// Runrun.it não conta pra gente depois do fato: quem mudou a prioridade e
+// quando, quem comentou onde, quem te passou uma tarefa. A API só devolve
+// o ESTADO atual (a prioridade é X), não a história (fulano mudou pra X
+// às 14h). Por isso o Colmeia anota, na hora que a ação passa por ele.
+//
+// Consequências disso, de propósito:
+//   - só entra o que passou PELO COLMEIA. Comentário feito direto no
+//     site do Runrun.it não aparece aqui — não temos como saber.
+//   - o feed começa vazio e vai enchendo a partir de agora; não dá pra
+//     reconstruir o passado.
+//
+// A anotação acontece num lugar só (registrarEventosDoFeed, chamada no
+// fim do handleRequest em Código.gs, depois da ação dar certo) em vez de
+// espalhada por dentro de cada função de escrita — assim nenhuma função
+// que mexe em dado de verdade do time precisou ser alterada.
+
+var FEED_RETENCAO_DIAS = 14;
+
+function getFeedEventosSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('FeedEventos');
+  if (!sheet) {
+    sheet = ss.insertSheet('FeedEventos');
+    sheet.getRange('A1:G1').setValues([['quando', 'dono', 'tipo', 'autor', 'task_id', 'titulo', 'detalhe']]);
+  }
+  return sheet;
+}
+
+/**
+ * Anota um evento pro feed de UMA pessoa (`dono` — quem vai ver isso).
+ * Nunca estoura: o feed é um extra, não pode derrubar a ação de verdade
+ * que acabou de dar certo (mudar prioridade, comentar, repassar).
+ */
+function registrarEventoFeed(dono, tipo, autor, taskId, titulo, detalhe) {
+  if (!dono || !tipo) return;
+  // Não faz sentido se avisar do que você mesmo acabou de fazer — o feed
+  // é "o que aconteceu nas suas tarefas", não um espelho dos seus cliques.
+  if (autor && String(autor).toLowerCase().trim() === String(dono).toLowerCase().trim()) return;
+  try {
+    var sheet = getFeedEventosSheet();
+    sheet.appendRow([
+      new Date().getTime(), dono, tipo, autor || '', taskId ? String(taskId) : '',
+      titulo || '', detalhe || ''
+    ]);
+  } catch (e) { /* feed é extra: falhar aqui não pode quebrar a ação */ }
+}
+
+function buscarFeedEventos(designer) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  var sheet = getFeedEventosSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var corte = new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+  var eventos = [];
+  for (var i = 1; i < linhas.length; i++) {
+    var quando = Number(linhas[i][0]) || 0;
+    if (quando < corte) continue;
+    if (String(linhas[i][1]).toLowerCase().trim() !== String(designer).toLowerCase().trim()) continue;
+    eventos.push({
+      quando: quando,
+      tipo: String(linhas[i][2]),
+      autor: String(linhas[i][3] || ''),
+      taskId: String(linhas[i][4] || ''),
+      titulo: String(linhas[i][5] || ''),
+      detalhe: String(linhas[i][6] || '')
+    });
+  }
+  eventos.sort(function (a, b) { return b.quando - a.quando; });
+  return { ok: true, eventos: eventos };
+}
+
+/**
+ * Joga fora o que passou da validade. Roda junto do backup diário (mesmo
+ * lugar da limpeza das conversas da Bee) — sem isso a aba cresceria pra
+ * sempre e a leitura do feed ia ficando mais lenta a cada dia.
+ */
+function limparFeedEventosAntigos() {
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getFeedEventosSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var corte = new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+    // De trás pra frente: apagar uma linha muda o índice das de baixo.
+    for (var i = linhas.length - 1; i >= 1; i--) {
+      if ((Number(linhas[i][0]) || 0) < corte) sheet.deleteRow(i + 1);
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ============ LOGIN ============
 
 function getLoginSheet() {

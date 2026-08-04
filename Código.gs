@@ -295,6 +295,14 @@ function handleRequest(e, method) {
         output = ajustarEstimativaTarefa(body.taskId, body.minutos, body.autor);
       } else if (body.acao === 'buscarExtrasRunrunCompleto') {
         output = buscarExtrasRunrunCompleto();
+      } else if (body.acao === 'buscarFeedEventos') {
+        output = buscarFeedEventos(body.designer);
+      } else if (body.acao === 'listarRepasseIgnorados') {
+        output = listarRepasseIgnorados(body.designer);
+      } else if (body.acao === 'ignorarNoRepasse') {
+        output = ignorarNoRepasseBackend(body.designer, body.taskIds);
+      } else if (body.acao === 'desfazerIgnorarNoRepasse') {
+        output = desfazerIgnorarNoRepasse(body.designer, body.taskId);
       } else if (body.acao === 'listarUsuarios') {
         output = listarTodosUsuariosRunrun();
       } else if (body.acao === 'listarPessoas') {
@@ -381,6 +389,10 @@ function handleRequest(e, method) {
       if (output && output.ok && ACOES_QUE_MUDAM_O_QUADRO.indexOf(body.acao) !== -1) {
         invalidarCacheDoQuadro();
       }
+
+      // Anota no feed da aba Bee o que acabou de acontecer (ver
+      // registrarEventosDoFeed logo abaixo e a explicação em Planilha.gs).
+      if (output && output.ok) registrarEventosDoFeed(body, output);
     } else {
       output = { ok: false, error: 'Use ?tipo=tarefas pra buscar o quadro.' };
     }
@@ -389,6 +401,50 @@ function handleRequest(e, method) {
   }
   return ContentService.createTextOutput(JSON.stringify(output))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Traduz "a ação X acabou de dar certo" em linhas no feed de quem
+ * interessa (ver registrarEventoFeed, Planilha.gs).
+ *
+ * Os dados de contexto (de quem é a tarefa, qual o título) vêm no próprio
+ * `body` que o front-end mandou — ele já tem tudo isso na mão na hora do
+ * clique, e assim nenhuma função de escrita precisou mudar de assinatura
+ * só pra alimentar o feed. Campo que o front-end não mandar simplesmente
+ * não vira evento, em vez de gravar linha pela metade.
+ *
+ * registrarEventoFeed já ignora sozinho o caso "autor == dono" (ninguém
+ * precisa ser avisado do que acabou de fazer).
+ */
+function registrarEventosDoFeed(body, output) {
+  try {
+    var dono = body.donoDaTarefa;   // de quem é a tarefa (quem vai ver)
+    // `autorDoFeed`, e NÃO `autor`: esse último decide com qual conta do
+    // Runrun.it a ação é feita (tokenRunrunDoAutor) — mandá-lo em ações
+    // que hoje não o mandam trocaria a conta que comenta/repassa de
+    // verdade. O feed precisa de um campo só dele, sem efeito colateral.
+    var autor = body.autorDoFeed || '';
+    var titulo = body.tituloDaTarefa || '';
+
+    if (body.acao === 'definirPrioridade' && dono) {
+      registrarEventoFeed(dono, 'prioridade', autor, body.taskId, titulo, body.prioridade || '');
+
+    } else if ((body.acao === 'adicionarComentario' || body.acao === 'adicionarComentarioComAnexo') && dono) {
+      // Só um pedaço do texto: o feed mostra a prévia, o comentário
+      // inteiro continua sendo lido no card (é lá que ele mora de verdade).
+      var previa = String(body.texto || '').substring(0, 220);
+      registrarEventoFeed(dono, 'comentario', autor, body.taskId, titulo, previa);
+
+    } else if (body.acao === 'avancarWorkflow') {
+      // Quem RECEBEU a tarefa é o novo responsável, e isso quem diz é a
+      // resposta do Runrun.it — não o front-end.
+      var recebeu = output && output.novoResponsavel;
+      if (recebeu) registrarEventoFeed(recebeu, 'recebida', autor, body.taskId, titulo, '');
+
+    } else if (body.acao === 'reatribuir' && body.nomeDoNovoResponsavel) {
+      registrarEventoFeed(body.nomeDoNovoResponsavel, 'recebida', autor, body.taskId, titulo, '');
+    }
+  } catch (e) { /* feed é extra: nunca pode derrubar a resposta da ação */ }
 }
 
 // ============ JUNTA TUDO PRO FRONT-END ============

@@ -1,23 +1,86 @@
+// ===== "Ficar comigo": quais tarefas você já decidiu assumir =====
+//
+// Isso ficava SÓ no localStorage — e por isso a fila inteira voltou a
+// aparecer quando o Colmeia mudou de endereço (claudiobeeon.github.io ->
+// colmeia.beeon.com.br): localStorage é separado por domínio, então o
+// endereço novo começou do zero. Agora a fonte de verdade é a planilha
+// (aba RepasseIgnorados, ver Planilha.gs); o localStorage continua aqui
+// como cópia local, pra tela desenhar na hora sem esperar a rede e pra
+// continuar funcionando com a internet fora.
 const REPASSE_IGNORADOS_KEY = "colmeia_repasse_ignorados_ids";
+
+// Começa com o que estiver salvo no navegador; a busca no backend (ver
+// carregarRepasseIgnoradosDoBackend) junta o resto assim que responde.
+let repasseIgnoradosCache = null;
+
 function idsRepasseIgnorados() {
-  try { return new Set(JSON.parse(localStorage.getItem(REPASSE_IGNORADOS_KEY) || "[]")); }
-  catch (e) { return new Set(); }
+  if (repasseIgnoradosCache) return repasseIgnoradosCache;
+  try { repasseIgnoradosCache = new Set(JSON.parse(localStorage.getItem(REPASSE_IGNORADOS_KEY) || "[]").map(String)); }
+  catch (e) { repasseIgnoradosCache = new Set(); }
+  return repasseIgnoradosCache;
 }
+
+function salvarIgnoradosNoNavegador() {
+  try {
+    localStorage.setItem(REPASSE_IGNORADOS_KEY, JSON.stringify(Array.from(idsRepasseIgnorados())));
+  } catch (e) { /* sem problema */ }
+}
+
 // Usado quando você clica "Ficar comigo" — a tarefa continua com você
 // (assignee não muda), então sem isso ela voltaria a aparecer na fila
 // pra sempre mesmo depois de você decidir assumir ela de propósito.
 function ignorarNaRepasse(taskId) {
-  try {
-    const ignorados = idsRepasseIgnorados();
-    ignorados.add(taskId);
-    localStorage.setItem(REPASSE_IGNORADOS_KEY, JSON.stringify(Array.from(ignorados)));
-  } catch (e) { /* sem problema */ }
+  idsRepasseIgnorados().add(String(taskId));
+  salvarIgnoradosNoNavegador();
+  // Passa pela fila de escrita: se a internet estiver fora, a decisão vai
+  // sozinha quando voltar, em vez de se perder (js/fila-offline.js).
+  if (typeof enviarEscritaNoBackend === "function") {
+    enviarEscritaNoBackend(
+      { acao: "ignorarNoRepasse", designer: DESIGNER_LOGADO, taskIds: [String(taskId)] },
+      "guardar o 'ficar comigo'"
+    );
+  }
+}
+
+/**
+ * Junta o que a planilha sabe com o que este navegador já tinha, e SOBE
+ * a diferença. É isso que recupera, sozinho, quem tinha decisões antigas
+ * guardadas só no navegador — inclusive as do endereço antigo, se a
+ * pessoa abrir o Colmeia por lá uma vez.
+ *
+ * Chamada no login (js/login-boot.js). Falha de rede não apaga nada: sem
+ * resposta, segue valendo só o que já estava no navegador.
+ */
+async function carregarRepasseIgnoradosDoBackend() {
+  if (!DESIGNER_LOGADO) return;
+  const doNavegador = new Set(idsRepasseIgnorados());
+
+  const resposta = await chamarBackend({ acao: "listarRepasseIgnorados", designer: DESIGNER_LOGADO });
+  if (caiuARede(resposta) || !resposta.ok) return;
+
+  const doBackend = new Set((resposta.ids || []).map(String));
+  doBackend.forEach(id => repasseIgnoradosCache.add(id));
+  salvarIgnoradosNoNavegador();
+
+  // O que só existia neste navegador ainda não está na planilha — sobe
+  // tudo de uma vez (uma chamada só, não uma por tarefa).
+  const sóAqui = Array.from(doNavegador).filter(id => !doBackend.has(id));
+  if (sóAqui.length) {
+    chamarBackend({ acao: "ignorarNoRepasse", designer: DESIGNER_LOGADO, taskIds: sóAqui });
+  }
+
+  if (typeof atualizarBadgeRepasse === "function") atualizarBadgeRepasse();
+  if (!document.getElementById("page-repasse").hidden && typeof buildRepassePage === "function") {
+    buildRepassePage();
+  }
 }
 
 function tarefaEstaComAtendimento(t) {
   if (!t.id || !t.assignee) return false;
   if (ehTarefaDeCoordenacao(t)) return false; // a sua tarefa fixa de coordenação não é "repasse"
-  if (idsRepasseIgnorados().has(t.id)) return false; // você já decidiu ficar com essa
+  // String() dos dois lados: o id vem como número do backend, mas o
+  // conjunto guarda texto (é como sai do JSON/da planilha).
+  if (idsRepasseIgnorados().has(String(t.id))) return false; // você já decidiu ficar com essa
   return ehMinhaTarefa(t);
 }
 
