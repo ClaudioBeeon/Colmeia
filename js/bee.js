@@ -244,6 +244,7 @@ document.addEventListener("click", e => {
 function renderMensagemDaConversa(m, indice, chaveConversa) {
   if (m.autor === "bee") {
     if (m._funcional) return bolhaDaBee(renderRespostaFuncional(m._funcional), indice);
+    if (m._acoesPasta) return bolhaDaBee(renderAcoesPastaHTML(m), indice);
     const extra = m._inspiracao ? renderLinksDeInspiracao(m._inspiracao.termos) : "";
     return bolhaDaBee(formatarFalaDaBee(m.texto, chaveConversa, indice) + extra, indice);
   }
@@ -782,6 +783,24 @@ function inserirThumbnailsDoComparativo(task, data) {
   });
 }
 
+/**
+ * Fala da Bee oferecendo as 3 ações da pasta do card (conferir o que
+ * falta / comparar versões / link de aprovação) — disparada depois de
+ * um upload arrastado pro card (ver avisarBeeSobreUploadNovo,
+ * js/detalhe-modal.js, e beeAvisarUploadNovo, Bee.gs). Os botões
+ * chamam as MESMAS funções já usadas na aba Anexos — ver wireThreadBee.
+ */
+function renderAcoesPastaHTML(m) {
+  return `
+    <p>${escaparHTML(m.texto)}</p>
+    <div class="bee-pastilhas">
+      <button type="button" class="bee-acao" data-acao-pasta="conferir">🐝 conferir o que falta</button>
+      <button type="button" class="bee-acao" data-acao-pasta="comparar">🔍 comparar versões</button>
+      <button type="button" class="bee-acao" data-acao-pasta="aprovacao">🔗 link de aprovação</button>
+    </div>
+  `;
+}
+
 // ===== Cliques =====
 
 function wireThreadBee(task) {
@@ -793,6 +812,15 @@ function wireThreadBee(task) {
     btn.addEventListener("click", () => {
       const item = (resumo.itens || [])[Number(btn.dataset.item)];
       if (item) irParaOrigemDoItem(task, item);
+    });
+  });
+
+  thread.querySelectorAll("[data-acao-pasta]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const alvo = tasks[detailIdx] || task;
+      if (btn.dataset.acaoPasta === "conferir") conferirEntregaComABee(alvo, btn);
+      else if (btn.dataset.acaoPasta === "comparar") compararVersoesComABee(alvo, btn);
+      else if (btn.dataset.acaoPasta === "aprovacao") gerarLinkDeAprovacaoParaTarefa(alvo, btn);
     });
   });
 

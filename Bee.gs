@@ -876,6 +876,31 @@ function compararVersoesDoCard(taskId) {
   };
 }
 
+// ============ 5d) AVISAR SOBRE UPLOAD NOVO (arquivo arrastado pro card) ============
+//
+// Pedido do Cláudio (2026-08-04): depois que um arquivo é arrastado pro
+// card (ver subirArquivoNoCard, Drive.gs — que já comenta sozinho no
+// Runrun.it), a Bee registra uma fala DE VERDADE oferecendo as 3 ações
+// relacionadas à pasta do card. "De verdade" quer dizer: fica salva na
+// conversa (lerConversaBee/salvarConversaBee), sobrevive a fechar e
+// reabrir o card — diferente do aviso antigo de upload (ver
+// js/notificacoes-uploads.js), que é só um lembrete na tela, não uma
+// fala persistida.
+
+function beeAvisarUploadNovo(taskId, nomeArquivo) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var conversa = lerConversaBee(taskId);
+  var agora = new Date().getTime();
+  conversa.push({
+    autor: 'bee',
+    texto: 'Subiu "' + (nomeArquivo || 'um arquivo novo') + '" na pasta do card. Quer que eu faça algo com isso?',
+    quando: agora,
+    _acoesPasta: true
+  });
+  salvarConversaBee(taskId, conversa);
+  return { ok: true, conversa: conversa };
+}
+
 // ============ 5b) INSPIRAR ============
 //
 // O Colmeia NÃO consegue entrar no Behance/Pinterest e trazer as

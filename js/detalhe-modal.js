@@ -1833,9 +1833,33 @@ async function subirArquivoArrastadoParaCard(task, arquivo) {
       { acao: "adicionarComentario", taskId: idAoSoltar, texto: `📎 Novo arquivo na pasta do card: ${data.nomeFinal}` },
       "avisar sobre o arquivo novo"
     );
+    avisarBeeSobreUploadNovo(idAoSoltar, data.nomeFinal);
   } catch (err) {
     console.error("Falha ao subir arquivo arrastado:", err);
     mostrarToast(`Falha de conexão ao subir "${arquivo.name}".`, "erro");
+  }
+}
+
+/**
+ * Depois de subir um arquivo arrastado, a Bee registra uma fala DE
+ * VERDADE (persistida — ver beeAvisarUploadNovo, Bee.gs) oferecendo as
+ * 3 ações da pasta do card. Pedido do Cláudio (2026-08-04): "esse é um
+ * comentário real da Bee, que fica ali". beeConversas/desenharThreadBee
+ * são de js/bee.js, carregado DEPOIS deste arquivo — daí o typeof-guard.
+ */
+async function avisarBeeSobreUploadNovo(taskId, nomeArquivo) {
+  const dataBee = await chamarBackend({ acao: "beeAvisarUploadNovo", taskId, nomeArquivo });
+  if (!dataBee || !dataBee.ok) return;
+  if (typeof beeConversas === "undefined") return;
+  beeConversas.set(taskId, dataBee.conversa);
+  // Se a Bee dessa MESMA tarefa já está aberta na tela, mostra a fala
+  // nova na hora — senão ela já está salva, e aparece quando a pessoa
+  // abrir a aba da Bee.
+  if (
+    tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId) &&
+    chatThreadAtivo === "bee" && typeof desenharThreadBee === "function"
+  ) {
+    desenharThreadBee(tasks[detailIdx]);
   }
 }
 
