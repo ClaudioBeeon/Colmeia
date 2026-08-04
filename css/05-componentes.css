@@ -1363,3 +1363,31 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
   .foco-hud { bottom: 14px; left: 14px; padding: 8px 8px 8px 14px; font-size: 12px; }
 }
 
+/* Escolha de peça pro link de aprovação, quando a pasta do card tem mais
+   de uma (Feed + Stories, por exemplo) — ver abrirEscolhaDePeca,
+   js/detalhe-modal.js. Criado na hora via JS, `position:fixed` porque
+   getBoundingClientRect() já é relativo à tela. Mesmo vocabulário visual
+   do .chat-hdr-menu (cartão branco/escuro flutuante). */
+.pecas-escolha-menu {
+  position: fixed; z-index: 400;
+  min-width: 220px; max-width: 280px; padding: 8px; border-radius: 16px;
+  background: #FFFFFF; box-shadow: 0 8px 30px rgba(0,0,0,.18);
+  display: flex; flex-direction: column; gap: 2px;
+  font-family: var(--font-body); animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
+}
+[data-theme="dark"] .pecas-escolha-menu { background: #242430; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.pecas-escolha-titulo {
+  font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: .02em; padding: 6px 9px 8px;
+}
+.pecas-escolha-item {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  border: none; background: transparent; color: var(--text-primary); cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 9px; border-radius: 10px; transition: background var(--dur-fast) var(--ease-apple);
+}
+.pecas-escolha-item span:first-child { flex-shrink: 0; }
+.pecas-escolha-item span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pecas-escolha-item:hover { background: var(--page-bg); }
+[data-theme="dark"] .pecas-escolha-item:hover { background: rgba(255,255,255,0.08); }
+

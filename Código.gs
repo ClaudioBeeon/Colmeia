@@ -241,8 +241,10 @@ function handleRequest(e, method) {
         output = beeAvisarUploadNovo(body.taskId, body.nomeArquivo);
       } else if (body.acao === 'beeAvisarLinkDriveNoComentario') {
         output = beeAvisarLinkDriveNoComentario(body.taskId);
+      } else if (body.acao === 'listarPecasDaPastaDoCard') {
+        output = listarPecasDaPastaDoCard(body.taskId);
       } else if (body.acao === 'gerarLinkDeAprovacao') {
-        output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor);
+        output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor, body.fileId);
       } else if (body.acao === 'buscarAprovacaoPublica') {
         // Ação PÚBLICA — chamada por aprovar.html, sem login nenhum do
         // Colmeia (ver Aprovacao.gs). Só o código aleatório protege.

@@ -1922,8 +1922,93 @@ wireArrastarArquivoParaCard();
  * deixando claro que é o cliente falando, relayed — não a conta de
  * quem gerou o link (ver responderAprovacaoPublica, Aprovacao.gs).
  */
+/**
+ * Pedido do Cláudio (2026-08-04): "quando sobe duas versões, stories e
+ * feed, já aparece no mesmo link quando tem mais de uma opção?". Não
+ * aparecia — o backend escolhia uma peça sozinho, meio no sorteio.
+ * Agora primeiro CONTA quantas peças distintas tem na pasta
+ * (listarPecasDaPastaDoCard, Aprovacao.gs — agrupa "Feed - v1"/"Feed -
+ * v2" como a mesma peça, mas "Feed" e "Stories" como peças diferentes):
+ * com uma peça só, gera o link direto (sem perguntar nada, igual
+ * sempre foi); com mais de uma, abre uma escolha (abrirEscolhaDePeca)
+ * pra decidir qual delas vai nesse link.
+ */
 async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
   if (!task || !task.id) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Procurando peças...";
+
+  const dataPecas = await chamarBackend({ acao: "listarPecasDaPastaDoCard", taskId: task.id });
+
+  btn.disabled = false;
+  btn.textContent = original;
+
+  if (!dataPecas || !dataPecas.ok) {
+    mostrarToast((dataPecas && dataPecas.error) || "Não consegui procurar a pasta do card agora.", "erro");
+    return;
+  }
+  const pecas = dataPecas.pecas || [];
+  if (pecas.length === 0) {
+    mostrarToast("Não encontrei nenhuma imagem ou vídeo na pasta do card pra gerar o link.", "erro");
+    return;
+  }
+  if (pecas.length === 1) {
+    await gerarECopiarLinkDeAprovacao(task, btn, pecas[0].fileId, pecas[0].nome);
+    return;
+  }
+  abrirEscolhaDePeca(task, btn, pecas);
+}
+
+/**
+ * Popup simples, criado na hora (não é fixo no HTML porque o botão que
+ * chama isso existe em 3 lugares diferentes — side-block do card, aviso
+ * inline da Bee no chat de Comentários, e a conversa da Bee — mais fácil
+ * criar do zero encostado no botão certo do que ter 3 cópias do menu no
+ * index.html). `position:fixed` porque `getBoundingClientRect()` já é
+ * relativo à tela, do mesmo jeito.
+ */
+function abrirEscolhaDePeca(task, btn, pecas) {
+  document.getElementById("pecasEscolhaMenu")?.remove();
+  const rect = btn.getBoundingClientRect();
+  const menu = document.createElement("div");
+  menu.id = "pecasEscolhaMenu";
+  menu.className = "pecas-escolha-menu";
+  menu.style.top = Math.round(rect.bottom + 6) + "px";
+  menu.style.left = Math.round(Math.max(8, rect.right - 240)) + "px";
+  menu.innerHTML = `
+    <div class="pecas-escolha-titulo">Mais de uma peça na pasta — qual vai nesse link?</div>
+    ${pecas.map((p, i) => `
+      <button type="button" class="pecas-escolha-item" data-idx="${i}">
+        <span>${p.mimeType.indexOf("video/") === 0 ? "🎬" : "🖼️"}</span>
+        <span>${escaparHTML(p.nome)}</span>
+      </button>
+    `).join("")}
+  `;
+  document.body.appendChild(menu);
+
+  menu.querySelectorAll("[data-idx]").forEach(item => {
+    item.addEventListener("click", () => {
+      const p = pecas[Number(item.dataset.idx)];
+      menu.remove();
+      gerarECopiarLinkDeAprovacao(task, btn, p.fileId, p.nome);
+    });
+  });
+
+  // Clicar fora fecha — a mesma técnica do resto do app (ex: chatHdrMenu),
+  // adiada um tick pra não fechar sozinho com o MESMO clique que abriu.
+  setTimeout(() => {
+    const fecharSeForaDoMenu = e => {
+      if (menu.isConnected && !menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener("click", fecharSeForaDoMenu, true);
+      }
+    };
+    document.addEventListener("click", fecharSeForaDoMenu, true);
+  }, 0);
+}
+
+async function gerarECopiarLinkDeAprovacao(task, btn, fileId, nomeArquivo) {
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Gerando link...";
@@ -1933,6 +2018,7 @@ async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
     taskId: task.id,
     cliente: task.client,
     tituloTarefa: task.title,
+    fileId: fileId || null,
   });
 
   btn.disabled = false;
