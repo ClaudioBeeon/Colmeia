@@ -574,7 +574,7 @@ function tarefaEhFilhaDe(taskId, parentTaskId) {
  */
 function testarCriarSubtarefaAlteracao() {
   // Troque aqui se quiser testar em outro card mãe.
-  var CARD_MAE = 110172;
+  var CARD_MAE = 112383;
   var QUEM = 'Cláudio';
 
   Logger.log('=== TESTE: criar subtarefa alocada ===');
