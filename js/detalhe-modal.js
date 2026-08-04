@@ -853,6 +853,7 @@ function renderDetail() {
               <span class="side-label">Anexos</span>
               <button type="button" class="download-all-btn" id="downloadAllBtn" ${task.attachmentsCount ? "" : "hidden"}>Baixar todos</button>
               ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>` : ""}
+              ${task.id ? `<button type="button" class="download-all-btn bee-conferir-btn" id="beeCompararVersoesBtn" title="A Bee compara as duas versões mais recentes (arquivos '- v1', '- v2'...) da pasta do card">🔍 comparar versões</button>` : ""}
             </div>
             <div class="attach-box">
               <div class="attach-list" id="attachList">
@@ -1523,6 +1524,9 @@ function renderDetail() {
 
   const beeConferirBtn = document.getElementById("beeConferirBtn");
   if (beeConferirBtn) beeConferirBtn.addEventListener("click", () => conferirEntregaComABee(tasks[detailIdx] || task, beeConferirBtn));
+
+  const beeCompararVersoesBtn = document.getElementById("beeCompararVersoesBtn");
+  if (beeCompararVersoesBtn) beeCompararVersoesBtn.addEventListener("click", () => compararVersoesComABee(tasks[detailIdx] || task, beeCompararVersoesBtn));
 
   // Um botão só, que vai e volta: nos comentários ele leva pra Bee, e
   // dentro da Bee ele traz de volta pros comentários.

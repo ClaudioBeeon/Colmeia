@@ -1284,6 +1284,15 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 .upload-notif-thumb.carregado { opacity: 1; }
 .upload-notif-thumb:hover { box-shadow: 0 0 0 2px var(--kanban-yellow); }
 
+/* Diff visual entre versões (comparar v1/v2 com a Bee) */
+.bee-comparativo-thumbs { display: flex; gap: 10px; margin-top: 8px; }
+.bee-comparativo-item { flex: 1; min-width: 0; }
+.bee-comparativo-label {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--text-secondary); margin-bottom: 3px;
+}
+.bee-comparativo-item .upload-notif-thumb { max-width: 100%; }
+
 /* ===================================================================
    MODO FOCO
    Ver js/modo-foco.js. O botão "Focar" mora no cabeçalho da tarefa

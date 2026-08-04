@@ -719,6 +719,69 @@ async function conferirEntregaComABee(task, btn) {
   }
 }
 
+/**
+ * "Comparar versões": pega as duas imagens mais recentes da pasta do
+ * card com nome "- v1", "- v2"... (ver nomeArquivoPadronizado, Drive.gs
+ * — todo arquivo arrastado pro card já nasce com esse padrão, ver
+ * subirArquivoArrastadoParaCard em js/detalhe-modal.js) e pede pra Bee
+ * apontar o que mudou. Primeira vez que ela realmente OLHA o conteúdo
+ * de uma imagem, não só o nome do arquivo. Só roda no clique.
+ */
+async function compararVersoesComABee(task, btn) {
+  if (!task || !task.id) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Comparando...";
+  abrirThreadBee(task);
+
+  const data = await chamarBackend({ acao: "beeCompararVersoes", taskId: task.id });
+
+  const btnAgora = document.getElementById("beeCompararVersoesBtn");
+  if (btnAgora) { btnAgora.disabled = false; btnAgora.textContent = original; }
+
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "A Bee não conseguiu comparar agora.", "erro");
+    return;
+  }
+  beeConversas.set(task.id, data.conversa || beeConversas.get(task.id) || []);
+  if (chatThreadAtivo === "bee" && tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
+    desenharThreadBee(task);
+    inserirThumbnailsDoComparativo(task, data);
+  }
+}
+
+/**
+ * As duas miniaturas (versão nova/anterior) na última fala da Bee — só
+ * pra essa resposta, na hora; não fica salvo no histórico da conversa
+ * (ver compararVersoesDoCard, Bee.gs — só o texto é persistido). Reusa o
+ * mesmo preview clicável já usado no aviso de upload novo (ver
+ * carregarThumbnailDoUpload/abrirImagemAmpliadaDoDrive, js/notificacoes-uploads.js).
+ */
+function inserirThumbnailsDoComparativo(task, data) {
+  const thread = document.getElementById("commentsThread");
+  if (!thread || !data.idArquivoNovo || !data.idArquivoAnterior) return;
+  const conversa = beeConversas.get(task.id) || [];
+  const ultimaBolha = thread.querySelector(`.bee-bubble[data-bee-indice="${conversa.length - 1}"] .comment-text`);
+  if (!ultimaBolha) return;
+  ultimaBolha.insertAdjacentHTML("beforeend", `
+    <div class="bee-comparativo-thumbs">
+      <div class="bee-comparativo-item">
+        <span class="bee-comparativo-label">v${data.versaoAnterior}</span>
+        <img class="upload-notif-thumb" data-file-id="${escaparHTML(data.idArquivoAnterior)}" data-nome="${escaparHTML(data.nomeArquivoAnterior)}" alt="Versão v${data.versaoAnterior}">
+      </div>
+      <div class="bee-comparativo-item">
+        <span class="bee-comparativo-label">v${data.versaoNova}</span>
+        <img class="upload-notif-thumb" data-file-id="${escaparHTML(data.idArquivoNovo)}" data-nome="${escaparHTML(data.nomeArquivoNovo)}" alt="Versão v${data.versaoNova}">
+      </div>
+    </div>
+  `);
+  ultimaBolha.querySelectorAll(".upload-notif-thumb").forEach(img => {
+    const fileId = img.dataset.fileId;
+    carregarThumbnailDoUpload(fileId, img);
+    img.addEventListener("click", () => abrirImagemAmpliadaDoDrive(fileId, img.dataset.nome));
+  });
+}
+
 // ===== Cliques =====
 
 function wireThreadBee(task) {
