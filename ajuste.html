@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Pontos marcados na peça — Beeon</title>
+<style>
+  /**
+   * A página que mostra O QUE FOI PEDIDO PRA MUDAR, com os pontos
+   * desenhados em cima da peça.
+   *
+   * POR QUE ELA EXISTE: o pedido de alteração vai parar no Runrun.it, e o
+   * Runrun.it não sabe desenhar marcação em imagem. Sem isso, a marcação
+   * que o atendimento fez com o mouse chegava no designer só como texto —
+   * "(alto à esquerda) trocar o logo" — e ele ficava adivinhando qual
+   * elemento era. Aqui os pontos aparecem onde foram postos.
+   *
+   * SEM LOGIN, de propósito, e um arquivo SOZINHO (não carrega os 26
+   * arquivos de js/ do app): o link é aberto de dentro do Runrun.it, numa
+   * aba nova, muitas vezes no celular. Ter que logar no Colmeia só pra ver
+   * onde é o ponto mataria o sentido da coisa. Mesmo modelo de segurança
+   * da página de aprovação do cliente: o que protege é o código aleatório
+   * do endereço.
+   *
+   * O designer que já está DENTRO do Colmeia não precisa deste link — o
+   * mesmo conteúdo aparece no topo do card da alteração (ver
+   * renderDevolucaoNoCard, js/detalhe-alteracao.js). Esta página é pra
+   * quem chegou pelo Runrun.it.
+   */
+  * { box-sizing: border-box; }
+  :root {
+    color-scheme: light;
+    --bg: #f4f3f0;
+    --card-bg: #ffffff;
+    --text: #1c1b1f;
+    --text-secondary: #6b6a70;
+    --border: #e6e4e0;
+    --amarelo: #ffcc00;
+    --laranja: #c9720a;
+    --laranja-bg: #fdf1e2;
+  }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap {
+    max-width: 620px; margin: 0 auto; padding: 28px 18px 60px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .marca {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 14px; color: var(--text-secondary);
+    letter-spacing: 0.02em; text-transform: uppercase;
+  }
+  .marca-selo {
+    width: 22px; height: 22px; border-radius: 7px; background: var(--amarelo);
+    display: inline-block;
+  }
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px;
+    box-shadow: 0 1px 3px rgba(20,20,30,0.07), 0 4px 14px rgba(20,20,30,0.06);
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .sub { font-size: 13.5px; color: var(--text-secondary); margin: 0 0 14px; }
+
+  /* A peça com os pontos. `position: relative` no palco + `%` nos pontos é
+     o que mantém cada marcação no lugar certo em qualquer tela, do celular
+     ao monitor grande — por isso os pontos são guardados em porcentagem e
+     nunca em pixel (mesma regra da página de aprovação). */
+  .palco { position: relative; line-height: 0; border-radius: 10px; overflow: hidden; background: #eceae6; }
+  .palco img { width: 100%; height: auto; display: block; }
+  .palco iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; display: block; }
+  .ponto {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--amarelo); color: #1c1b1f; border: 2px solid #fff;
+    font-size: 13px; font-weight: 800; line-height: 24px; text-align: center;
+    box-shadow: 0 4px 12px rgba(20,20,30,0.35);
+  }
+  .motivo {
+    font-size: 14.5px; line-height: 1.55; white-space: pre-wrap;
+    background: var(--laranja-bg); border-radius: 10px; padding: 13px 15px;
+    margin: 0 0 14px; color: #6d4405;
+  }
+  .lista { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+  .linha { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.45; }
+  .linha-num {
+    width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%;
+    background: var(--amarelo); color: #1c1b1f;
+    font-size: 12px; font-weight: 800; line-height: 22px; text-align: center;
+  }
+  .aviso {
+    font-size: 13.5px; color: var(--text-secondary);
+    background: #f7f6f3; border-radius: 10px; padding: 12px 14px; margin-top: 14px;
+  }
+  .estado { text-align: center; padding: 40px 16px; color: var(--text-secondary); font-size: 15px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="marca"><span class="marca-selo"></span> Beeon · Colmeia</div>
+    <div id="conteudo" class="estado">Carregando o pedido...</div>
+  </div>
+
+<script>
+  var COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
+
+  function chamar(corpo) {
+    return fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify(corpo) })
+      .then(function (r) { return r.json(); });
+  }
+
+  function escaparTexto(t) {
+    return String(t == null ? "" : t)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function mostrar(html) {
+    var el = document.getElementById("conteudo");
+    el.className = "";
+    el.innerHTML = html;
+  }
+
+  function mostrarEstado(texto) {
+    var el = document.getElementById("conteudo");
+    el.className = "estado";
+    el.textContent = texto;
+  }
+
+  var codigo = new URLSearchParams(location.search).get("codigo");
+  if (!codigo) {
+    mostrarEstado("Esse link está incompleto. Peça o link de novo pra quem te mandou.");
+  } else {
+    chamar({ acao: "buscarDevolucaoPublica", codigo: codigo })
+      .then(function (data) {
+        if (!data || !data.ok) {
+          mostrarEstado((data && data.error) || "Não consegui abrir esse pedido agora.");
+          return;
+        }
+        desenhar(data.devolucao);
+      })
+      .catch(function () {
+        // Diferencia "servidor fora" de "link errado" — mandar a pessoa
+        // conferir o link quando o problema é nosso só faz ela achar que
+        // errou. Mesmo cuidado da página de aprovação.
+        mostrarEstado("O nosso sistema não respondeu agora. O pedido continua salvo — tenta de novo em instantes.");
+      });
+  }
+
+  function desenhar(d) {
+    var pins = d.pins || [];
+
+    var palco = "";
+    if (d.ehVideo && d.fileId) {
+      // Em vídeo não dá pra desenhar ponto: o quadro muda o tempo todo, e
+      // uma marcação fixa apontaria pro lugar errado em quase todos eles.
+      // Fica o player e a lista escrita, que continua valendo.
+      palco = '<div class="palco"><iframe src="https://drive.google.com/file/d/'
+        + encodeURIComponent(d.fileId) + '/preview" allow="autoplay" allowfullscreen></iframe></div>';
+    } else if (d.base64) {
+      palco = '<div class="palco"><img src="data:' + escaparTexto(d.mimeType) + ';base64,' + d.base64 + '" alt="'
+        + escaparTexto(d.nomeArquivo) + '">'
+        + pins.map(function (p, i) {
+            return '<span class="ponto" style="left:' + Number(p.x) + '%;top:' + Number(p.y) + '%">' + (i + 1) + '</span>';
+          }).join("")
+        + '</div>';
+    } else {
+      palco = '<div class="aviso">Não consegui carregar a peça — ela pode ter sido movida ou renomeada no Drive depois do pedido. O que foi pedido continua valendo, está aí embaixo.</div>';
+    }
+
+    var lista = pins.length
+      ? '<div class="lista">' + pins.map(function (p, i) {
+          return '<div class="linha"><span class="linha-num">' + (i + 1) + '</span><span>'
+            + escaparTexto(p.texto || "(sem descrição)") + '</span></div>';
+        }).join("") + '</div>'
+      : "";
+
+    mostrar(
+      '<div class="card">'
+      + '<h1>' + escaparTexto(d.nomePeca || "Pedido de ajuste") + '</h1>'
+      + '<p class="sub">' + escaparTexto(d.cliente || "") + '</p>'
+      + (d.motivo ? '<p class="motivo">' + escaparTexto(d.motivo) + '</p>' : "")
+      + palco
+      + lista
+      + '</div>'
+    );
+  }
+</script>
+</body>
+</html>

@@ -116,6 +116,11 @@ function openDetail(idx, entradaAnimacao) {
     }
   }
 
+  // O que o atendimento pediu pra mudar, com os pontos marcados na peça
+  // (js/detalhe-alteracao.js). Some sozinho em tarefa que não veio de uma
+  // devolução, então não precisa de checagem aqui.
+  if (typeof renderDevolucaoNoCard === "function") renderDevolucaoNoCard(tasks[detailIdx]);
+
   // Deixa o endereço lá em cima do navegador virar o ID desta tarefa
   // (ver js/roteador-url.js) — permite mandar o link pra alguém, F5 sem
   // perder o lugar, e o botão Voltar funcionando.
@@ -735,6 +740,14 @@ function renderDetail() {
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
+              <!-- O que o atendimento pediu pra mudar, com os pontos marcados
+                   NA IMAGEM. Fica no TOPO da descrição, fora de aba nenhuma:
+                   numa tarefa de alteração isso não é contexto de apoio, é a
+                   instrução principal — quem abre o card precisa ver os
+                   pontos antes de qualquer outra coisa. Preenchido por
+                   renderDevolucaoNoCard (js/detalhe-alteracao.js); fica
+                   escondido em toda tarefa que não veio de uma devolução. -->
+              <div class="devolucao-bloco" id="devolucaoBloco" hidden></div>
               ${task.id ? `
                 <div class="ai-briefing-result" id="briefingResult">
                   ${task.briefingHTML !== undefined ? task.briefingHTML : `<p class="workflow-seq-empty">Carregando briefing...</p>`}

@@ -860,6 +860,7 @@ async function apvConfirmarDevolucao() {
     return;
   }
 
+  const versaoConferida = apvPecaAberta.peca.versoes[apvVersaoNaTela - 1];
   const btn = document.getElementById("apvConfirmarDevolver");
   const original = btn.textContent;
   btn.disabled = true;
@@ -876,6 +877,16 @@ async function apvConfirmarDevolucao() {
     designer: apvPecaAberta.designer,
     designerId: apvPecaAberta.designerId,
     autorNome: DESIGNER_LOGADO,
+    cliente: apvPecaAberta.cliente,
+    // Qual arquivo estava sendo conferido — é em cima DELE que os pontos
+    // foram marcados, e é ele que a página de ajuste vai mostrar.
+    fileId: versaoConferida ? versaoConferida.fileId : "",
+    nomeArquivo: versaoConferida ? versaoConferida.nome : "",
+    mimeType: versaoConferida ? versaoConferida.mimeType : "",
+    // Só a interface sabe onde o Colmeia está publicado hoje (mesmo motivo
+    // de gerarLinkDeAprovacao) — sem essa base, o backend não teria como
+    // montar o link dos pontos.
+    baseUrl: new URL(".", location.href).href,
   });
 
   btn.disabled = false;

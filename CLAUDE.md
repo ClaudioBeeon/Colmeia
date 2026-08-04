@@ -536,6 +536,31 @@ Pedido do Cláudio: *"se não o card se perde"*. São duas coisas separadas, as 
   desejada dele **não** é mexida, porque ele é o guarda-chuva do mês e pode ter um prazo de cliente
   de verdade ali.
 
+### Os pontos marcados na peça sobrevivem à ida pro Runrun.it
+
+O atendimento marca pontos com o mouse na tela de conferência, mas o pedido vai parar no
+**Runrun.it, que não sabe desenhar marcação em imagem**. Antes disso, do outro lado sobrava só
+`(alto à esquerda) trocar o logo` — e o designer ficava adivinhando qual elemento era.
+
+A devolução inteira (motivo + pinos + qual arquivo estava sendo conferido) é gravada na aba
+`Devolucoes` (`gravarDevolucao`, AprovacaoInterna.gs), e daí saem **dois caminhos pro mesmo
+conteúdo** — os dois precisam existir, porque o time trabalha nos dois lugares:
+
+- **Dentro do card**, pra quem já está no Colmeia: `renderDevolucaoNoCard`
+  (js/detalhe-alteracao.js) desenha a peça com os pontos em cima, no **topo da descrição, fora de
+  aba nenhuma**. Numa tarefa de alteração isso não é contexto de apoio, é a instrução principal —
+  atrás de uma aba seria exatamente o que a pessoa não veria antes de começar.
+- **`ajuste.html`**, o link que entra no texto do pedido, pra quem abriu a tarefa direto no
+  Runrun.it. Página sozinha e **sem login**, mesmo modelo da página de aprovação do cliente (o que
+  protege é o código aleatório). O backend não sabe onde o Colmeia está publicado, então a `baseUrl`
+  vem do front-end — mesma divisão de `gerarLinkDeAprovacao`.
+
+**Em vídeo os pontos não são desenhados**, nos dois caminhos: o quadro muda o tempo todo e uma
+marcação fixa apontaria pro lugar errado em quase todos eles. Fica o player e a lista escrita.
+
+No caminho do **projeto fechado** não existe subtarefa, então a devolução fica pendurada no **card
+mãe** (`taskIdAlteracao` vazio) — é por isso que `buscarDevolucaoDaTarefa` aceita os dois ids.
+
 ### As outras decisões que estavam em aberto
 
 - **Numeração da alteração:** `proximoNumeroDeAlteracao` conta as "Alteração V*" que já existem no

@@ -403,11 +403,34 @@ function devolverParaDesigner(dados) {
   var designer = dados.designer || tarefa.responsible_name || '';
   var designerId = dados.designerId || tarefa.user_id || '';
 
+  var fechado = projetoDaTarefaEstaFechado(tarefa);
+
+  // Guarda a devolução ANTES de escrever no Runrun.it: é dela que sai o
+  // link, e o link precisa estar dentro do texto que vai ser escrito.
+  var codigo = gravarDevolucao({
+    taskIdOrigem: taskId,
+    cardMaeId: cardMaeId,
+    cliente: dados.cliente || tarefa.client_name || '',
+    nomePeca: dados.nomePeca || '',
+    fileId: dados.fileId || '',
+    nomeArquivo: dados.nomeArquivo || '',
+    mimeType: dados.mimeType || '',
+    motivo: motivo,
+    pins: dados.pins || []
+  });
+
   var textoPins = textoDosPins(dados.pins);
   var corpo = motivo + (textoPins ? '\n\n' + textoPins : '');
-  var assinatura = '\n\n— pedido por ' + (dados.autorNome || 'atendimento') + ' na conferência interna do Colmeia';
 
-  var fechado = projetoDaTarefaEstaFechado(tarefa);
+  // O LINK que abre a peça com os pontos desenhados em cima. Só a
+  // interface sabe em que endereço o Colmeia está publicado hoje (mesmo
+  // motivo de gerarLinkDeAprovacao), então a base vem de lá — sem ela, o
+  // pedido ainda funciona, só sem o link.
+  if (Array.isArray(dados.pins) && dados.pins.length && dados.baseUrl) {
+    corpo += '\n\nVer os pontos marcados na peça: ' + dados.baseUrl + 'ajuste.html?codigo=' + codigo;
+  }
+
+  var assinatura = '\n\n— pedido por ' + (dados.autorNome || 'atendimento') + ' na conferência interna do Colmeia';
 
   if (fechado) {
     // Menção de verdade: <mention>@Nome</mention> notifica a pessoa. Sem
@@ -433,7 +456,8 @@ function devolverParaDesigner(dados) {
       erroPasse: rPasse.ok ? '' : (rPasse.error || ''),
       cardMaeId: cardMaeId,
       cardMaeLink: 'https://runrun.it/tasks/' + cardMaeId,
-      designer: designer
+      designer: designer,
+      codigoAjuste: codigo
     };
   }
 
@@ -464,6 +488,11 @@ function devolverParaDesigner(dados) {
   // vale avisar, não vale derrubar a devolução inteira.
   var rEtapa = moverEtapaTarefa(criada.taskId, 'ajustes', dados.autor);
 
+  // Agora que a subtarefa existe, a devolução passa a apontar pra ela — é
+  // isso que faz o bloco com os pontos aparecer dentro do card quando o
+  // designer abrir a alteração (ver buscarDevolucaoDaTarefa).
+  vincularDevolucaoAAlteracao(codigo, criada.taskId);
+
   marcarConferenciaDevolvida(taskId, dados.nomePeca, dados.autorNome, motivo);
   return {
     ok: true,
@@ -476,8 +505,31 @@ function devolverParaDesigner(dados) {
     foiProAjustes: !!rEtapa.ok,
     erroEtapa: rEtapa.ok ? '' : (rEtapa.error || ''),
     entregaEm: hojeNoFusoDaAgencia(),
-    designer: designer
+    designer: designer,
+    codigoAjuste: codigo
   };
+}
+
+/**
+ * Liga a devolução já gravada à subtarefa que acabou de nascer. Só o
+ * caminho normal chama isso — no projeto fechado não existe subtarefa, e
+ * a devolução continua pendurada no card mãe.
+ */
+function vincularDevolucaoAAlteracao(codigo, taskIdAlteracao) {
+  var sheet = getDevolucoesSheet();
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var linhas = sheet.getDataRange().getValues();
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) === String(codigo)) {
+        sheet.getRange(i + 1, 2).setValue(String(taskIdAlteracao));
+        return;
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -516,9 +568,12 @@ function proximoNumeroDeAlteracao(cardMaeId) {
  * Os pontos marcados na imagem viram texto no corpo do pedido.
  *
  * O Runrun.it não tem como mostrar marcação em imagem, então a posição
- * vira uma referência escrita ("no alto à esquerda"). Menos preciso que o
- * ponto na tela, mas é o que atravessa pro outro lado — e some sozinho
- * quando ninguém marcou nada.
+ * vira uma referência escrita ("no alto à esquerda"). Isso sozinho não
+ * basta — "alto à esquerda" não diz de que tamanho nem exatamente onde —
+ * por isso o pedido também leva um LINK que abre a peça com os pontos
+ * desenhados em cima (ver gravarDevolucao e ajuste.html). O texto continua
+ * existindo pra quem só vai ler o card correndo, e some sozinho quando
+ * ninguém marcou nada.
  */
 function textoDosPins(pins) {
   if (!Array.isArray(pins) || !pins.length) return '';
@@ -526,6 +581,140 @@ function textoDosPins(pins) {
     return (i + 1) + '. (' + regiaoDoPonto(p.x, p.y) + ') ' + String(p.texto || '').trim();
   });
   return 'Pontos marcados na peça:\n' + linhas.join('\n');
+}
+
+// ---------------------------------------------------------------------
+// A devolução guardada: é o que faz os pinos sobreviverem à ida pro
+// Runrun.it, onde marcação em imagem não existe
+// ---------------------------------------------------------------------
+
+function getDevolucoesSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Devolucoes');
+  if (!sheet) {
+    sheet = ss.insertSheet('Devolucoes');
+    sheet.getRange('A1:L1').setValues([[
+      'codigo', 'task_id_alteracao', 'task_id_origem', 'card_mae_id', 'cliente',
+      'nome_peca', 'file_id', 'nome_arquivo', 'mime_type', 'motivo', 'pins', 'devolvido_em'
+    ]]);
+  }
+  return sheet;
+}
+
+/**
+ * Guarda a devolução inteira (motivo + pinos + qual arquivo estava sendo
+ * conferido) e devolve o código do link.
+ *
+ * Por que precisa existir: o pedido de alteração vai parar no Runrun.it,
+ * que não sabe desenhar ponto em cima de imagem. Sem guardar isso aqui, a
+ * marcação que o atendimento fez com o mouse virava só "(alto à
+ * esquerda)" — e o designer ficava adivinhando qual elemento era.
+ *
+ * `taskIdAlteracao` fica vazio no caminho do projeto fechado (não existe
+ * subtarefa), e é por isso que a busca por tarefa (buscarDevolucaoDaTarefa)
+ * aceita tanto o id da alteração quanto o do card mãe.
+ */
+function gravarDevolucao(dados) {
+  var codigo = Utilities.getUuid().replace(/-/g, '');
+  var sheet = getDevolucoesSheet();
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    sheet.appendRow([
+      codigo,
+      dados.taskIdAlteracao || '',
+      dados.taskIdOrigem || '',
+      dados.cardMaeId || '',
+      dados.cliente || '',
+      dados.nomePeca || '',
+      dados.fileId || '',
+      dados.nomeArquivo || '',
+      dados.mimeType || '',
+      dados.motivo || '',
+      JSON.stringify(dados.pins || []),
+      new Date().toISOString()
+    ]);
+  } finally {
+    lock.releaseLock();
+  }
+  return codigo;
+}
+
+function linhaParaDevolucao(l) {
+  var pins = [];
+  try { pins = JSON.parse(l[10] || '[]'); } catch (e) { pins = []; }
+  return {
+    codigo: l[0],
+    taskIdAlteracao: String(l[1] || ''),
+    taskIdOrigem: String(l[2] || ''),
+    cardMaeId: String(l[3] || ''),
+    cliente: l[4],
+    nomePeca: l[5],
+    fileId: l[6],
+    nomeArquivo: l[7],
+    mimeType: l[8],
+    motivo: l[9],
+    pins: pins,
+    devolvidoEm: l[11]
+  };
+}
+
+/**
+ * A devolução pra página pública `ajuste.html` — a peça vem embutida em
+ * base64, igual à página de aprovação do cliente, pra funcionar sem login
+ * nenhum. É isso que faz o link colado no Runrun.it abrir direto.
+ *
+ * Vídeo não vai embutido (estoura o limite de 25MB do Apps Script): vai o
+ * id, e a página usa o player do Drive. Nesse caso os pontos não são
+ * desenhados em cima — sobra a lista escrita, que continua valendo.
+ */
+function buscarDevolucaoPublica(codigo) {
+  if (!codigo) return { ok: false, error: 'codigo não informado.' };
+  var linhas = getDevolucoesSheet().getDataRange().getValues();
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) !== String(codigo)) continue;
+    var d = linhaParaDevolucao(linhas[i]);
+    var ehVideo = String(d.mimeType || '').indexOf('video/') === 0;
+    if (!ehVideo && d.fileId) {
+      var img = buscarImagemCheiaDrive(d.fileId);
+      if (img && img.ok) {
+        d.base64 = img.base64;
+        d.mimeType = img.mimeType || d.mimeType;
+      } else {
+        // A peça pode ter sido movida/renomeada depois. O pedido não se
+        // perde por causa disso — o motivo e a lista de pontos continuam
+        // aparecendo, com um aviso no lugar da imagem.
+        d.semImagem = true;
+      }
+    }
+    d.ehVideo = ehVideo;
+    return { ok: true, devolucao: d };
+  }
+  return { ok: false, error: 'Esse link de ajuste não existe mais.' };
+}
+
+/**
+ * A devolução de uma tarefa, pra desenhar DENTRO do card no Colmeia (ver
+ * renderDevolucaoNoCard, js/detalhe-alteracao.js). Aceita o id da
+ * subtarefa de alteração ou o do card mãe — no caminho do projeto fechado
+ * não existe subtarefa, e o pedido fica pendurado no card mãe mesmo.
+ *
+ * Devolve a mais recente: um card pode acumular várias devoluções ao
+ * longo do mês, e a que interessa é sempre a última.
+ */
+function buscarDevolucaoDaTarefa(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var linhas = getDevolucoesSheet().getDataRange().getValues();
+  var achada = null;
+  for (var i = 1; i < linhas.length; i++) {
+    var d = linhaParaDevolucao(linhas[i]);
+    var bate = String(d.taskIdAlteracao) === String(taskId)
+      || (!d.taskIdAlteracao && String(d.cardMaeId) === String(taskId));
+    if (bate && (!achada || String(d.devolvidoEm) > String(achada.devolvidoEm))) achada = d;
+  }
+  if (!achada) return { ok: true, devolucao: null };
+  achada.ehVideo = String(achada.mimeType || '').indexOf('video/') === 0;
+  return { ok: true, devolucao: achada };
 }
 
 function regiaoDoPonto(x, y) {

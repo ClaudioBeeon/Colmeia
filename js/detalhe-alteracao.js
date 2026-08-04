@@ -200,3 +200,130 @@ function nomeDaPecaOriginalRapido(task) {
   const original = acharTarefaOriginalDaAlteracao(task);
   return original ? original.title : null;
 }
+
+// ===========================================================================
+// O PEDIDO DE AJUSTE DENTRO DO CARD, com os pontos marcados na peça
+// ===========================================================================
+//
+// Pedido do Cláudio (2026-08-04): "se tiver uma solução para a alteração
+// aparecer dentro do card seria perfeito". O problema real: o atendimento
+// marca pontos com o mouse na tela de conferência, mas o pedido vai parar no
+// Runrun.it, que não sabe desenhar marcação em imagem — do outro lado sobrava
+// só "(alto à esquerda) trocar o logo", e o designer ficava adivinhando qual
+// elemento era.
+//
+// São DOIS caminhos pro mesmo conteúdo, e os dois precisam existir:
+//   - aqui, no topo do card, pra quem já está no Colmeia;
+//   - ajuste.html, o link que vai no texto do pedido, pra quem abriu a
+//     tarefa direto no Runrun.it (que é onde o time também trabalha).
+
+/**
+ * Desenha, no topo da descrição do card, o que o atendimento pediu pra mudar
+ * — com os pontos em cima da peça.
+ *
+ * Fica FORA de aba nenhuma de propósito: numa tarefa de alteração isso não é
+ * contexto de apoio, é a instrução principal. Escondido atrás de uma aba,
+ * seria exatamente a informação que a pessoa não veria antes de começar a
+ * trabalhar.
+ *
+ * Some sozinho em qualquer tarefa que não veio de uma devolução (a busca
+ * devolve `devolucao: null` e o bloco continua escondido), então dá pra
+ * chamar sem checar nada antes.
+ */
+async function renderDevolucaoNoCard(task) {
+  const bloco = document.getElementById("devolucaoBloco");
+  if (!bloco || !task.id) return;
+  const taskId = task.id;
+
+  // Já buscado nesta tarefa? Não pergunta de novo — o pedido de ajuste não
+  // muda depois de feito, e openDetail pode rodar várias vezes na mesma
+  // tarefa (o quadro se redesenha sozinho em segundo plano).
+  if (task._devolucaoHTML !== undefined) {
+    bloco.innerHTML = task._devolucaoHTML;
+    bloco.hidden = !task._devolucaoHTML;
+    return;
+  }
+
+  const data = await chamarBackend({ acao: "buscarDevolucaoDaTarefa", taskId });
+
+  // Trocou de tarefa enquanto carregava? Compara por id, nunca por
+  // referência (bug recorrente do CLAUDE.md) — e busca o elemento de novo,
+  // já que o pop-up pode ter sido redesenhado nesse meio-tempo.
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
+  const blocoAgora = document.getElementById("devolucaoBloco");
+  if (!blocoAgora) return;
+
+  // Falha de rede não vira "não tem pedido nenhum": deixa o bloco escondido
+  // sem guardar nada, pra tentar de novo na próxima abertura.
+  if (!data || !data.ok || caiuARede(data)) return;
+
+  const d = data.devolucao;
+  if (!d) {
+    task._devolucaoHTML = "";
+    blocoAgora.hidden = true;
+    return;
+  }
+
+  const pins = d.pins || [];
+  const html = `
+    <div class="devolucao-topo">
+      <span class="devolucao-selo">Pedido de ajuste</span>
+      <span class="devolucao-quando">${escaparHTML(d.nomePeca || "")}</span>
+    </div>
+    ${d.motivo ? `<p class="devolucao-motivo">${escaparHTML(d.motivo)}</p>` : ""}
+    ${pins.length ? `
+      <div class="devolucao-palco" id="devolucaoPalco" data-file-id="${escaparHTML(d.fileId || "")}" data-video="${d.ehVideo ? "1" : ""}">
+        <div class="devolucao-carregando">Carregando a peça com os pontos...</div>
+      </div>
+      <div class="devolucao-lista">
+        ${pins.map((p, i) => `
+          <div class="devolucao-linha">
+            <span class="devolucao-num">${i + 1}</span>
+            <span>${escaparHTML(p.texto || "(sem descrição)")}</span>
+          </div>`).join("")}
+      </div>
+    ` : ""}
+  `;
+
+  task._devolucaoHTML = html;
+  blocoAgora.innerHTML = html;
+  blocoAgora.hidden = false;
+
+  if (pins.length) carregarPecaDaDevolucao(d, pins);
+}
+
+/**
+ * Põe a peça no bloco e desenha os pontos em cima dela.
+ *
+ * A imagem vem pelo backend (buscarImagemCheiaDrive), nunca apontando a <img>
+ * direto pro Drive: nem todo arquivo tem "qualquer pessoa com o link" ligado.
+ *
+ * Em VÍDEO os pontos não são desenhados — o quadro muda o tempo todo, e uma
+ * marcação fixa apontaria pro lugar errado em quase todos eles. Fica o player
+ * e a lista escrita, que continua valendo.
+ */
+async function carregarPecaDaDevolucao(d, pins) {
+  const palco = document.getElementById("devolucaoPalco");
+  if (!palco || !d.fileId) return;
+
+  if (d.ehVideo) {
+    palco.innerHTML = `<iframe class="devolucao-video" src="https://drive.google.com/file/d/${encodeURIComponent(d.fileId)}/preview" allow="autoplay" allowfullscreen title="${escaparHTML(d.nomeArquivo || "")}"></iframe>`;
+    return;
+  }
+
+  const img = await chamarBackend({ acao: "buscarImagemCheiaDrive", fileId: d.fileId });
+  const palcoAgora = document.getElementById("devolucaoPalco");
+  if (!palcoAgora) return;
+
+  if (!img || !img.ok || !img.base64) {
+    palcoAgora.innerHTML = `<p class="devolucao-carregando">Não consegui carregar a peça — ela pode ter sido movida ou renomeada no Drive. Os pontos estão descritos abaixo.</p>`;
+    return;
+  }
+
+  // x/y estão em PORCENTAGEM da imagem (nunca em pixel) — é o que mantém
+  // cada ponto no lugar certo em qualquer largura de tela.
+  palcoAgora.innerHTML = `
+    <img class="devolucao-img" src="data:${img.mimeType || d.mimeType};base64,${img.base64}" alt="${escaparHTML(d.nomeArquivo || "")}">
+    ${pins.map((p, i) => `<span class="devolucao-ponto" style="left:${Number(p.x)}%;top:${Number(p.y)}%">${i + 1}</span>`).join("")}
+  `;
+}

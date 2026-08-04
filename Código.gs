@@ -263,6 +263,13 @@ function handleRequest(e, method) {
         output = aprovarInternamente(body.taskId, body.nomePeca, body.aprovadoPor);
       } else if (body.acao === 'devolverParaDesigner') {
         output = devolverParaDesigner(body);
+      } else if (body.acao === 'buscarDevolucaoDaTarefa') {
+        output = buscarDevolucaoDaTarefa(body.taskId);
+      } else if (body.acao === 'buscarDevolucaoPublica') {
+        // Ação PÚBLICA — chamada por ajuste.html, a página que mostra os
+        // pontos marcados na peça. Sem login, igual à de aprovação: o que
+        // protege é o código aleatório do link.
+        output = buscarDevolucaoPublica(body.codigo);
       } else if (body.acao === 'buscarAprovacaoPublica') {
         // Ação PÚBLICA — chamada por aprovar.html, sem login nenhum do
         // Colmeia (ver Aprovacao.gs). Só o código aleatório protege.
