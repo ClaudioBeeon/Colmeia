@@ -216,6 +216,12 @@ const ACOES_DEMORADAS = [
   "beeMemoriaCliente",     // le os comentarios de ate 15 tarefas do cliente
   "montarIndiceDeLinks",   // so usado manualmente pelo editor do Apps Script
   "buscarExtrasRunrunCompleto", // pagina 15 dias de entregues dos 3 designers
+  // Conferência interna: as três varrem pasta do Drive e/ou o Runrun.it
+  // várias vezes (uma leitura de pasta por peça na fila; criar tarefa +
+  // alocar + mover etapa na devolução).
+  "listarConferenciasPendentes",
+  "dadosDaConferencia",
+  "devolverParaDesigner",
   "listarPastasClientesDrive",  // varre pastas do Drive
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive
   "buscarProgressoClientes",

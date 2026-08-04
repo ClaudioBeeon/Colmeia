@@ -838,6 +838,20 @@ function renderDetail() {
               ${renderHubDoClienteHTML(task.client)}
             </div>
           </div>
+          ${task.id ? `
+            <div class="side-block">
+              <span class="side-label">Quando terminar</span>
+              <button type="button" class="apv-pedir-btn" id="apvPedirBtn">
+                <span class="apv-pedir-btn-icone">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <span class="apv-pedir-btn-txt">
+                  Pedir aprovação do atendimento
+                  <span class="apv-pedir-btn-sub">Manda a peça mais nova da pasta pra conferência</span>
+                </span>
+              </button>
+            </div>
+          ` : ""}
           <div class="side-block">
             <span class="side-label">Atendimento responsável</span>
             <div class="side-person">
@@ -1025,6 +1039,17 @@ function renderDetail() {
   }
   const linkManualBtn = document.getElementById("pastaLinkManualBtn");
   if (linkManualBtn) linkManualBtn.addEventListener("click", () => abrirLinkarPastaManual(task, criarPastaBtn));
+
+  // O caminho MANUAL de mandar a peça pra conferência do atendimento. O
+  // caminho automático é a fala da Bee de "arquivo novo"
+  // (js/notificacoes-uploads.js) — este botão existe porque aquela fala
+  // depende de uma varredura de 8s da pasta e some quando é dispensada.
+  // Sem ele, uma peça podia ficar parada só porque a notificação passou
+  // batido. Mesmo par de "Criar pasta do card" + "Linkar pasta certa".
+  const apvPedirBtn = document.getElementById("apvPedirBtn");
+  if (apvPedirBtn && typeof pedirAprovacaoDoAtendimento === "function") {
+    apvPedirBtn.addEventListener("click", () => pedirAprovacaoDoAtendimento(task, apvPedirBtn));
+  }
 
   wireEdicaoEntregaDesejada(task);
 

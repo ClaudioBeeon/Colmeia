@@ -699,6 +699,15 @@ function fazerBackupDaPlanilha() {
   } catch (err) {
     Logger.log('Erro ao limpar eventos antigos do feed: ' + err.message);
   }
+  // Mesma ideia pra fila da conferência interna (AprovacaoInterna.gs):
+  // linha já decidida vira histórico e é podada em 30 dias. O que está
+  // "pendente" nunca é apagado, por mais velho que seja — é trabalho em
+  // aberto.
+  try {
+    limparConferenciasAntigas();
+  } catch (err) {
+    Logger.log('Erro ao limpar conferências antigas: ' + err.message);
+  }
   // Respostas de cliente que não chegaram na tarefa porque o Runrun.it
   // estava fora do ar na hora (ver reenviarAvisosDeAprovacaoPendentes,
   // Aprovacao.gs). A aba "Aprovações" também tenta a cada abertura — isso

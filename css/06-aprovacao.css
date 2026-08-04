@@ -624,3 +624,61 @@
   .apv-card-acao .apv-btn { width: 100%; }
   .apv-painel { width: 100%; }
 }
+
+/* ----- Peça no palco: o que a camada visual não tinha como prever -----
+   Vídeo NÃO vai embutido em base64 como a imagem: qualquer vídeo estoura o
+   limite de 25MB do Apps Script (foi exatamente o bug que fazia o link de
+   aprovação dizer "arquivo sumiu" pra vídeo que estava lá). Então entra o
+   player do próprio Drive num iframe, que precisa de tamanho declarado —
+   iframe não tem proporção natural pra `object-fit` respeitar, ao
+   contrário de <img>/<video>. */
+.apv-palco-slot > iframe {
+  width: 100%; height: 100%; border: 0;
+  border-radius: 6px; background: #000;
+}
+.apv-palco-drive {
+  position: absolute; right: 14px; bottom: 14px;
+  padding: 7px 12px; border-radius: 999px;
+  font-family: var(--apv-fonte-texto); font-size: 12px; font-weight: 600;
+  background: var(--card-bg); border: 1px solid var(--border);
+  color: var(--text-secondary); text-decoration: none;
+  box-shadow: var(--shadow-card);
+}
+.apv-palco-drive:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
+/* A tarefa sem descrição escrita no Runrun.it. Não é erro nem tela vazia —
+   é um recado dentro da coluna do briefing, então sem a moldura de card
+   que o .apv-vazio grandão usa. */
+.apv-vazio-inline {
+  font-family: var(--apv-fonte-texto); font-size: 13px; line-height: 1.55;
+  color: var(--text-muted); font-style: italic;
+}
+
+/* ----- O botão dentro do CARD: "Pedir aprovação do atendimento" -----
+   Mora na coluna da direita do card (js/detalhe-modal.js), junto do Hub do
+   cliente e do "Criar pasta do card" — segue o ritmo daquela coluna
+   (rótulo pequeno em cima, controle embaixo) e o desenho do
+   .pasta-drive-btn, que é o vizinho mais parecido.
+
+   Este é o caminho MANUAL de mandar uma peça pra conferência; o
+   automático é a fala da Bee quando entra arquivo novo na pasta. Os dois
+   existem porque a fala da Bee depende de uma varredura e pode ter sido
+   dispensada — e aí a peça ficaria parada sem ninguém perceber. */
+.apv-pedir-btn {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 11px 13px; cursor: pointer; text-align: left;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-md); color: var(--text-primary);
+  transition: border-color var(--dur-base) var(--ease-apple),
+              box-shadow var(--dur-base) var(--ease-apple);
+}
+.apv-pedir-btn:hover { border-color: var(--kanban-yellow); box-shadow: var(--shadow-card); }
+.apv-pedir-btn:disabled { opacity: 0.6; cursor: default; }
+.apv-pedir-btn-icone {
+  width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%;
+  background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center;
+}
+.apv-pedir-btn-icone svg { width: 15px; height: 15px; }
+.apv-pedir-btn-txt { display: flex; flex-direction: column; gap: 2px; font-size: 13px; font-weight: 600; }
+.apv-pedir-btn-sub { font-size: 11px; font-weight: 400; color: var(--text-muted); }

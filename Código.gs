@@ -125,7 +125,10 @@ var ACOES_QUE_MUDAM_O_QUADRO = [
   'avancarWorkflow', 'desfazerWorkflow', 'entregarTarefa', 'reabrirTarefa',
   'reatribuir', 'moverEtapa', 'moverEtapaArbitraria',
   'alterarEntrega', 'alterarPublicacao', 'ajustarEstimativa',
-  'criarRegra', 'adicionarNaRegra', 'removerDaRegra', 'criarTarefa'
+  'criarRegra', 'adicionarNaRegra', 'removerDaRegra', 'criarTarefa',
+  // Devolver pro designer cria a subtarefa de alteração, aloca alguém e
+  // move pra Ajustes — três coisas que aparecem no quadro na hora.
+  'devolverParaDesigner'
 ];
 
 function doGet(e) {
@@ -245,6 +248,21 @@ function handleRequest(e, method) {
         output = listarPecasDaPastaDoCard(body.taskId);
       } else if (body.acao === 'gerarLinkDeAprovacao') {
         output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor, body.fileId);
+      } else if (body.acao === 'pedirConferenciaInterna') {
+        // Aprovação INTERNA do atendimento (AprovacaoInterna.gs) — o passo
+        // ANTES de mandar pro cliente. Não confundir com as ações de
+        // aprovação logo abaixo, que são do link que o cliente abre.
+        output = pedirConferenciaInterna(body);
+      } else if (body.acao === 'listarConferenciasPendentes') {
+        output = listarConferenciasPendentes();
+      } else if (body.acao === 'dadosDaConferencia') {
+        output = dadosDaConferencia(body.taskId, body.nomePeca);
+      } else if (body.acao === 'listarVersoesDasPecas') {
+        output = listarVersoesDasPecas(body.taskId);
+      } else if (body.acao === 'aprovarInternamente') {
+        output = aprovarInternamente(body.taskId, body.nomePeca, body.aprovadoPor);
+      } else if (body.acao === 'devolverParaDesigner') {
+        output = devolverParaDesigner(body);
       } else if (body.acao === 'buscarAprovacaoPublica') {
         // Ação PÚBLICA — chamada por aprovar.html, sem login nenhum do
         // Colmeia (ver Aprovacao.gs). Só o código aleatório protege.

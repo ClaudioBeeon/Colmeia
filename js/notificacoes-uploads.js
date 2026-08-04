@@ -253,7 +253,8 @@ async function renderNotificacoesUpload(task) {
     <p>Você adicionou ${qtd} arquivo${qtd > 1 ? "s" : ""} em <strong>${escaparHTML(nomeDaPasta)}</strong>${task.client ? ` <span class="upload-notif-cliente">(${escaparHTML(task.client)})</span>` : ""}</p>
     <ul class="upload-notif-arquivos">${listaArquivos}</ul>
     <div class="bee-pastilhas">
-      <button type="button" class="bee-acao principal" data-upload-acao="copiar">Adicionar ao comentário</button>
+      <button type="button" class="bee-acao principal" data-upload-acao="aprovacao">Pedir aprovação do atendimento</button>
+      <button type="button" class="bee-acao" data-upload-acao="copiar">Adicionar ao comentário</button>
       <a class="bee-acao" href="${escaparHTML(link)}" target="_blank" rel="noopener">Ver</a>
       <button type="button" class="bee-acao" data-upload-acao="dispensar">Dispensar</button>
     </div>
@@ -274,6 +275,23 @@ async function renderNotificacoesUpload(task) {
   });
   wrap.querySelector('[data-upload-acao="copiar"]').addEventListener("click", () => {
     adicionarComentarioDeUpload(task, wrap, link, qtd, dispensarTodos);
+  });
+  // O caminho AUTOMÁTICO de mandar a peça pra conferência do atendimento:
+  // aparece exatamente na hora em que a peça acabou de ficar pronta, sem
+  // ninguém precisar lembrar de nada. O caminho manual é o botão "Pedir
+  // aprovação do atendimento" no card (js/detalhe-modal.js) — este aviso
+  // depende da varredura de 8s e some quando é dispensado, então não pode
+  // ser o único jeito.
+  //
+  // Dispensa o aviso ao dar certo: pedido feito, o lembrete cumpriu o
+  // papel. Se der errado, o aviso FICA — some sozinho seria perder o
+  // caminho justo quando ele falhou.
+  wrap.querySelector('[data-upload-acao="aprovacao"]').addEventListener("click", async (e) => {
+    if (typeof pedirAprovacaoDoAtendimento !== "function") return;
+    const deuCerto = await pedirAprovacaoDoAtendimento(task, e.currentTarget);
+    if (!deuCerto) return;
+    dispensarTodos();
+    document.getElementById("beeUploadAviso")?.remove();
   });
   wrap.querySelectorAll(".upload-notif-thumb").forEach(img => {
     const fileId = img.dataset.fileId;

@@ -16,6 +16,16 @@ function iniciarAppPosLogin() {
   const repasseNav = document.querySelector('.nav-ic[data-page="repasse"]');
   if (repasseNav) repasseNav.hidden = !souClaudio();
 
+  // A conferência interna é de quem tem papel "atendimento" na planilha de
+  // login — mais o Cláudio, que coordena e precisa poder cobrir/testar.
+  // Designer não vê: ele MANDA pra conferência (pelo card ou pela fala da
+  // Bee), não confere. O item nasce `hidden` no index.html de propósito,
+  // então quem não se encaixa aqui simplesmente nunca vê a página.
+  const podeConferir = PAPEL_LOGADO === "atendimento" || souClaudio();
+  const aprovacaoNav = document.querySelector('.nav-ic[data-page="aprovacao"]');
+  if (aprovacaoNav) aprovacaoNav.hidden = !podeConferir;
+  if (podeConferir && typeof atualizarBadgeAprovacao === "function") atualizarBadgeAprovacao();
+
   // Desenha na hora a última foto do quadro guardada nesse navegador (ver
   // restaurarSnapshotDoQuadro, js/pessoas-fotos.js) — assim o quadro
   // aparece instantâneo em vez de esperar o Apps Script "acordar" com a

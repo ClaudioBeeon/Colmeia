@@ -67,6 +67,12 @@ requisição, e todos compartilham o mesmo espaço de nomes — qualquer funçã
   e `GEMINI_MODEL_CONVERSA` (forte, mais lento) só pra conversar — se o nome do modelo forte não
   existir, `chamarGeminiTexto` cai sozinho no rápido em vez de deixar a Bee muda.
 
+- `AprovacaoInterna.gs` (~470 linhas) — a **conferência do atendimento** ANTES de a peça ir pro
+  cliente: a fila (`listarConferenciasPendentes`), os dados da tela de conferência, o carimbo de
+  aprovação e a devolução pro designer (que cria a subtarefa "Alteração VN" em Ajustes, com entrega
+  hoje às 18h, ou faz o caminho alternativo quando o projeto do mês está fechado). Não confundir com
+  `Aprovacao.gs`, que é o passo SEGUINTE — o link que o cliente abre. Ver seção própria abaixo.
+
 **Ao criar um arquivo `.gs` novo:** é obrigatório liberá-lo no `.claspignore` (que ignora tudo por
 padrão), senão o clasp não o envia e o deploy passa "com sucesso" mas as funções dele não existem em
 produção. A checagem automática (`.github/scripts/checar-arquivos-gs.js`) barra esse esquecimento.
@@ -143,8 +149,9 @@ Arquivos, na ordem em que são carregados (`js/`):
 23. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
 24. `pagina-bee.js` — a página **Bee** (feed de atividades + o painel de verdade da Bee do lado).
     Ver seção própria abaixo.
-25. `pagina-aprovacao.js` — a **aprovação interna do atendimento**. Hoje é só um ESQUELETO
-    documentado (a camada visual está pronta, a funcional não) — ver seção própria abaixo.
+25. `pagina-aprovacao.js` — a **aprovação interna do atendimento** (a fila, a conferência, o envio
+    e a devolução), mais `pedirAprovacaoDoAtendimento`, o ponto único por onde uma peça entra na
+    fila. Ver seção própria abaixo.
 26. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
@@ -465,23 +472,82 @@ de fora — Reels/vídeo/animação sugeriria eles, mas não existe (ainda) um j
 igual o Photoshop/Illustrator têm; a estrutura (`SUGESTOES_DE_PROGRAMA`) já está pronta pra adicionar
 uma regra nova assim que tiver o link.
 
-## Aprovação interna do atendimento (2026-08-04) — VISUAL PRONTO, FUNCIONAL NÃO
+## Aprovação interna do atendimento (2026-08-04)
 
-`js/pagina-aprovacao.js` + `css/06-aprovacao.css` + os blocos no `index.html`. O portão que
-faltava no fluxo: hoje qualquer um gera o link do cliente direto, sem ninguém conferir. Passa a
-ser designer conclui → **atendimento confere** → o mesmo clique prepara o link do cliente →
-cliente responde (`aprovar.html`, que já existia).
+`js/pagina-aprovacao.js` + `AprovacaoInterna.gs` + `css/06-aprovacao.css` + os blocos no
+`index.html`. O portão que faltava no fluxo: antes disso qualquer um gerava o link do cliente
+direto, sem ninguém conferir. Passou a ser designer conclui → **atendimento confere** → o mesmo
+clique prepara o link do cliente → cliente responde (`aprovar.html`, que já existia).
 
-**Estado atual: só a camada visual existe.** O `js/pagina-aprovacao.js` é um ESQUELETO — todas as
-funções estão vazias, com o contrato de cada uma escrito em cima dela, e o cabeçalho do arquivo
-explica o fluxo inteiro, as ações de backend que faltam criar e três decisões que ainda não foram
-tomadas (o que põe uma peça na fila; como numerar a subtarefa de alteração; quem enxerga a
-página). **Quem for implementar deve ler esse cabeçalho primeiro** — ele é o documento de entrega,
-não um comentário decorativo. O `index.html` tem conteúdo de exemplo marcado com `<!-- EXEMPLO -->`
-dentro dos contêineres, pra tela poder ser revisada antes de existir backend.
+**Foi feito em duas etapas, por duas sessões:** primeiro a camada visual inteira (as 5 telas, com
+conteúdo de exemplo e um esqueleto de JS documentado função por função), depois a funcional, que
+manteve o layout como estava e só ligou os dados. Vale repetir o método quando o desenho importa:
+desenhar primeiro, sem estrutura imposta por quem vai codar, e implementar uma vez só por cima do
+layout final.
 
-**O item de menu está `hidden` de propósito** e a página não aparece pra ninguém hoje. Dá pra
-abrir pela URL (`/aprovacoes`) pra revisar o visual. Tirar o `hidden` é parte de decidir quem vê.
+### Como uma peça ENTRA na fila (decisão do Cláudio, 04/08)
+
+Não é etapa nova no quadro: é o **designer** que manda, por **dois caminhos**, e os dois chamam a
+MESMA ação `pedirConferenciaInterna`.
+
+1. **A fala da Bee de "arquivo novo"** (js/notificacoes-uploads.js) ganhou a pastilha principal
+   "Pedir aprovação do atendimento". É o caminho automático — aparece na hora em que a peça
+   acabou de ficar pronta, sem ninguém precisar lembrar de nada.
+2. **O botão "Pedir aprovação do atendimento"** na coluna da direita do card, junto do Hub do
+   cliente (`#apvPedirBtn`, js/detalhe-modal.js).
+
+**Por que dois e não um:** a fala da Bee depende da varredura de 8s da pasta do Drive e some
+quando é dispensada. Se fosse o único caminho, uma peça ficaria parada só porque a notificação
+passou batido. É o mesmo par de "Criar pasta do card" + "Linkar pasta certa" — o caminho fácil, e
+a saída manual pra quando ele falha. **Ao criar um terceiro ponto de entrada no futuro, chamar
+`pedirAprovacaoDoAtendimento` (js/pagina-aprovacao.js) em vez de montar outra chamada:** a regra de
+"o que é mandar pra conferência" tem que continuar morando num lugar só.
+
+### A subtarefa de alteração nasce em AJUSTES, com entrega HOJE às 18h
+
+Pedido do Cláudio: *"se não o card se perde"*. São duas coisas separadas, as duas em
+`devolverParaDesigner` (AprovacaoInterna.gs):
+
+- **Entrega hoje 18h** — vai no `desiredDate` da criação; `criarTarefaRunrun` completa sozinho com
+  as 18:00 (`desired_date_with_time`). Sem data, a tarefa afunda no fim da coluna, que é ordenada
+  por entrega. A data é calculada no fuso de São Paulo (`hojeNoFusoDaAgencia`), não no do servidor
+  do Google — senão um pedido feito à noite viraria "amanhã".
+- **Coluna Ajustes** — NÃO dá pra mandar na criação; a etapa é um PUT separado
+  (`task_state_id`, ver `moverEtapaTarefa`), então é uma segunda chamada logo depois. Se ela
+  falhar, a tarefa continua existindo e alocada: o aviso na tela diz isso em vez de mentir
+  "pronto!". No caminho do projeto fechado o card mãe também é movido pra Ajustes — mas a entrega
+  desejada dele **não** é mexida, porque ele é o guarda-chuva do mês e pode ter um prazo de cliente
+  de verdade ali.
+
+### As outras decisões que estavam em aberto
+
+- **Numeração da alteração:** `proximoNumeroDeAlteracao` conta as "Alteração V*" que já existem no
+  card mãe e segue (V1, V2, V3). "V1" fixo criaria duas com o mesmo nome na segunda devolução.
+- **Quem enxerga a página:** papel `atendimento` na planilha de login, mais o Cláudio. O designer
+  não vê — ele MANDA pra conferência, não confere. Ligado em `iniciarAppPosLogin`
+  (js/login-boot.js); o item de menu nasce `hidden` no index.html, então quem não se encaixa nunca
+  vê a página.
+
+### O que fica na planilha e o que é lido ao vivo
+
+A aba `ConferenciaInterna` guarda só a **decisão** (pediu / aprovou / devolveu) e **qual versão
+estava valendo na hora do pedido**. Os arquivos são lidos do Drive toda vez. É isso que faz a tela
+perceber sozinha quando o designer sobe uma versão nova depois de já ter pedido a conferência
+(`temVersaoNova`), sem precisar de aviso nenhum. Linha já decidida é podada em 30 dias junto do
+backup diário; o que está `pendente` nunca é apagado, por mais velho que seja — é trabalho em
+aberto.
+
+**Cuidado com o nome parecido:** `listarAprovacoesPendentes` (Aprovacao.gs) é de OUTRA etapa —
+lista o que já foi mandado pro cliente e ainda não voltou (alimenta a aba "Aprovações" da Fila de
+repasse). `listarConferenciasPendentes` (AprovacaoInterna.gs) é o passo ANTERIOR. As duas olham
+lados opostos do mesmo fluxo e não devem ser ligadas uma na outra.
+
+### Imagem vai embutida, vídeo vai pelo player do Drive
+
+Mesma divisão que a página do cliente já usava, e pelo mesmo motivo: qualquer vídeo estoura o
+limite de 25MB do Apps Script. **A diferença aqui é que o arquivo NÃO é liberado publicamente** —
+a peça ainda pode ser devolvida, e liberar antes da aprovação exporia algo que talvez nunca vá pro
+cliente. Quem confere abre logado na conta da agência, que já tem acesso à pasta.
 
 **Quem usa é o atendimento, que NÃO usa o Colmeia** (eles trabalham no Runrun.it e entram só pra
 isso). Essa é a restrição de UX principal e explica quase todas as escolhas: nenhum ícone sem
