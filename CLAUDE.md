@@ -491,9 +491,9 @@ Não é etapa nova no quadro: é o **designer** que manda, por **dois caminhos**
 MESMA ação `pedirConferenciaInterna`.
 
 1. **A fala da Bee de "arquivo novo"** (js/notificacoes-uploads.js) ganhou a pastilha principal
-   "Pedir aprovação do atendimento". É o caminho automático — aparece na hora em que a peça
+   "Enviar para revisão". É o caminho automático — aparece na hora em que a peça
    acabou de ficar pronta, sem ninguém precisar lembrar de nada.
-2. **O botão "Pedir aprovação do atendimento"** na coluna da direita do card, junto do Hub do
+2. **O botão "Enviar para revisão"** na coluna da direita do card, junto do Hub do
    cliente (`#apvPedirBtn`, js/detalhe-modal.js).
 
 **Por que dois e não um:** a fala da Bee depende da varredura de 8s da pasta do Drive e some

@@ -253,7 +253,7 @@ async function renderNotificacoesUpload(task) {
     <p>Você adicionou ${qtd} arquivo${qtd > 1 ? "s" : ""} em <strong>${escaparHTML(nomeDaPasta)}</strong>${task.client ? ` <span class="upload-notif-cliente">(${escaparHTML(task.client)})</span>` : ""}</p>
     <ul class="upload-notif-arquivos">${listaArquivos}</ul>
     <div class="bee-pastilhas">
-      <button type="button" class="bee-acao principal" data-upload-acao="aprovacao">Pedir aprovação do atendimento</button>
+      <button type="button" class="bee-acao principal" data-upload-acao="aprovacao">Enviar para revisão</button>
       <button type="button" class="bee-acao" data-upload-acao="copiar">Adicionar ao comentário</button>
       <a class="bee-acao" href="${escaparHTML(link)}" target="_blank" rel="noopener">Ver</a>
       <button type="button" class="bee-acao" data-upload-acao="dispensar">Dispensar</button>

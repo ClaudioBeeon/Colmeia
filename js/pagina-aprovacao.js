@@ -50,7 +50,7 @@
 // (a) O QUE PÕE UMA PEÇA NA FILA. Não é etapa nova no quadro: é o DESIGNER que
 //     manda, em dois pontos de entrada (decisão do Cláudio, 04/08) — a fala da
 //     Bee quando ele sobe arquivo novo (js/notificacoes-uploads.js) e o botão
-//     "Pedir aprovação do atendimento" no card (js/detalhe-modal.js). Os dois
+//     "Enviar para revisão" no card (js/detalhe-modal.js). Os dois
 //     chamam a MESMA ação `pedirConferenciaInterna`. Dois caminhos porque a
 //     fala da Bee depende de uma varredura de 8s e pode ter sido dispensada;
 //     o botão garante que nada fique parado por causa disso.

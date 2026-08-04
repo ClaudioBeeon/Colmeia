@@ -846,8 +846,8 @@ function renderDetail() {
                   <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </span>
                 <span class="apv-pedir-btn-txt">
-                  Pedir aprovação do atendimento
-                  <span class="apv-pedir-btn-sub">Manda a peça mais nova da pasta pra conferência</span>
+                  Enviar para revisão
+                  <span class="apv-pedir-btn-sub">A peça mais nova da pasta vai pro atendimento conferir</span>
                 </span>
               </button>
             </div>
