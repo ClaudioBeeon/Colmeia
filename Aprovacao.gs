@@ -232,6 +232,38 @@ function linhaParaObjetoDeAprovacao(linha) {
   };
 }
 
+/**
+ * Lista as aprovações já enviadas de um cliente, mais recente primeiro —
+ * pedido do Cláudio (2026-08-04): "ver os que foram enviados daquele
+ * cliente, o que está esperando aprovação ou que teve ajustes", pra
+ * organizar isso dentro do Hub do cliente (ver abrirHubDoCliente,
+ * js/paginas-designers.js). Só as últimas 30, pra não devolver o
+ * histórico inteiro de um cliente antigo.
+ */
+function listarAprovacoesDoCliente(cliente) {
+  if (!cliente) return { ok: false, error: 'cliente não informado.' };
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var alvo = normalizarNomeParaComparar(cliente);
+  var lista = [];
+  for (var i = 1; i < linhas.length; i++) {
+    if (normalizarNomeParaComparar(linhas[i][2]) !== alvo) continue;
+    var obj = linhaParaObjetoDeAprovacao(linhas[i]);
+    lista.push({
+      codigo: obj.codigo,
+      taskId: obj.taskId,
+      tituloTarefa: obj.tituloTarefa,
+      nomeArquivo: obj.nomeArquivo,
+      status: obj.status,
+      criadoEm: obj.criadoEm,
+      respondidoEm: obj.respondidoEm,
+      respostaTexto: obj.respostaTexto
+    });
+  }
+  lista.sort(function (a, b) { return b.criadoEm - a.criadoEm; });
+  return { ok: true, aprovacoes: lista.slice(0, 30) };
+}
+
 function acharLinhaDeAprovacao(codigo) {
   var sheet = getAprovacoesSheet();
   var linhas = sheet.getDataRange().getValues();

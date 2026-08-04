@@ -101,5 +101,75 @@ function renderHubDoClienteHTML(nomeCliente) {
   return todos.join("");
 }
 
+// ===== Aprovações enviadas do cliente (2026-08-04) =====
+//
+// Pedido do Cláudio: dentro do Hub do cliente, ver os links de aprovação
+// já mandados pra esse cliente — o que ainda está esperando resposta, o
+// que foi aprovado, o que voltou com pedido de ajuste. Busca de novo TODA
+// vez que o hub abre (não guarda cache): é informação que muda o tempo
+// todo (o cliente pode responder a qualquer momento) e a lista é curta
+// (até 30 itens, ver listarAprovacoesDoCliente, Aprovacao.gs).
+const APROVACAO_STATUS_INFO = {
+  pendente: { texto: "⏳ Aguardando resposta", cls: "aprov-pendente" },
+  aprovado: { texto: "✅ Aprovado", cls: "aprov-aprovado" },
+  ajuste: { texto: "✏️ Pediu ajuste", cls: "aprov-ajuste" },
+};
+
+async function buscarAprovacoesDoCliente(cliente) {
+  if (!COLMEIA_API_URL || !cliente) return [];
+  try {
+    const data = await chamarBackend({ acao: "listarAprovacoesDoCliente", cliente });
+    return (data && data.ok) ? data.aprovacoes || [] : [];
+  } catch (err) {
+    console.error("Falha ao buscar aprovações do cliente:", err);
+    return [];
+  }
+}
+
+function renderAprovacoesDoClienteHTML(lista) {
+  if (!lista.length) {
+    return `<span class="ch-tarefas-vazio">Nenhum link de aprovação enviado ainda pra esse cliente.</span>`;
+  }
+  return lista.map(a => {
+    const info = APROVACAO_STATUS_INFO[a.status] || APROVACAO_STATUS_INFO.pendente;
+    const quando = a.respondidoEm || a.criadoEm;
+    const dataTexto = quando ? new Date(quando).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+    return `
+      <div class="ch-aprov-item">
+        <div class="ch-aprov-info">
+          <span class="ch-aprov-titulo">${escaparHTML(a.tituloTarefa || a.nomeArquivo || "Peça")}</span>
+          ${a.respostaTexto ? `<span class="ch-aprov-resposta">“${escaparHTML(a.respostaTexto)}”</span>` : ""}
+        </div>
+        <div class="ch-aprov-lado">
+          <span class="ch-aprov-status ${info.cls}">${info.texto}</span>
+          <span class="ch-aprov-data">${dataTexto}</span>
+          <button type="button" class="ch-aprov-copiar" data-codigo="${a.codigo}" title="Copiar link de novo">🔗</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function carregarAprovacoesNoHub(cliente) {
+  const el = document.getElementById("chModalAprovacoes");
+  if (!el) return;
+  el.innerHTML = `<span class="ch-tarefas-vazio">Carregando...</span>`;
+  const lista = await buscarAprovacoesDoCliente(cliente);
+  // O hub pode ter trocado de cliente (ou fechado) enquanto buscava.
+  if (document.getElementById("chModalNome")?.textContent !== formatarNomeExibicao(cliente)) return;
+  el.innerHTML = renderAprovacoesDoClienteHTML(lista);
+  el.querySelectorAll(".ch-aprov-copiar").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const url = new URL(".", location.href).href + "aprovar.html?codigo=" + btn.dataset.codigo;
+      try {
+        await navigator.clipboard.writeText(url);
+        mostrarToast("Link de aprovação copiado de novo.", "sucesso");
+      } catch (err) {
+        mostrarToast(`Link (não consegui copiar sozinho): ${url}`);
+      }
+    });
+  });
+}
+
 // (attachments fake removido — agora busca de verdade em carregarAnexos())
 

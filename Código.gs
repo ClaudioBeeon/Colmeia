@@ -249,6 +249,8 @@ function handleRequest(e, method) {
         output = buscarAprovacaoPublica(body.codigo);
       } else if (body.acao === 'responderAprovacaoPublica') {
         output = responderAprovacaoPublica(body.codigo, body.aprovado, body.respostaTexto, body.pins);
+      } else if (body.acao === 'listarAprovacoesDoCliente') {
+        output = listarAprovacoesDoCliente(body.cliente);
       } else if (body.acao === 'beeGerarImagem') {
         // Gemini 2.5 Flash Image ("Nano Banana") — ver NanoBanana.gs. O
         // caminho pela Adobe Firefly foi abandonado: o produto que a Beeon

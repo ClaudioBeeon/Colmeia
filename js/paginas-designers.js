@@ -372,6 +372,7 @@ function abrirHubDoCliente(cliente, designer) {
   document.getElementById("chModalNome").textContent = formatarNomeExibicao(cliente);
 
   document.getElementById("chModalHub").innerHTML = renderHubDoClienteHTML(cliente);
+  carregarAprovacoesNoHub(cliente);
 
   const atend = getAtendimentoDoCliente(cliente) || "Sem atendimento";
   const fotoAtend = resolverFotoManual(atend) || fotoDoAtendimento(atend);

@@ -1269,6 +1269,28 @@ body.card-aberto .quick-access-panel { display: none; }
 .ch-tarefa-due.overdue { color: var(--danger); }
 .ch-tarefas-vazio { font-size: 12px; color: var(--text-muted); font-style: italic; }
 
+/* Aprovações enviadas do cliente (2026-08-04) — mesmo visual da lista de
+   tarefas em aberto logo abaixo, só que com um selo de status por item. */
+.ch-aprov-lista { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; }
+.ch-aprov-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 14px; background: var(--page-bg); border-radius: 14px;
+}
+.ch-aprov-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ch-aprov-titulo { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-aprov-resposta { font-size: 11.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-aprov-lado { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.ch-aprov-status { font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.ch-aprov-pendente { background: var(--accent-soft); color: var(--accent); }
+.ch-aprov-aprovado { background: rgba(34,176,125,0.14); color: var(--success); }
+.ch-aprov-ajuste { background: var(--warning-soft); color: var(--warning); }
+.ch-aprov-data { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.ch-aprov-copiar {
+  border: none; background: transparent; cursor: pointer; font-size: 13px;
+  padding: 4px; border-radius: 8px; line-height: 1; transition: background .12s var(--ease-apple);
+}
+.ch-aprov-copiar:hover { background: var(--border); }
+
 /* Pills do hub dentro do modal — mesmo padrão pastel + texto escuro do mc-badge */
 .ch-modal-body .hub-pill { color: #000; font-family: 'Questrial', var(--font-body); font-weight: 400; }
 .ch-modal-body .hub-purple { background: #E9E4FC; }
