@@ -55,6 +55,13 @@
 //     fala da Bee depende de uma varredura de 8s e pode ter sido dispensada;
 //     o botão garante que nada fique parado por causa disso.
 //
+//     Mandar pra revisão faz DUAS coisas, e as duas importam: põe a peça na
+//     fila desta tela E deixa no campo de comentário um texto com o link
+//     direto da conferência, pro designer revisar e enviar. O comentário não
+//     é enfeite — o atendimento trabalha no Runrun.it e não fica olhando a
+//     fila daqui sozinho; é o comentário que avisa e traz eles até cá. Nada
+//     vai pro Runrun.it sozinho (ver rascunharComentarioDeRevisao).
+//
 // (b) A NUMERAÇÃO DA SUBTAREFA. "Alteração V1" fixo quebraria na segunda
 //     devolução da mesma peça. `proximoNumeroDeAlteracao` (AprovacaoInterna.gs)
 //     conta as que já existem no card mãe e segue: V1, V2, V3.
@@ -1117,11 +1124,48 @@ async function pedirAprovacaoDoAtendimento(task, btn, nomePeca) {
   }
 
   if (!data || !data.ok) {
-    mostrarToast((data && data.error) || "Não consegui mandar pra conferência agora.", "erro");
+    mostrarToast((data && data.error) || "Não consegui mandar pra revisão agora.", "erro");
     return false;
   }
+
+  rascunharComentarioDeRevisao(task, (data.pecas || [])[0]);
 
   const nomes = (data.pecas || []).join(", ");
   mostrarToast(`${nomes || "A peça"} foi pro atendimento conferir.`, "sucesso");
   return true;
+}
+
+/**
+ * Escreve no campo de comentário um texto com o LINK DA REVISÃO — e para
+ * por aí. Nada sai sozinho pro Runrun.it (pedido do Cláudio): o designer
+ * lê, ajusta se quiser, e clica em enviar. É o mesmo comportamento do
+ * "Adicionar ao comentário" que a fala da Bee já tinha.
+ *
+ * POR QUE O COMENTÁRIO É NECESSÁRIO, e não só a fila: o atendimento
+ * trabalha no RUNRUN.IT, não aqui. A fila da tela de conferência é a lista
+ * de trabalho de quem confere, mas ninguém fica olhando ela sozinho — o
+ * comentário na tarefa é o que avisa e traz a pessoa até cá. Os dois
+ * existem, cada um fazendo uma coisa.
+ *
+ * O link aponta pra PEÇA, não pra fila (ver roteadorLinkDaConferencia,
+ * js/roteador-url.js): quem clica cai direto no que precisa conferir, em
+ * vez de ter que procurar de novo numa lista.
+ *
+ * Fica no rascunho pros DOIS pontos de entrada (a fala da Bee e o botão do
+ * card), porque os dois passam por `pedirAprovacaoDoAtendimento` — é o
+ * mesmo gesto, e faria pouco sentido um deles avisar o atendimento e o
+ * outro não.
+ */
+function rascunharComentarioDeRevisao(task, nomePeca) {
+  const campo = document.getElementById("commentInput");
+  if (!campo || typeof roteadorLinkDaConferencia !== "function") return;
+
+  const link = roteadorLinkDaConferencia(task.id, nomePeca);
+  const texto = `${nomePeca || "A peça"} está pronta pra revisão: ${link}`;
+
+  // Acrescenta em vez de apagar o que a pessoa já estava digitando —
+  // mesmo cuidado de adicionarComentarioDeUpload.
+  campo.value = campo.value.trim() ? `${campo.value.trim()} ${texto}` : texto;
+  campo.focus();
+  campo.setSelectionRange(campo.value.length, campo.value.length);
 }

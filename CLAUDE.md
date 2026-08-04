@@ -496,6 +496,16 @@ MESMA ação `pedirConferenciaInterna`.
 2. **O botão "Enviar para revisão"** na coluna da direita do card, junto do Hub do
    cliente (`#apvPedirBtn`, js/detalhe-modal.js).
 
+**Mandar pra revisão faz DUAS coisas:** põe a peça na fila da tela de conferência **e** deixa no
+campo de comentário um texto com o **link direto da conferência daquela peça**
+(`rascunharComentarioDeRevisao` + `roteadorLinkDaConferencia`). O comentário não é enfeite — o
+atendimento trabalha no **Runrun.it** e não fica olhando a fila do Colmeia sozinho; é o comentário
+que avisa e traz eles até cá. **Nada vai pro Runrun.it sozinho:** o texto fica no campo pro designer
+revisar e clicar em enviar, mesmo comportamento do "Adicionar ao comentário" que a fala da Bee já
+tinha. O link é `.../aprovacoes/<taskId>?peca=<nome>` — aponta pra PEÇA, não pra fila, senão quem
+clica teria que procurar de novo numa lista. (O nome da peça vai na query, não no caminho: nome de
+arquivo tem espaço, acento e barra.)
+
 **Por que dois e não um:** a fala da Bee depende da varredura de 8s da pasta do Drive e some
 quando é dispensada. Se fosse o único caminho, uma peça ficaria parada só porque a notificação
 passou batido. É o mesmo par de "Criar pasta do card" + "Linkar pasta certa" — o caminho fácil, e

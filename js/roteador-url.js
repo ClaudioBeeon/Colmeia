@@ -116,9 +116,36 @@ function roteadorInterpretarRota() {
   const caminho = roteadorCaminhoAtual();
   if (!caminho) return { tipo: "kanban" };
   if (/^\d+$/.test(caminho)) return { tipo: "tarefa", id: caminho };
+
+  // `.../aprovacoes/114526` abre a conferência daquela peça direto. É o
+  // link que a Bee põe no comentário da tarefa quando o designer manda a
+  // peça pra revisão — o atendimento trabalha no Runrun.it, então o
+  // comentário de lá é o que traz eles pra cá, e cair na fila genérica
+  // faria a pessoa ter que procurar a peça de novo.
+  //
+  // O nome da peça vai na QUERY (?peca=Feed), não no caminho: nome de
+  // arquivo tem espaço, acento e barra, e nada disso sobrevive inteiro a
+  // um pedaço de caminho. Sem ele, abre a peça mexida por último.
+  const conferencia = caminho.match(/^aprovacoes\/(\d+)$/);
+  if (conferencia) {
+    let peca = "";
+    try { peca = new URLSearchParams(location.search).get("peca") || ""; } catch (e) { /* sem problema */ }
+    return { tipo: "conferencia", id: conferencia[1], peca };
+  }
+
   const pagina = ROTEADOR_SLUGS_INVERSO[caminho];
   if (pagina) return { tipo: "pagina", pagina };
   return { tipo: "kanban" };
+}
+
+/**
+ * O endereço completo pra abrir a conferência de uma peça. Montado a
+ * partir de `ROTA_BASE` pelo mesmo motivo do resto do arquivo: continua
+ * certo quando o domínio virar colmeia.beeon.com.br, sem mexer aqui.
+ */
+function roteadorLinkDaConferencia(taskId, nomePeca) {
+  const base = location.origin + ROTA_BASE + "aprovacoes/" + taskId;
+  return nomePeca ? base + "?peca=" + encodeURIComponent(nomePeca) : base;
 }
 
 /**
@@ -247,6 +274,12 @@ async function roteadorAbrirRotaInicial() {
       // ainda não foi criado.
       await roteadorEsperarPainelPronto();
       await abrirTarefaPorId(rota.id);
+    } else if (rota.tipo === "conferencia") {
+      // A fila entra como pano de fundo e a conferência abre por cima —
+      // mesma ideia do link direto de tarefa logo acima. Sair da peça leva
+      // pra fila, que é onde a pessoa continua o trabalho.
+      mostrarPagina("aprovacao");
+      if (typeof apvAbrirConferencia === "function") await apvAbrirConferencia(rota.id, rota.peca);
     } else if (rota.tipo === "pagina") {
       mostrarPagina(rota.pagina);
     } else {
@@ -269,6 +302,10 @@ window.addEventListener("popstate", async () => {
     const painelAberto = document.getElementById("taskDetail").classList.contains("open");
     if (rota.tipo === "tarefa") {
       await abrirTarefaPorId(rota.id);
+    } else if (rota.tipo === "conferencia") {
+      if (painelAberto) closeDetail();
+      mostrarPagina("aprovacao");
+      if (typeof apvAbrirConferencia === "function") await apvAbrirConferencia(rota.id, rota.peca);
     } else {
       if (painelAberto) closeDetail();
       mostrarPagina(rota.tipo === "pagina" ? rota.pagina : "kanban");
