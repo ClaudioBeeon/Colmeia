@@ -596,6 +596,45 @@ independente de a tarefa ainda estar aberta no Runrun.it.
 - Reaproveita `.repasse-column`/`.repasse-card`/`.repasse-btn` no CSS; só o que é específico de
   aprovação (`.aprov-*`) foi criado.
 
+## Quando o Runrun.it cai (2026-08-04)
+
+Eles saem do ar de vez em quando, e aí TUDO que depende deles falha junto. Antes cada tela
+inventava a própria mensagem técnica, e — pior — a página de aprovação **mentia** pro cliente.
+
+**O buraco silencioso que existia:** `responderAprovacaoPublica` (Aprovacao.gs) grava a resposta na
+planilha PRIMEIRO e só depois comenta na tarefa do Runrun.it, dentro de um `try/catch` que engolia o
+erro. Com o Runrun.it fora: a resposta do cliente era salva (bom), mas o comentário não chegava, o
+cliente via "já avisamos o time" e o designer nunca ficava sabendo. Ninguém dos dois lados
+descobria — só quando o cliente cobrasse.
+
+**A logística agora, ponta a ponta:**
+
+1. **Detectar** — `runrunFetch` (RunrunLeitura.gs) marca `runrunForaDoAr` no cache (2 min) quando a
+   resposta é 5xx/429/0 ou nem chega a responder, e LIMPA a marca em qualquer resposta boa. Só
+   isso conta como queda: 401/403/404 são problema nosso (token, id que não existe) e não acendem
+   o aviso. `runrunPareceForaDoAr()` é quem responde a pergunta.
+2. **A resposta do cliente nunca se perde** — ela já era salva antes do Runrun.it entrar na
+   história, e isso não mudou.
+3. **Contar a verdade pro cliente** — `responderAprovacaoPublica` agora devolve `avisoChegou`.
+   Sendo `false`, a página mostra "Sua resposta está salva com a gente, mas o nosso sistema está
+   fora do ar" e oferece o WhatsApp (que passa a aparecer também no "aprovado", onde normalmente
+   fica escondido). Se nem a peça carregar, `mostrarErroDeServidor()` (aprovar.html) diferencia
+   "servidor fora" de "link errado" — mandar o cliente conferir o link quando o problema é nosso
+   só faz ele achar que errou.
+4. **Reenviar sozinho** — o que não saiu fica marcado na coluna N da aba `Aprovacoes`
+   (`marcarAvisoDeAprovacaoPendente`) e `reenviarAvisosDeAprovacaoPendentes` tenta de novo em dois
+   momentos: quando alguém abre a aba "Aprovações" e no backup diário. O comentário reenviado diz
+   que é atrasado e quando o cliente respondeu de verdade — quem lê precisa saber disso.
+5. **Avisar quem está no Colmeia** — `mostrarAvisoRunrunFora` (js/config.js) põe uma faixa fixa no
+   topo dizendo o que funciona e o que não funciona. NÃO some sozinha (diferente do toast): some
+   quando a próxima varredura do quadro conseguir falar com eles de novo.
+6. **Mostrar o preso na aba Aprovações** — o card ganha `.aprov-preso` avisando que o cliente já
+   respondeu mas o recado ainda não entrou na tarefa, pra ninguém achar que não houve resposta.
+
+**Tom das mensagens, de propósito:** amarelo (a cor da casa), nunca vermelho, e sem jargão. Pro
+cliente, "fora do ar" não é erro dele nem problema dele — e a resposta que ele acabou de dar está
+salva. Ele sempre tem dois caminhos (tentar de novo / WhatsApp), nunca um beco sem saída.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

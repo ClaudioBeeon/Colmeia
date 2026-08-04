@@ -40,6 +40,9 @@ function getAprovacoesSheet() {
   // cria ela sozinha na primeira vez que alguém ler/gravar depois dessa
   // versão (mesmo padrão de getLinksClientesSheet, Planilha.gs).
   if (sheet.getLastColumn() < 13) sheet.getRange(1, 13).setValue('pins');
+  // Coluna N: "1" enquanto o aviso na tarefa não saiu porque o Runrun.it
+  // estava fora do ar (ver reenviarAvisosDeAprovacaoPendentes).
+  if (sheet.getLastColumn() < 14) sheet.getRange(1, 14).setValue('aviso_pendente');
   return sheet;
 }
 
@@ -402,6 +405,7 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
     lock.releaseLock();
   }
 
+  var avisoChegou = false;
   try {
     var pinsList = parsearPins(linha.pins);
     // Cabeçalho fixo "Alterações do cliente" — pedido do Cláudio
@@ -423,10 +427,96 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
     }
     // Sem "autor" — cai sozinho na conta padrão (o coordenador), de
     // propósito: não é a conta de quem gerou o link, é sempre a mesma.
-    adicionarComentario(linha.taskId, partes.join('\n'), null);
-  } catch (e) { /* a resposta já foi salva na planilha — o comentário é um extra, não trava por causa dele */ }
+    var envio = adicionarComentario(linha.taskId, partes.join('\n'), null);
+    avisoChegou = !!(envio && envio.ok);
+  } catch (e) {
+    // A resposta do cliente já está salva na planilha (acima) — ela nunca
+    // se perde por causa disso. O que falhou foi só AVISAR a equipe.
+    avisoChegou = false;
+  }
 
-  return { ok: true, status: linha.status };
+  // O Runrun.it estava fora: marca pra reenviar depois (ver
+  // reenviarAvisosDeAprovacaoPendentes) e conta a verdade pro cliente, em
+  // vez de mostrar "deu tudo certo" e ninguém ficar sabendo — que era
+  // exatamente o que acontecia antes: silencioso dos dois lados.
+  if (!avisoChegou) {
+    marcarAvisoDeAprovacaoPendente(codigo);
+  }
+
+  return { ok: true, status: linha.status, avisoChegou: avisoChegou };
+}
+
+// Coluna N da aba Aprovacoes: "1" enquanto o aviso na tarefa não saiu.
+var COLUNA_AVISO_PENDENTE = 14;
+
+function marcarAvisoDeAprovacaoPendente(codigo) {
+  try {
+    var lock = LockService.getScriptLock();
+    pegarTravaDaPlanilha(lock);
+    try {
+      var sheet = getAprovacoesSheet();
+      var linhas = sheet.getDataRange().getValues();
+      for (var i = 1; i < linhas.length; i++) {
+        if (String(linhas[i][0]) === String(codigo)) {
+          sheet.getRange(i + 1, COLUNA_AVISO_PENDENTE).setValue('1');
+          return;
+        }
+      }
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (e) { /* nem isso deu — o cliente ainda vai ser orientado a mandar no WhatsApp */ }
+}
+
+/**
+ * Reenvia pras tarefas os avisos que não saíram porque o Runrun.it estava
+ * fora do ar na hora em que o cliente respondeu.
+ *
+ * Roda junto do backup diário e também quando alguém abre a aba
+ * "Aprovações" (listarAprovacoesPendentes) — assim, na prática, o aviso
+ * chega poucos minutos depois do Runrun.it voltar, sem ninguém fazer nada.
+ */
+function reenviarAvisosDeAprovacaoPendentes() {
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var reenviados = 0;
+
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][COLUNA_AVISO_PENDENTE - 1] || '') !== '1') continue;
+    var obj = linhaParaObjetoDeAprovacao(linhas[i]);
+    if (!obj.taskId) continue;
+
+    var partes = ['Alterações do cliente (via link de aprovação):'];
+    partes.push(obj.status === 'aprovado'
+      ? '✅ Aprovou "' + obj.nomeArquivo + '".'
+      : '✏️ Pediu ajuste em "' + obj.nomeArquivo + '".');
+    if (obj.respostaTexto) partes.push(obj.respostaTexto);
+    var pinsList = parsearPins(obj.pins);
+    if (pinsList.length) {
+      partes.push((pinsList.length === 1 ? '1 ponto marcado' : pinsList.length + ' pontos marcados') +
+        ' na imagem — abre o link de aprovação de novo pra ver exatamente onde:');
+      pinsList.forEach(function (p, n) { partes.push((n + 1) + '. ' + (p.texto || '(sem descrição)')); });
+    }
+    // Deixa claro que é um aviso atrasado: quem lê precisa saber que o
+    // cliente respondeu ANTES, não agora.
+    partes.push('(aviso atrasado — o Runrun.it estava fora do ar quando o cliente respondeu, em ' +
+      Utilities.formatDate(new Date(Number(obj.respondidoEm) || new Date().getTime()),
+        'America/Sao_Paulo', 'dd/MM à\'s\' HH:mm') + ')');
+
+    var envio;
+    try {
+      envio = adicionarComentario(obj.taskId, partes.join('\n'), null);
+    } catch (e) {
+      envio = null;
+    }
+    // Ainda fora do ar: para por aqui e tenta tudo de novo na próxima —
+    // insistir nas outras linhas só ia falhar igual e gastar tempo.
+    if (!envio || !envio.ok) break;
+
+    try { sheet.getRange(i + 1, COLUNA_AVISO_PENDENTE).setValue(''); } catch (e) { /* segue */ }
+    reenviados++;
+  }
+  return { ok: true, reenviados: reenviados };
 }
 
 function linhaParaObjetoDeAprovacao(linha) {
@@ -485,6 +575,12 @@ function listarAprovacoesDoCliente(cliente) {
 var APROVADAS_JANELA_DIAS = 7;
 
 function listarAprovacoesPendentes() {
+  // Aproveita a abertura da aba pra tentar mandar os avisos que ficaram
+  // presos (Runrun.it fora do ar quando o cliente respondeu). Na prática
+  // é o que faz o aviso chegar poucos minutos depois dele voltar, sem
+  // ninguém precisar fazer nada. Nunca derruba a listagem.
+  try { reenviarAvisosDeAprovacaoPendentes(); } catch (e) { /* segue */ }
+
   var sheet = getAprovacoesSheet();
   var linhas = sheet.getDataRange().getValues();
   var corteAprovadas = new Date().getTime() - APROVADAS_JANELA_DIAS * 24 * 60 * 60 * 1000;
@@ -514,7 +610,11 @@ function listarAprovacoesPendentes() {
       criadoEm: obj.criadoEm,
       respondidoEm: obj.respondidoEm,
       respostaTexto: obj.respostaTexto,
-      quantosPins: parsearPins(obj.pins).length
+      quantosPins: parsearPins(obj.pins).length,
+      // O cliente respondeu, mas o aviso ainda não chegou na tarefa (o
+      // Runrun.it estava fora) — a aba mostra isso pra você não achar
+      // que ninguém respondeu.
+      avisoPendente: String(linhas[i][COLUNA_AVISO_PENDENTE - 1] || '') === '1'
     });
   }
 

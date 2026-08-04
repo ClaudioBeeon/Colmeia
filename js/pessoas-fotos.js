@@ -431,12 +431,16 @@ async function carregarTarefasReais() {
     const data = await chamarBackendGet("?tipo=tarefas");
     if (!data.ok) {
       console.error("Erro ao buscar tarefas do Colmeia:", data.error);
+      // Se o problema é o Runrun.it estar fora, avisa em português em vez
+      // de deixar a pessoa achando que o Colmeia está quebrado.
+      if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(data.runrunFora);
       tasks = tasksFake;
       carregandoTarefas = false;
       buildBoard();
       render();
       return;
     }
+    if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(false);
     salvarSnapshotDoQuadro(data.tarefas); // pra próxima abertura ser instantânea
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
     tasksTodas = todasMapeadas;
@@ -468,7 +472,13 @@ async function atualizarKanbanEmBackground() {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1) return;
   try {
     const data = await chamarBackendGet("?tipo=tarefas");
-    if (!data.ok) return;
+    if (!data.ok) {
+      // A atualização de fundo é o lugar mais provável de PERCEBER que o
+      // Runrun.it caiu (roda a cada 60s), e também de perceber que voltou.
+      if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(data.runrunFora);
+      return;
+    }
+    if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(false);
 
     salvarSnapshotDoQuadro(data.tarefas); // mantém a foto do quadro sempre fresca
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);

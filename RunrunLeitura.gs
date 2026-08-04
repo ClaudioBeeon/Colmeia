@@ -36,21 +36,72 @@ function tokenRunrunDoAutor(nomeAutor) {
   return RUNRUN_USER_TOKEN;
 }
 
+// ===== "O Runrun.it está fora do ar?" =====
+//
+// Eles caem de vez em quando, e quando isso acontece TUDO no Colmeia que
+// depende deles falha junto (quadro, play, comentário, aprovação). Sem
+// isso, cada tela inventava a sua própria mensagem de erro técnica e
+// ninguém entendia que o problema era do outro lado.
+//
+// O marcador vive no cache (não na planilha): é um estado passageiro, e
+// ele expira sozinho — se o Runrun.it voltar e ninguém mais chamar nada,
+// o aviso some em 2 minutos em vez de ficar preso pra sempre.
+var CACHE_RUNRUN_FORA = 'runrunForaDoAr';
+var CACHE_RUNRUN_FORA_SEGUNDOS = 120;
+
+function marcarRunrunForaDoAr(status) {
+  try {
+    CacheService.getScriptCache().put(
+      CACHE_RUNRUN_FORA, String(status || 'sem resposta'), CACHE_RUNRUN_FORA_SEGUNDOS);
+  } catch (e) { /* sem cache: o app só não mostra a faixa de aviso */ }
+}
+
+function marcarRunrunDeVolta() {
+  try { CacheService.getScriptCache().remove(CACHE_RUNRUN_FORA); } catch (e) { /* segue */ }
+}
+
+function runrunPareceForaDoAr() {
+  try { return !!CacheService.getScriptCache().get(CACHE_RUNRUN_FORA); }
+  catch (e) { return false; }
+}
+
+/**
+ * Só conta como "fora do ar" o que é problema DELES (5xx, 0, 429) ou uma
+ * resposta que nem JSON é. 401/403/404 são problema nosso (token errado,
+ * id que não existe) e não devem acender o aviso de servidor caído.
+ */
+function ehQuedaDoRunrun(status) {
+  var n = Number(status) || 0;
+  return n === 0 || n === 429 || n >= 500;
+}
+
 function runrunFetch(caminho, token) {
-  var res = UrlFetchApp.fetch(RUNRUN_BASE_URL + caminho, {
-    method: 'get',
-    headers: {
-      'App-Key': RUNRUN_APP_KEY,
-      'User-Token': token || RUNRUN_USER_TOKEN,
-      'Content-Type': 'application/json'
-    },
-    muteHttpExceptions: true
-  });
+  var res;
+  try {
+    res = UrlFetchApp.fetch(RUNRUN_BASE_URL + caminho, {
+      method: 'get',
+      headers: {
+        'App-Key': RUNRUN_APP_KEY,
+        'User-Token': token || RUNRUN_USER_TOKEN,
+        'Content-Type': 'application/json'
+      },
+      muteHttpExceptions: true
+    });
+  } catch (e) {
+    // Nem chegou a responder (fora do ar, DNS, timeout da rede).
+    marcarRunrunForaDoAr(0);
+    return { erroFetch: true, status: 0, corpoBruto: String(e && e.message || e) };
+  }
   var codigo = res.getResponseCode();
   var corpo = res.getContentText();
   try {
-    return JSON.parse(corpo);
+    var json = JSON.parse(corpo);
+    // Respondeu JSON de verdade: está de pé. Limpa qualquer marca antiga
+    // pra faixa de aviso sumir sozinha assim que eles voltam.
+    if (codigo < 400) marcarRunrunDeVolta();
+    return json;
   } catch (e) {
+    if (ehQuedaDoRunrun(codigo)) marcarRunrunForaDoAr(codigo);
     return { erroFetch: true, status: codigo, corpoBruto: corpo.substring(0, 300) };
   }
 }

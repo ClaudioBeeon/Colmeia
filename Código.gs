@@ -537,7 +537,15 @@ function getTarefasColmeia() {
     guardarNoCacheEmFatias(cache, CACHE_QUADRO_CHAVE, JSON.stringify(resultado), CACHE_QUADRO_SEGUNDOS);
     return resultado;
   } catch (err) {
-    return { ok: false, error: 'Erro ao buscar tarefas do Runrun.it: ' + err.message };
+    // `runrunFora` separa "o Runrun.it caiu" de "deu algum outro erro" —
+    // é o que deixa o front mostrar a faixa explicando a situação em vez
+    // de uma mensagem técnica que ninguém entende (ver
+    // runrunPareceForaDoAr, RunrunLeitura.gs).
+    return {
+      ok: false,
+      runrunFora: runrunPareceForaDoAr(),
+      error: 'Erro ao buscar tarefas do Runrun.it: ' + err.message
+    };
   }
 }
 
