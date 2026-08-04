@@ -46,6 +46,7 @@ const ORDEM_ESPERADA = [
   "js/roteador-url.js",
   "js/detalhe-historia.js",
   "js/modo-foco.js",
+  "js/pagina-aprovacao.js",
   "js/login-boot.js",
 ];
 
@@ -77,6 +78,7 @@ const ORDEM_CSS_ESPERADA = [
   "css/03-detalhe.css",
   "css/04-paginas.css",
   "css/05-componentes.css",
+  "css/06-aprovacao.css",
 ];
 
 const problemas = [];

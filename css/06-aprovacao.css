@@ -1,0 +1,607 @@
+/* ---------------------------------------------------------------------
+   APROVAÇÃO INTERNA DO ATENDIMENTO (2026-08-04)
+   ---------------------------------------------------------------------
+   O portão que faltava no fluxo: o designer termina a peça, o
+   ATENDIMENTO confere aqui, e só então o link do cliente é gerado.
+
+   Quem usa isso não usa o Colmeia — o atendimento trabalha no Runrun.it
+   e entra aqui só pra essa tarefa. Por isso tudo é escrito por extenso,
+   nenhum ícone aparece sozinho sem rótulo, e a tela de conferência é um
+   overlay que cobre o app inteiro em vez de mais uma página no meio das
+   outras: quem abre isso pela primeira vez não deve ter o resto do app
+   competindo por atenção.
+
+   Sexto arquivo de css/, carregado por último — é uma área nova e
+   isolada (tudo com prefixo `.apv-`), então nada aqui disputa peso com
+   as regras dos outros cinco. Ao adicionar um arquivo novo, lembrar de
+   liberá-lo na lista ORDEM_CSS_ESPERADA de
+   .github/scripts/checar-ordem-dos-scripts.js.
+--------------------------------------------------------------------- */
+
+.apv-area {
+  /* --success-soft não existe no 01-base.css (só --success), e essas
+     duas aparecem em vários lugares aqui — em vez de espalhar rgba()
+     solto pelo arquivo, ficam definidas uma vez só, nos dois temas. */
+  --apv-sucesso-suave: rgba(34, 176, 125, 0.12);
+  --apv-amarelo-suave: #FFF6D6;
+  --apv-palco: #E9EAEE;
+  --apv-superficie-2: #F8F8FA;
+  --apv-borda-forte: #E1E2E7;
+  /* Texto de leitura (briefing, mensagem pro cliente) na mesma pilha de
+     fonte de sistema que o chat do app já usa — ver css/03-detalhe.css. */
+  --apv-fonte-texto: -apple-system, "SF Pro Display", "SF Pro Text", "Inter", system-ui, var(--font-body), sans-serif;
+}
+[data-theme="dark"] .apv-area {
+  --apv-sucesso-suave: rgba(95, 224, 174, 0.14);
+  --apv-amarelo-suave: rgba(255, 199, 0, 0.14);
+  --apv-palco: rgba(255, 255, 255, 0.05);
+  --apv-superficie-2: rgba(255, 255, 255, 0.03);
+  --apv-borda-forte: rgba(255, 255, 255, 0.16);
+}
+
+/* ===== Peças de uso geral desta área ================================= */
+
+.apv-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; border-radius: var(--radius-md); padding: 12px 18px;
+  font-family: var(--font-body); font-size: 14px; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple),
+              opacity var(--dur-fast) var(--ease-apple),
+              transform var(--dur-fast) var(--ease-apple);
+}
+.apv-btn:active { transform: scale(0.98); }
+.apv-btn:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+.apv-btn-primario { background: var(--kanban-yellow); color: #16181D; }
+.apv-btn-primario:hover { background: #F0BC00; }
+.apv-btn-neutro { background: var(--apv-superficie-2); color: var(--text-primary); border: 1px solid var(--apv-borda-forte); }
+.apv-btn-neutro:hover { background: var(--apv-palco); }
+.apv-btn-perigo { background: var(--danger-soft); color: var(--danger); }
+.apv-btn-perigo:hover { filter: brightness(0.97); }
+.apv-btn-whats { background: #25D366; color: #0A2E17; }
+.apv-btn-whats:hover { background: #1FBB59; }
+.apv-btn-g { padding: 16px 24px; font-size: 15.5px; border-radius: var(--radius-lg); }
+.apv-btn-p { padding: 8px 13px; font-size: 12.5px; border-radius: 999px; }
+
+.apv-pill {
+  display: inline-flex; align-items: center; gap: 5px; border-radius: 999px;
+  padding: 4px 10px; font-size: 11.5px; font-weight: 700; white-space: nowrap;
+}
+.apv-pill-versao { background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
+.apv-pill-espera { background: var(--apv-superficie-2); color: var(--text-secondary); border: 1px solid var(--border); }
+.apv-pill-espera.atrasado { background: var(--warning-soft); color: var(--warning); border-color: transparent; }
+.apv-pill-nova { background: var(--apv-amarelo-suave); color: var(--kanban-yellow-text); }
+
+.apv-rotulo {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 12px;
+}
+
+.apv-vazio {
+  text-align: center; padding: 60px 20px; color: var(--text-secondary);
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); font-family: var(--apv-fonte-texto);
+}
+.apv-vazio-icone { font-size: 34px; margin-bottom: 10px; }
+
+/* ===== TELA 1 — Fila de aprovação ====================================
+   Vive como página normal do app (#page-aprovacao), com o cabeçalho e a
+   barra lateral de sempre. É a única das cinco telas que fica dentro da
+   moldura do Colmeia — as outras cobrem a tela inteira. */
+
+.apv-fila {
+  max-width: 900px; width: 100%; margin: 0 auto; padding: 4px 4px 40px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.apv-fila-intro {
+  font-family: var(--apv-fonte-texto);
+  font-size: 14.5px; line-height: 1.55; color: var(--text-secondary);
+  max-width: 62ch; margin-bottom: 10px;
+}
+.apv-card {
+  display: flex; align-items: center; gap: 18px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: 16px 18px;
+  transition: box-shadow var(--dur-base) var(--ease-apple),
+              transform var(--dur-base) var(--ease-apple);
+}
+.apv-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.apv-card-mini {
+  width: 60px; height: 76px; flex-shrink: 0; overflow: hidden; position: relative;
+  border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--apv-palco);
+}
+.apv-card-mini img,
+.apv-card-mini svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.apv-card-mini-play {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.28); color: #fff;
+}
+.apv-card-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.apv-card-cliente {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.apv-card-peca { font-family: var(--font-display); font-size: 17px; line-height: 1.25; color: var(--text-primary); }
+.apv-card-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+.apv-card-designer {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-secondary);
+}
+.apv-card-acao { flex-shrink: 0; }
+
+/* ===== TELAS 2 e 3 — Conferência e envio =============================
+   Overlay que cobre o app, na mesma moldura do pop-up de tarefa (ver
+   .task-detail em css/03-detalhe.css: mesmos afastamentos, mesma
+   entrada em dois passos `visible` → `open`).
+
+   A ALTURA É TRAVADA DE PROPÓSITO e nada aqui rola no eixo vertical,
+   fora a coluna do briefing. A peça tem que caber inteira na tela
+   sempre: quem confere 15 peças por dia não pode ter que rolar pra ver
+   o rodapé da arte — é assim que passa um detalhe errado. */
+
+.apv-conferencia {
+  display: none; position: fixed;
+  top: 22px; right: 22px; bottom: 22px; left: 106px;
+  z-index: 120;
+  flex-direction: column; overflow: hidden;
+  background: var(--page-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-hover);
+  font-family: var(--font-body); color: var(--text-primary);
+  opacity: 0; transform: translateX(24px) scale(0.99);
+  transition: opacity var(--dur-slow) var(--ease-apple-spring),
+              transform var(--dur-slow) var(--ease-apple-spring);
+}
+.apv-conferencia.visible { display: flex; }
+.apv-conferencia.open { opacity: 1; transform: translateX(0) scale(1); }
+[data-theme="dark"] .apv-conferencia { background: #0C0B12; }
+
+.apv-contexto {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 22px; background: var(--card-bg); border-bottom: 1px solid var(--border);
+}
+[data-theme="dark"] .apv-contexto { background: rgba(255, 255, 255, 0.03); }
+.apv-voltar {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: none; background: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 13.5px; font-weight: 600;
+  color: var(--text-secondary); padding: 7px 12px; border-radius: 999px;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.apv-voltar:hover { background: var(--apv-superficie-2); color: var(--text-primary); }
+.apv-contexto-nome { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+.apv-contexto-cliente { font-family: var(--font-display); font-size: 16px; }
+.apv-contexto-peca { font-family: var(--apv-fonte-texto); font-size: 14px; color: var(--text-secondary); }
+.apv-contexto-restam { margin-left: auto; font-size: 12.5px; color: var(--text-muted); }
+
+.apv-colunas {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+}
+.apv-coluna { display: flex; flex-direction: column; min-height: 0; }
+
+/* Briefing: rola por dentro dele mesmo. Texto longo é normal ali, e
+   rolar TEXTO não faz ninguém aprovar a versão errada. */
+.apv-coluna-pedido {
+  overflow-y: auto; padding: 22px 24px 32px;
+  background: var(--card-bg); border-right: 1px solid var(--border);
+}
+[data-theme="dark"] .apv-coluna-pedido { background: rgba(255, 255, 255, 0.02); }
+
+/* A peça: NÃO rola em hipótese nenhuma. Distribui a altura disponível
+   entre o seletor de versão, a peça e a barra de ação. */
+.apv-coluna-feito { overflow: hidden; padding: 18px 24px 0; }
+.apv-estado-conferindo { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+/* O estado de envio tem lista + campo de texto + botões, então esse
+   sim rola por dentro. */
+.apv-estado-envio { overflow-y: auto; min-height: 0; height: 100%; padding-bottom: 24px; }
+
+.apv-brief-titulo { font-family: var(--font-display); font-size: 21px; line-height: 1.25; margin-bottom: 4px; }
+.apv-brief-cliente { font-family: var(--apv-fonte-texto); font-size: 13.5px; color: var(--text-secondary); margin-bottom: 18px; }
+.apv-brief-texto { font-family: var(--apv-fonte-texto); font-size: 14px; line-height: 1.65; }
+.apv-brief-texto p { margin-bottom: 12px; }
+.apv-brief-texto ul { margin: 0 0 12px; padding-left: 20px; }
+.apv-brief-texto li { margin-bottom: 6px; }
+
+.apv-specs {
+  margin: 20px 0; border: 1px solid var(--border);
+  border-radius: var(--radius-md); overflow: hidden;
+}
+.apv-spec {
+  display: flex; justify-content: space-between; gap: 14px;
+  padding: 11px 14px; font-family: var(--apv-fonte-texto); font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+.apv-spec:first-child { border-top: none; }
+.apv-spec-rotulo { color: var(--text-secondary); }
+.apv-spec-valor { font-weight: 600; text-align: right; }
+.apv-spec-valor.atencao { color: var(--warning); }
+
+/* A Bee: roda SÓ quando clicam, nunca sozinha — ver o comentário no
+   topo de js/pagina-aprovacao.js. */
+.apv-bee { background: var(--apv-amarelo-suave); border-radius: var(--radius-md); padding: 16px; }
+.apv-bee-titulo {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  font-size: 13.5px; font-weight: 700; color: var(--kanban-yellow-text);
+}
+.apv-bee-desc {
+  font-family: var(--apv-fonte-texto); font-size: 12.5px; line-height: 1.5;
+  color: var(--text-secondary); margin-bottom: 12px;
+}
+.apv-bee-resultado { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; }
+.apv-bee-item {
+  display: flex; gap: 9px; align-items: flex-start;
+  font-family: var(--apv-fonte-texto); font-size: 12.5px; line-height: 1.5;
+}
+.apv-bee-item svg { flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px; }
+.apv-bee-item.ok { color: var(--text-secondary); }
+.apv-bee-item.duvida { color: var(--kanban-yellow-text); font-weight: 600; }
+.apv-bee-nota {
+  font-family: var(--apv-fonte-texto); font-size: 11.5px;
+  color: var(--text-muted); font-style: italic; margin-top: 4px;
+}
+
+/* ----- Seletor de versão -----
+   Fica sempre visível, nunca escondido atrás de menu. Se a versão nunca
+   aparece na tela, o erro de mandar a versão errada é questão de tempo. */
+.apv-versao-barra { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.apv-versao-switch {
+  display: inline-flex; align-items: center; gap: 3px; padding: 4px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 999px; box-shadow: var(--shadow-card);
+}
+.apv-versao-seta {
+  width: 28px; height: 28px; border: none; background: none; cursor: pointer;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary); transition: background var(--dur-fast) var(--ease-apple);
+}
+.apv-versao-seta:hover { background: var(--apv-superficie-2); color: var(--text-primary); }
+.apv-versao-seta:disabled { opacity: 0.3; pointer-events: none; }
+.apv-versao-btn {
+  min-width: 38px; height: 28px; padding: 0 10px; border: none; background: none; cursor: pointer;
+  border-radius: 999px; font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
+  color: var(--text-secondary); font-variant-numeric: tabular-nums;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.apv-versao-btn:hover { background: var(--apv-superficie-2); color: var(--text-primary); }
+.apv-versao-btn.ativa { background: var(--text-primary); color: var(--page-bg); }
+.apv-versao-legenda { font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-secondary); }
+.apv-versao-legenda b { color: var(--text-primary); font-weight: 600; }
+.apv-arquivo {
+  margin-left: auto; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+  color: var(--text-secondary); background: var(--card-bg); border: 1px solid var(--border);
+  padding: 5px 11px; border-radius: 999px;
+}
+
+/* Aviso de versão mais nova: AMARELO, nunca vermelho — é informação
+   útil, não erro. E não bloqueia nada: só garante que ninguém aprove a
+   v3 sem saber que existe uma v4. */
+.apv-aviso-nova {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--apv-amarelo-suave); border-radius: var(--radius-md);
+  padding: 12px 16px; margin-bottom: 14px;
+  animation: apvEntraDeCima var(--dur-slow) var(--ease-apple-spring);
+}
+@keyframes apvEntraDeCima {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.apv-aviso-nova svg { flex-shrink: 0; width: 20px; height: 20px; color: var(--kanban-yellow-text); }
+.apv-aviso-nova-txt {
+  flex: 1; min-width: 200px; font-family: var(--apv-fonte-texto);
+  font-size: 13.5px; line-height: 1.45; color: var(--kanban-yellow-text);
+}
+
+/* ----- O palco da peça -----
+   `min-height: 0` é o que permite o palco ENCOLHER abaixo do tamanho
+   natural do conteúdo. Sem ele um flex item se recusa a ficar menor que
+   o conteúdo, e a peça empurra a barra de ação pra fora da tela. */
+.apv-palco {
+  flex: 1 1 auto; min-height: 0; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--apv-palco); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 16px;
+}
+.apv-palco-slot {
+  width: 100%; height: 100%; min-height: 0; padding: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+/* `contain`: a peça cabe inteira, NUNCA é cortada, e a proporção dela é
+   que decide o tamanho final. Vale igual pra imagem e pra vídeo. */
+.apv-palco-slot > img,
+.apv-palco-slot > video {
+  max-width: 100%; max-height: 100%; width: auto; height: auto;
+  object-fit: contain; border-radius: 6px; box-shadow: var(--shadow-hover);
+}
+.apv-palco.trocou { animation: apvTrocaPeca var(--dur-base) var(--ease-apple); }
+@keyframes apvTrocaPeca {
+  from { opacity: 0.3; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+.apv-marca {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--kanban-yellow); color: #16181D; border: 2px solid #fff;
+  font-size: 12px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(20, 20, 30, 0.3);
+}
+
+.apv-acoes { flex: 0 0 auto; display: flex; gap: 12px; align-items: center; padding-bottom: 8px; }
+.apv-acoes .apv-btn { flex: 1; }
+.apv-acoes-nota {
+  flex: 0 0 auto; font-family: var(--apv-fonte-texto); font-size: 12px;
+  color: var(--text-muted); text-align: center; padding-bottom: 14px;
+}
+
+/* ----- TELA 3: aprovado, preparando o envio (MESMA tela) ----- */
+.apv-selo {
+  display: flex; align-items: center; gap: 11px;
+  background: var(--apv-sucesso-suave); border-radius: var(--radius-md);
+  padding: 13px 16px; margin-bottom: 18px;
+  animation: apvSeloEntra var(--dur-slow) var(--ease-apple-spring);
+}
+@keyframes apvSeloEntra {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.apv-selo-icone {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background: var(--success); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.apv-selo-txt { font-family: var(--apv-fonte-texto); font-size: 13.5px; line-height: 1.4; color: var(--success); font-weight: 600; }
+
+.apv-bloco { margin-bottom: 20px; }
+.apv-bloco-sub { font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-secondary); margin: -6px 0 10px; }
+.apv-escolha {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 12px 14px; margin-bottom: 8px; cursor: pointer;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+  transition: border-color var(--dur-fast) var(--ease-apple), background var(--dur-fast) var(--ease-apple);
+}
+.apv-escolha:hover { border-color: var(--apv-borda-forte); }
+.apv-escolha.marcada { border-color: var(--kanban-yellow); background: var(--apv-amarelo-suave); }
+.apv-check {
+  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+  border: 2px solid var(--apv-borda-forte); color: transparent;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple);
+}
+.apv-escolha.marcada .apv-check { background: var(--kanban-yellow); border-color: var(--kanban-yellow); color: #16181D; }
+.apv-escolha-mini { width: 34px; height: 42px; flex-shrink: 0; border-radius: 7px; overflow: hidden; border: 1px solid var(--border); }
+.apv-escolha-mini img,
+.apv-escolha-mini svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.apv-escolha-nome { flex: 1; min-width: 0; font-family: var(--apv-fonte-texto); font-size: 13.5px; font-weight: 600; }
+.apv-escolha-sub { display: block; font-size: 11.5px; color: var(--text-secondary); font-weight: 400; margin-top: 1px; }
+
+.apv-campo {
+  width: 100%; padding: 12px 14px; resize: vertical; min-height: 82px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-family: var(--apv-fonte-texto); font-size: 13.5px; line-height: 1.5; color: var(--text-primary);
+}
+.apv-campo::placeholder { color: var(--text-muted); }
+.apv-campo:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.apv-campo.invalido { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+
+/* "Ver como o cliente vê" é o maior botão da tela DE PROPÓSITO, e os
+   botões de envio nascem apagados até ele ser usado uma vez. É a trava
+   mais barata que existe contra "mandei sem olhar" — e é fácil de tirar
+   depois se incomodar: some com a classe .apv-envio-travado. */
+.apv-preview {
+  width: 100%; padding: 20px; margin-bottom: 8px; cursor: pointer;
+  border: none; border-radius: var(--radius-lg);
+  background: var(--text-primary); color: var(--page-bg);
+  font-family: var(--font-body); font-size: 16.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; gap: 11px;
+  box-shadow: var(--shadow-hover);
+  transition: transform var(--dur-fast) var(--ease-apple), filter var(--dur-fast) var(--ease-apple);
+}
+.apv-preview:hover { filter: brightness(1.12); }
+.apv-preview:active { transform: scale(0.985); }
+.apv-preview.ja-visto {
+  background: var(--card-bg); color: var(--text-secondary);
+  border: 1px solid var(--apv-borda-forte); box-shadow: none;
+  font-size: 14px; padding: 13px;
+}
+.apv-preview-nota {
+  font-family: var(--apv-fonte-texto); font-size: 12.5px;
+  color: var(--text-secondary); text-align: center; margin-bottom: 18px;
+}
+.apv-preview-nota.ok { color: var(--success); }
+.apv-envio-botoes { display: flex; gap: 10px; flex-wrap: wrap; }
+.apv-envio-botoes .apv-btn { flex: 1; min-width: 132px; }
+.apv-envio-travado { opacity: 0.4; pointer-events: none; }
+
+/* ===== TELAS 4 e 5 — Devolver pro designer / projeto fechado =========
+   Mesmo painel: o que muda entre os dois é o conteúdo, não o lugar. */
+
+.apv-overlay {
+  position: fixed; inset: 0; z-index: 620;
+  background: rgba(12, 10, 20, 0.42);
+  display: flex; justify-content: flex-end;
+  animation: apvFade var(--dur-base) var(--ease-apple);
+}
+@keyframes apvFade { from { opacity: 0; } to { opacity: 1; } }
+.apv-painel {
+  width: min(480px, 100%); height: 100%;
+  display: flex; flex-direction: column; overflow-y: auto;
+  background: var(--page-bg);
+  animation: apvPainelEntra var(--dur-slow) var(--ease-apple-spring);
+}
+[data-theme="dark"] .apv-painel { background: #0C0B12; }
+@keyframes apvPainelEntra {
+  from { transform: translateX(28px); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.apv-painel-topo {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 18px 22px; background: var(--card-bg); border-bottom: 1px solid var(--border);
+}
+[data-theme="dark"] .apv-painel-topo { background: rgba(255, 255, 255, 0.03); }
+.apv-painel-titulo { font-family: var(--font-display); font-size: 19px; }
+.apv-fechar {
+  width: 34px; height: 34px; border: none; background: none; cursor: pointer;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary); transition: background var(--dur-fast) var(--ease-apple);
+}
+.apv-fechar:hover { background: var(--apv-superficie-2); color: var(--text-primary); }
+.apv-painel-corpo { flex: 1; padding: 22px; display: flex; flex-direction: column; gap: 20px; }
+.apv-painel-rodape {
+  flex: 0 0 auto; position: sticky; bottom: 0; display: flex; gap: 11px;
+  padding: 16px 22px; background: var(--card-bg); border-top: 1px solid var(--border);
+}
+[data-theme="dark"] .apv-painel-rodape { background: rgba(255, 255, 255, 0.03); }
+.apv-painel-rodape .apv-btn { flex: 1; }
+
+.apv-explica {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 15px 17px; font-family: var(--apv-fonte-texto);
+  font-size: 13.5px; line-height: 1.6; color: var(--text-secondary);
+}
+.apv-explica b { color: var(--text-primary); font-weight: 600; }
+.apv-explica-linha { display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; }
+.apv-explica-linha:first-child { margin-top: 0; }
+.apv-explica-linha svg { flex-shrink: 0; width: 18px; height: 18px; color: var(--success); margin-top: 1px; }
+
+.apv-campo-rotulo { display: block; font-size: 13.5px; font-weight: 700; margin-bottom: 4px; }
+.apv-campo-ajuda {
+  font-family: var(--apv-fonte-texto); font-size: 12.5px; line-height: 1.45;
+  color: var(--text-secondary); margin-bottom: 9px;
+}
+.apv-obrigatorio { color: var(--danger); font-weight: 700; }
+.apv-erro {
+  display: flex; align-items: center; gap: 7px; margin-top: 8px;
+  font-family: var(--apv-fonte-texto); font-size: 12.5px; font-weight: 600; color: var(--danger);
+}
+.apv-erro svg { flex-shrink: 0; }
+
+.apv-marcar-btn {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; cursor: pointer;
+  padding: 13px 15px; background: var(--card-bg);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+  transition: border-color var(--dur-fast) var(--ease-apple), background var(--dur-fast) var(--ease-apple);
+}
+.apv-marcar-btn:hover { border-color: var(--apv-borda-forte); }
+.apv-marcar-btn.ativo { border-color: var(--kanban-yellow); background: var(--apv-amarelo-suave); }
+.apv-marcar-btn svg { flex-shrink: 0; }
+.apv-marcar-btn-sub {
+  display: block; font-family: var(--apv-fonte-texto);
+  font-size: 12px; font-weight: 400; color: var(--text-secondary); margin-top: 2px;
+}
+.apv-marcar-area { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.apv-marcar-palco {
+  position: relative; cursor: crosshair; overflow: hidden;
+  background: var(--apv-palco); border: 1px solid var(--border); border-radius: var(--radius-md);
+}
+.apv-marcar-palco img,
+.apv-marcar-palco svg { width: 100%; height: auto; display: block; }
+.apv-marcar-lista { display: flex; flex-direction: column; gap: 8px; }
+.apv-marcar-linha { display: flex; align-items: center; gap: 9px; }
+.apv-marcar-num {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  background: var(--kanban-yellow); color: #16181D;
+  font-size: 11px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.apv-marcar-linha input {
+  flex: 1; min-width: 0; padding: 8px 11px;
+  font-family: var(--apv-fonte-texto); font-size: 13px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 9px; color: var(--text-primary);
+}
+.apv-marcar-linha input:focus { outline: none; border-color: var(--accent); }
+.apv-marcar-remover {
+  width: 26px; height: 26px; flex-shrink: 0; border: none; background: none; cursor: pointer;
+  border-radius: 50%; color: var(--text-muted); font-size: 16px; line-height: 1;
+}
+.apv-marcar-remover:hover { background: var(--apv-superficie-2); color: var(--danger); }
+
+/* ----- TELA 5: projeto do mês já fechado no Runrun.it -----
+   Caso real e confirmado. É exatamente quando algo saiu do normal que a
+   pessoa mais precisa de clareza — daí o mesmo cuidado das outras
+   telas, e a explicação sem jargão de sistema. */
+.apv-excecao {
+  background: var(--warning-soft); border-radius: var(--radius-md); padding: 18px 20px;
+  animation: apvEntraDeCima var(--dur-slow) var(--ease-apple-spring);
+}
+.apv-excecao-topo { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.apv-excecao-topo svg { width: 22px; height: 22px; flex-shrink: 0; color: var(--warning); }
+.apv-excecao-titulo { font-family: var(--font-display); font-size: 17px; color: var(--text-primary); }
+.apv-excecao-txt { font-family: var(--apv-fonte-texto); font-size: 13.5px; line-height: 1.6; color: var(--text-primary); }
+.apv-link-copiar {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 5px 5px 5px 14px;
+}
+.apv-link-url {
+  flex: 1; min-width: 0; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.apv-copiado { color: var(--success); font-weight: 700; }
+
+/* ===== Confirmação de versão =========================================
+   Só aparece no caso perigoso: aprovar uma versão que não é a mais
+   nova. Interromper por padrão viraria ruído que todo mundo ignora —
+   interromper SÓ aqui é o que mantém a interrupção significando algo. */
+.apv-confirma-fundo {
+  position: fixed; inset: 0; z-index: 700;
+  background: rgba(12, 10, 20, 0.5);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: apvFade var(--dur-base) var(--ease-apple);
+}
+.apv-confirma {
+  width: min(440px, 100%); padding: 26px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-hover);
+  animation: apvConfirmaEntra var(--dur-slow) var(--ease-apple-spring);
+}
+[data-theme="dark"] .apv-confirma { background: #17141F; }
+@keyframes apvConfirmaEntra {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.apv-confirma-icone {
+  width: 44px; height: 44px; border-radius: 50%; margin-bottom: 14px;
+  background: var(--warning-soft); color: var(--warning);
+  display: flex; align-items: center; justify-content: center;
+}
+.apv-confirma-titulo { font-family: var(--font-display); font-size: 20px; line-height: 1.3; margin-bottom: 8px; }
+.apv-confirma-txt {
+  font-family: var(--apv-fonte-texto); font-size: 14px; line-height: 1.6;
+  color: var(--text-secondary); margin-bottom: 20px;
+}
+.apv-confirma-txt b { color: var(--text-primary); font-weight: 600; }
+.apv-confirma-botoes { display: flex; gap: 10px; }
+.apv-confirma-botoes .apv-btn { flex: 1; }
+
+/* ===== Telas estreitas ===============================================
+   No celular a trava de altura sai: briefing + peça + dois botões não
+   cabem juntos numa tela pequena, e espremer a peça pra caber tudo
+   deixaria a arte pequena demais pra conferir qualquer coisa — o
+   contrário do objetivo. A peça fica com 62% da altura da tela (ainda
+   grande, ainda inteira, sem cortar) e a coluna rola. */
+@media (max-width: 900px) {
+  .apv-conferencia { top: 0; right: 0; bottom: 0; left: 0; border-radius: 0; border: none; }
+  .apv-contexto { padding: 10px 16px; }
+  .apv-contexto-restam { width: 100%; margin-left: 0; }
+  .apv-colunas { grid-template-columns: 1fr; overflow-y: auto; }
+  .apv-coluna { min-height: 0; }
+  .apv-coluna-pedido {
+    overflow-y: visible; border-right: none; border-bottom: 1px solid var(--border);
+    padding: 18px 16px 24px;
+  }
+  .apv-coluna-feito { overflow: visible; padding: 16px 16px 0; }
+  .apv-estado-conferindo,
+  .apv-estado-envio { height: auto; overflow: visible; }
+  .apv-palco { flex: none; height: 62vh; min-height: 260px; }
+  .apv-acoes { flex-direction: column; }
+  .apv-acoes .apv-btn { width: 100%; }
+  .apv-card { flex-wrap: wrap; }
+  .apv-card-acao { width: 100%; }
+  .apv-card-acao .apv-btn { width: 100%; }
+  .apv-painel { width: 100%; }
+}

@@ -13,11 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-04o">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-04o">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-04o">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-04o">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-04o">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-04p">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-04p">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-04p">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-04p">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-04p">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-04p">
 </head>
 <body>
 
@@ -93,6 +94,19 @@
           <span class="nav-badge" id="repasseBadge" hidden>0</span>
         </span>
         <span class="nav-label">Fila de repasse</span>
+      </a>
+      <!-- Aprovação do atendimento — ESCONDIDO de propósito por enquanto:
+           a tela existe e está pronta visualmente, mas ainda não tem
+           backend, e um item de menu levando pra dados de exemplo
+           confundiria o time. Quem implementar decide quem enxerga isso
+           (atendimento? coordenador? os dois — ver PAPEL_LOGADO) e tira o
+           `hidden` junto. Até lá dá pra abrir pela URL: /aprovacoes -->
+      <a href="#" class="nav-ic" title="Aprovações do atendimento" data-page="aprovacao" hidden>
+        <span class="nav-icon-circle">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5l5 5 10-11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="nav-badge" id="aprovacaoBadge" hidden>0</span>
+        </span>
+        <span class="nav-label">Aprovações</span>
       </a>
     </nav>
 
@@ -593,6 +607,324 @@
       <section class="board repasse-board" id="repasseBoard"></section>
     </section>
 
+    <!-- ============ TELA 1: FILA DE APROVAÇÃO DO ATENDIMENTO ============
+         A porta de entrada de quem confere. É a única das cinco telas que
+         fica dentro da moldura normal do Colmeia — as outras quatro cobrem
+         a tela inteira, pra nada competir por atenção com quem nunca usou
+         o app. Ver o cabeçalho de js/pagina-aprovacao.js. -->
+    <section class="app-page apv-area" id="page-aprovacao" hidden>
+      <div class="apv-fila">
+        <p class="apv-fila-intro">
+          São peças que os designers terminaram e que precisam da sua conferência
+          antes de ir pro cliente. Abra uma, compare com o que foi pedido, e
+          aprove ou devolve.
+        </p>
+        <div id="apvFilaLista">
+          <!-- EXEMPLO — trocar pelo que apvRenderFila() desenhar.
+               Está aqui pra tela poder ser revisada antes de existir backend. -->
+          <article class="apv-card">
+            <div class="apv-card-mini" style="background:linear-gradient(135deg,#7A4A21,#FFCC55);"></div>
+            <div class="apv-card-corpo">
+              <span class="apv-card-cliente">Grão Café</span>
+              <span class="apv-card-peca">Feed — Combo de Verão</span>
+              <div class="apv-card-meta">
+                <span class="apv-card-designer">Gustavo</span>
+                <span class="apv-pill apv-pill-versao">versão 3</span>
+                <span class="apv-pill apv-pill-espera">2 h esperando</span>
+                <span class="apv-pill apv-pill-nova">versão nova chegou</span>
+              </div>
+            </div>
+            <div class="apv-card-acao">
+              <button type="button" class="apv-btn apv-btn-primario">Conferir</button>
+            </div>
+          </article>
+          <article class="apv-card">
+            <div class="apv-card-mini" style="background:linear-gradient(160deg,#123B4F,#2E7C9B);"></div>
+            <div class="apv-card-corpo">
+              <span class="apv-card-cliente">Vila Nova Odontologia</span>
+              <span class="apv-card-peca">Stories — Promoção de julho</span>
+              <div class="apv-card-meta">
+                <span class="apv-card-designer">Manuela</span>
+                <span class="apv-pill apv-pill-versao">versão 1</span>
+                <span class="apv-pill apv-pill-espera">40 min esperando</span>
+              </div>
+            </div>
+            <div class="apv-card-acao">
+              <button type="button" class="apv-btn apv-btn-primario">Conferir</button>
+            </div>
+          </article>
+          <!-- FIM DO EXEMPLO -->
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ============ TELAS 2 e 3: CONFERÊNCIA E ENVIO ============
+       Overlay que cobre o app, na mesma moldura do pop-up de tarefa. A
+       ALTURA É TRAVADA: a peça tem que caber inteira na tela sempre, sem
+       rolagem — quem confere 15 peças por dia não pode ter que rolar pra
+       ver o rodapé da arte, é assim que passa um detalhe errado.
+       A tela 3 (envio) é o MESMO overlay com o estado trocado, não uma
+       tela nova: quem acabou de aprovar quer mandar agora. -->
+  <div class="apv-conferencia apv-area" id="apvConferencia" role="dialog" aria-modal="true" aria-labelledby="apvContextoPeca">
+    <div class="apv-contexto">
+      <button type="button" class="apv-voltar" id="apvVoltar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Voltar pra fila
+      </button>
+      <div class="apv-contexto-nome">
+        <span class="apv-contexto-cliente" id="apvContextoCliente">Grão Café</span>
+        <span class="apv-contexto-peca" id="apvContextoPeca">Feed — Combo de Verão</span>
+      </div>
+      <span class="apv-contexto-restam" id="apvContextoRestam">3 peças ainda esperando</span>
+    </div>
+
+    <div class="apv-colunas">
+      <!-- ---------- ESQUERDA: o que foi pedido ---------- -->
+      <div class="apv-coluna apv-coluna-pedido">
+        <p class="apv-rotulo">O que foi pedido</p>
+        <h2 class="apv-brief-titulo" id="apvBriefTitulo">Feed — Combo de Verão</h2>
+        <p class="apv-brief-cliente" id="apvBriefCliente">Grão Café · pedido por Manu em 2 de agosto</p>
+
+        <div class="apv-brief-texto" id="apvBriefTexto">
+          <!-- EXEMPLO — trocar pelo que apvRenderBriefing() desenhar -->
+          <p>Post de feed anunciando o combo de verão (café gelado + cookie) com <b>15% de desconto</b> pra pedidos feitos pelo app.</p>
+          <ul>
+            <li>Usar a paleta do verão definida em julho (tons de laranja e areia)</li>
+            <li>Logo na versão horizontal, no rodapé</li>
+            <li>Chamada principal legível no feed, sem dar zoom</li>
+          </ul>
+        </div>
+
+        <div class="apv-specs" id="apvBriefSpecs">
+          <!-- EXEMPLO -->
+          <div class="apv-spec"><span class="apv-spec-rotulo">Formato</span><span class="apv-spec-valor">1080 × 1350 (4:5)</span></div>
+          <div class="apv-spec"><span class="apv-spec-rotulo">Prazo do cliente</span><span class="apv-spec-valor atencao">hoje, 18h</span></div>
+          <div class="apv-spec"><span class="apv-spec-rotulo">Card mãe</span><span class="apv-spec-valor">#11503</span></div>
+        </div>
+
+        <div class="apv-bee">
+          <div class="apv-bee-titulo">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><ellipse cx="12" cy="14" rx="5" ry="6" fill="currentColor" opacity="0.9"/><path d="M7 12h10M7 15h10" stroke="var(--card-bg)" stroke-width="1.4" stroke-linecap="round"/><path d="M9 8c-2-2-5-2.5-6-1s1 3.5 3.5 3.5M15 8c2-2 5-2.5 6-1s-1 3.5-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            A Bee pode conferir pra você
+          </div>
+          <p class="apv-bee-desc">
+            Ela lê o que foi pedido, olha a peça e aponta o que talvez esteja
+            faltando. É uma segunda opinião — quem decide é você.
+          </p>
+          <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" id="apvBeeBtn">Pedir pra Bee conferir</button>
+          <div class="apv-bee-resultado" id="apvBeeResultado" hidden></div>
+        </div>
+      </div>
+
+      <!-- ---------- DIREITA: o que foi feito ---------- -->
+      <div class="apv-coluna apv-coluna-feito">
+        <!-- Estado A: conferindo -->
+        <div class="apv-estado-conferindo" id="apvEstadoConferindo">
+          <div class="apv-versao-barra">
+            <div class="apv-versao-switch" id="apvVersaoSwitch">
+              <!-- EXEMPLO — trocar pelo que apvRenderSeletorDeVersao() desenhar -->
+              <button type="button" class="apv-versao-seta" aria-label="Versão anterior">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="apv-versao-btn">v1</button>
+              <button type="button" class="apv-versao-btn">v2</button>
+              <button type="button" class="apv-versao-btn ativa">v3</button>
+              <button type="button" class="apv-versao-seta" aria-label="Próxima versão" disabled>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <span class="apv-versao-legenda" id="apvVersaoLegenda">Esta é a <b>versão mais recente</b> que o designer entregou.</span>
+            <span class="apv-arquivo" id="apvArquivo">Feed_v3.png</span>
+          </div>
+
+          <!-- Informa, não bloqueia: amarelo, com um botão pra ver a nova. -->
+          <div class="apv-aviso-nova" id="apvAvisoNova" hidden>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
+            <span class="apv-aviso-nova-txt" id="apvAvisoNovaTxt"></span>
+            <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" id="apvVerVersaoNova">Ver a mais nova</button>
+          </div>
+
+          <div class="apv-palco" id="apvPalco">
+            <div class="apv-palco-slot" id="apvPalcoSlot"></div>
+            <!-- os pontos marcados (.apv-marca) entram aqui via JS -->
+          </div>
+
+          <div class="apv-acoes">
+            <button type="button" class="apv-btn apv-btn-perigo apv-btn-g" id="apvBtnDevolver">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14l-5-5 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h11a5 5 0 015 5v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Devolver pro designer
+            </button>
+            <button type="button" class="apv-btn apv-btn-primario apv-btn-g" id="apvBtnAprovar">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Aprovar e preparar envio
+            </button>
+          </div>
+          <p class="apv-acoes-nota">Nada vai pro cliente ainda — aprovar aqui só libera a tela de envio.</p>
+        </div>
+
+        <!-- Estado B: aprovado, preparando o envio (MESMA tela) -->
+        <div class="apv-estado-envio" id="apvEstadoEnvio" hidden>
+          <div class="apv-selo">
+            <span class="apv-selo-icone">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="apv-selo-txt" id="apvSeloTxt">Aprovado internamente</span>
+          </div>
+
+          <div class="apv-bloco">
+            <p class="apv-rotulo">Quais peças vão no link</p>
+            <p class="apv-bloco-sub">O cliente vê todas juntas, numa página só, e responde uma por uma.</p>
+            <div id="apvListaPecasEnvio">
+              <!-- EXEMPLO — trocar pelo que apvRenderEnvio() desenhar -->
+              <button type="button" class="apv-escolha marcada">
+                <span class="apv-check"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="apv-escolha-mini" style="background:linear-gradient(135deg,#7A4A21,#FFCC55);"></span>
+                <span class="apv-escolha-nome">Feed — Combo de Verão<span class="apv-escolha-sub">v3 · aprovada agora</span></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="apv-bloco">
+            <p class="apv-rotulo">Mensagem pro cliente (opcional)</p>
+            <textarea class="apv-campo" id="apvMsgCliente" placeholder="Oi! Segue a arte pra sua aprovação. Qualquer ajuste é só marcar direto na imagem."></textarea>
+          </div>
+
+          <!-- Maior botão da tela de propósito, e os de envio abaixo só
+               acendem depois que ele foi usado uma vez. Ver apvAoVerPreview(). -->
+          <button type="button" class="apv-preview" id="apvBtnPreview">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+            Ver como o cliente vê
+          </button>
+          <p class="apv-preview-nota" id="apvPreviewNota">Dá uma olhada antes de mandar — é a última chance de pegar algo errado.</p>
+
+          <div class="apv-bloco">
+            <p class="apv-rotulo">Enviar pro cliente</p>
+            <div class="apv-envio-botoes apv-envio-travado" id="apvEnvioBotoes">
+              <button type="button" class="apv-btn apv-btn-whats" data-apv-envio="whatsapp">WhatsApp</button>
+              <button type="button" class="apv-btn apv-btn-neutro" data-apv-envio="link">Copiar link</button>
+              <button type="button" class="apv-btn apv-btn-neutro" data-apv-envio="email">E-mail</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TELAS 4 e 5: DEVOLVER / PROJETO FECHADO ============
+       Mesmo painel: o que muda entre os dois casos é o conteúdo, não o
+       lugar. O caso "projeto fechado" é detectado AO ABRIR, nunca depois
+       de a pessoa escrever — e o texto dela vale do mesmo jeito, só vai
+       por outro caminho. Ver apvAbrirDevolver(). -->
+  <div class="apv-overlay apv-area" id="apvOverlayDevolver" hidden>
+    <div class="apv-painel" role="dialog" aria-modal="true" aria-labelledby="apvPainelTitulo">
+      <div class="apv-painel-topo">
+        <span class="apv-painel-titulo" id="apvPainelTitulo">Devolver pro designer</span>
+        <button type="button" class="apv-fechar" id="apvFecharPainel" aria-label="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="apv-painel-corpo">
+        <!-- Caso normal -->
+        <div class="apv-explica" id="apvExplicaNormal">
+          <div class="apv-explica-linha">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Cria a subtarefa de <b>alteração</b> dentro do card mãe.</span>
+          </div>
+          <div class="apv-explica-linha">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Já entra na fila de quem fez essa peça.</span>
+          </div>
+          <div class="apv-explica-linha">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>O que você escrever abaixo vira o comentário da tarefa.</span>
+          </div>
+        </div>
+
+        <!-- Caso de exceção: projeto do mês já fechado no Runrun.it -->
+        <div class="apv-excecao" id="apvExcecaoFechado" hidden>
+          <div class="apv-excecao-topo">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
+            <span class="apv-excecao-titulo">Esse projeto já foi fechado</span>
+          </div>
+          <p class="apv-excecao-txt" id="apvExcecaoTxt">
+            Essa peça é de um mês que já encerrou, e projetos encerrados não
+            aceitam tarefa nova. Então não dá pra abrir a subtarefa de alteração
+            aqui.
+            <br><br>
+            <b>O que o Colmeia vai fazer no lugar:</b> comentar no card mãe
+            marcando o designer e passar o card pra ele. Ele recebe do mesmo
+            jeito — só não vira uma subtarefa separada. O texto que você
+            escreveu abaixo continua valendo, vai como o comentário.
+          </p>
+        </div>
+
+        <div>
+          <label class="apv-campo-rotulo" for="apvMotivo">
+            O que precisa mudar? <span class="apv-obrigatorio">obrigatório</span>
+          </label>
+          <p class="apv-campo-ajuda">
+            Escreve como você explicaria pro designer no WhatsApp. Quanto mais
+            específico, menos idas e vindas.
+          </p>
+          <textarea class="apv-campo" id="apvMotivo" placeholder="Ex: o desconto está 20% mas o combo aprovado era 15%. E o logo tem que ser a versão horizontal."></textarea>
+          <div class="apv-erro" id="apvErroMotivo" hidden>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v5.5M12 16v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            Escreve o motivo antes de devolver — sem isso o designer não sabe o que refazer.
+          </div>
+        </div>
+
+        <div>
+          <button type="button" class="apv-marcar-btn" id="apvMarcarBtn">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.7 7-11a7 7 0 10-14 0c0 5.3 7 11 7 11z" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="1.9"/></svg>
+            <span>
+              Marcar pontos na imagem
+              <span class="apv-marcar-btn-sub">Clica na peça pra apontar exatamente onde</span>
+            </span>
+          </button>
+          <div class="apv-marcar-area" id="apvMarcarArea" hidden>
+            <div class="apv-marcar-palco" id="apvMarcarPalco"></div>
+            <div class="apv-marcar-lista" id="apvMarcarLista"></div>
+          </div>
+        </div>
+
+        <!-- Só no caso de projeto fechado -->
+        <div id="apvBlocoLinkMae" hidden>
+          <label class="apv-campo-rotulo">Link do card mãe</label>
+          <p class="apv-campo-ajuda">Copia e manda no WhatsApp do designer, pra ele abrir direto.</p>
+          <div class="apv-link-copiar">
+            <span class="apv-link-url" id="apvLinkMaeUrl">runrun.it/tasks/…</span>
+            <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" id="apvCopiarLinkMae">Copiar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="apv-painel-rodape">
+        <button type="button" class="apv-btn apv-btn-neutro" id="apvCancelarDevolver">Cancelar</button>
+        <button type="button" class="apv-btn apv-btn-primario" id="apvConfirmarDevolver">Devolver</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CONFIRMAÇÃO DE VERSÃO ============
+       Só aparece no caso perigoso: aprovar uma versão que não é a mais
+       nova. É o ÚNICO ponto do fluxo que interrompe alguém, e é isso que
+       faz a interrupção continuar significando alguma coisa. Repare que o
+       botão principal é "Ver a mais nova", não "seguir". -->
+  <div class="apv-confirma-fundo apv-area" id="apvConfirmaFundo" hidden>
+    <div class="apv-confirma" role="alertdialog" aria-modal="true" aria-labelledby="apvConfirmaTitulo">
+      <span class="apv-confirma-icone">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
+      </span>
+      <h2 class="apv-confirma-titulo" id="apvConfirmaTitulo">Essa não é a versão mais nova</h2>
+      <p class="apv-confirma-txt" id="apvConfirmaTxt"></p>
+      <div class="apv-confirma-botoes">
+        <button type="button" class="apv-btn apv-btn-primario" id="apvConfirmaVer">Ver a mais nova</button>
+        <button type="button" class="apv-btn apv-btn-neutro" id="apvConfirmaSegue">Aprovar esta mesmo</button>
+      </div>
+    </div>
   </div>
 
   <!-- A Bee solta: aqui ela NÃO lê tarefa nenhuma, é só uma especialista
@@ -733,29 +1065,30 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-04o"></script>
-<script src="js/fila-offline.js?v=2026-08-04o"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-04o"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-04o"></script>
-<script src="js/kanban-polling.js?v=2026-08-04o"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-04o"></script>
-<script src="js/regras-briefing.js?v=2026-08-04o"></script>
-<script src="js/kanban-board.js?v=2026-08-04o"></script>
-<script src="js/clientes-hub.js?v=2026-08-04o"></script>
-<script src="js/chat-comentarios.js?v=2026-08-04o"></script>
-<script src="js/detalhe-modal.js?v=2026-08-04o"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-04o"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-04o"></script>
-<script src="js/bee.js?v=2026-08-04o"></script>
-<script src="js/paginas-designers.js?v=2026-08-04o"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-04o"></script>
-<script src="js/pagina-repasse.js?v=2026-08-04o"></script>
-<script src="js/pagina-horas.js?v=2026-08-04o"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-04o"></script>
-<script src="js/paleta-comando.js?v=2026-08-04o"></script>
-<script src="js/roteador-url.js?v=2026-08-04o"></script>
-<script src="js/detalhe-historia.js?v=2026-08-04o"></script>
-<script src="js/modo-foco.js?v=2026-08-04o"></script>
-<script src="js/login-boot.js?v=2026-08-04o"></script>
+<script src="js/config.js?v=2026-08-04p"></script>
+<script src="js/fila-offline.js?v=2026-08-04p"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-04p"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-04p"></script>
+<script src="js/kanban-polling.js?v=2026-08-04p"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-04p"></script>
+<script src="js/regras-briefing.js?v=2026-08-04p"></script>
+<script src="js/kanban-board.js?v=2026-08-04p"></script>
+<script src="js/clientes-hub.js?v=2026-08-04p"></script>
+<script src="js/chat-comentarios.js?v=2026-08-04p"></script>
+<script src="js/detalhe-modal.js?v=2026-08-04p"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-04p"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-04p"></script>
+<script src="js/bee.js?v=2026-08-04p"></script>
+<script src="js/paginas-designers.js?v=2026-08-04p"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-04p"></script>
+<script src="js/pagina-repasse.js?v=2026-08-04p"></script>
+<script src="js/pagina-horas.js?v=2026-08-04p"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-04p"></script>
+<script src="js/paleta-comando.js?v=2026-08-04p"></script>
+<script src="js/roteador-url.js?v=2026-08-04p"></script>
+<script src="js/detalhe-historia.js?v=2026-08-04p"></script>
+<script src="js/modo-foco.js?v=2026-08-04p"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-04p"></script>
+<script src="js/login-boot.js?v=2026-08-04p"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@ const pageTitles = {
   runrun: ["Runrun completo", "Todas as abas e tarefas do time"],
   horas: ["Minhas horas", "Horas trabalhadas e agenda da semana"],
   repasse: ["Fila de repasse", "Tarefas esperando com o atendimento"],
+  aprovacao: ["Peças esperando você", "Conferência do atendimento antes de ir pro cliente"],
 };
 
 // Nome do designer logado no Colmeia hoje (mesmo usado na barra lateral).

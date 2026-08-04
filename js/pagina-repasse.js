@@ -1014,6 +1014,10 @@ function mostrarPagina(page) {
   if (page === "tipos") buildTiposPage();
   if (page === "repasse") buildRepassePage();
   if (page === "runrun") buildRunrunCompletoPage();
+  // A aprovação do atendimento ainda é um esqueleto (ver
+  // js/pagina-aprovacao.js) — a chamada já fica ligada aqui pra quem for
+  // implementar só precisar preencher a função por dentro.
+  if (page === "aprovacao") buildAprovacaoPage();
   // A página de horas tem um cronômetro que anda de 1 em 1 segundo — ele
   // precisa parar quando a pessoa sai dela, senão fica rodando à toa pelo
   // resto da sessão (ver iniciarRelogioDaPaginaHoras, js/pagina-horas.js).

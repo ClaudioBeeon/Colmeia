@@ -17,7 +17,8 @@ Se uma sessão futura receber acesso a essa pasta vazia, pedir acesso à pasta c
 - `index.html`, `js/*.js` (separado por assunto — ver "Estrutura do frontend (js/)" abaixo) e
   `css/*.css` = frontend. Publicado automaticamente no GitHub Pages a cada push.
   O CSS era um `style.css` único de ~3.200 linhas; em 2026-07-30 virou 5 arquivos por área
-  (`01-base`, `02-quadro`, `03-detalhe`, `04-paginas`, `05-componentes`), carregados por tags
+  (`01-base`, `02-quadro`, `03-detalhe`, `04-paginas`, `05-componentes`; em 2026-08-04 entrou o
+  6º, `06-aprovacao`), carregados por tags
   `<link>` **nessa ordem exata** — em CSS, quando duas regras têm o mesmo peso, vence a escrita
   depois, então trocar a ordem muda a aparência. A checagem automática confere isso a cada push.
 - Os arquivos `.gs` na raiz = backend, roda no Google Apps Script. Ver "Estrutura do backend (.gs)"
@@ -83,9 +84,10 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
 entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; o
-roteador de URL, 22; a história da peça, 23; e o modo foco, 24) menores dentro da pasta `js/`, cada
+roteador de URL, 22; a história da peça, 23; o modo foco, 24; e a aprovação do atendimento, 25)
+menores dentro da pasta `js/`, cada
 um cuidando de um assunto. **Não é um sistema de build** — não tem bundler, TypeScript, nem npm
-envolvido no frontend. É só HTML puro: o `index.html` carrega os 24 arquivos com várias tags
+envolvido no frontend. É só HTML puro: o `index.html` carrega os 25 arquivos com várias tags
 `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
@@ -139,7 +141,9 @@ Arquivos, na ordem em que são carregados (`js/`):
 22. `detalhe-historia.js` — os **eventos do sistema** (criada, começou a trabalhar, arquivo, entregue)
     que alimentam a pílula "Linha do tempo" do painel de comentários. Ver seção própria abaixo.
 23. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
-24. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+24. `pagina-aprovacao.js` — a **aprovação interna do atendimento**. Hoje é só um ESQUELETO
+    documentado (a camada visual está pronta, a funcional não) — ver seção própria abaixo.
+25. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -458,6 +462,48 @@ bem quando mais importa. **Só Photoshop/Illustrator por enquanto:** Premiere e 
 de fora — Reels/vídeo/animação sugeriria eles, mas não existe (ainda) um jeito de abrir eles direto
 igual o Photoshop/Illustrator têm; a estrutura (`SUGESTOES_DE_PROGRAMA`) já está pronta pra adicionar
 uma regra nova assim que tiver o link.
+
+## Aprovação interna do atendimento (2026-08-04) — VISUAL PRONTO, FUNCIONAL NÃO
+
+`js/pagina-aprovacao.js` + `css/06-aprovacao.css` + os blocos no `index.html`. O portão que
+faltava no fluxo: hoje qualquer um gera o link do cliente direto, sem ninguém conferir. Passa a
+ser designer conclui → **atendimento confere** → o mesmo clique prepara o link do cliente →
+cliente responde (`aprovar.html`, que já existia).
+
+**Estado atual: só a camada visual existe.** O `js/pagina-aprovacao.js` é um ESQUELETO — todas as
+funções estão vazias, com o contrato de cada uma escrito em cima dela, e o cabeçalho do arquivo
+explica o fluxo inteiro, as ações de backend que faltam criar e três decisões que ainda não foram
+tomadas (o que põe uma peça na fila; como numerar a subtarefa de alteração; quem enxerga a
+página). **Quem for implementar deve ler esse cabeçalho primeiro** — ele é o documento de entrega,
+não um comentário decorativo. O `index.html` tem conteúdo de exemplo marcado com `<!-- EXEMPLO -->`
+dentro dos contêineres, pra tela poder ser revisada antes de existir backend.
+
+**O item de menu está `hidden` de propósito** e a página não aparece pra ninguém hoje. Dá pra
+abrir pela URL (`/aprovacoes`) pra revisar o visual. Tirar o `hidden` é parte de decidir quem vê.
+
+**Quem usa é o atendimento, que NÃO usa o Colmeia** (eles trabalham no Runrun.it e entram só pra
+isso). Essa é a restrição de UX principal e explica quase todas as escolhas: nenhum ícone sem
+rótulo, botão escrito por extenso, e a conferência sendo um overlay que cobre o app inteiro em vez
+de mais uma página no meio das outras.
+
+**As 5 telas:** fila (`#page-aprovacao`, única dentro da moldura normal do app) → conferência
+(`#apvConferencia`, overlay: briefing à esquerda, peça à direita) → envio (o MESMO overlay com o
+estado trocado, não uma tela nova) → devolver (`#apvOverlayDevolver`) → projeto fechado (o MESMO
+painel do devolver, conteúdo diferente).
+
+**Três decisões de desenho que não devem ser desfeitas sem conversa:**
+- **A altura da conferência é travada e a peça nunca rola.** Quem confere 15 peças por dia não pode
+  ter que rolar pra ver o rodapé da arte — é assim que passa um detalhe errado. O `min-height: 0`
+  no `.apv-palco` é o que faz a peça encolher em vez de empurrar os botões pra fora da tela; sem
+  ele um flex item se recusa a ficar menor que o conteúdo. No celular a trava sai (ver o media
+  query no fim do CSS, com o motivo).
+- **A confirmação ao aprovar uma versão que não é a mais nova é o ÚNICO ponto que interrompe
+  alguém**, de propósito: é exatamente o erro que essas telas existem pra evitar, e interromper só
+  ali é o que faz a interrupção continuar significando algo. Não acrescentar confirmação em mais
+  nada sem uma razão do mesmo peso.
+- **Os botões de envio nascem apagados até "Ver como o cliente vê" ser usado uma vez.** Botão
+  grande sozinho é sugestão, não proteção. É fácil de tirar se incomodar (parar de pôr a classe
+  `.apv-envio-travado`) — foi combinado assim com o Cláudio, pra reavaliar depois de uso real.
 
 ## Bug recorrente conhecido
 
