@@ -27,14 +27,52 @@
 
 let beeFeedEventos = null; // null = ainda não buscou
 
+// Onde o #beePainel morava antes de ser trazido pra cá — guardado pra
+// devolver ele exatamente no mesmo lugar quando a pessoa sai da página
+// (a bolinha flutuante continua funcionando em todas as outras telas).
+let _beePainelCasaOriginal = null;
+
+/**
+ * Traz o painel de verdade da Bee pra dentro da página, no lugar do
+ * chat. Mover (em vez de recriar) mantém os MESMOS ids, listeners e
+ * estado de conversa — a Bee daqui é literalmente a mesma da bolinha.
+ */
 function abrirPaginaBee() {
+  const painel = document.getElementById("beePainel");
+  const slot = document.getElementById("beePainelSlot");
+  if (painel && slot && painel.parentElement !== slot) {
+    _beePainelCasaOriginal = painel.parentElement;
+    slot.appendChild(painel);
+    painel.classList.add("bee-painel-na-pagina");
+    painel.setAttribute("aria-hidden", "false");
+    // Sai do modo "painel lateral": sem isso o CSS de body.bee-aberta
+    // continuaria valendo e o painel empurraria o quadro das OUTRAS
+    // páginas, que foi exatamente o que ficou estranho na 1ª versão.
+    document.body.classList.remove("bee-aberta");
+  }
+  // Esconde a bolinha flutuante enquanto essa página está aberta (ela
+  // serve pra CHAMAR a Bee de outra tela; aqui já está tudo na frente).
+  document.body.classList.add("pagina-bee-aberta");
+  // A tela inicial dela (atalhos + conversas recentes) é o ponto de
+  // partida certo aqui — a página inteira é sobre a Bee.
+  if (typeof beeMostrarTela === "function") beeMostrarTela("inicio");
+  if (typeof beeRecentesLista !== "undefined" && beeRecentesLista === null
+      && typeof carregarRecentesDaBee === "function") {
+    carregarRecentesDaBee();
+  }
+
   renderFeedDaBee();
-  if (typeof beeAbrirPainel === "function") beeAbrirPainel();
   carregarFeedDaBee();
 }
 
 function fecharPaginaBee() {
-  if (typeof beeFecharPainel === "function") beeFecharPainel();
+  document.body.classList.remove("pagina-bee-aberta");
+  const painel = document.getElementById("beePainel");
+  if (painel && _beePainelCasaOriginal && painel.parentElement !== _beePainelCasaOriginal) {
+    _beePainelCasaOriginal.appendChild(painel);
+    painel.classList.remove("bee-painel-na-pagina");
+    painel.setAttribute("aria-hidden", "true");
+  }
 }
 
 async function carregarFeedDaBee() {

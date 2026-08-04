@@ -617,6 +617,38 @@ body.bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
 }
 body.bee-aberta .bee-painel { margin-right: 0; opacity: 1; pointer-events: auto; }
 body.card-aberto .bee-painel { display: none; }
+
+/* ===== O MESMO painel, quando mora dentro da página Bee =====
+   js/pagina-bee.js MOVE o #beePainel pra dentro de #beePainelSlot (em
+   vez de recriar o chat lá) — então tudo que faz dele um painel LATERAL
+   (largura fixa, margem negativa que o esconde, transição de entrada)
+   precisa ser desligado aqui, senão ele continuaria escondido/empurrando
+   como antes. Vira só um quadro branco que preenche a coluna dele. */
+.bee-painel.bee-painel-na-pagina {
+  width: auto; max-width: none; flex: 1; min-width: 0;
+  margin-right: 0; opacity: 1; pointer-events: auto;
+  border-radius: 26px; transition: none;
+}
+/* Sem o "x" de fechar aqui: essa página é a casa da Bee, não tem pra
+   onde fechar — quem sai daqui troca de aba na barra lateral. */
+.bee-painel-na-pagina #beeFechar { display: none; }
+/* A bolinha flutuante também não faz sentido aqui: ela serve pra CHAMAR
+   a Bee de outra tela, e nesta ela já está aberta na frente. */
+body.pagina-bee-aberta .bee-fab { opacity: 0; pointer-events: none; }
+
+/* Os atalhos em QUADRADOS de tamanho fixo, numa linha só (como aprovado
+   no protótipo). O `1fr 1fr` original foi desenhado pro painel lateral
+   de 500px; aqui o painel passa de 800px e cada célula virava um bloco
+   enorme, com o último atalho sobrando cortado numa terceira fileira. */
+.bee-painel-na-pagina .bee-grid {
+  display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 18px 6px;
+}
+.bee-painel-na-pagina .bee-card {
+  width: 108px; height: 108px; flex: 0 0 auto; border-radius: 18px; padding: 13px;
+}
+/* Nas outras páginas o painel some com o card aberto (lá vale a Bee do
+   card). Dentro da página Bee isso não se aplica — ela É a tela. */
+body.card-aberto .bee-painel.bee-painel-na-pagina { display: flex; }
 /* Precisa ser COR SÓLIDA: --card-bg no escuro é branco translúcido
    (rgba .045), e usar ele aqui deixava o painel inteiro transparente,
    com o quadro aparecendo por trás da conversa. */

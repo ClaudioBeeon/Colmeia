@@ -467,12 +467,23 @@ uma regra nova assim que tiver o link.
 (`page-bee`) com dois lados: um feed de atividades à esquerda, e o **painel de verdade da Bee**
 (o mesmo `#beePainel` da bolinha flutuante, `js/bee.js`) aberto do lado direito.
 
-**O chat não tem markup próprio nessa página — é reaproveitado, não duplicado.**
-`abrirPaginaBee()` chama `beeAbrirPainel()` (a mesma função que a bolinha flutuante usa em
-qualquer tela) e `fecharPaginaBee()` chama `beeFecharPainel()` ao sair. Como o `#beePainel` é um
-item flex IRMÃO do `.main` (empurra o quadro pra esquerda ao abrir, em vez de cobrir por cima — ver
-comentário no próprio HTML dele), abrir ele com a página Bee sozinha visível já produz o layout
-"feed à esquerda, chat à direita" sem escrever uma linha de lógica de conversa nova.
+**O chat não tem markup próprio nessa página — o painel de verdade é MOVIDO pra cá.**
+`abrirPaginaBee()` faz `slot.appendChild(painel)`, tirando o `#beePainel` de onde ele mora (irmão
+do `.main`) e colocando dentro de `#beePainelSlot`, na coluna da direita; `fecharPaginaBee()`
+devolve pro lugar. Mover em vez de recriar mantém os MESMOS ids, listeners e estado de conversa —
+a Bee daqui é literalmente a mesma da bolinha flutuante, sem uma linha de lógica duplicada.
+
+**A primeira versão tentou só chamar `beeAbrirPainel()` e deu errado:** aquilo liga
+`body.bee-aberta`, que é o modo "painel lateral" — ele empurrava o conteúdo pro lado e o feed
+ficava perdido no meio da tela, nada a ver com o protótipo aprovado. Por isso `abrirPaginaBee()`
+REMOVE `body.bee-aberta` e a classe `.bee-painel-na-pagina` (css/05-componentes.css) desliga tudo
+que faz dele um painel lateral: largura fixa, a margem negativa que o esconde, e a transição de
+entrada. Ao mexer no CSS do `.bee-painel`, conferir se a regra nova também precisa ser desligada lá.
+
+O layout é `.bee-pagina` (css/04-paginas.css): grid de duas colunas — feed à esquerda numa moldura
+cinza própria, chat à direita. Dentro da página, `.bee-grid` também é reescrito pra quadrados de
+tamanho fixo numa linha só: o `1fr 1fr` original foi desenhado pro painel lateral de 500px e, num
+painel de 800px+, virava blocos enormes com o último atalho cortado.
 
 **O feed junta DOIS grupos de evento, e a diferença entre eles importa:**
 

@@ -1631,16 +1631,42 @@ body.card-aberto .quick-access-panel { display: none; }
   .hr-cal-grade, .hr-cal-corpo { grid-template-columns: 42px repeat(7, 1fr); }
 }
 
-/* ===== PÁGINA "BEE" (feed) =====
-   Só o feed mora aqui — o chat é o #beePainel de verdade (ver
-   css/05-componentes.css/.bee-painel), aberto/fechado por
-   js/pagina-bee.js junto com essa página. Sem fundo cinza por baixo dos
-   cards de propósito: a .app-page já senta em cima do --page-bg do app
-   inteiro (mesmo princípio de .column, que também é transparent). */
+/* ===== PÁGINA "BEE" =====
+   Duas colunas lado a lado, como no protótipo aprovado: o feed à
+   esquerda (numa "moldura" cinza clara própria) e o chat à direita. O
+   chat é o #beePainel DE VERDADE, movido pra cá por js/pagina-bee.js —
+   ver .bee-painel-na-pagina em css/05-componentes.css, que tira dele o
+   comportamento de painel lateral (aquele que empurrava o quadro). */
+.bee-pagina {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 20px; padding-bottom: 22px;
+}
+.bee-painel-slot { min-width: 0; min-height: 0; display: flex; }
+
+/* A moldura do feed: fundo um tiquinho mais escuro que o da página, pra
+   os cards brancos "flutuarem" dentro dela (é o que dá o ar clean da
+   referência). Sem isso o card branco encostava direto no fundo. */
 .bee-feed-col {
-  max-width: 640px; width: 100%; margin: 0 auto;
-  padding: 4px 4px 32px;
-  display: flex; flex-direction: column; gap: 18px;
+  min-height: 0; overflow-y: auto;
+  background: var(--page-bg-fundo, rgba(0, 0, 0, 0.025));
+  border-radius: 26px; padding: 16px 14px 20px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+[data-theme="dark"] .bee-feed-col { background: rgba(0, 0, 0, 0.18); }
+
+/* Barra de rolagem discreta: some em repouso, aparece só com o mouse
+   em cima (pedido do Cláudio no protótipo). */
+.bee-feed-col { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.bee-feed-col:hover { scrollbar-color: var(--text-muted) transparent; }
+.bee-feed-col::-webkit-scrollbar { width: 5px; }
+.bee-feed-col::-webkit-scrollbar-track { background: transparent; }
+.bee-feed-col::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
+.bee-feed-col:hover::-webkit-scrollbar-thumb { background: var(--text-muted); }
+
+@media (max-width: 900px) {
+  .bee-pagina { grid-template-columns: 1fr; }
+  .bee-painel-slot { min-height: 420px; }
 }
 .bee-feed-vazio { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 20px; }
 
