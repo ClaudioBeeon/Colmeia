@@ -1859,20 +1859,49 @@ function registrarFalaDaBeeSobrePasta(taskId, dataBee) {
   if (!dataBee || !dataBee.ok) return;
   if (typeof beeConversas === "undefined") return;
   beeConversas.set(taskId, dataBee.conversa);
-  // Bug encontrado em 2026-08-04: isso só REDESENHAVA se a pessoa já
-  // estivesse na aba da Bee — como quem manda o link do Drive normalmente
-  // está na aba "Comentários" (é de lá que vem o aviso de upload), a fala
-  // ficava salva, mas escondida, esperando um clique que nunca vinha. O
-  // pedido original ("a Bee apareça perguntando as 3 opções") é uma
-  // TROCA de aba automática, não só uma atualização condicional — troca
-  // pra aba dela sempre que é a MESMA tarefa que ainda está aberta na
-  // tela (se a pessoa já tiver saído do card, só fica salvo mesmo).
-  if (
-    tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId) &&
-    typeof abrirThreadBee === "function"
-  ) {
-    abrirThreadBee(tasks[detailIdx]);
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return; // saiu da tarefa nesse meio-tempo
+
+  // Trocar de aba sozinho pra Bee foi tentado (2026-08-04) e o Cláudio
+  // pediu pra tirar: ele quer ver a oferta DENTRO do chat de Comentários,
+  // sem ser levado pra dentro da conversa da Bee ("Bee resumiu essas
+  // coisas..."). A fala continua sendo salva de verdade na conversa dela
+  // (pra quem abrir a aba da Bee depois ver no histórico); só a
+  // exibição automática agora é local, no mesmo lugar do aviso "repetir
+  // no card mãe?" (mostrarPromptRepetirComentario,
+  // js/notificacoes-uploads.js) — #beeInlineAvisos, fora da lista de
+  // comentários, imune a ela ser redesenhada sozinha.
+  if (chatThreadAtivo === "bee" && typeof desenharThreadBee === "function") {
+    desenharThreadBee(tasks[detailIdx]);
+    return;
   }
+  const ultimaFala = (dataBee.conversa || [])[dataBee.conversa.length - 1];
+  mostrarAvisoAcoesPastaInline(tasks[detailIdx], (ultimaFala && ultimaFala.texto) || "Quer que eu faça algo com isso?");
+}
+
+/**
+ * A oferta das 3 ações ("conferir o que falta"/"comparar versões"/"link
+ * de aprovação") aparecendo DIRETO no chat de Comentários — não troca de
+ * aba, não mexe na conversa da Bee que está na tela. Reaproveita
+ * bolhaDaBee/renderAcoesPastaHTML (js/bee.js, carregado depois — daí o
+ * typeof-guard) só pro VISUAL da bolha; os botões chamam as mesmas ações
+ * de sempre, que continuam livres pra abrir a aba da Bee se precisarem
+ * mostrar um resultado mais longo (ex: conferirEntregaComABee).
+ */
+function mostrarAvisoAcoesPastaInline(task, texto) {
+  const avisos = document.getElementById("beeInlineAvisos");
+  if (!avisos || typeof bolhaDaBee !== "function" || typeof renderAcoesPastaHTML !== "function") return;
+  document.getElementById("beeAcoesPastaAviso")?.remove();
+  avisos.insertAdjacentHTML("beforeend", `<div id="beeAcoesPastaAviso">${bolhaDaBee(renderAcoesPastaHTML({ texto }), -1)}</div>`);
+  const wrap = document.getElementById("beeAcoesPastaAviso");
+  wrap.querySelectorAll("[data-acao-pasta]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const alvo = tasks[detailIdx] || task;
+      if (btn.dataset.acaoPasta === "conferir") conferirEntregaComABee(alvo, btn);
+      else if (btn.dataset.acaoPasta === "comparar") compararVersoesComABee(alvo, btn);
+      else if (btn.dataset.acaoPasta === "aprovacao") gerarLinkDeAprovacaoParaTarefa(alvo, btn);
+      wrap.remove();
+    });
+  });
 }
 
 wireArrastarArquivoParaCard();
