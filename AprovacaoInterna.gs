@@ -572,7 +572,13 @@ function devolverParaDesigner(dados) {
   // mesma faz esse papel.
   var cardMaeId = tarefa.parent_task_id || taskId;
   var designer = dados.designer || tarefa.responsible_name || '';
-  var designerId = dados.designerId || tarefa.user_id || '';
+  // Quem vai fazer o ajuste pode NÃO ser quem fez a peça — o atendimento
+  // escolhe na caixinha antes de mandar. Por isso, sem id, o NOME escolhido
+  // é resolvido aqui; cair direto no `tarefa.user_id` mandaria a alteração
+  // pro responsável antigo sem ninguém perceber.
+  var designerId = dados.designerId || '';
+  if (!designerId && designer) designerId = idDoUsuarioRunrunPorNome(designer) || '';
+  if (!designerId) designerId = tarefa.user_id || '';
 
   var fechado = projetoDaTarefaEstaFechado(tarefa);
 

@@ -961,7 +961,7 @@ function apvPrepararPedirAlteracao(peca) {
  * aparece NO CAMPO, não num alerta que some sozinho, e some assim que a
  * pessoa começa a digitar.
  */
-async function apvConfirmarDevolucao() {
+function apvConfirmarDevolucao() {
   if (!apvPecaAberta) return;
   const campo = document.getElementById("apvMotivo");
   const motivo = (campo.value || "").trim();
@@ -972,6 +972,74 @@ async function apvConfirmarDevolucao() {
     campo.focus();
     return;
   }
+  apvAbrirEscolhaDeDesigner();
+}
+
+/**
+ * A caixinha com os designers, aberta EM CIMA do botão "Pedir alteração".
+ *
+ * Antes a alteração ia sempre pra quem fez a peça, sem escolha nenhuma —
+ * e acontece de essa pessoa estar de férias ou cheia. O responsável pela
+ * arte vem primeiro e destacado (é ele em quase todo caso), então o
+ * caminho comum continua sendo um clique.
+ */
+function apvAbrirEscolhaDeDesigner() {
+  const menu = document.getElementById("apvDesignerMenu");
+  const lista = document.getElementById("apvDesignerLista");
+  if (!menu || !lista) return;
+
+  const responsavel = apvPecaAberta.designer || "";
+  const nomes = (typeof DESIGNERS_EQUIPE !== "undefined" ? DESIGNERS_EQUIPE : []).slice();
+  // O responsável pode ser alguém fora dos três (freela, alguém novo) —
+  // nesse caso entra na lista mesmo assim, senão sumiria a opção óbvia.
+  if (responsavel && !nomes.some(n => nomesCorrespondem(n, responsavel))) nomes.unshift(responsavel);
+  nomes.sort((a, b) => Number(nomesCorrespondem(b, responsavel)) - Number(nomesCorrespondem(a, responsavel)));
+
+  lista.innerHTML = nomes.map(nome => {
+    const ehResponsavel = nomesCorrespondem(nome, responsavel);
+    return `
+      <button type="button" class="apv-designer-item ${ehResponsavel ? "responsavel" : ""}" data-apv-designer="${escaparHTML(nome)}">
+        ${avatarHTML(nome, "avatar-sm")}
+        <span class="apv-designer-nome">
+          ${escaparHTML(nome)}
+          ${ehResponsavel ? `<span class="apv-designer-selo">Designer responsável</span>` : ""}
+        </span>
+      </button>`;
+  }).join("");
+
+  lista.querySelectorAll("[data-apv-designer]").forEach(btn => {
+    btn.addEventListener("click", () => apvDevolverPara(btn.dataset.apvDesigner));
+  });
+  menu.hidden = false;
+
+  // Clicar fora fecha — mesma técnica do resto do app, adiada um tique pra
+  // não fechar sozinha com o MESMO clique que abriu.
+  setTimeout(() => {
+    const fecharSeFora = e => {
+      if (menu.isConnected && !menu.hidden && !menu.contains(e.target)
+          && !e.target.closest("#apvBtnDevolver")) {
+        menu.hidden = true;
+        document.removeEventListener("click", fecharSeFora, true);
+      }
+    };
+    document.addEventListener("click", fecharSeFora, true);
+  }, 0);
+}
+
+/** Manda de verdade, já sabendo quem vai fazer o ajuste. */
+async function apvDevolverPara(nomeDesigner) {
+  if (!apvPecaAberta) return;
+  document.getElementById("apvDesignerMenu").hidden = true;
+
+  const motivo = (document.getElementById("apvMotivo").value || "").trim();
+
+  // Escolhendo o próprio responsável, reusa o id que já veio com a peça.
+  // Escolhendo outro, manda só o NOME e deixa o backend achar o id
+  // (idDoUsuarioRunrunPorNome, RunrunLeitura.gs) — mandar id vazio faria a
+  // alteração cair silenciosamente no responsável antigo, que é
+  // exatamente o que essa caixinha existe pra evitar.
+  const ehOResponsavel = nomesCorrespondem(nomeDesigner, apvPecaAberta.designer || "");
+  const designerId = ehOResponsavel ? apvPecaAberta.designerId : "";
 
   const versaoConferida = apvPecaAberta.peca.versoes[apvVersaoNaTela - 1];
   const btn = document.getElementById("apvBtnDevolver");
@@ -985,8 +1053,8 @@ async function apvConfirmarDevolucao() {
     // Ponto marcado sem texto não vira nada do outro lado — o designer veria
     // "(alto à esquerda)" sozinho e não saberia o que fazer com aquilo.
     pins: apvPinsDevolucao.filter(p => String(p.texto || "").trim()),
-    designer: apvPecaAberta.designer,
-    designerId: apvPecaAberta.designerId,
+    designer: nomeDesigner,
+    designerId: designerId,
     autorNome: DESIGNER_LOGADO,
     cliente: apvPecaAberta.cliente,
     // Qual arquivo estava sendo conferido — é em cima DELE que os pontos

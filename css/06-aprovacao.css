@@ -290,8 +290,50 @@
    rodapé fixo separado (que existia antes e foi removido daqui). */
 .apv-bloco-motivo { flex: 1 1 auto; display: flex; flex-direction: column; }
 .apv-bloco-motivo-rodape {
+  /* `relative` ancora a caixinha de quem faz a alteração
+     (.apv-designer-menu), que abre pra CIMA a partir daqui. */
+  position: relative;
   margin-top: auto; padding-top: 18px;
   display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ----- Quem faz a alteração: a caixinha em cima do botão -----
+   Abre PRA CIMA porque o botão mora no pé do cartão — um menu pra baixo
+   sairia da tela. Mesma decisão do seletor de destino do chat
+   (.chat-destino-menu, css/03-detalhe.css).
+
+   O responsável pela arte vem primeiro e destacado: é ele em quase todo
+   caso, e três opções iguais fariam quem confere ter que lembrar quem
+   fez a peça. Os outros continuam ali porque acontece de quem fez estar
+   de férias ou cheio. */
+.apv-designer-menu[hidden] { display: none; }
+.apv-designer-menu {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 6;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-hover); padding: 12px;
+  animation: apvDesignerPop var(--dur-base) var(--ease-apple-spring);
+}
+@keyframes apvDesignerPop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+.apv-designer-titulo {
+  margin: 0 0 10px; font-family: var(--apv-fonte-texto);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.apv-designer-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 9px 10px; border-radius: var(--radius-md); cursor: pointer;
+  border: 1px solid transparent; background: none;
+  color: var(--text-primary); font-family: var(--font-body);
+  transition: background var(--dur-base) var(--ease-apple), border-color var(--dur-base) var(--ease-apple);
+}
+.apv-designer-item:hover { background: var(--apv-superficie-2); }
+.apv-designer-item.responsavel { border-color: var(--kanban-yellow); background: var(--warning-soft); }
+.apv-designer-nome { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; font-weight: 600; }
+.apv-designer-selo {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+  color: var(--kanban-yellow-text);
 }
 
 /* ----- Rodapé fixo da coluna esquerda -----
