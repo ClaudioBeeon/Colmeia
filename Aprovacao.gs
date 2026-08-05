@@ -538,7 +538,7 @@ function reenviarAvisosDeAprovacaoPendentes() {
 
     var partes = ['Alterações do cliente (via link de aprovação):'];
     partes.push(obj.status === 'aprovado'
-      ? '✅ Aprovou "' + obj.nomeArquivo + '".'
+      ? '✅ Aprovou "' + obj.nomeArquivo + '"' + (obj.quemAprovou ? ' — ' + obj.quemAprovou : '') + '.'
       : '✏️ Pediu ajuste em "' + obj.nomeArquivo + '".');
     if (obj.respostaTexto) partes.push(obj.respostaTexto);
     var pinsList = parsearPins(obj.pins);

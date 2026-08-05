@@ -70,6 +70,13 @@
     --sombra-alta: 0 8px 24px rgba(20,20,30,0.12);
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
     --mola: cubic-bezier(0.16, 1, 0.3, 1);
+    /* Mesmas durações "estilo Apple" do resto do Colmeia (--dur-fast/
+       base/slow, css/01-base.css) — B15 da auditoria (2026-08-06): esta
+       página tinha .12s/.15s/.18s/.22s escritos na mão, cada botão com o
+       seu próprio número. */
+    --dur-fast: 150ms;
+    --dur-base: 220ms;
+    --dur-slow: 320ms;
   }
   html, body { margin: 0; padding: 0; height: 100%; }
   body {
@@ -139,7 +146,7 @@
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     border-radius: 12px; padding: 13px 18px; font-size: 14.5px; font-weight: 700;
-    transition: background .15s var(--ease), opacity .15s var(--ease), transform .12s var(--ease);
+    transition: background var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
   }
   .btn:active { transform: scale(0.98); }
   .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
@@ -199,7 +206,7 @@
      declarada ele nasce com 0px e o cliente vê um quadrado vazio. */
   .visor-slot iframe { width: 100%; height: 100%; border: 0; border-radius: 8px; }
   .visor-erro { padding: 26px; text-align: center; font-size: 13.5px; line-height: 1.55; color: var(--text-2); }
-  .visor.trocou { animation: troca .22s var(--ease); }
+  .visor.trocou { animation: troca var(--dur-base) var(--ease); }
   @keyframes troca { from { opacity: .35; transform: scale(.99); } to { opacity: 1; transform: scale(1); } }
 
   .seta {
@@ -207,7 +214,7 @@
     width: 42px; height: 42px; border-radius: 50%;
     background: var(--card); border: 1px solid var(--border);
     box-shadow: var(--sombra); display: flex; align-items: center; justify-content: center;
-    transition: background .15s var(--ease), box-shadow .15s var(--ease);
+    transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
   }
   .seta:hover { background: var(--superficie-2); box-shadow: var(--sombra-alta); }
   .seta.esq { left: 14px; }
@@ -227,7 +234,7 @@
   .filme { flex: 0 0 auto; display: flex; gap: 10px; overflow-x: auto; padding: 2px; }
   .filme-item {
     flex: 0 0 auto; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 6px;
-    opacity: .55; transition: opacity .15s var(--ease); padding: 0;
+    opacity: .55; transition: opacity var(--dur-fast) var(--ease); padding: 0;
   }
   .filme-item:hover { opacity: .85; }
   .filme-item.ativa { opacity: 1; }
@@ -235,7 +242,7 @@
     width: 62px; height: 76px; border-radius: 12px; overflow: hidden; position: relative;
     border: 2px solid var(--border); background: var(--stage); box-shadow: var(--sombra);
     display: flex; align-items: center; justify-content: center;
-    transition: border-color .15s var(--ease);
+    transition: border-color var(--dur-fast) var(--ease);
   }
   .filme-item.ativa .filme-mini { border-color: var(--amarelo); }
   .filme-mini img { width: 100%; height: 100%; object-fit: cover; }
@@ -326,13 +333,13 @@
     position: fixed; inset: 0; z-index: 60;
     background: rgba(12,10,20,0.45);
     display: flex; align-items: center; justify-content: center; padding: 20px;
-    animation: modalFade .15s var(--ease);
+    animation: modalFade var(--dur-base) var(--ease);
   }
   @keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
   .modal-caixa {
     width: min(380px, 100%); background: var(--card); border-radius: 18px;
     padding: 24px; box-shadow: var(--sombra-alta);
-    animation: modalEntra .18s var(--mola);
+    animation: modalEntra var(--dur-slow) var(--mola);
   }
   @keyframes modalEntra { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
   .modal-titulo { font-size: 17px; font-weight: 700; margin: 0 0 6px; }
@@ -489,9 +496,16 @@
             </div>
           </div>
 
+          <!-- "Concluir" é a ação PRINCIPAL — pedido do Cláudio (B12 da
+               auditoria, 2026-08-06): quem respondeu já terminou o que
+               veio fazer aqui, então fechar vem primeiro, com destaque de
+               verdade (não um botão de texto apagado). O WhatsApp continua
+               como opção, só que depois, pra quem quiser avisar por fora
+               também — a gravação na planilha já aconteceu no momento de
+               Aprovar/Pedir ajuste, isso não muda com a ordem dos botões. -->
           <div class="acoes-coluna" id="acoesWhatsapp" hidden style="margin-top:14px;">
+            <button type="button" class="btn btn-neutro btn-bloco" id="btnConcluir">Concluir</button>
             <button type="button" class="btn btn-whats btn-bloco" id="btnWhatsapp">📱 Enviar no WhatsApp também</button>
-            <button type="button" class="btn btn-texto btn-bloco" id="btnConcluir">Concluir</button>
           </div>
         </div>
 
@@ -517,6 +531,23 @@
       <div class="acoes-coluna">
         <button type="button" class="btn btn-aprovar btn-bloco" id="btnConfirmarAprovar">✅ Confirmar aprovação</button>
         <button type="button" class="btn btn-texto btn-bloco" id="btnCancelarAprovar">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Aviso de pontos marcados =====
+       B13 da auditoria (2026-08-06): tem gente marcando pontos na peça
+       (pedindo ajuste, na prática) e clicando "Aprovar" por engano logo
+       depois, sem tirar os pontos. Único ponto extra de interrupção nesta
+       página, pelo mesmo motivo do "versão não é a mais nova" na tela do
+       atendimento: é exatamente o erro que este aviso existe pra evitar. -->
+  <div class="modal-fundo" id="modalAvisoPins" hidden>
+    <div class="modal-caixa">
+      <p class="modal-titulo">Tem ponto marcado na peça</p>
+      <p class="modal-txt" id="avisoPinsTexto">Você marcou pontos na arte — isso normalmente é pra pedir um ajuste. Se aprovar mesmo assim, isso vai junto no aviso pro time, mas a peça já entra como aprovada. Tem certeza?</p>
+      <div class="acoes-coluna">
+        <button type="button" class="btn btn-aprovar btn-bloco" id="btnAprovarMesmoAssim">✅ Aprovar mesmo assim</button>
+        <button type="button" class="btn btn-texto btn-bloco" id="btnVoltarPins">Voltar e revisar os pontos</button>
       </div>
     </div>
   </div>
@@ -962,7 +993,17 @@
         desenharPeca(0, false);
       }
 
-      document.getElementById("btnAprovar").addEventListener("click", abrirModalQuemAprova);
+      document.getElementById("btnAprovar").addEventListener("click", function () {
+        if (pins.length) {
+          document.getElementById("avisoPinsTexto").textContent = (pins.length === 1
+            ? 'Você marcou 1 ponto na arte'
+            : 'Você marcou ' + pins.length + ' pontos na arte')
+            + ' — isso normalmente é pra pedir um ajuste. Se aprovar mesmo assim, isso vai junto no aviso pro time, mas a peça já entra como aprovada. Tem certeza?';
+          document.getElementById("modalAvisoPins").hidden = false;
+          return;
+        }
+        abrirModalQuemAprova();
+      });
       document.getElementById("btnPedirAjuste").addEventListener("click", function () {
         document.getElementById("formAjuste").classList.add("aberto");
         document.getElementById("acoesPrincipais").hidden = true;
@@ -1039,6 +1080,20 @@
   });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && !document.getElementById("modalQuemAprova").hidden) fecharModalQuemAprova();
+    if (e.key === "Escape" && !document.getElementById("modalAvisoPins").hidden) fecharModalAvisoPins();
+  });
+
+  // ===== Aviso de pontos marcados (ver btnAprovar, mais acima) =====
+  function fecharModalAvisoPins() {
+    document.getElementById("modalAvisoPins").hidden = true;
+  }
+  document.getElementById("btnAprovarMesmoAssim").addEventListener("click", function () {
+    fecharModalAvisoPins();
+    abrirModalQuemAprova();
+  });
+  document.getElementById("btnVoltarPins").addEventListener("click", fecharModalAvisoPins);
+  document.getElementById("modalAvisoPins").addEventListener("mousedown", function (e) {
+    if (e.target === this) fecharModalAvisoPins();
   });
 </script>
 </body>

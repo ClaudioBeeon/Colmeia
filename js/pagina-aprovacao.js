@@ -219,7 +219,7 @@ function apvRenderFila(itens) {
         </div>
       </div>
       <div class="apv-card-acao">
-        <button type="button" class="apv-btn apv-btn-primario" data-apv-conferir="${i}">${item.status === "aprovada" ? "Continuar envio" : "Conferir"}</button>
+        <button type="button" class="apv-btn ${item.arquivoSumiu ? "apv-btn-neutro" : "apv-btn-primario"}" data-apv-conferir="${i}">${item.arquivoSumiu ? "Arquivo sumiu" : (item.status === "aprovada" ? "Continuar envio" : "Conferir")}</button>
       </div>
     </article>
   `).join("");
@@ -227,7 +227,16 @@ function apvRenderFila(itens) {
   lista.querySelectorAll("[data-apv-conferir]").forEach(btn => {
     btn.addEventListener("click", () => {
       const item = apvFila[Number(btn.dataset.apvConferir)];
-      if (item) apvAbrirConferencia(item.taskId, item.nomePeca);
+      if (!item) return;
+      // "Conferir" mentia aqui: o backend já sabe (via arquivoSumiu, ver
+      // listarConferenciasPendentes) que o arquivo não está mais na pasta
+      // com esse nome — abrir a conferência só pra mostrar esse mesmo erro
+      // um segundo depois é um beco sem saída disfarçado de botão normal.
+      if (item.arquivoSumiu) {
+        mostrarToast(`"${item.nomePeca}" não está mais na pasta do card — pode ter sido movida ou renomeada. Confere com ${item.designer || "o designer"} e pede pra subir de novo com o mesmo nome.`, "erro");
+        return;
+      }
+      apvAbrirConferencia(item.taskId, item.nomePeca);
     });
   });
 
