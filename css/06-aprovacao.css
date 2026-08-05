@@ -230,7 +230,7 @@
 .apv-acao-btn:hover { background: #F0BC00; }
 .apv-acao-track {
   display: flex; flex-direction: column;
-  transition: transform var(--dur-base) var(--ease-apple);
+  transition: transform var(--dur-fast) var(--ease-apple);
 }
 .apv-acao-item {
   height: 42px; display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -830,8 +830,8 @@
    deslize do rótulo (mesma --dur-base do resto do app) em vez de
    acontecer num tempo próprio. */
 .apv-contexto {
-  transition: background var(--dur-base) var(--ease-apple),
-              border-color var(--dur-base) var(--ease-apple);
+  transition: background-color var(--dur-fast) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple);
   border: 1px solid transparent;
 }
 /* O tom do estado vai POR CIMA de um fundo opaco, nunca no lugar dele.
@@ -879,19 +879,28 @@
    aparece atrás dela, sem precisar repetir a cor e sem dobrar a
    transparência. */
 .apv-contexto { position: relative; overflow: hidden; }
+/* `--dur-fast` (150ms), não `--dur-base`: pedido do Cláudio depois de
+   sentir a tela "travada". Esse carrossel é resposta a um clique, não uma
+   entrada de painel — o app inteiro usa o tempo curto pra isso (hover,
+   toggle, troca de estado). Com 220ms em vários elementos ao mesmo tempo,
+   a soma dava sensação de espera. */
 .apv-contexto-etapa {
   position: absolute; inset: 0; z-index: 2;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   padding: 0 14px;
   transform: translateY(100%);
-  transition: transform var(--dur-base) var(--ease-apple);
+  transition: transform var(--dur-fast) var(--ease-apple);
 }
 .apv-mostrando-etapa .apv-contexto-etapa { transform: translateY(0); }
 /* A face normal sai pra cima ao mesmo tempo — é o que faz as duas se
-   moverem juntas, como um carrossel, em vez de uma piscar sobre a outra. */
+   moverem juntas, como um carrossel, em vez de uma piscar sobre a outra.
+   Só `opacity` + `transform`: são as duas propriedades que o navegador
+   anima sem refazer o desenho da página, e aqui são vários elementos de
+   uma vez. */
 .apv-contexto > *:not(.apv-contexto-etapa) {
-  transition: transform var(--dur-base) var(--ease-apple),
-              opacity var(--dur-base) var(--ease-apple);
+  transition: transform var(--dur-fast) var(--ease-apple),
+              opacity var(--dur-fast) var(--ease-apple);
+  will-change: transform;
 }
 .apv-mostrando-etapa > *:not(.apv-contexto-etapa) {
   transform: translateY(-160%); opacity: 0;

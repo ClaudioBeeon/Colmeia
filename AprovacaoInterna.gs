@@ -629,7 +629,13 @@ function entrarComoAtendimento(codigo) {
 // Nome da etapa no Runrun.it, como está escrito lá. A comparação ignora
 // acento e maiúscula (ver normalizarNomeDeEtapa), então pequenas
 // diferenças de escrita não quebram nada.
-var ETAPA_APROVACAO_CLIENTE = 'Aprovação do Cliente';
+// A etapa se chama "Aprovação Cliente" no Runrun.it — sem o "do". Em vez
+// de trocar um texto exato por outro (e quebrar de novo no dia em que
+// alguém renomear), a busca aceita uma LISTA de jeitos de escrever e
+// ignora as palavrinhas de ligação (do/da/de) na comparação. O primeiro
+// da lista é o que aparece escrito na tela.
+var ETAPA_APROVACAO_CLIENTE = 'Aprovação Cliente';
+var ETAPA_APROVACAO_CLIENTE_NOMES = ['Aprovação Cliente', 'Aprovação do Cliente', 'Aprovacao Cliente'];
 
 /**
  * Move o card mãe pra etapa "Aprovação do Cliente" no Runrun.it.
@@ -651,7 +657,7 @@ function moverCardMaeParaAprovacaoCliente(taskId, autor) {
   }
   var cardMaeId = tarefa.parent_task_id || taskId;
 
-  var stageId = idDaEtapaPorNome(ETAPA_APROVACAO_CLIENTE);
+  var stageId = idDaEtapaPorNome(ETAPA_APROVACAO_CLIENTE_NOMES);
   if (!stageId) {
     // Falha honesta: a interface avisa que o link foi gerado mas o card
     // não se moveu, em vez de dizer "pronto!" pra uma coisa que não
@@ -667,7 +673,14 @@ function moverCardMaeParaAprovacaoCliente(taskId, autor) {
 function normalizarNomeDeEtapa(nome) {
   return String(nome || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().trim();
+    .toLowerCase()
+    // Tira as palavrinhas de ligação: "Aprovação do Cliente" e "Aprovação
+    // Cliente" viram a mesma coisa. É a diferença que fez a busca falhar
+    // na primeira tentativa, e é o tipo de detalhe que muda sozinho quando
+    // alguém renomeia a coluna no Runrun.it.
+    .replace(/\b(do|da|de|dos|das)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -684,12 +697,17 @@ function normalizarNomeDeEtapa(nome) {
  * muda de id) pra não repetir a varredura a cada envio.
  */
 function idDaEtapaPorNome(nomeProcurado) {
-  var chaveCache = 'colmeia_etapa_id_' + normalizarNomeDeEtapa(nomeProcurado);
+  // Aceita um nome ou uma LISTA de nomes possíveis — a mesma etapa pode
+  // estar escrita de jeitos diferentes, e quem chama não deveria ter que
+  // adivinhar qual.
+  var nomes = Array.isArray(nomeProcurado) ? nomeProcurado : [nomeProcurado];
+  var alvos = nomes.map(normalizarNomeDeEtapa).filter(function (n) { return !!n; });
+  if (!alvos.length) return null;
+
+  var chaveCache = 'colmeia_etapa_id_' + alvos[0];
   var cache = CacheService.getScriptCache();
   var guardado = cache.get(chaveCache);
   if (guardado) return guardado;
-
-  var alvo = normalizarNomeDeEtapa(nomeProcurado);
   // Ordenado por atualização: a etapa que interessa é usada o tempo todo,
   // então aparece nas primeiras páginas. Para no que achar — e desiste
   // depois de 5 páginas pra nunca virar uma varredura infinita.
@@ -700,7 +718,7 @@ function idDaEtapaPorNome(nomeProcurado) {
       var t = lote[i];
       var nomes = [t.board_stage_name, t.task_state_name];
       for (var n = 0; n < nomes.length; n++) {
-        if (nomes[n] && normalizarNomeDeEtapa(nomes[n]) === alvo && t.task_state_id) {
+        if (nomes[n] && alvos.indexOf(normalizarNomeDeEtapa(nomes[n])) !== -1 && t.task_state_id) {
           cache.put(chaveCache, String(t.task_state_id), 6 * 60 * 60);
           return String(t.task_state_id);
         }

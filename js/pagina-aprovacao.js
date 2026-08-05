@@ -808,7 +808,7 @@ function apvMarcarBotaoComoAprovado() {
   // precisar procurar um selo em canto nenhum.
   apvPintarBarra("aprovado");
   // Os pills de etapa sobem logo depois do verde, na mesma pílula:
-  // "Card mãe → Aprovação do Cliente". Clicar na setinha move, e é isso.
+  // "Card mãe → Aprovação Cliente". Clicar na setinha move, e é isso.
   if (!apvCardMaeMovido) apvMostrarEtapaDoCardMae(true);
 }
 
@@ -1057,7 +1057,7 @@ async function apvGarantirLink() {
 }
 
 /**
- * Manda o card mãe pra etapa "Aprovação do Cliente" no Runrun.it, se a
+ * Manda o card mãe pra etapa "Aprovação Cliente" no Runrun.it, se a
  * opção estiver marcada (pedido do Cláudio).
  *
  * POR QUE ISSO EXISTE: depois que o link vai pro cliente, o card mãe não é
@@ -1074,32 +1074,37 @@ async function apvGarantirLink() {
  */
 let apvCardMaeMovido = false;
 
-async function moverCardMaeAgora() {
+function moverCardMaeAgora() {
   if (apvCardMaeMovido || !apvPecaAberta) return;
   apvCardMaeMovido = true;
 
-  const btn = document.getElementById("apvMoverMaeSim");
-  const rotulo = btn ? btn.textContent : "";
-  if (btn) { btn.disabled = true; btn.textContent = "Movendo..."; }
-
-  const data = await chamarBackend({
-    acao: "moverCardMaeParaAprovacaoCliente",
-    taskId: apvPecaAberta.taskId,
-    autor: DESIGNER_LOGADO,
-  });
-
-  if (btn) { btn.disabled = false; btn.textContent = rotulo; }
-
-  if (!data || !data.ok) {
-    // Deixa tentar de novo — pode ter sido só uma queda de rede. A face
-    // continua aberta de propósito: fechá-la aqui esconderia a única
-    // chance que sobrou de resolver isso sem sair pro Runrun.it.
-    apvCardMaeMovido = false;
-    mostrarToast((data && data.error) || "Não consegui mover o card mãe — mova ele à mão no Runrun.it.", "erro");
-    return;
-  }
-  mostrarToast("Card mãe movido para Aprovação do Cliente.", "sucesso");
+  // RESPONDE NA HORA e manda o pedido por baixo — o mesmo jeito do resto
+  // do Colmeia (play, prioridade, mover etapa no quadro). Antes o botão
+  // virava "Movendo..." e a tela ficava parada esperando o Runrun.it, que
+  // leva alguns segundos: parecia travado. Mover uma etapa quase nunca
+  // falha, e quando falha o aviso conta — não vale segurar a tela inteira
+  // por causa da exceção.
   apvMostrarEtapaDoCardMae(false);
+
+  const taskId = apvPecaAberta.taskId;
+  chamarBackend({
+    acao: "moverCardMaeParaAprovacaoCliente",
+    taskId,
+    autor: DESIGNER_LOGADO,
+  }).then(data => {
+    if (data && data.ok) {
+      mostrarToast("Card mãe movido para Aprovação Cliente.", "sucesso");
+      return;
+    }
+    // Deu errado: desfaz a marca (dá pra tentar de novo) e traz os pills
+    // de volta, mas só se a pessoa ainda estiver na mesma peça — senão o
+    // carrossel subiria sozinho numa tela que já é outra.
+    apvCardMaeMovido = false;
+    if (apvPecaAberta && String(apvPecaAberta.taskId) === String(taskId) && apvAprovado) {
+      apvMostrarEtapaDoCardMae(true);
+    }
+    mostrarToast((data && data.error) || "Não consegui mover o card mãe — mova ele à mão no Runrun.it.", "erro");
+  });
 }
 
 // ---------------------------------------------------------------------------
