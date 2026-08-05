@@ -942,12 +942,17 @@
 /* O link da pasta do Drive, na ficha do briefing. Quem confere às vezes
    precisa ver o arquivo de verdade (tamanho real, o que mais tem na
    pasta) — sem isso, a única saída era pedir o link pro designer. */
+/* Discreto de propósito (pedido do Cláudio): é um atalho de apoio, não
+   uma ação da tela. Em azul de link ele puxava mais atenção que o botão
+   de aprovar, que é o que a pessoa veio fazer aqui. Fica no cinza do
+   texto secundário e só ganha cor no hover. */
 .apv-spec-link {
   display: inline-flex; align-items: center; gap: 5px;
-  color: var(--accent); text-decoration: none;
+  color: var(--text-secondary); text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-apple);
 }
-.apv-spec-link:hover { text-decoration: underline; }
-.apv-spec-link svg { flex-shrink: 0; }
+.apv-spec-link:hover { color: var(--text-primary); }
+.apv-spec-link svg { flex-shrink: 0; opacity: 0.6; }
 
 /* ----- O briefing da Bee, juntando card mãe + tarefa -----
    Três grupos separados porque são três perguntas diferentes na cabeça de
