@@ -126,14 +126,11 @@
   .app { height: 100%; display: flex; flex-direction: column; }
   .topo {
     flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
-    gap: 16px; padding: 14px 24px; background: var(--card); border-bottom: 1px solid var(--border);
+    gap: 16px; padding: 14px 24px; margin: 16px 24px 0; background: var(--card);
+    border: 1px solid var(--border); border-radius: 999px; box-shadow: var(--sombra);
   }
   .marca { display: flex; align-items: center; gap: 9px; }
-  .marca-selo {
-    width: 26px; height: 26px; border-radius: 8px; background: var(--amarelo);
-    display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
-  }
-  .marca-nome { font-size: 14px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-2); }
+  .marca-logo { height: 24px; width: auto; flex-shrink: 0; }
   .topo-tarefa { display: flex; align-items: baseline; gap: 9px; min-width: 0; text-align: right; }
   .topo-cliente { font-size: 15px; font-weight: 700; }
   .topo-titulo { font-size: 13.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -313,7 +310,7 @@
     body { overflow: auto; }
     html, body { height: auto; }
     .app { height: auto; min-height: 100%; }
-    .topo { padding: 12px 16px; flex-wrap: wrap; }
+    .topo { padding: 12px 16px; margin: 12px 14px 0; flex-wrap: wrap; border-radius: 22px; }
     .topo-tarefa { text-align: left; width: 100%; }
     .miolo { grid-template-columns: 1fr; padding: 14px 14px 32px; }
     .coluna-peca { min-height: 0; }
@@ -354,8 +351,7 @@
 <div class="app" id="telaAprovacao" hidden>
   <header class="topo">
     <div class="marca">
-      <span class="marca-selo">🐝</span>
-      <span class="marca-nome">Beeon</span>
+      <img class="marca-logo" src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Hozinontal_tyqohh.png" alt="Colmeia">
     </div>
     <div class="topo-tarefa">
       <span class="topo-cliente" id="nomeCliente"></span>
