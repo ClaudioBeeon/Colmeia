@@ -308,6 +308,7 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   // que estava aberto antes.
   apvDeslizarAcao(0);
   apvPintarBarra("neutro");
+  apvMostrarEtapaDoCardMae(false);
   apvAprovado = false;
   apvEnviado = false;
   apvAbaAtiva = "conferencia";
@@ -494,11 +495,18 @@ function montarBriefingHTML(data) {
   // confusão que o Cláudio descreveu: às vezes o pedido está num, às vezes
   // no outro. Sem ela, tudo vira uma lista só e ninguém sabe qual é a
   // regra do mês e qual é desta peça.
-  const lista = itens => itens.map(it => `
-    <li>
-      ${escaparHTML(it.texto)}
-      <span class="apv-origem ${it.onde === "card mãe" ? "mae" : "tarefa"}">${escaparHTML(it.onde)}</span>
-    </li>`).join("");
+  // A etiqueta diz de qual CARD veio, não o nome interno da fonte. O
+  // backend marca cada mensagem com "descricao"/"aqui"/"card mãe" — isso
+  // é vocabulário de código, e estava vazando pra tela como "descricao".
+  const deOndeVeio = onde => (onde === "card mãe" ? "card mãe" : "tarefa");
+  const lista = itens => itens.map(it => {
+    const origem = deOndeVeio(it.onde);
+    return `
+      <li>
+        ${escaparHTML(it.texto)}
+        <span class="apv-origem ${origem === "card mãe" ? "mae" : "tarefa"}">${escaparHTML(origem)}</span>
+      </li>`;
+  }).join("");
 
   return `
     ${(b.alteracao || []).length ? `
@@ -518,7 +526,6 @@ function montarBriefingHTML(data) {
       </div>` : ""}
     ${(b.itens || []).length ? `
       <div class="apv-brief-grupo">
-        <p class="apv-brief-grupo-rot">O que foi pedido</p>
         <ul class="apv-brief-lista">${lista(b.itens)}</ul>
       </div>` : ""}
     <p class="apv-brief-rodape">Resumo da Bee, juntando o card mãe e a tarefa do designer.</p>
@@ -800,8 +807,9 @@ function apvMarcarBotaoComoAprovado() {
   // nessa peça, a cor responde sozinha "essa já foi aprovada", sem ele
   // precisar procurar um selo em canto nenhum.
   apvPintarBarra("aprovado");
-  // A pergunta do card mãe sobe logo depois do verde, na mesma pílula.
-  apvPerguntarCardMae();
+  // Os pills de etapa sobem logo depois do verde, na mesma pílula:
+  // "Card mãe → Aprovação do Cliente". Clicar na setinha move, e é isso.
+  if (!apvCardMaeMovido) apvMostrarEtapaDoCardMae(true);
 }
 
 /**
@@ -826,35 +834,12 @@ function apvDeslizarAcao(indice) {
  * cor escrita à mão em lugar nenhum do JS, e trocar o tom é mexer num
  * lugar só.
  */
-function apvDeslizarContexto(indice) {
-  const track = document.getElementById("apvContextoTrack");
-  if (!track) return;
-  const face = track.children[0];
-  // Altura MEDIDA, nunca chutada: essa pílula quebra em duas linhas no
-  // celular, e um número fixo cortaria o conteúdo. Mesmo cuidado do
-  // ajustarAlturaCardMaeNoPill (js/detalhe-cardmae.js), que apanhou disso
-  // duas vezes com valores fixos antes de virar cálculo.
-  const altura = face ? face.offsetHeight : 44;
-  track.style.transform = `translateY(-${altura * indice}px)`;
-}
-
-/**
- * A pergunta do card mãe, na segunda face da pílula.
- *
- * Vem DEPOIS de aprovar, e não antes, porque só aí ela faz sentido: o card
- * mãe sai da produção quando a peça vai pro cliente. Era uma marcação no
- * painel de envio, que o Cláudio nunca via — perguntar aqui em cima, no
- * mesmo lugar onde ele acabou de clicar, é a diferença entre a coisa
- * acontecer e não acontecer.
- */
-function apvPerguntarCardMae() {
-  if (apvCardMaeMovido) return;
-  apvDeslizarContexto(1);
-}
-
-/** Volta a pílula pra face normal. */
-function apvVoltarFaceNormal() {
-  apvDeslizarContexto(0);
+function apvMostrarEtapaDoCardMae(mostrar) {
+  const barra = document.querySelector(".apv-contexto");
+  if (!barra) return;
+  barra.classList.toggle("apv-mostrando-etapa", !!mostrar);
+  const etapa = document.getElementById("apvContextoEtapa");
+  if (etapa) etapa.setAttribute("aria-hidden", mostrar ? "false" : "true");
 }
 
 function apvPintarBarra(estado) {
@@ -876,6 +861,7 @@ function apvVoltarParaConferencia() {
   apvAprovado = false;
   apvDeslizarAcao(0);
   apvPintarBarra("neutro");
+  apvMostrarEtapaDoCardMae(false);
   apvAbaAtiva = "conferencia";
   apvRedesenharAbas();
   apvRedesenharPaineis();
@@ -1113,7 +1099,7 @@ async function moverCardMaeAgora() {
     return;
   }
   mostrarToast("Card mãe movido para Aprovação do Cliente.", "sucesso");
-  apvVoltarFaceNormal();
+  apvMostrarEtapaDoCardMae(false);
 }
 
 // ---------------------------------------------------------------------------
@@ -1431,10 +1417,6 @@ function apvLigarEventos() {
   liga("apvTabCliente", "click", () => apvTrocarAba("cliente"));
   liga("apvVoltarEnvio", "click", apvVoltarParaConferencia);
   liga("apvMoverMaeSim", "click", moverCardMaeAgora);
-  // "Agora não" só fecha a pergunta — não é uma decisão que precise ficar
-  // guardada em lugar nenhum. Se mudar de ideia, o card mãe se move à mão
-  // no Runrun.it, que é o que já acontecia antes de tudo isso existir.
-  liga("apvMoverMaeNao", "click", apvVoltarFaceNormal);
   // A saída do estado "em alteração": sem isso a pílula ficava amarela e
   // travada, sem nenhum caminho de volta se a pessoa mudasse de ideia ou
   // precisasse reler a peça.

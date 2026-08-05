@@ -852,24 +852,61 @@
 [data-theme="dark"] .apv-estado-aprovado .apv-acao-item { color: #06301F; }
 .apv-estado-alteracao .apv-acao-btn { background: var(--kanban-yellow); pointer-events: none; }
 
-/* ----- As duas faces da pílula de cima -----
-   Mesmo carrossel do pill do card mãe no pop-up de tarefa: as faces ficam
-   empilhadas e a pilha inteira desliza, então a que sai e a que entra se
-   movem juntas, sem piscar. A altura vem MEDIDA pelo JS
-   (apvDeslizarContexto) e não escrita aqui: essa pílula quebra em duas
-   linhas no celular, e um valor fixo cortaria o conteúdo. */
-.apv-contexto { overflow: hidden; padding: 0; }
-.apv-contexto-track {
-  display: flex; flex-direction: column;
+/* ----- A segunda face da pílula: pra onde o card mãe vai -----
+   Sobe no carrossel logo que aprova. São só os pills de etapa, o mesmo
+   par que o Colmeia já mostra no cabeçalho da tarefa (Cards Mães →
+   Revisão): clicar na setinha move, sem pergunta e sem dois botões.
+
+   ELA É `absolute`, COBRINDO A FACE DE BAIXO, e isso não é detalhe: como
+   irmã em fluxo, a pílula crescia pra caber as duas ao mesmo tempo e a
+   barra inteira esticava (foi o que quebrou a tela em 05/08). Assim a
+   altura continua sendo só a da face normal, sem nenhum JS medindo nada.
+
+   Ela é TRANSPARENTE de propósito: as duas faces nunca se sobrepõem
+   durante o deslize (uma sai por cima enquanto a outra entra por baixo),
+   então o fundo da própria pílula — que a essa altura já está verde —
+   aparece atrás dela, sem precisar repetir a cor e sem dobrar a
+   transparência. */
+.apv-contexto { position: relative; overflow: hidden; }
+.apv-contexto-etapa {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 0 14px;
+  transform: translateY(100%);
   transition: transform var(--dur-base) var(--ease-apple);
 }
-.apv-contexto-face {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 10px 10px 10px 14px;
+.apv-mostrando-etapa .apv-contexto-etapa { transform: translateY(0); }
+/* A face normal sai pra cima ao mesmo tempo — é o que faz as duas se
+   moverem juntas, como um carrossel, em vez de uma piscar sobre a outra. */
+.apv-contexto > *:not(.apv-contexto-etapa) {
+  transition: transform var(--dur-base) var(--ease-apple),
+              opacity var(--dur-base) var(--ease-apple);
 }
-.apv-contexto-pergunta { justify-content: center; }
-.apv-pergunta-txt { font-family: var(--apv-fonte-texto); font-size: 13.5px; }
-.apv-pergunta-botoes { display: flex; gap: 8px; }
+.apv-mostrando-etapa > *:not(.apv-contexto-etapa) {
+  transform: translateY(-160%); opacity: 0;
+}
+
+.apv-etapa-de,
+.apv-etapa-para {
+  display: inline-flex; align-items: center; border-radius: 999px;
+  padding: 7px 15px; font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.apv-etapa-de { background: #16181D; color: #fff; }
+[data-theme="dark"] .apv-etapa-de { background: rgba(255, 255, 255, 0.12); }
+.apv-etapa-para { background: var(--kanban-yellow); color: #16181D; }
+.apv-etapa-seta {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%;
+  border: 1px solid var(--apv-borda-forte); background: var(--card-bg);
+  color: var(--text-secondary); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple),
+              transform var(--dur-fast) var(--ease-apple-spring);
+}
+.apv-etapa-seta svg { width: 15px; height: 15px; }
+.apv-etapa-seta:hover { background: var(--kanban-yellow); color: #16181D; border-color: transparent; }
+.apv-etapa-seta:active { transform: scale(0.92); }
+.apv-etapa-seta:disabled { opacity: 0.5; cursor: default; }
 
 /* Só existe quando a peça foi devolvida — nos outros estados ele não teria
    pra onde levar. */
