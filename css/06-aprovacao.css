@@ -243,9 +243,27 @@
    vão embaixo dele. */
 .apv-coluna-pedido {
   overflow-y: auto; padding: 22px 24px 0;
-  background: var(--card-bg); border-right: 1px solid var(--border);
+  background: var(--page-bg); border-right: 1px solid var(--border);
 }
-[data-theme="dark"] .apv-coluna-pedido { background: rgba(255, 255, 255, 0.02); }
+/* Mesmo cinza escuro que `.apv-colunas` já usa no fundo do overlay
+   inteiro (não o `--page-bg` padrão do resto do app) — pra não sobrar
+   uma costura de cor entre a coluna e o que fica atrás dela. */
+[data-theme="dark"] .apv-coluna-pedido { background: #0C0B12; }
+
+/* ----- "Blocos" — coluna esquerda escolhida pelo Cláudio entre 3
+   protótipos visuais (artifact "Lateral da conferência", 2026-08-05):
+   cada seção vira um cartão branco flutuando sobre o cinza da coluna,
+   com a MESMA sombra que os cards do quadro já usam — nada inventado.
+   `.apv-blocos-coluna` só dá o espaço entre os cartões (`gap`); os
+   elementos que não são cartão (botão Voltar, o registro "aprovado há
+   X", a pílula de exceção) usam esse mesmo gap uniforme, então eles têm
+   `margin` zerada — é o pai quem espaça, não cada filho por conta
+   própria. */
+.apv-blocos-coluna { display: flex; flex-direction: column; gap: 12px; }
+.apv-bloco-card {
+  background: var(--card-bg); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card); padding: 18px;
+}
 
 /* ----- Rodapé fixo da coluna esquerda -----
    "Pedir alteração" e "Ver como o cliente vê" ficam GRUDADOS embaixo,
@@ -256,7 +274,7 @@
 .apv-rodape-coluna {
   position: sticky; bottom: 0;
   background: var(--card-bg);
-  margin: 14px -24px 0; padding: 14px 24px 22px;
+  margin: 0 -24px 0; padding: 14px 24px 22px;
   border-top: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 10px;
 }
@@ -308,20 +326,24 @@
 .apv-brief-texto p { margin-bottom: 12px; }
 .apv-brief-texto ul { margin: 0 0 12px; padding-left: 20px; }
 .apv-brief-texto li { margin-bottom: 6px; }
+.apv-brief-texto p:last-child,
+.apv-brief-texto ul:last-child { margin-bottom: 0; }
 
-.apv-specs {
-  margin: 20px 0; border: 1px solid var(--border);
-  border-radius: var(--radius-md); overflow: hidden;
+/* Entrega desejada: rótulo miúdo em maiúsculas de um lado, valor como
+   pílula amarela do outro — mesmo par rótulo/valor do resto do app
+   (ex.: `.apv-spec-valor` já existia; só o desenho ao redor mudou). */
+.apv-specs { display: flex; flex-direction: column; gap: 10px; }
+.apv-spec { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.apv-spec-rotulo {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
 }
-.apv-spec {
-  display: flex; justify-content: space-between; gap: 14px;
-  padding: 11px 14px; font-family: var(--apv-fonte-texto); font-size: 13px;
-  border-top: 1px solid var(--border);
+.apv-spec-valor {
+  font-family: var(--apv-fonte-texto); font-size: 13.5px; font-weight: 700;
+  color: var(--kanban-yellow-text); background: var(--apv-amarelo-suave);
+  padding: 4px 10px; border-radius: 999px;
 }
-.apv-spec:first-child { border-top: none; }
-.apv-spec-rotulo { color: var(--text-secondary); }
-.apv-spec-valor { font-weight: 600; text-align: right; }
-.apv-spec-valor.atencao { color: var(--warning); }
+.apv-spec-valor.atencao { color: var(--warning); background: var(--warning-soft); }
 
 /* ----- Seletor de versão -----
    Fica sempre visível, nunca escondido atrás de menu. Se a versão nunca
@@ -418,13 +440,13 @@
    abaixo, só a cor que muda. */
 .apv-voltar-envio {
   display: inline-flex; align-self: flex-start; align-items: center; gap: 6px;
-  border: none; background: none; cursor: pointer; padding: 4px 2px; margin-bottom: 12px;
+  border: none; background: none; cursor: pointer; padding: 4px 2px;
   font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--text-secondary);
   transition: color var(--dur-fast) var(--ease-apple);
 }
 .apv-voltar-envio:hover { color: var(--text-primary); }
 
-.apv-envio-meta { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.apv-envio-meta { display: flex; flex-direction: column; gap: 6px; }
 .apv-envio-meta-linha {
   display: flex; align-items: center; gap: 7px;
   font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-muted);
@@ -432,7 +454,7 @@
 .apv-envio-meta-linha svg { flex-shrink: 0; }
 .apv-envio-meta-linha.ok { color: var(--success); font-weight: 600; }
 
-.apv-bloco { margin-bottom: 20px; }
+.apv-bloco { margin-bottom: 0; }
 .apv-bloco-sub { font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-secondary); margin: -6px 0 10px; }
 .apv-escolha {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
@@ -549,7 +571,6 @@
    mouse. O link do card mãe vira um linkzinho ao lado, não mais uma caixa. */
 .apv-excecao-linha {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  margin-bottom: 16px;
   animation: apvEntraDeCima var(--dur-slow) var(--ease-apple-spring);
 }
 .apv-excecao-pill {

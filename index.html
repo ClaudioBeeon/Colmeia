@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-05e">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05e">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05e">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05e">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05e">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05e">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-05f">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05f">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05f">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05f">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05f">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05f">
 </head>
 <body>
 
@@ -740,19 +740,27 @@
         <!-- Painel A: o que foi pedido. Só o texto de verdade escrito na
              tarefa — sem resumo por IA e sem repetir cliente/peça/designer,
              que já aparecem na pílula de cima. -->
-        <div id="apvPainelBriefing">
-          <p class="apv-rotulo">O que foi pedido</p>
-          <div class="apv-brief-texto" id="apvBriefTexto">
-            <!-- EXEMPLO — trocar pelo que apvRenderBriefing() desenhar -->
-            <p>Post de feed anunciando o combo de verão (café gelado + cookie) com <b>15% de desconto</b> pra pedidos feitos pelo app.</p>
-            <ul>
-              <li>Usar a paleta do verão definida em julho (tons de laranja e areia)</li>
-              <li>Logo na versão horizontal, no rodapé</li>
-              <li>Chamada principal legível no feed, sem dar zoom</li>
-            </ul>
+        <!-- Estilo "Blocos" — escolhido pelo Cláudio entre 3 protótipos
+             visuais (artifact "Lateral da conferência", 2026-08-05): cada
+             seção vira um cartão branco separado, flutuando sobre o cinza
+             do app, com a mesma sombra que os cards do quadro já usam.
+             `.apv-blocos-coluna` só dá o espaçamento (gap) entre os
+             cartões; quem monta a "cara" de cartão é `.apv-bloco-card`. -->
+        <div id="apvPainelBriefing" class="apv-blocos-coluna">
+          <div class="apv-bloco-card">
+            <p class="apv-rotulo">O que foi pedido</p>
+            <div class="apv-brief-texto" id="apvBriefTexto">
+              <!-- EXEMPLO — trocar pelo que apvRenderBriefing() desenhar -->
+              <p>Post de feed anunciando o combo de verão (café gelado + cookie) com <b>15% de desconto</b> pra pedidos feitos pelo app.</p>
+              <ul>
+                <li>Usar a paleta do verão definida em julho (tons de laranja e areia)</li>
+                <li>Logo na versão horizontal, no rodapé</li>
+                <li>Chamada principal legível no feed, sem dar zoom</li>
+              </ul>
+            </div>
           </div>
 
-          <div class="apv-specs" id="apvBriefSpecs">
+          <div class="apv-bloco-card apv-specs" id="apvBriefSpecs">
             <!-- EXEMPLO -->
             <div class="apv-spec"><span class="apv-spec-rotulo">Entrega desejada</span><span class="apv-spec-valor atencao">hoje, 18h</span></div>
           </div>
@@ -762,7 +770,8 @@
                caso não dá pra criar subtarefa (projeto fechado não aceita
                tarefa nova); o texto abaixo vira comentário no card mãe. Só
                uma pílula com dica (title) — o texto grande explicando tudo
-               isso, testado, era demais pra uma exceção rara. -->
+               isso, testado, era demais pra uma exceção rara. Fica solta,
+               sem virar cartão — é aviso, não conteúdo. -->
           <div class="apv-excecao-linha" id="apvExcecaoFechado" hidden>
             <span class="apv-excecao-pill" id="apvExcecaoPill" title="Esse card mãe é de um mês que já encerrou, e projetos encerrados não aceitam tarefa nova. O que você escrever abaixo vira um comentário nele, marcando o designer, em vez de uma subtarefa.">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5.5M12 8v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -775,8 +784,9 @@
                aqui (não atrás de um botão que abre outra tela). Vai pro
                Runrun.it: vira a descrição da subtarefa de alteração, ou o
                comentário no card mãe no caso do projeto fechado (ver
-               devolverParaDesigner, AprovacaoInterna.gs). -->
-          <div>
+               devolverParaDesigner, AprovacaoInterna.gs). Motivo e pontos
+               marcados ficam no MESMO cartão — são a mesma decisão. -->
+          <div class="apv-bloco-card">
             <label class="apv-campo-rotulo" for="apvMotivo">
               O que precisa mudar? <span class="apv-obrigatorio">obrigatório</span>
             </label>
@@ -785,13 +795,13 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v5.5M12 16v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
               Escreve o motivo antes de pedir alteração — sem isso o designer não sabe o que refazer.
             </div>
-          </div>
 
-          <!-- Pontos marcados: o clique é DIRETO na peça, ali do lado —
-               nada de tela ou cópia da imagem separada. A lista também
-               explica isso quando está vazia (ver apvRenderPinsDevolucao). -->
-          <div class="apv-marcar-lista" id="apvMarcarLista">
-            <p class="apv-campo-ajuda">Clica em "Adicionar ponto" e depois na peça, ao lado, pra apontar exatamente onde.</p>
+            <!-- Pontos marcados: o clique é DIRETO na peça, ali do lado —
+                 nada de tela ou cópia da imagem separada. A lista também
+                 explica isso quando está vazia (ver apvRenderPinsDevolucao). -->
+            <div class="apv-marcar-lista" id="apvMarcarLista">
+              <p class="apv-campo-ajuda">Clica em "Adicionar ponto" e depois na peça, ao lado, pra apontar exatamente onde.</p>
+            </div>
           </div>
 
           <!-- Rodapé fixo — não rola com o resto do painel, pedido do
@@ -810,7 +820,7 @@
 
         <!-- Painel B: aprovado, preparando o envio. Some sozinho ao abrir
              uma peça nova (ver apvAbrirConferencia). -->
-        <div id="apvPainelEnvio" hidden>
+        <div id="apvPainelEnvio" class="apv-blocos-coluna" hidden>
           <!-- Volta pro painel A — não desaprova nada no backend, só deixa
                ver o briefing de novo, marcar outro ponto ou escrever um
                "pedir alteração" em vez de mandar. Ver apvVoltarParaConferencia(). -->
@@ -830,7 +840,7 @@
             </span>
           </div>
 
-          <div class="apv-bloco">
+          <div class="apv-bloco apv-bloco-card">
             <p class="apv-rotulo">Quais peças vão no link</p>
             <p class="apv-bloco-sub">O cliente vê todas juntas, numa página só, e responde uma por uma.</p>
             <div id="apvListaPecasEnvio">
@@ -843,12 +853,12 @@
             </div>
           </div>
 
-          <div class="apv-bloco">
+          <div class="apv-bloco apv-bloco-card">
             <p class="apv-rotulo">Mensagem pro cliente (opcional)</p>
             <textarea class="apv-campo" id="apvMsgCliente" placeholder="Oi! Segue a arte pra sua aprovação. Qualquer ajuste é só marcar direto na imagem."></textarea>
           </div>
 
-          <div class="apv-bloco">
+          <div class="apv-bloco apv-bloco-card">
             <p class="apv-rotulo">Ao enviar</p>
             <!-- Depois que o link vai pro cliente, o card mãe não é mais
                  trabalho em produção: é coisa esperando resposta. Mover ele
@@ -884,12 +894,12 @@
         <!-- Painel C: aba "Aprovação do cliente" — status de quem já
              recebeu o link. Independe de estar no painel A ou B; troca por
              cima dos dois (ver apvTrocarAba()). -->
-        <div id="apvPainelStatus" hidden>
-          <div class="apv-status-vazio" id="apvStatusVazio">
+        <div id="apvPainelStatus" class="apv-blocos-coluna" hidden>
+          <div class="apv-status-vazio apv-bloco-card" id="apvStatusVazio">
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12s3.6-7 9-7 9 7 9 7-3.6 7-9 7-9-7-9-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
             Ainda não foi enviado pro cliente.
           </div>
-          <div class="apv-status-card" id="apvStatusCard" hidden>
+          <div class="apv-status-card apv-bloco-card" id="apvStatusCard" hidden>
             <span class="apv-status-selo">Aguardando o cliente</span>
             <div class="apv-link-copiar">
               <span class="apv-link-url" id="apvStatusLinkUrl"></span>
@@ -1091,31 +1101,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-05e"></script>
-<script src="js/fila-offline.js?v=2026-08-05e"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-05e"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-05e"></script>
-<script src="js/kanban-polling.js?v=2026-08-05e"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-05e"></script>
-<script src="js/regras-briefing.js?v=2026-08-05e"></script>
-<script src="js/kanban-board.js?v=2026-08-05e"></script>
-<script src="js/clientes-hub.js?v=2026-08-05e"></script>
-<script src="js/chat-comentarios.js?v=2026-08-05e"></script>
-<script src="js/detalhe-modal.js?v=2026-08-05e"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-05e"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-05e"></script>
-<script src="js/bee.js?v=2026-08-05e"></script>
-<script src="js/paginas-designers.js?v=2026-08-05e"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-05e"></script>
-<script src="js/pagina-repasse.js?v=2026-08-05e"></script>
-<script src="js/pagina-horas.js?v=2026-08-05e"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-05e"></script>
-<script src="js/paleta-comando.js?v=2026-08-05e"></script>
-<script src="js/roteador-url.js?v=2026-08-05e"></script>
-<script src="js/detalhe-historia.js?v=2026-08-05e"></script>
-<script src="js/modo-foco.js?v=2026-08-05e"></script>
-<script src="js/pagina-bee.js?v=2026-08-05e"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-05e"></script>
-<script src="js/login-boot.js?v=2026-08-05e"></script>
+<script src="js/config.js?v=2026-08-05f"></script>
+<script src="js/fila-offline.js?v=2026-08-05f"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-05f"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-05f"></script>
+<script src="js/kanban-polling.js?v=2026-08-05f"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-05f"></script>
+<script src="js/regras-briefing.js?v=2026-08-05f"></script>
+<script src="js/kanban-board.js?v=2026-08-05f"></script>
+<script src="js/clientes-hub.js?v=2026-08-05f"></script>
+<script src="js/chat-comentarios.js?v=2026-08-05f"></script>
+<script src="js/detalhe-modal.js?v=2026-08-05f"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-05f"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-05f"></script>
+<script src="js/bee.js?v=2026-08-05f"></script>
+<script src="js/paginas-designers.js?v=2026-08-05f"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-05f"></script>
+<script src="js/pagina-repasse.js?v=2026-08-05f"></script>
+<script src="js/pagina-horas.js?v=2026-08-05f"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-05f"></script>
+<script src="js/paleta-comando.js?v=2026-08-05f"></script>
+<script src="js/roteador-url.js?v=2026-08-05f"></script>
+<script src="js/detalhe-historia.js?v=2026-08-05f"></script>
+<script src="js/modo-foco.js?v=2026-08-05f"></script>
+<script src="js/pagina-bee.js?v=2026-08-05f"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-05f"></script>
+<script src="js/login-boot.js?v=2026-08-05f"></script>
 </body>
 </html>
