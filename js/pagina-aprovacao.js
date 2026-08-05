@@ -125,11 +125,19 @@ let apvPinsDevolucao = [];
 // Modo "clicar na peça marca um ponto" ligado/desligado.
 let apvMarcando = false;
 
-// Fase do botão de ação da pílula (ver apvClickAcao):
-//   "aprovar"  → clicar chama apvAprovar()
-//   "animando" → clique ignorado, o rótulo está deslizando sozinho
-//   "enviar"   → clicar copia o link pro cliente
-let apvFaseAcao = "aprovar";
+// A peça já foi aprovada internamente (nesta sessão de conferência)? Rege
+// tanto o rótulo do botão da pílula (Aprovar / Enviar para o cliente)
+// quanto qual painel a coluna esquerda mostra — ver apvClickAcao,
+// apvRedesenharPaineis.
+let apvAprovado = false;
+
+// O link já foi copiado pelo menos uma vez (botão "Enviar para o
+// cliente")? É o que decide o que a aba "Aprovação do cliente" mostra.
+let apvEnviado = false;
+
+// Qual pílula está acesa do lado esquerdo: "conferencia" (o painel A ou B,
+// dependendo de apvAprovado) ou "cliente" (painel de status).
+let apvAbaAtiva = "conferencia";
 
 // Quando ESTA peça foi pedida pra conferência (peca.pedidoEm da fila),
 // guardado no momento de abrir — apvFila já pode ter perdido o item depois
@@ -299,15 +307,19 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   apvMarcando = false;
   apvPedidoEmAtual = null;
   apvCardMaeMovido = false;
+  apvAprovado = false;
+  apvEnviado = false;
+  apvAbaAtiva = "conferencia";
 
-  // Volta pro painel "o que foi pedido" — a tela pode ter ficado no painel
-  // de envio da peça anterior. E o botão de ação volta pro início da
-  // pilha (Aprovar), destravado.
+  // Volta pra pílula "Conferência" e pro painel "o que foi pedido" — a tela
+  // pode ter ficado noutro estado da peça anterior. O botão de ação volta
+  // pro início da pilha (Aprovar), destravado.
+  document.getElementById("apvTabConferencia").classList.add("ativa");
+  document.getElementById("apvTabCliente").classList.remove("ativa");
   document.getElementById("apvPainelBriefing").hidden = false;
   document.getElementById("apvPainelEnvio").hidden = true;
-  apvFaseAcao = "aprovar";
+  document.getElementById("apvPainelStatus").hidden = true;
   document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
-  document.getElementById("apvAcaoCopiado").classList.remove("mostra");
   document.getElementById("apvBtnAprovar").classList.remove("travado");
   document.getElementById("apvContextoId").hidden = true;
   document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
@@ -596,8 +608,12 @@ function apvAprovar() {
  *
  * NÃO troca de tela: o #apvPainelBriefing some, o #apvPainelEnvio aparece, e a
  * peça continua ali do lado, sempre visível. Quem acabou de aprovar quer
- * mandar agora, não navegar. O botão de ação (na pílula de cima) anima pra
- * "Aprovado" e depois pra "Enviar para o cliente" — ver apvIniciarAnimacaoAprovado.
+ * mandar agora, não navegar.
+ *
+ * O botão de ação (na pílula de cima) troca de rótulo NA HORA — pedido do
+ * Cláudio, "instantâneo como o resto do Colmeia" — sem pausa artificial no
+ * meio. A confirmação é um toast, o mesmo mecanismo de confirmação usado em
+ * qualquer outra ação do app.
  */
 async function apvConfirmarAprovacao() {
   if (!apvPecaAberta) return;
@@ -623,45 +639,81 @@ async function apvConfirmarAprovacao() {
   apvFila = apvFila.filter(i => !(String(i.taskId) === String(apvPecaAberta.taskId) && i.nomePeca === apvPecaAberta.peca.nomePeca));
   atualizarBadgeAprovacao();
 
-  document.getElementById("apvPainelBriefing").hidden = true;
-  document.getElementById("apvPainelEnvio").hidden = false;
+  apvAprovado = true;
+  mostrarToast("Aprovado internamente.", "sucesso");
+  apvMarcarBotaoComoAprovado();
   apvRenderEnvio(apvPecaAberta, data);
-  apvIniciarAnimacaoAprovado();
+  apvRedesenharPaineis();
 }
 
 /**
- * O clique único do botão da pílula: o que ele faz depende da FASE
- * (apvFaseAcao) — nunca da posição visual do rótulo, que é só animação.
+ * O clique único do botão da pílula: o que ele faz depende de já ter
+ * aprovado ou não — nunca da posição visual do rótulo.
  */
 function apvClickAcao() {
-  if (apvFaseAcao === "aprovar") { apvAprovar(); return; }
-  if (apvFaseAcao === "animando") return; // clique no meio da animação: ignora
-  apvCopiarLinkCliente(); // apvFaseAcao === "enviar"
+  if (!apvAprovado) { apvAprovar(); return; }
+  apvCopiarLinkCliente();
 }
 
 /**
- * Desliza o rótulo do botão em DUAS etapas — Aprovar → Aprovado → Enviar
- * para o cliente — dentro do mesmo botão, na pílula de cima. A largura do
- * botão é fixa (CSS) de propósito: só o texto mudando de tamanho no meio da
- * animação faria ele pular de largura.
+ * Troca o rótulo do botão pra "Enviar para o cliente", dentro do mesmo
+ * botão, na pílula de cima. A largura do botão é fixa (CSS) de propósito:
+ * só o texto mudando de tamanho faria ele pular de largura na troca.
  *
  * A altura do item é lida do próprio DOM (offsetHeight), nunca um número
  * fixo repetido aqui — evita o CSS e o JS descombinarem se a altura mudar
  * um dia.
  */
-function apvIniciarAnimacaoAprovado() {
+function apvMarcarBotaoComoAprovado() {
   const track = document.getElementById("apvAcaoTrack");
   const item = track.children[0];
   const altura = item ? item.offsetHeight : 42;
-  const reduzMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  apvFaseAcao = "animando";
   track.style.transform = `translateY(-${altura}px)`;
+}
 
-  setTimeout(() => {
-    track.style.transform = `translateY(-${altura * 2}px)`;
-    apvFaseAcao = "enviar";
-  }, reduzMovimento ? 0 : 900);
+/**
+ * Volta pro painel "o que foi pedido" sem desfazer a aprovação no backend
+ * (não existe ação de "desaprovar" — e não precisa: aprovar de novo só
+ * regrava a mesma linha). Serve pra quando o atendimento quer reler o
+ * briefing, marcar um ponto ou pedir alteração mesmo depois de ter
+ * aprovado — pedido do Cláudio.
+ */
+function apvVoltarParaConferencia() {
+  apvAprovado = false;
+  document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
+  apvAbaAtiva = "conferencia";
+  apvRedesenharAbas();
+  apvRedesenharPaineis();
+}
+
+/** Troca qual pílula está acesa (Conferência / Aprovação do cliente). */
+function apvTrocarAba(aba) {
+  apvAbaAtiva = aba;
+  apvRedesenharAbas();
+  if (aba === "cliente") apvRenderStatusCliente();
+  apvRedesenharPaineis();
+}
+
+function apvRedesenharAbas() {
+  document.getElementById("apvTabConferencia").classList.toggle("ativa", apvAbaAtiva === "conferencia");
+  document.getElementById("apvTabCliente").classList.toggle("ativa", apvAbaAtiva === "cliente");
+}
+
+/** Qual dos três painéis da coluna esquerda fica visível agora. */
+function apvRedesenharPaineis() {
+  const conferencia = apvAbaAtiva === "conferencia";
+  document.getElementById("apvPainelBriefing").hidden = !(conferencia && !apvAprovado);
+  document.getElementById("apvPainelEnvio").hidden = !(conferencia && apvAprovado);
+  document.getElementById("apvPainelStatus").hidden = apvAbaAtiva !== "cliente";
+}
+
+/** Vazio até mandar pro cliente pela primeira vez; depois, o link + cobrar. */
+function apvRenderStatusCliente() {
+  document.getElementById("apvStatusVazio").hidden = apvEnviado;
+  document.getElementById("apvStatusCard").hidden = !apvEnviado;
+  if (apvEnviado) {
+    document.getElementById("apvStatusLinkUrl").textContent = apvLinkGerado;
+  }
 }
 
 /**
@@ -689,9 +741,9 @@ async function apvCopiarLinkCliente() {
     return;
   }
 
-  const flash = document.getElementById("apvAcaoCopiado");
-  flash.classList.add("mostra");
-  setTimeout(() => flash.classList.remove("mostra"), 1400);
+  apvEnviado = true;
+  mostrarToast("Link copiado.", "sucesso");
+  if (apvAbaAtiva === "cliente") apvRenderStatusCliente();
 }
 
 /**
@@ -1094,6 +1146,23 @@ function apvLigarEventos() {
   liga("apvMarcarBtn", "click", apvAlternarMarcacao);
   liga("apvPalco", "click", apvCliqueNoPalcoParaMarcar);
   liga("apvVerVersaoNova", "click", () => apvIrParaVersao(apvPecaAberta ? apvPecaAberta.peca.versoes.length : 1));
+
+  liga("apvTabConferencia", "click", () => apvTrocarAba("conferencia"));
+  liga("apvTabCliente", "click", () => apvTrocarAba("cliente"));
+  liga("apvVoltarEnvio", "click", apvVoltarParaConferencia);
+
+  liga("apvStatusCopiar", "click", async () => {
+    try {
+      await navigator.clipboard.writeText(apvLinkGerado);
+      mostrarToast("Link copiado.", "sucesso");
+    } catch (err) {
+      mostrarToast("Não consegui copiar sozinho — o link está aí na tela.", "erro");
+    }
+  });
+  liga("apvStatusWhatsapp", "click", () => {
+    const texto = `Oi! Só passando pra saber se você já viu a arte que mandamos: ${apvLinkGerado}`;
+    window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+  });
 
   liga("apvConfirmaVer", "click", () => {
     document.getElementById("apvConfirmaFundo").hidden = true;

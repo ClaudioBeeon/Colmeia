@@ -193,13 +193,18 @@
 .apv-contexto-restam { margin-left: auto; font-size: 12.5px; color: var(--text-muted); }
 
 /* ----- O botão de ação, dentro da pílula -----
-   UM botão só, que muda de rótulo sozinho: Aprovar → Aprovado → Enviar
-   para o cliente (ver apvClickAcao/apvIniciarAnimacaoAprovado,
-   js/pagina-aprovacao.js). Os três rótulos ficam empilhados dentro de
-   uma janela da altura de UM item (overflow:hidden) e o "carrossel" é
-   só a pilha inteira deslizando pra cima via transform — a largura fica
-   fixa de propósito, senão o texto mudando de tamanho (Aprovar → Enviar
-   para o cliente) faria o botão pular de largura no meio da animação. */
+   UM botão só, que troca de rótulo sozinho: Aprovar → Enviar para o
+   cliente (ver apvClickAcao/apvMarcarComoAprovado, js/pagina-aprovacao.js).
+   Os dois rótulos ficam empilhados dentro de uma janela da altura de UM
+   item (overflow:hidden) e a troca é a pilha inteira deslizando pra cima
+   via transform — a largura fica fixa de propósito, senão o texto mudando
+   de tamanho faria o botão pular de largura no meio da troca.
+
+   A duração é a MESMA `--dur-base` de qualquer outra troca de estado no
+   Colmeia (pedido do Cláudio: "instantâneo como o resto do app") — nada
+   de pausa artificial no meio. A confirmação de que aprovou é um toast
+   (mostrarToast), o mesmo mecanismo usado em todo o resto do app; o
+   botão só troca de rótulo, não tenta confirmar nada sozinho. */
 .apv-acao-btn {
   position: relative; overflow: hidden;
   border: none; cursor: pointer; border-radius: 999px;
@@ -211,22 +216,13 @@
 .apv-acao-btn.travado { opacity: 0.45; pointer-events: none; }
 .apv-acao-track {
   display: flex; flex-direction: column;
-  transition: transform 460ms var(--ease-apple-spring);
+  transition: transform var(--dur-base) var(--ease-apple);
 }
 .apv-acao-item {
   height: 42px; display: flex; align-items: center; justify-content: center; gap: 8px;
   font-family: var(--font-body); font-size: 14px; font-weight: 700;
   color: #16181D; white-space: nowrap;
 }
-.apv-acao-copiado {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center; gap: 7px;
-  background: var(--success); color: #fff;
-  font-family: var(--font-body); font-size: 14px; font-weight: 700;
-  opacity: 0; pointer-events: none;
-  transition: opacity var(--dur-fast) ease;
-}
-.apv-acao-copiado.mostra { opacity: 1; }
 
 /* O card grande de baixo — antes era o `.apv-conferencia` inteiro que
    carregava fundo/borda/sombra; agora ele só empilha a pílula de cima
@@ -248,6 +244,37 @@
   background: var(--card-bg); border-right: 1px solid var(--border);
 }
 [data-theme="dark"] .apv-coluna-pedido { background: rgba(255, 255, 255, 0.02); }
+
+/* Duas pílulas segmentadas — mesmo padrão do cabeçalho do painel de
+   comentários do card (Comentários/Bee, css/03-detalhe.css): cada botão
+   mora num DIV com flex:1 (não o botão direto), porque um <button> como
+   item flex resiste a encolher até o tamanho do irmão sozinho. */
+.apv-tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+.apv-tab-wrap { flex: 1 1 0; min-width: 0; }
+.apv-tab-pill {
+  width: 100%; font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  padding: 9px 8px; border: none; border-radius: 999px; cursor: pointer;
+  background: var(--apv-superficie-2); color: var(--text-secondary);
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.apv-tab-pill.ativa { background: var(--kanban-yellow); color: #16181D; }
+
+/* ----- Aba "Aprovação do cliente" -----
+   Status de quem já recebeu o link — vazio até o botão de enviar (na
+   pílula de cima) copiar o link pela primeira vez. */
+.apv-status-vazio {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  padding: 50px 12px; color: var(--text-muted);
+  font-family: var(--apv-fonte-texto); font-size: 13.5px;
+}
+.apv-status-vazio svg { opacity: 0.55; }
+.apv-status-card { display: flex; flex-direction: column; gap: 12px; }
+.apv-status-selo {
+  align-self: flex-start; font-size: 12px; font-weight: 700;
+  padding: 5px 11px; border-radius: 999px;
+  background: var(--apv-amarelo-suave); color: var(--kanban-yellow-text);
+}
 
 /* A peça: NÃO rola em hipótese nenhuma. A coluna toda é a barra de
    versão + o aviso (se tiver) + a peça + o botão de devolver — sempre
@@ -364,29 +391,26 @@
   box-shadow: 0 4px 12px rgba(20, 20, 30, 0.3);
 }
 
-/* ----- TELA 3: aprovado, preparando o envio (MESMA tela) ----- */
-.apv-revisao-tempo {
-  display: flex; align-items: center; gap: 6px;
+/* ----- TELA 3: aprovado, preparando o envio (MESMA tela) -----
+   O "Aprovado" já foi confirmado por toast na hora (ver apvConfirmarAprovacao);
+   aqui é só um REGISTRO — por isso uma linha compacta, não mais um cartão
+   verde grande. Mesmo peso visual da linha de "pedida há X horas" logo
+   abaixo, só a cor que muda. */
+.apv-voltar-envio {
+  display: inline-flex; align-self: flex-start; align-items: center; gap: 6px;
+  border: none; background: none; cursor: pointer; padding: 4px 2px; margin-bottom: 12px;
+  font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  transition: color var(--dur-fast) var(--ease-apple);
+}
+.apv-voltar-envio:hover { color: var(--text-primary); }
+
+.apv-envio-meta { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.apv-envio-meta-linha {
+  display: flex; align-items: center; gap: 7px;
   font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-muted);
-  margin-bottom: 10px;
 }
-.apv-revisao-tempo svg { flex-shrink: 0; }
-.apv-selo {
-  display: flex; align-items: center; gap: 11px;
-  background: var(--apv-sucesso-suave); border-radius: var(--radius-md);
-  padding: 13px 16px; margin-bottom: 18px;
-  animation: apvSeloEntra var(--dur-slow) var(--ease-apple-spring);
-}
-@keyframes apvSeloEntra {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
-}
-.apv-selo-icone {
-  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
-  background: var(--success); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-}
-.apv-selo-txt { font-family: var(--apv-fonte-texto); font-size: 13.5px; line-height: 1.4; color: var(--success); font-weight: 600; }
+.apv-envio-meta-linha svg { flex-shrink: 0; }
+.apv-envio-meta-linha.ok { color: var(--success); font-weight: 600; }
 
 .apv-bloco { margin-bottom: 20px; }
 .apv-bloco-sub { font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-secondary); margin: -6px 0 10px; }
