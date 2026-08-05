@@ -102,6 +102,39 @@
   .aviso-acoes { display: flex; gap: 10px; margin-top: 20px; }
   .aviso-acoes .btn { flex: 1; }
 
+  /* Tela de carregando: mesmo tema colmeia (logo flutuando + frases em
+     rodízio) já usado na entrada do app (js/kanban-board.js) e no pop-up
+     de tarefa — pra não parecer um site diferente enquanto espera a peça. */
+  .board-loading {
+    position: relative; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    max-width: 380px; width: 100%; min-height: 220px;
+    border-radius: 18px; background: var(--card); box-shadow: var(--sombra);
+  }
+  .board-loading-glass {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 25% 30%, rgba(120,110,255,0.10), transparent 55%),
+      radial-gradient(circle at 75% 65%, rgba(120,110,255,0.07), transparent 55%);
+    animation: colmeia-glass-move 9s ease-in-out infinite;
+  }
+  .board-loading-content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .board-loading-bee { width: 44px; height: 44px; animation: colmeia-bee-float 2.4s ease-in-out infinite; }
+  .board-loading-text { font-size: 15px; font-weight: 700; color: var(--text-2); }
+  .board-loading-text.fade-in { animation: colmeia-text-fade 0.4s var(--ease); }
+  @keyframes colmeia-glass-move {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(6%, -6%) scale(1.08); }
+  }
+  @keyframes colmeia-bee-float {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50% { transform: translateY(-10px) rotate(4deg); }
+  }
+  @keyframes colmeia-text-fade {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   /* ===== Botões ===== */
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -324,11 +357,14 @@
 </head>
 <body>
 
-<!-- ===== Carregando ===== -->
+<!-- ===== Carregando (mesma animação de quando entra no Colmeia) ===== -->
 <div class="tela-cheia" id="telaCarregando">
-  <div class="aviso">
-    <div class="aviso-icone">⏳</div>
-    <p class="aviso-titulo">Carregando a peça...</p>
+  <div class="board-loading">
+    <div class="board-loading-glass"></div>
+    <div class="board-loading-content">
+      <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="board-loading-bee" alt="Colmeia">
+      <p class="board-loading-text" id="loadingMsg"></p>
+    </div>
   </div>
 </div>
 
@@ -458,7 +494,37 @@
     ["telaCarregando", "telaErro", "telaAprovacao"].forEach(function (t) {
       document.getElementById(t).hidden = (t !== id);
     });
+    if (id !== "telaCarregando") clearInterval(intervalMsgCarregando);
   }
+
+  // Mesmas frases do tema colmeia usadas na entrada do app
+  // (js/pessoas-fotos.js) — sem a que menciona o Runrun.it, porque quem
+  // abre esse link é o CLIENTE, que não sabe (nem precisa saber) o que é
+  // o Runrun.it.
+  var mensagensCarregando = [
+    "Preparando o melzinho...",
+    "Ajeitando os favos...",
+    "Organizando as abelhinhas...",
+    "Polinizando as tarefas...",
+    "Arrumando a colmeia...",
+  ];
+  var intervalMsgCarregando = null;
+
+  function iniciarMensagensCarregando() {
+    clearInterval(intervalMsgCarregando);
+    var indice = 0;
+    var el = document.getElementById("loadingMsg");
+    if (!el) return;
+    el.textContent = mensagensCarregando[0];
+    intervalMsgCarregando = setInterval(function () {
+      indice = (indice + 1) % mensagensCarregando.length;
+      el.classList.remove("fade-in");
+      void el.offsetWidth; // reinicia a animação CSS
+      el.textContent = mensagensCarregando[indice];
+      el.classList.add("fade-in");
+    }, 1800);
+  }
+  iniciarMensagensCarregando();
 
   function escaparTexto(t) {
     var div = document.createElement("div");
