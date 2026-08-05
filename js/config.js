@@ -220,6 +220,8 @@ const ACOES_DEMORADAS = [
   // várias vezes (uma leitura de pasta por peça na fila; criar tarefa +
   // alocar + mover etapa na devolução).
   "listarConferenciasPendentes",
+  // IA lendo os dois cards (mãe + tarefa) e os comentários dos dois.
+  "briefingDaConferencia",
   "dadosDaConferencia",
   "devolverParaDesigner",
   "listarPastasClientesDrive",  // varre pastas do Drive

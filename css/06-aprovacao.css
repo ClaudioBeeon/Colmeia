@@ -893,3 +893,56 @@
 }
 .apv-spec-link:hover { text-decoration: underline; }
 .apv-spec-link svg { flex-shrink: 0; }
+
+/* ----- O briefing da Bee, juntando card mãe + tarefa -----
+   Três grupos separados porque são três perguntas diferentes na cabeça de
+   quem confere: "é do tamanho certo?", "o texto bate?", "atende o que foi
+   pedido?". Numa lista só, o tamanho e a copy se perdiam no meio do resto
+   — e são justamente os dois erros mais caros de deixar passar. */
+.apv-brief-grupo { margin-bottom: 16px; }
+.apv-brief-grupo:last-of-type { margin-bottom: 8px; }
+.apv-brief-grupo-rot {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted); margin: 0 0 7px;
+}
+.apv-brief-formato {
+  margin: 0; font-family: var(--apv-fonte-texto);
+  font-size: 14.5px; font-weight: 600; color: var(--text-primary);
+}
+.apv-brief-lista {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  font-family: var(--apv-fonte-texto); font-size: 13.5px; line-height: 1.5;
+}
+.apv-brief-lista li { display: flex; align-items: flex-start; gap: 7px; flex-wrap: wrap; }
+.apv-brief-lista li::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%; margin-top: 8px;
+  background: var(--text-muted); flex-shrink: 0;
+}
+/* A copy é pra ser comparada palavra por palavra com a arte — por isso ela
+   aparece entre aspas e num tom mais forte que o resto. */
+.apv-brief-lista.copy li { font-weight: 600; }
+.apv-brief-lista.copy li::before { background: var(--accent); }
+
+/* A etiqueta de ORIGEM em cada item é o que resolve a confusão de "às
+   vezes o pedido está num card, às vezes no outro": sem ela, tudo vira uma
+   lista só e ninguém sabe o que é regra do mês e o que é desta peça. */
+.apv-origem {
+  padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap;
+}
+.apv-origem.mae { background: var(--apv-amarelo-suave); color: var(--kanban-yellow-text); }
+.apv-origem.tarefa { background: var(--apv-superficie-2); color: var(--text-secondary); border: 1px solid var(--border); }
+
+/* O pedido de alteração vem em primeiro e destacado: numa peça que voltou,
+   ele é a instrução principal — o pedido original já foi atendido. */
+.apv-brief-grupo.alteracao {
+  background: var(--apv-amarelo-suave); border-radius: var(--radius-md);
+  padding: 13px 15px; margin-bottom: 18px;
+}
+.apv-brief-grupo.alteracao .apv-brief-grupo-rot { color: var(--kanban-yellow-text); }
+
+.apv-brief-rodape {
+  margin: 0; font-family: var(--apv-fonte-texto);
+  font-size: 11.5px; font-style: italic; color: var(--text-muted);
+}

@@ -309,6 +309,8 @@ function handleRequest(e, method) {
         output = devolverParaDesigner(body);
       } else if (body.acao === 'moverCardMaeParaAprovacaoCliente') {
         output = moverCardMaeParaAprovacaoCliente(body.taskId, body.autor);
+      } else if (body.acao === 'briefingDaConferencia') {
+        output = briefingDaConferencia(body.taskId);
       } else if (body.acao === 'entrarComoAtendimento') {
         output = entrarComoAtendimento(body.codigo);
       } else if (body.acao === 'buscarConferenciaDaTarefa') {

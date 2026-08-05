@@ -407,13 +407,14 @@ function apvRenderBriefing(peca) {
   idChip.href = peca.cardMaeLink || `https://runrun.it/tasks/${peca.taskId}`;
   idChip.hidden = false;
 
-  const texto = document.getElementById("apvBriefTexto");
-  // A descrição vem do Runrun.it já como HTML. É conteúdo de dentro de casa
-  // (escrito pelo próprio time no Runrun.it), o mesmo tratamento que o pop-up
-  // de tarefa já dá pra ela — não é entrada de fora.
-  texto.innerHTML = peca.descricao
-    ? peca.descricao
-    : `<p class="apv-vazio-inline">Essa tarefa não tem descrição escrita no Runrun.it. Vale conferir com quem pediu antes de aprovar.</p>`;
+  // O briefing é um RESUMO da Bee, não a descrição crua da tarefa.
+  //
+  // Por quê: na Beeon o pedido do mês fica escrito no CARD MÃE, e a tarefa
+  // do designer nasce quase vazia. Mostrando só a descrição dela, a tela
+  // dizia "essa tarefa não tem descrição" numa peça que tinha briefing
+  // completo um andar acima. A Bee lê os dois lados e separa o que quem
+  // confere precisa comparar com a arte: tamanho, copy e o resto.
+  carregarBriefingDaBee(peca);
 
   const entrega = peca.prazo ? new Date(peca.prazo) : null;
   const atrasada = entrega && entrega < new Date(new Date().toDateString());
@@ -433,6 +434,95 @@ function apvRenderBriefing(peca) {
   `;
 
   apvPrepararPedirAlteracao(peca);
+}
+
+/**
+ * Busca (e desenha) o resumo da Bee no lugar do briefing.
+ *
+ * É uma chamada de IA, então demora alguns segundos — mas roda sozinha ao
+ * abrir, sem esperar clique, ao contrário do "pedir pra Bee conferir". A
+ * diferença é que aqui não é uma segunda opinião: é a única forma de saber
+ * o que foi pedido, e sem isso a coluna fica vazia.
+ *
+ * O resultado é guardado por tarefa (`_briefingConf`), então voltar pra
+ * mesma peça não gasta outra chamada. No backend também tem cache por
+ * conteúdo — mudou um comentário, o resumo é refeito; não mudou, volta na
+ * hora.
+ */
+async function carregarBriefingDaBee(peca) {
+  const el = document.getElementById("apvBriefTexto");
+  if (!el) return;
+  const taskId = peca.taskId;
+
+  if (peca._briefingConf !== undefined) {
+    el.innerHTML = peca._briefingConf;
+    return;
+  }
+
+  el.innerHTML = `<p class="apv-vazio-inline">A Bee está lendo o card mãe e a tarefa...</p>`;
+  const data = await chamarBackend({ acao: "briefingDaConferencia", taskId });
+
+  // Trocou de peça enquanto carregava? Compara por id, nunca por
+  // referência, e busca o elemento de novo (bug recorrente do CLAUDE.md).
+  if (!apvPecaAberta || String(apvPecaAberta.taskId) !== String(taskId)) return;
+  const elAgora = document.getElementById("apvBriefTexto");
+  if (!elAgora) return;
+
+  // Falha de rede não vira "não tem briefing": guarda nada e tenta de novo
+  // na próxima abertura, dizendo a verdade enquanto isso.
+  if (!data || !data.ok || caiuARede(data)) {
+    elAgora.innerHTML = `<p class="apv-vazio-inline">Não consegui montar o briefing agora. A peça e o histórico continuam aí do lado.</p>`;
+    return;
+  }
+
+  const html = montarBriefingHTML(data);
+  apvPecaAberta._briefingConf = html;
+  elAgora.innerHTML = html;
+}
+
+function montarBriefingHTML(data) {
+  if (data.semMaterial || !data.briefing) {
+    return `<p class="apv-vazio-inline">Não achei nada escrito sobre essa peça — nem na tarefa, nem no card mãe. Vale conferir com quem pediu antes de aprovar.</p>`;
+  }
+  const b = data.briefing;
+  const nada = !b.formato && !(b.copy || []).length && !(b.itens || []).length && !(b.alteracao || []).length;
+  if (nada) {
+    return `<p class="apv-vazio-inline">Não achei nada escrito sobre essa peça — nem na tarefa, nem no card mãe. Vale conferir com quem pediu antes de aprovar.</p>`;
+  }
+
+  // A etiqueta de origem em cada item (card mãe / tarefa) é o que evita a
+  // confusão que o Cláudio descreveu: às vezes o pedido está num, às vezes
+  // no outro. Sem ela, tudo vira uma lista só e ninguém sabe qual é a
+  // regra do mês e qual é desta peça.
+  const lista = itens => itens.map(it => `
+    <li>
+      ${escaparHTML(it.texto)}
+      <span class="apv-origem ${it.onde === "card mãe" ? "mae" : "tarefa"}">${escaparHTML(it.onde)}</span>
+    </li>`).join("");
+
+  return `
+    ${(b.alteracao || []).length ? `
+      <div class="apv-brief-grupo alteracao">
+        <p class="apv-brief-grupo-rot">O que precisa mudar</p>
+        <ul class="apv-brief-lista">${lista(b.alteracao)}</ul>
+      </div>` : ""}
+    ${b.formato ? `
+      <div class="apv-brief-grupo">
+        <p class="apv-brief-grupo-rot">Formato</p>
+        <p class="apv-brief-formato">${escaparHTML(b.formato)}</p>
+      </div>` : ""}
+    ${(b.copy || []).length ? `
+      <div class="apv-brief-grupo">
+        <p class="apv-brief-grupo-rot">Copy que tem que estar na peça</p>
+        <ul class="apv-brief-lista copy">${lista(b.copy)}</ul>
+      </div>` : ""}
+    ${(b.itens || []).length ? `
+      <div class="apv-brief-grupo">
+        <p class="apv-brief-grupo-rot">O que foi pedido</p>
+        <ul class="apv-brief-lista">${lista(b.itens)}</ul>
+      </div>` : ""}
+    <p class="apv-brief-rodape">Resumo da Bee, juntando o card mãe e a tarefa do designer.</p>
+  `;
 }
 
 function apvDataCurta(iso) {

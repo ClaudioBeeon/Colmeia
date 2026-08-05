@@ -461,6 +461,126 @@ function aprovarInternamente(taskId, nomePeca, aprovadoPor) {
 }
 
 // ---------------------------------------------------------------------
+// O briefing da conferência: o que foi pedido, juntando os dois cards
+// ---------------------------------------------------------------------
+
+var BRIEFING_CONFERENCIA_VERSAO = 'conf-v1';
+
+/**
+ * O "o que foi pedido" da tela de conferência.
+ *
+ * O PROBLEMA: a tela mostrava só a descrição da própria tarefa — e quase
+ * sempre ela está vazia. Na Beeon o pedido do mês fica escrito no CARD
+ * MÃE, e cada subtarefa nasce com pouco mais que o nome da peça. Resultado:
+ * quem confere abria a tela e lia "essa tarefa não tem descrição", numa
+ * peça que tinha briefing completo um andar acima.
+ *
+ * O QUE ELE FAZ: junta os dois lados (card mãe + tarefa do designer, mais
+ * os comentários dos dois) e pede pra Bee separar em três coisas que quem
+ * confere precisa conferir de verdade:
+ *
+ *   - FORMATO/TAMANHO: é o erro mais barato de pegar e o mais caro de
+ *     deixar passar (peça no tamanho errado volta inteira).
+ *   - COPY: os textos que têm que aparecer na peça, pra bater com o que
+ *     está na arte, palavra por palavra.
+ *   - O RESTO do que foi pedido.
+ *
+ * E quando a peça é uma ALTERAÇÃO, o que mudar entra em separado — não
+ * misturado com o pedido original, porque são coisas diferentes: o pedido
+ * original já foi atendido, o que está em jogo é a mudança.
+ *
+ * Mesma disciplina do resto da Bee: cada item aponta a mensagem de onde
+ * saiu, e item sem fonte válida é descartado — é o sintoma de a IA ter
+ * inventado o item junto com a fonte.
+ */
+function briefingDaConferencia(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  var material = beeMaterialDaTarefa(taskId);
+  if (!material.ok) return material;
+  if (!material.mensagens.length) return { ok: true, semMaterial: true };
+
+  var textoMaterial = beeTextoDoMaterial(material);
+
+  // A devolução entra no material quando existe: numa alteração, o que o
+  // atendimento escreveu é a instrução principal, não contexto de apoio.
+  var devolucao = buscarDevolucaoDaTarefa(taskId);
+  var textoDevolucao = '';
+  if (devolucao.ok && devolucao.devolucao) {
+    var d = devolucao.devolucao;
+    textoDevolucao = '\n\nPEDIDO DE ALTERAÇÃO FEITO PELO ATENDIMENTO:\n' + (d.motivo || '') +
+      (d.pins && d.pins.length ? '\n' + textoDosPins(d.pins) : '');
+  }
+
+  var hash = hashTexto(textoMaterial + textoDevolucao + '|' + BRIEFING_CONFERENCIA_VERSAO);
+  var chaveCache = 'conf-' + taskId;
+  var cacheado = buscarBriefingCacheado(chaveCache, hash);
+  if (cacheado) return { ok: true, briefing: cacheado, doCache: true };
+
+  var ehAlteracao = material.ehAlteracao || !!textoDevolucao;
+
+  var prompt = 'Você é a Bee, assistente da Colmeia, ferramenta da Beeon (agência de marketing).\n\n' +
+    'Quem vai ler isto é o ATENDIMENTO, conferindo uma peça pronta ANTES de mandar pro cliente. ' +
+    'Ele precisa saber o que foi pedido pra comparar com a arte que está vendo na tela ao lado.\n\n' +
+    'Abaixo está tudo que está escrito sobre a peça: a descrição do card mãe (o pedido do mês), a ' +
+    'descrição da tarefa do designer e os comentários dos dois. Cada mensagem tem um número entre ' +
+    'colchetes.\n\n' +
+    'REGRAS DURAS:\n' +
+    '- Só diga o que está escrito. Nunca complete, nunca deduza, nunca sugira.\n' +
+    '- Cada item traz o NÚMERO da mensagem de onde saiu. Sem conseguir apontar, não escreva o item.\n' +
+    '- Nada escrito sobre algo? Devolva vazio. É melhor que inventar.\n' +
+    '- Português do Brasil, frases curtas, tom de colega. Sem "olá", sem emoji.\n\n' +
+    'SEPARE EM TRÊS COISAS:\n' +
+    '- "formato": tamanho, dimensões, proporção ou onde a peça vai ser publicada ' +
+    '(ex: "1080x1350, feed", "Reels 9:16 até 20s"). "" se não estiver escrito.\n' +
+    '- "copy": os TEXTOS que têm que aparecer na peça (chamada, oferta, telefone, ' +
+    'condição). Copie a palavra exata quando estiver escrita. Lista vazia se não houver.\n' +
+    '- "itens": o resto do que foi pedido.\n' +
+    (ehAlteracao
+      ? '- "alteracao": esta peça JÁ FOI FEITA e voltou pra mudança. Aqui vai o que precisa MUDAR ' +
+        'agora, separado do pedido original.\n'
+      : '- "alteracao": deixe a lista vazia, esta peça não é uma alteração.\n') +
+    '\nTAREFA: ' + material.titulo + '\n' +
+    (material.cliente ? 'CLIENTE: ' + material.cliente + '\n' : '') +
+    '\nMATERIAL:\n' + textoMaterial + textoDevolucao + '\n\n' +
+    'Responda SOMENTE em JSON:\n' +
+    '{"formato":"...","copy":[{"texto":"...","fonte":2}],' +
+    '"itens":[{"texto":"...","fonte":3}],"alteracao":[{"texto":"...","fonte":5}]}';
+
+  var resultado = chamarGemini(prompt);
+  if (!resultado.ok) return resultado;
+
+  var dados = resultado.dados || {};
+  var porNumero = {};
+  material.mensagens.forEach(function (m) { porNumero[m.n] = m; });
+
+  // O pedido de alteração não é uma das mensagens numeradas (entrou no
+  // material como bloco à parte), então itens de alteração são aceitos sem
+  // fonte — para eles a origem é uma só e é conhecida.
+  function limpar(lista, exigeFonte) {
+    return (lista || []).filter(function (it) {
+      return it && it.texto && (!exigeFonte || porNumero[Number(it.fonte)]);
+    }).map(function (it) {
+      var fonte = porNumero[Number(it.fonte)];
+      return {
+        texto: String(it.texto),
+        onde: fonte ? fonte.onde : 'atendimento',
+        autor: fonte ? fonte.autor : 'atendimento'
+      };
+    });
+  }
+
+  var briefing = {
+    formato: String(dados.formato || ''),
+    copy: limpar(dados.copy, true),
+    itens: limpar(dados.itens, true),
+    alteracao: limpar(dados.alteracao, false)
+  };
+  salvarBriefingCacheado(chaveCache, hash, briefing);
+  return { ok: true, briefing: briefing };
+}
+
+// ---------------------------------------------------------------------
 // A entrada do atendimento (2026-08-05)
 // ---------------------------------------------------------------------
 

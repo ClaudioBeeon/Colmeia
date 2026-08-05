@@ -88,6 +88,16 @@ function beeMaterialDaTarefa(taskId, idOriginal) {
   // está lá, e sem isso a Bee não teria de onde tirar item nenhum.
   adicionar(buscarDescricao(taskId).descricao, 'descrição da tarefa', tarefa.created_at, 'descricao', taskId, null);
   comentariosDe(taskId, 'aqui');
+  // A DESCRIÇÃO do card mãe, não só os comentários dele. Faltava, e era um
+  // buraco grande: na Beeon o pedido inteiro do mês costuma estar escrito
+  // na descrição do card mãe, e cada subtarefa nasce só com o nome da peça.
+  // Sem isso a Bee lia uma tarefa vazia e dizia "não tem nada escrito
+  // sobre o que fazer" numa peça que tinha briefing completo — só que um
+  // andar acima.
+  if (tarefa.parent_task_id) {
+    var descMae = buscarDescricao(tarefa.parent_task_id);
+    adicionar(descMae && descMae.descricao, 'descrição do card mãe', tarefa.created_at, 'card mãe', tarefa.parent_task_id, null);
+  }
   comentariosDe(tarefa.parent_task_id, 'card mãe');
   if (idOriginal && String(idOriginal) !== String(taskId)) comentariosDe(idOriginal, 'tarefa original');
 
