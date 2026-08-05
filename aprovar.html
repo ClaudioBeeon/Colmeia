@@ -537,6 +537,10 @@
     document.getElementById("legendaConta").textContent =
       pecas.length > 1 ? ("Peça " + (indice + 1) + " de " + pecas.length) : "";
 
+    var imgEl = slot.querySelector("img");
+    if (imgEl) imgEl.addEventListener("load", posicionarOverlayPins);
+    posicionarOverlayPins();
+
     var visor = document.getElementById("visor");
     visor.classList.toggle("marcavel", !modoLeitura && aceitaPins(peca));
     if (animar) {
@@ -606,6 +610,33 @@
   // foram marcados) de propósito: é essa a numeração que aparece no
   // comentário que chega pro time, então tem que bater com o que o
   // cliente viu na tela.
+
+  /** O pino é posicionado em % relativa a #pinsOverlay — mas a imagem, com
+   *  `object-fit: contain` dentro de um visor de proporção diferente, quase
+   *  nunca preenche a caixa inteira (sobra fundo dos lados ou em cima/embaixo,
+   *  + os 14px de padding do visor-slot). Se o overlay ficasse do tamanho do
+   *  `.visor` inteiro (como o CSS `inset:0` faz por padrão), a % calculada
+   *  em cima da imagem seria aplicada numa caixa maior, e o pino saía
+   *  deslocado do lugar exato do clique. Por isso o overlay é redimensionado,
+   *  em pixel, pra ocupar exatamente a área da imagem — a MESMA caixa que o
+   *  clique já usa pra calcular x/y. */
+  function posicionarOverlayPins() {
+    var overlay = document.getElementById("pinsOverlay");
+    var visor = document.getElementById("visor");
+    var alvo = document.querySelector("#visorSlot img, #visorSlot video");
+    if (!alvo) {
+      overlay.style.left = "0"; overlay.style.top = "0";
+      overlay.style.width = "100%"; overlay.style.height = "100%";
+      return;
+    }
+    var caixaVisor = visor.getBoundingClientRect();
+    var caixaAlvo = alvo.getBoundingClientRect();
+    overlay.style.left = (caixaAlvo.left - caixaVisor.left) + "px";
+    overlay.style.top = (caixaAlvo.top - caixaVisor.top) + "px";
+    overlay.style.width = caixaAlvo.width + "px";
+    overlay.style.height = caixaAlvo.height + "px";
+  }
+  window.addEventListener("resize", posicionarOverlayPins);
 
   function renderPins() {
     // No visor, só os pontos DA PEÇA que está aparecendo.
