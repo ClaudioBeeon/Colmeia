@@ -950,9 +950,15 @@ function apvPrepararPedirAlteracao(peca) {
   // o link) — é o que apvCopiarLinkMae lê na hora de copiar.
   document.getElementById("apvCopiarLinkMae").dataset.link = peca.cardMaeLink || "";
 
-  document.getElementById("apvBtnDevolverTxt").textContent = fechado
-    ? `Comentar e passar pro ${peca.designer || "designer"}`
-    : "Pedir alteração";
+  // O botão diz SEMPRE "Pedir alteração", nos dois caminhos. É o que a
+  // pessoa está fazendo, e é a mesma coisa dos dois lados — como o Colmeia
+  // resolve isso por baixo (subtarefa nova, ou comentar e reatribuir no
+  // card mãe quando o projeto do mês está fechado) não é problema de quem
+  // clica. O rótulo antigo ("Comentar e passar pro Cláudio Henrique") era
+  // comprido, mudava de tamanho conforme o nome, e explicava mecânica em
+  // vez de intenção. Quem faz o ajuste é escolhido na caixinha que abre
+  // depois do clique (ver apvAbrirEscolhaDeDesigner).
+  document.getElementById("apvBtnDevolverTxt").textContent = "Pedir alteração";
 }
 
 /**
