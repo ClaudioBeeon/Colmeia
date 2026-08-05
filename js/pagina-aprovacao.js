@@ -422,6 +422,14 @@ function apvRenderBriefing(peca) {
       <span class="apv-spec-rotulo">Entrega desejada</span>
       <span class="apv-spec-valor ${atrasada ? "atencao" : ""}">${entrega ? apvDataCurta(peca.prazo) : "sem data"}</span>
     </div>
+    ${peca.pastaUrl ? `
+      <div class="apv-spec">
+        <span class="apv-spec-rotulo">Arquivos</span>
+        <a class="apv-spec-valor apv-spec-link" href="${escaparHTML(peca.pastaUrl)}" target="_blank" rel="noopener">
+          Abrir a pasta no Drive
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>` : ""}
   `;
 
   apvPrepararPedirAlteracao(peca);
@@ -702,6 +710,8 @@ function apvMarcarBotaoComoAprovado() {
   // nessa peça, a cor responde sozinha "essa já foi aprovada", sem ele
   // precisar procurar um selo em canto nenhum.
   apvPintarBarra("aprovado");
+  // A pergunta do card mãe sobe logo depois do verde, na mesma pílula.
+  apvPerguntarCardMae();
 }
 
 /**
@@ -726,6 +736,37 @@ function apvDeslizarAcao(indice) {
  * cor escrita à mão em lugar nenhum do JS, e trocar o tom é mexer num
  * lugar só.
  */
+function apvDeslizarContexto(indice) {
+  const track = document.getElementById("apvContextoTrack");
+  if (!track) return;
+  const face = track.children[0];
+  // Altura MEDIDA, nunca chutada: essa pílula quebra em duas linhas no
+  // celular, e um número fixo cortaria o conteúdo. Mesmo cuidado do
+  // ajustarAlturaCardMaeNoPill (js/detalhe-cardmae.js), que apanhou disso
+  // duas vezes com valores fixos antes de virar cálculo.
+  const altura = face ? face.offsetHeight : 44;
+  track.style.transform = `translateY(-${altura * indice}px)`;
+}
+
+/**
+ * A pergunta do card mãe, na segunda face da pílula.
+ *
+ * Vem DEPOIS de aprovar, e não antes, porque só aí ela faz sentido: o card
+ * mãe sai da produção quando a peça vai pro cliente. Era uma marcação no
+ * painel de envio, que o Cláudio nunca via — perguntar aqui em cima, no
+ * mesmo lugar onde ele acabou de clicar, é a diferença entre a coisa
+ * acontecer e não acontecer.
+ */
+function apvPerguntarCardMae() {
+  if (apvCardMaeMovido) return;
+  apvDeslizarContexto(1);
+}
+
+/** Volta a pílula pra face normal. */
+function apvVoltarFaceNormal() {
+  apvDeslizarContexto(0);
+}
+
 function apvPintarBarra(estado) {
   const barra = document.querySelector(".apv-contexto");
   if (!barra) return;
@@ -788,12 +829,6 @@ function apvRenderStatusCliente() {
 async function apvCopiarLinkCliente() {
   const link = await apvGarantirLink();
   if (!link) return;
-
-  // O card mãe sai da produção e vai pra aba de espera do Runrun.it. Roda
-  // ANTES de copiar porque é a mesma ação — mandar pro cliente — e falhar
-  // aqui não deve atrasar nem cancelar a cópia do link (ver o comentário
-  // de moverCardMaeSeMarcado).
-  await moverCardMaeSeMarcado();
 
   const msg = (document.getElementById("apvMsgCliente").value || "").trim();
   const texto = (msg ? msg + "\n\n" : "") + link;
@@ -963,10 +998,13 @@ async function apvGarantirLink() {
  */
 let apvCardMaeMovido = false;
 
-async function moverCardMaeSeMarcado() {
-  const marcar = document.getElementById("apvMoverMae");
-  if (!marcar || !marcar.checked || apvCardMaeMovido || !apvPecaAberta) return;
+async function moverCardMaeAgora() {
+  if (apvCardMaeMovido || !apvPecaAberta) return;
   apvCardMaeMovido = true;
+
+  const btn = document.getElementById("apvMoverMaeSim");
+  const rotulo = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Movendo..."; }
 
   const data = await chamarBackend({
     acao: "moverCardMaeParaAprovacaoCliente",
@@ -974,14 +1012,18 @@ async function moverCardMaeSeMarcado() {
     autor: DESIGNER_LOGADO,
   });
 
+  if (btn) { btn.disabled = false; btn.textContent = rotulo; }
+
   if (!data || !data.ok) {
-    // Deixa tentar de novo no próximo clique — pode ter sido só uma queda
-    // de rede.
+    // Deixa tentar de novo — pode ter sido só uma queda de rede. A face
+    // continua aberta de propósito: fechá-la aqui esconderia a única
+    // chance que sobrou de resolver isso sem sair pro Runrun.it.
     apvCardMaeMovido = false;
-    mostrarToast((data && data.error) || "Não consegui mover o card mãe — o link está pronto, mas mova ele à mão no Runrun.it.", "erro");
+    mostrarToast((data && data.error) || "Não consegui mover o card mãe — mova ele à mão no Runrun.it.", "erro");
     return;
   }
   mostrarToast("Card mãe movido para Aprovação do Cliente.", "sucesso");
+  apvVoltarFaceNormal();
 }
 
 // ---------------------------------------------------------------------------
@@ -1298,6 +1340,15 @@ function apvLigarEventos() {
   liga("apvTabConferencia", "click", () => apvTrocarAba("conferencia"));
   liga("apvTabCliente", "click", () => apvTrocarAba("cliente"));
   liga("apvVoltarEnvio", "click", apvVoltarParaConferencia);
+  liga("apvMoverMaeSim", "click", moverCardMaeAgora);
+  // "Agora não" só fecha a pergunta — não é uma decisão que precise ficar
+  // guardada em lugar nenhum. Se mudar de ideia, o card mãe se move à mão
+  // no Runrun.it, que é o que já acontecia antes de tudo isso existir.
+  liga("apvMoverMaeNao", "click", apvVoltarFaceNormal);
+  // A saída do estado "em alteração": sem isso a pílula ficava amarela e
+  // travada, sem nenhum caminho de volta se a pessoa mudasse de ideia ou
+  // precisasse reler a peça.
+  liga("apvSairAlteracao", "click", apvVoltarParaConferencia);
 
   liga("apvStatusCopiar", "click", async () => {
     try {

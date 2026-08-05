@@ -403,6 +403,12 @@ function dadosDaConferencia(taskId, nomePeca) {
     cardMaeId: cardMaeId,
     cardMaeLink: cardMaeId ? 'https://runrun.it/tasks/' + cardMaeId : '',
     projetoFechado: projetoFechado,
+    // A pasta do card no Drive. Quem confere às vezes precisa ver o
+    // arquivo de verdade (abrir em tamanho real, olhar as outras peças,
+    // conferir o que mais tem lá) — e sem isso a única saída era pedir o
+    // link pro designer. `listarVersoesDasPecas` já sabia a pasta; só não
+    // estava contando.
+    pastaUrl: lista.pastaUrl || '',
     peca: peca,
     outrasPecas: lista.pecas.filter(function (p) { return p.nomePeca !== peca.nomePeca; }),
     statusConferencia: statusConferencia,

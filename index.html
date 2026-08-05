@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-05m">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05m">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05m">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05m">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05m">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05m">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-05n">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05n">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05n">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05n">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05n">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05n">
 </head>
 <body>
 
@@ -735,6 +735,16 @@
          de que aprovou é um toast, igual ao resto do app — não faz parte
          da animação do botão. -->
     <div class="apv-contexto">
+      <!-- Duas FACES empilhadas dentro da mesma pílula, deslizando juntas
+           (a normal sai por cima, a de baixo entra) — o mesmo carrossel
+           que o pill do card mãe já usa no pop-up de tarefa, ver
+           mostrarPerguntaTransferirNoPill (js/detalhe-cardmae.js). Aqui a
+           segunda face pergunta se o card mãe vai pra "Aprovação do
+           Cliente". A altura é MEDIDA no JS (offsetHeight da primeira
+           face), nunca um número fixo: essa pílula quebra em duas linhas
+           no celular, e um valor chutado cortaria o conteúdo. -->
+      <div class="apv-contexto-track" id="apvContextoTrack">
+      <div class="apv-contexto-face">
       <!-- O logo do Colmeia. Não é decoração: quem usa esta tela é o
            ATENDIMENTO, que trabalha no Runrun.it e entra aqui só pra isso —
            numa aba nova, vindo de um link de comentário. Sem a marca, a
@@ -768,6 +778,24 @@
           </span>
         </span>
       </button>
+      <!-- A saída do estado "em alteração". Só aparece quando a pílula
+           está amarela: sem ela, quem pediu a alteração ficava preso ali,
+           sem caminho de volta pra reler a peça ou mudar de ideia. -->
+      <button type="button" class="apv-sair-alteracao" id="apvSairAlteracao">Voltar</button>
+      </div>
+
+      <!-- Segunda face: só aparece depois de aprovar. Depois que o link
+           vai pro cliente, o card mãe não é mais trabalho em produção — é
+           coisa esperando resposta, e quem olha o quadro do Runrun.it
+           (o time todo) precisa ver isso. -->
+      <div class="apv-contexto-face apv-contexto-pergunta">
+        <span class="apv-pergunta-txt">Mover o card mãe para <b>Aprovação do Cliente</b>?</span>
+        <div class="apv-pergunta-botoes">
+          <button type="button" class="apv-btn apv-btn-p apv-btn-primario" id="apvMoverMaeSim">Mover</button>
+          <button type="button" class="apv-btn apv-btn-p apv-btn-neutro" id="apvMoverMaeNao">Agora não</button>
+        </div>
+      </div>
+      </div>
     </div>
 
     <div class="apv-colunas">
@@ -915,25 +943,6 @@
             <textarea class="apv-campo" id="apvMsgCliente" placeholder="Oi! Segue a arte pra sua aprovação. Qualquer ajuste é só marcar direto na imagem."></textarea>
           </div>
 
-          <div class="apv-bloco apv-bloco-card">
-            <p class="apv-rotulo">Ao enviar</p>
-            <!-- Depois que o link vai pro cliente, o card mãe não é mais
-                 trabalho em produção: é coisa esperando resposta. Mover ele
-                 pra aba "Aprovação do Cliente" do Runrun.it é o que faz o
-                 quadro de lá contar a verdade — e quem olha o Runrun.it é o
-                 time todo, não só quem usa o Colmeia. Nasce marcado porque
-                 é o que quase sempre tem que acontecer; desmarcar é o caso
-                 raro (ex: a peça é uma de várias e o mês continua rodando).
-                 Acontece no clique do botão de enviar, lá em cima na pílula
-                 (ver moverCardMaeSeMarcado, js/pagina-aprovacao.js). -->
-            <label class="apv-mover-mae" id="apvMoverMaeRow">
-              <input type="checkbox" id="apvMoverMae" checked>
-              <span>
-                Mover o card mãe para <b>Aprovação do Cliente</b>
-                <span class="apv-mover-mae-sub">Acontece quando você enviar, na aba do Runrun.it</span>
-              </span>
-            </label>
-          </div>
 
           <!-- Rodapé fixo — não rola com o resto do painel, pedido do
                Cláudio (ver .apv-rodape-coluna, css/06-aprovacao.css).
@@ -1158,31 +1167,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-05m"></script>
-<script src="js/fila-offline.js?v=2026-08-05m"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-05m"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-05m"></script>
-<script src="js/kanban-polling.js?v=2026-08-05m"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-05m"></script>
-<script src="js/regras-briefing.js?v=2026-08-05m"></script>
-<script src="js/kanban-board.js?v=2026-08-05m"></script>
-<script src="js/clientes-hub.js?v=2026-08-05m"></script>
-<script src="js/chat-comentarios.js?v=2026-08-05m"></script>
-<script src="js/detalhe-modal.js?v=2026-08-05m"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-05m"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-05m"></script>
-<script src="js/bee.js?v=2026-08-05m"></script>
-<script src="js/paginas-designers.js?v=2026-08-05m"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-05m"></script>
-<script src="js/pagina-repasse.js?v=2026-08-05m"></script>
-<script src="js/pagina-horas.js?v=2026-08-05m"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-05m"></script>
-<script src="js/paleta-comando.js?v=2026-08-05m"></script>
-<script src="js/roteador-url.js?v=2026-08-05m"></script>
-<script src="js/detalhe-historia.js?v=2026-08-05m"></script>
-<script src="js/modo-foco.js?v=2026-08-05m"></script>
-<script src="js/pagina-bee.js?v=2026-08-05m"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-05m"></script>
-<script src="js/login-boot.js?v=2026-08-05m"></script>
+<script src="js/config.js?v=2026-08-05n"></script>
+<script src="js/fila-offline.js?v=2026-08-05n"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-05n"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-05n"></script>
+<script src="js/kanban-polling.js?v=2026-08-05n"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-05n"></script>
+<script src="js/regras-briefing.js?v=2026-08-05n"></script>
+<script src="js/kanban-board.js?v=2026-08-05n"></script>
+<script src="js/clientes-hub.js?v=2026-08-05n"></script>
+<script src="js/chat-comentarios.js?v=2026-08-05n"></script>
+<script src="js/detalhe-modal.js?v=2026-08-05n"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-05n"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-05n"></script>
+<script src="js/bee.js?v=2026-08-05n"></script>
+<script src="js/paginas-designers.js?v=2026-08-05n"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-05n"></script>
+<script src="js/pagina-repasse.js?v=2026-08-05n"></script>
+<script src="js/pagina-horas.js?v=2026-08-05n"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-05n"></script>
+<script src="js/paleta-comando.js?v=2026-08-05n"></script>
+<script src="js/roteador-url.js?v=2026-08-05n"></script>
+<script src="js/detalhe-historia.js?v=2026-08-05n"></script>
+<script src="js/modo-foco.js?v=2026-08-05n"></script>
+<script src="js/pagina-bee.js?v=2026-08-05n"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-05n"></script>
+<script src="js/login-boot.js?v=2026-08-05n"></script>
 </body>
 </html>

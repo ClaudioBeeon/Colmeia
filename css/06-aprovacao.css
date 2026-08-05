@@ -835,14 +835,13 @@
   border: 1px solid transparent;
 }
 .apv-estado-aprovado {
-  background: var(--success-soft, #E4F6EF);
+  background: var(--apv-sucesso-suave);
   border-color: var(--success);
 }
 .apv-estado-alteracao {
-  background: var(--warning-soft);
+  background: var(--apv-amarelo-suave);
   border-color: var(--kanban-yellow);
 }
-[data-theme="dark"] .apv-estado-aprovado { background: rgba(95, 224, 174, 0.14); }
 
 /* O botão acompanha o estado da barra. Em alteração ele fica só como
    AVISO — não tem pra onde levar (a peça está com o designer), então
@@ -852,3 +851,45 @@
 .apv-estado-aprovado .apv-acao-item { color: #06301F; }
 [data-theme="dark"] .apv-estado-aprovado .apv-acao-item { color: #06301F; }
 .apv-estado-alteracao .apv-acao-btn { background: var(--kanban-yellow); pointer-events: none; }
+
+/* ----- As duas faces da pílula de cima -----
+   Mesmo carrossel do pill do card mãe no pop-up de tarefa: as faces ficam
+   empilhadas e a pilha inteira desliza, então a que sai e a que entra se
+   movem juntas, sem piscar. A altura vem MEDIDA pelo JS
+   (apvDeslizarContexto) e não escrita aqui: essa pílula quebra em duas
+   linhas no celular, e um valor fixo cortaria o conteúdo. */
+.apv-contexto { overflow: hidden; padding: 0; }
+.apv-contexto-track {
+  display: flex; flex-direction: column;
+  transition: transform var(--dur-base) var(--ease-apple);
+}
+.apv-contexto-face {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 10px 10px 14px;
+}
+.apv-contexto-pergunta { justify-content: center; }
+.apv-pergunta-txt { font-family: var(--apv-fonte-texto); font-size: 13.5px; }
+.apv-pergunta-botoes { display: flex; gap: 8px; }
+
+/* Só existe quando a peça foi devolvida — nos outros estados ele não teria
+   pra onde levar. */
+.apv-sair-alteracao {
+  display: none;
+  border: 1px solid var(--border); background: var(--card-bg);
+  color: var(--text-secondary); cursor: pointer;
+  border-radius: 999px; padding: 9px 16px;
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  transition: color var(--dur-base) var(--ease-apple), border-color var(--dur-base) var(--ease-apple);
+}
+.apv-sair-alteracao:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.apv-estado-alteracao .apv-sair-alteracao { display: inline-flex; }
+
+/* O link da pasta do Drive, na ficha do briefing. Quem confere às vezes
+   precisa ver o arquivo de verdade (tamanho real, o que mais tem na
+   pasta) — sem isso, a única saída era pedir o link pro designer. */
+.apv-spec-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--accent); text-decoration: none;
+}
+.apv-spec-link:hover { text-decoration: underline; }
+.apv-spec-link svg { flex-shrink: 0; }
