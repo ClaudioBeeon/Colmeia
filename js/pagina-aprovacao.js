@@ -837,6 +837,12 @@ function apvDeslizarAcao(indice) {
 function apvMostrarEtapaDoCardMae(mostrar) {
   const etapa = document.getElementById("apvContextoEtapa");
   if (!etapa) return;
+  // Peça nova começa do zero: sem isso o chip verde com ✓ da peça
+  // anterior continuaria lá, dizendo que esta já foi transferida.
+  if (!mostrar) {
+    const w = document.getElementById("apvEtapaTransfer");
+    if (w) w.classList.remove("disparando", "transferindo", "chegou");
+  }
   // Mostrar/esconder e pronto: os pills entram no meio da barra com um
   // deslize curto (a animação está no CSS). Não existe mais troca de face
   // — mover a barra inteira lia como lento, porque o olho tinha que
@@ -1078,16 +1084,27 @@ let apvCardMaeMovido = false;
 
 function moverCardMaeAgora() {
   if (apvCardMaeMovido || !apvPecaAberta) return;
+
+  // A MESMA animação de três tempos do pill do cabeçalho da tarefa (ver
+  // transferirCardMaeParaDestino, js/detalhe-cardmae.js) — mesmas classes,
+  // mesmos tempos:
+  //   1) a setinha dispara pra direita e some;
+  //   2) o chip "Card mãe" e a setinha encolhem até zero, e o chip de
+  //      destino desliza sozinho pro lugar deles (é flex, ninguém mede
+  //      nada em JS);
+  //   3) o destino chega dando um pulinho, fica VERDE e o ✓ abre.
+  const wrap = document.getElementById("apvEtapaTransfer");
+  if (!wrap || wrap.classList.contains("disparando")) return;
+
   apvCardMaeMovido = true;
+  wrap.classList.add("disparando");
+  setTimeout(() => wrap.classList.add("transferindo"), 170);
+  setTimeout(() => wrap.classList.add("chegou"), 520);
 
-  // RESPONDE NA HORA e manda o pedido por baixo — o mesmo jeito do resto
-  // do Colmeia (play, prioridade, mover etapa no quadro). Antes o botão
-  // virava "Movendo..." e a tela ficava parada esperando o Runrun.it, que
-  // leva alguns segundos: parecia travado. Mover uma etapa quase nunca
-  // falha, e quando falha o aviso conta — não vale segurar a tela inteira
-  // por causa da exceção.
-  apvMostrarEtapaDoCardMae(false);
-
+  // O pedido vai por baixo e a tela não espera por ele — igual a lá. O
+  // resultado da animação (o chip verde com ✓) É o estado certo e FICA na
+  // tela: some seria jogar fora o que acabou de acontecer na frente da
+  // pessoa, e ela ficaria sem saber se deu certo.
   const taskId = apvPecaAberta.taskId;
   chamarBackend({
     acao: "moverCardMaeParaAprovacaoCliente",
@@ -1095,17 +1112,17 @@ function moverCardMaeAgora() {
     autor: DESIGNER_LOGADO,
   }).then(data => {
     if (data && data.ok) {
-      mostrarToast("Card mãe movido para Aprovação Cliente.", "sucesso");
+      if (typeof agendarAtualizacaoKanban === "function") agendarAtualizacaoKanban();
       return;
     }
-    // Deu errado: desfaz a marca (dá pra tentar de novo) e traz os pills
-    // de volta, mas só se a pessoa ainda estiver na mesma peça — senão o
-    // carrossel subiria sozinho numa tela que já é outra.
+    // Deu errado: desfaz a animação (volta a poder tentar) e conta. Só
+    // mexe na tela se a pessoa ainda estiver na mesma peça.
     apvCardMaeMovido = false;
-    if (apvPecaAberta && String(apvPecaAberta.taskId) === String(taskId) && apvAprovado) {
-      apvMostrarEtapaDoCardMae(true);
+    if (apvPecaAberta && String(apvPecaAberta.taskId) === String(taskId)) {
+      const w = document.getElementById("apvEtapaTransfer");
+      if (w) w.classList.remove("disparando", "transferindo", "chegou");
     }
-    mostrarToast((data && data.error) || "Não consegui mover o card mãe — mova ele à mão no Runrun.it.", "erro");
+    mostrarToast((data && data.error) || "Não consegui transferir o card mãe agora.", "erro");
   });
 }
 

@@ -863,12 +863,7 @@
 .apv-estado-aprovado .apv-contexto-id,
 .apv-estado-aprovado .apv-contexto-restam,
 .apv-estado-aprovado .apv-contexto-nome * { color: #fff; }
-/* Os pills de etapa têm cor própria (preto e amarelo) e não herdam nada:
-   eles precisam ler igual sobre verde e sobre amarelo. */
-.apv-estado-aprovado .apv-etapa-de,
-.apv-estado-alteracao .apv-etapa-de { color: #fff; }
-.apv-estado-aprovado .apv-etapa-para,
-.apv-estado-alteracao .apv-etapa-para { color: #16181D; }
+
 
 /* O botão acompanha o estado da barra. Em alteração ele fica só como
    AVISO — não tem pra onde levar (a peça está com o designer), então
@@ -926,27 +921,10 @@
    fechamento de tag, ele fica aqui, invisível pro CSS. */
 .apv-contexto-face { display: contents; }
 
-.apv-etapa-de,
-.apv-etapa-para {
-  display: inline-flex; align-items: center; border-radius: 999px;
-  padding: 7px 15px; font-size: 13px; font-weight: 700; white-space: nowrap;
-}
-.apv-etapa-de { background: #16181D; color: #fff; }
-[data-theme="dark"] .apv-etapa-de { background: rgba(255, 255, 255, 0.12); }
-.apv-etapa-para { background: var(--kanban-yellow); color: #16181D; }
-.apv-etapa-seta {
-  width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%;
-  border: 1px solid var(--apv-borda-forte); background: var(--card-bg);
-  color: var(--text-secondary); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: background var(--dur-fast) var(--ease-apple),
-              color var(--dur-fast) var(--ease-apple),
-              transform var(--dur-fast) var(--ease-apple-spring);
-}
-.apv-etapa-seta svg { width: 15px; height: 15px; }
-.apv-etapa-seta:hover { background: var(--kanban-yellow); color: #16181D; border-color: transparent; }
-.apv-etapa-seta:active { transform: scale(0.92); }
-.apv-etapa-seta:disabled { opacity: 0.5; cursor: default; }
+/* Os chips e a setinha NÃO têm estilo próprio aqui: são as classes do
+   pill do cabeçalho da tarefa (.etapa-chip / .etapa-transfer-seta,
+   css/03-detalhe.css), reaproveitadas inteiras. Um ajuste lá chega aqui
+   sozinho — que é o contrário do que aconteceria com uma cópia. */
 
 /* Só existe quando a peça foi devolvida — nos outros estados ele não teria
    pra onde levar. */
