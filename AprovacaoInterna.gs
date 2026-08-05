@@ -637,6 +637,15 @@ function entrarComoAtendimento(codigo) {
 var ETAPA_APROVACAO_CLIENTE = 'Aprovação Cliente';
 var ETAPA_APROVACAO_CLIENTE_NOMES = ['Aprovação Cliente', 'Aprovação do Cliente', 'Aprovacao Cliente'];
 
+// Uma tarefa que está NA coluna "Aprovação Cliente" (confirmada pelo
+// Cláudio em 05/08). Serve só de semente pra descobrir o número da
+// coluna — ver idDaEtapaPorNome. Não precisa continuar lá pra sempre: o
+// nome é conferido antes de o número ser aceito, e se um dia ela sair da
+// coluna o Colmeia cai nos outros caminhos em vez de errar calado. Dá
+// pra trocar sem mexer no código, pela propriedade de script
+// TAREFA_EXEMPLO_APROVACAO_CLIENTE.
+var TAREFA_EXEMPLO_APROVACAO_CLIENTE = '112696';
+
 /**
  * Move o card mãe pra etapa "Aprovação do Cliente" no Runrun.it.
  *
@@ -704,13 +713,10 @@ function idDaEtapaPorNome(nomeProcurado) {
   var alvos = nomes.map(normalizarNomeDeEtapa).filter(function (n) { return !!n; });
   if (!alvos.length) return null;
 
-  // ATALHO DIRETO: a propriedade de script STAGE_ID_APROVACAO_CLIENTE, se
-  // existir, ganha de tudo. A varredura por nome é conveniente mas depende
-  // de o Runrun.it devolver o nome da etapa na listagem — e quando isso
-  // falha, não há nada que o Cláudio possa fazer sozinho. Com a
-  // propriedade, ele resolve na hora, sem depender de deploy nem de mim.
-  // Ver diagnosticoEtapasDoRunrun() logo abaixo pra descobrir o número.
-  if (alvos.indexOf(normalizarNomeDeEtapa(ETAPA_APROVACAO_CLIENTE)) !== -1) {
+  var ehAprovacaoCliente = alvos.indexOf(normalizarNomeDeEtapa(ETAPA_APROVACAO_CLIENTE)) !== -1;
+
+  // 1) A propriedade de script, se alguém cadastrou, ganha de tudo.
+  if (ehAprovacaoCliente) {
     var fixo = PropertiesService.getScriptProperties().getProperty('STAGE_ID_APROVACAO_CLIENTE');
     if (fixo) return String(fixo).trim();
   }
@@ -719,6 +725,36 @@ function idDaEtapaPorNome(nomeProcurado) {
   var cache = CacheService.getScriptCache();
   var guardado = cache.get(chaveCache);
   if (guardado) return guardado;
+
+  // 2) PELA TAREFA DE EXEMPLO. As etapas são as colunas do quadro
+  //    (Pendentes, Fazendo, Aprovação Cliente...) e o número delas não
+  //    aparece em lugar nenhum da tela do Runrun.it — nem existe endpoint
+  //    que liste as colunas. Mas TODA tarefa carrega o número da coluna em
+  //    que está: basta ler UMA que esteja lá.
+  //
+  //    É o caminho mais confiável, porque a leitura de uma tarefa devolve
+  //    o registro completo (a listagem nem sempre traz o nome da etapa —
+  //    foi o que fez a varredura do item 3 falhar em produção).
+  //
+  //    O nome é CONFERIDO antes de aceitar o número: se a tarefa de
+  //    exemplo for movida pra outra coluna um dia, o Colmeia percebe e
+  //    ignora, em vez de mandar todos os cards mãe pra coluna errada em
+  //    silêncio — que seria bem pior que não mover nenhum.
+  var idExemplo = PropertiesService.getScriptProperties().getProperty('TAREFA_EXEMPLO_APROVACAO_CLIENTE')
+    || (ehAprovacaoCliente ? TAREFA_EXEMPLO_APROVACAO_CLIENTE : '');
+  if (idExemplo) {
+    var exemplo = runrunFetch('/tasks/' + String(idExemplo).trim());
+    if (exemplo && !exemplo.erroFetch && exemplo.task_state_id) {
+      var nomeExemplo = normalizarNomeDeEtapa(exemplo.board_stage_name || exemplo.task_state_name);
+      if (alvos.indexOf(nomeExemplo) !== -1) {
+        cache.put(chaveCache, String(exemplo.task_state_id), 6 * 60 * 60);
+        return String(exemplo.task_state_id);
+      }
+    }
+  }
+
+  // 3) Última tentativa: varrer as tarefas abertas atrás de uma que esteja
+  //    na etapa. Só funciona se a listagem devolver o nome da etapa.
   // Ordenado por atualização: a etapa que interessa é usada o tempo todo,
   // então aparece nas primeiras páginas. Para no que achar — e desiste
   // depois de 5 páginas pra nunca virar uma varredura infinita.
