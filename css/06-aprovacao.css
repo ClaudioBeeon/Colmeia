@@ -179,9 +179,23 @@
 /* Pílula de cima: cantos 100% arredondados, flutuando sozinha (não
    mais uma barra colada no topo do card grande). */
 .apv-contexto {
+  /* O padding da esquerda encolheu de 22px pra 14px quando o logo entrou:
+     a marca já traz a sua própria margem visual, e 22px fazia ela parecer
+     solta no meio da pílula. */
   flex: 0 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 10px 10px 10px 22px; background: var(--card-bg);
+  padding: 10px 10px 10px 14px; background: var(--card-bg);
   border-radius: 999px; box-shadow: var(--shadow-card);
+}
+
+/* O logo do Colmeia, na ponta esquerda da pílula.
+   `width: auto` + altura fixa preserva a proporção seja qual for o arquivo
+   — trocar o logo um dia não vai esticar nada. O traço à direita separa a
+   marca das informações da tarefa: são coisas de natureza diferente, e sem
+   ele o nome do cliente parecia colado na assinatura. */
+.apv-contexto-logo {
+  height: 19px; width: auto; flex-shrink: 0;
+  padding-right: 14px; margin-right: -4px;
+  border-right: 1px solid var(--border);
 }
 .apv-contexto-id {
   font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
