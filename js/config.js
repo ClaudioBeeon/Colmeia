@@ -168,6 +168,15 @@ const columnsDef = [
 // Cole aqui a URL do seu Web App do Apps Script depois de publicar o
 // Code.gs (Implantar > Nova implantação > Aplicativo da web).
 // Enquanto não colar, o Colmeia continua usando os dados fake abaixo.
+//
+// ATENÇÃO — essa mesma URL está DUPLICADA em mais 2 lugares, porque
+// aprovar.html e ajuste.html são páginas soltas (sem login, não carregam
+// os arquivos de js/) e por isso não podem ler esta constante: cada uma
+// tem sua própria cópia de `COLMEIA_API_URL`. Ao trocar a implantação do
+// Apps Script (uma "Nova versão"), atualizar as 3 juntas:
+//   - js/config.js (aqui)
+//   - aprovar.html
+//   - ajuste.html
 const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
 
 // URL do Web App do painel-designers-beeon (o outro painel, já publicado).

@@ -297,6 +297,8 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   const overlay = document.getElementById("apvConferencia");
   if (!overlay) return;
 
+  if (typeof roteadorAoAbrirConferencia === "function") roteadorAoAbrirConferencia(taskId, nomePeca);
+
   apvPecaAberta = null;
   apvVersaoNaTela = null;
   apvLinkGerado = "";
@@ -398,6 +400,7 @@ function apvFecharConferencia() {
   overlay.classList.remove("open");
   setTimeout(() => overlay.classList.remove("visible"), 220);
   apvPecaAberta = null;
+  if (typeof roteadorAoFecharConferencia === "function") roteadorAoFecharConferencia();
 }
 
 /**

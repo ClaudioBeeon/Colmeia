@@ -168,7 +168,12 @@ function roteadorLinkDaConferencia(taskId, nomePeca) {
  */
 function roteadorIrPara(url, estadoExtra) {
   if (roteadorReagindoAoHistorico) return;
-  if (location.pathname === url) return;
+  // Inclui a query (`location.search`) na comparação — sem isso, a URL
+  // da conferência (que carrega `?tarefa=...&peca=...`) nunca seria vista
+  // como "igual à atual", já que `location.pathname` sozinho nunca tem
+  // query nenhuma; toda reabertura da mesma peça empilharia uma entrada
+  // nova no histórico à toa.
+  if (location.pathname + location.search === url) return;
   try { history.pushState({ colmeiaRota: true, ...estadoExtra }, "", url); } catch (e) { /* sem problema */ }
 }
 
@@ -256,6 +261,31 @@ function roteadorAoFecharTarefa() {
 }
 
 /**
+ * Chamado no fim de apvAbrirConferencia (js/pagina-aprovacao.js) — mesma
+ * ideia de roteadorAoAbrirTarefa, mas pra peça da conferência interna.
+ * Guarda de onde a pessoa veio (`colmeiaVoltarPara`), pro fechar (ver
+ * roteadorAoFecharConferencia) saber que dá pra desfazer com um Voltar.
+ */
+function roteadorAoAbrirConferencia(taskId, nomePeca) {
+  if (!taskId) return;
+  const url = ROTA_BASE + ROTEADOR_SLUGS.aprovacao + "?tarefa=" + encodeURIComponent(taskId)
+    + (nomePeca ? "&peca=" + encodeURIComponent(nomePeca) : "");
+  roteadorIrPara(url, { colmeiaVoltarPara: location.pathname + location.search });
+}
+
+/** Chamado no fim de apvFecharConferencia (js/pagina-aprovacao.js). Mesma lógica de roteadorAoFecharTarefa. */
+function roteadorAoFecharConferencia() {
+  const estado = history.state;
+  if (estado && typeof estado.colmeiaVoltarPara === "string") {
+    if (!roteadorReagindoAoHistorico) history.back();
+    return;
+  }
+  // A fila (page-aprovacao) já é a página visível por baixo — mesmo
+  // caminho de substituição de roteadorAoFecharTarefa.
+  roteadorSubstituirPelaPaginaAtual();
+}
+
+/**
  * Lê a URL de entrada (já sem a "encomenda" do 404.html, se tinha uma)
  * e abre a tarefa/página certa. Chamado UMA VEZ, em iniciarAppPosLogin
  * (js/login-boot.js), no lugar do antigo `mostrarPagina("kanban")` fixo.
@@ -313,7 +343,10 @@ window.addEventListener("popstate", async () => {
   roteadorReagindoAoHistorico = true;
   try {
     const painelAberto = document.getElementById("taskDetail").classList.contains("open");
+    const apvOverlay = document.getElementById("apvConferencia");
+    const conferenciaAberta = !!(apvOverlay && apvOverlay.classList.contains("open"));
     if (rota.tipo === "tarefa") {
+      if (conferenciaAberta && typeof apvFecharConferencia === "function") apvFecharConferencia();
       await abrirTarefaPorId(rota.id);
     } else if (rota.tipo === "conferencia") {
       if (painelAberto) closeDetail();
@@ -321,6 +354,7 @@ window.addEventListener("popstate", async () => {
       if (typeof apvAbrirConferencia === "function") await apvAbrirConferencia(rota.id, rota.peca);
     } else {
       if (painelAberto) closeDetail();
+      if (conferenciaAberta && typeof apvFecharConferencia === "function") apvFecharConferencia();
       mostrarPagina(rota.tipo === "pagina" ? rota.pagina : "kanban");
     }
   } finally {

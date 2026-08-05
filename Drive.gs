@@ -708,6 +708,14 @@ function fazerBackupDaPlanilha() {
   } catch (err) {
     Logger.log('Erro ao limpar conferências antigas: ' + err.message);
   }
+  // Mesma ideia pra aba "Aprovacoes" (link que o cliente abre): linha já
+  // decidida (aprovado/ajuste) vira histórico e é podada em 30 dias. O
+  // que está "pendente" nunca é apagado.
+  try {
+    limparAprovacoesAntigas();
+  } catch (err) {
+    Logger.log('Erro ao limpar aprovações antigas: ' + err.message);
+  }
   // Respostas de cliente que não chegaram na tarefa porque o Runrun.it
   // estava fora do ar na hora (ver reenviarAvisosDeAprovacaoPendentes,
   // Aprovacao.gs). A aba "Aprovações" também tenta a cada abertura — isso

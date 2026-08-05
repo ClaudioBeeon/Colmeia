@@ -523,6 +523,10 @@
 </div>
 
 <script>
+  // ATENÇÃO — essa URL está DUPLICADA em mais 2 lugares (js/config.js e
+  // ajuste.html), porque esta página é solta, sem login, e não carrega
+  // os arquivos de js/ do app principal. Ao trocar a implantação do Apps
+  // Script, atualizar as 3 juntas.
   var COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
 
   function pegarCodigo() {
@@ -530,10 +534,16 @@
     return params.get("codigo") || "";
   }
 
+  // Mesmo prazo de 25s do resto do app (chamarBackend, js/config.js) —
+  // sem isso, um Runrun.it fora do ar podia deixar o cliente olhando
+  // "carregando" pra sempre, sem nunca cair na tela de erro.
   function chamar(corpo) {
-    return fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify(corpo) })
+    var controller = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 25000);
+    return fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify(corpo), signal: controller.signal })
       .then(function (r) { return r.json(); })
-      .catch(function () { return { ok: false, semRede: true, error: "Falha de conexão." }; });
+      .catch(function () { return { ok: false, semRede: true, error: "Falha de conexão." }; })
+      .finally(function () { clearTimeout(timeout); });
   }
 
   function mostrarTela(id) {

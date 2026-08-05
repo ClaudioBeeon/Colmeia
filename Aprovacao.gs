@@ -297,10 +297,23 @@ function idsDaLinhaDeAprovacao(valor) {
  * "você já respondeu" em vez dos botões de novo, pra não deixar
  * aprovar/pedir ajuste duas vezes.
  */
+// Depois de 1 mês, o link para de abrir — pedido do Cláudio (2026-08-06):
+// "pode expirar após 1 mês, o link do drive continua público". Só o
+// CÓDIGO deixa de funcionar; o arquivo em si continua compartilhado como
+// "qualquer pessoa com o link" no Drive (isso não muda), porque revogar
+// ele exigiria saber com certeza que ninguém mais precisa acessar a peça
+// por ali — e isso o Colmeia não tem como saber.
+var APROVACAO_LINK_VALIDADE_DIAS = 30;
+
 function buscarAprovacaoPublica(codigo) {
   if (!codigo) return { ok: false, error: 'Link inválido.' };
   var linha = acharLinhaDeAprovacao(codigo);
   if (!linha) return { ok: false, error: 'Não encontrei essa aprovação — o link pode estar errado.' };
+
+  var idadeMs = new Date().getTime() - Number(linha.criadoEm || 0);
+  if (idadeMs > APROVACAO_LINK_VALIDADE_DIAS * 24 * 60 * 60 * 1000) {
+    return { ok: false, error: 'Esse link venceu — ele tem ' + APROVACAO_LINK_VALIDADE_DIAS + ' dias de validade. Pede um link novo pra agência.', expirado: true };
+  }
 
   // Um link pode ter VÁRIAS peças (ver gravarLinhaDeAprovacao). Uma peça
   // que falhar não derruba as outras: ela vira um item com `erro`, e a
@@ -583,6 +596,32 @@ function linhaParaObjetoDeAprovacao(linha) {
     status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11],
     pins: linha[12] || '', quemAprovou: linha[14] || ''
   };
+}
+
+var APROVACOES_RETENCAO_DIAS = 30;
+
+/**
+ * Poda as linhas já decididas (aprovado/ajuste) com mais de 30 dias.
+ * Roda junto do backup diário, mesmo padrão de `limparConferenciasAntigas`
+ * (AprovacaoInterna.gs). O que está "pendente" nunca é apagado, por mais
+ * velho que seja — é aprovação em aberto esperando o cliente.
+ */
+function limparAprovacoesAntigas() {
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var limite = Date.now() - APROVACOES_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    for (var i = linhas.length - 1; i >= 1; i--) {
+      if (String(linhas[i][8]) === 'pendente') continue;
+      var quando = Number(linhas[i][10]) || Number(linhas[i][7]) || 0;
+      if (quando && quando < limite) sheet.deleteRow(i + 1);
+    }
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
