@@ -471,6 +471,39 @@
   padding: 5px 11px; border-radius: 999px;
 }
 
+/* ----- Carrossel de peças (lote com mais de uma peça) -----
+   Pedido do Cláudio (2026-08-05): quando o designer manda várias peças
+   diferentes de uma vez pra revisão (ex: 13 posts), o atendimento confere
+   todas juntas, numa decisão só (Aprovar/Pedir alteração pro lote inteiro
+   — ver apvAprovar/apvConfirmarDevolucao). Este carrossel deixa trocar
+   qual peça está no palco pra olhar cada uma, e a marcação de pontos (ver
+   .apv-palco.marcando) é sempre da peça que está ativa aqui. Some sozinho
+   quando a peça é uma só — mesma regra do resto da tela, nada aparece sem
+   ter função. */
+.apv-carrossel-pecas {
+  flex: 0 0 auto; display: flex; gap: 8px; overflow-x: auto;
+  padding: 2px 2px 10px; margin-bottom: 2px;
+}
+.apv-carrossel-item {
+  flex: 0 0 auto; width: 52px; height: 52px; border-radius: 10px;
+  border: 2px solid transparent; background: var(--card-bg) center/cover no-repeat;
+  cursor: pointer; position: relative; overflow: hidden; padding: 0;
+  transition: border-color var(--dur-fast) var(--ease-apple);
+}
+.apv-carrossel-item.ativa { border-color: var(--kanban-yellow); }
+/* O pontinho vermelho avisa "esta peça já tem pedido de alteração
+   marcado", pra quem está devolvendo o lote não esquecer de escrever o
+   que precisa mudar numa peça que só olhou de relance. */
+.apv-carrossel-item-marcada::after {
+  content: ""; position: absolute; top: 4px; right: 4px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--danger); box-shadow: 0 0 0 2px var(--card-bg);
+}
+.apv-carrossel-legenda {
+  flex: 0 0 auto; font-family: var(--apv-fonte-texto); font-size: 12px;
+  color: var(--text-secondary); margin: -2px 0 8px;
+}
+
 /* Aviso de versão mais nova: AMARELO, nunca vermelho — é informação
    útil, não erro. E não bloqueia nada: só garante que ninguém aprove a
    v3 sem saber que existe uma v4. */

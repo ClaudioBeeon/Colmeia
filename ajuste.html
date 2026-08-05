@@ -84,6 +84,10 @@
     background: var(--laranja-bg); border-radius: 10px; padding: 13px 15px;
     margin: 0 0 14px; color: var(--laranja);
   }
+  /* Nome da peça, só quando o pedido cobre mais de uma (ver desenhar()) —
+     separa visualmente os pontos de uma peça dos da peça seguinte. */
+  .peca-nome { font-size: 14px; font-weight: 700; margin: 18px 0 8px; }
+  .peca-nome:first-of-type { margin-top: 0; }
   .lista { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
   .linha { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.45; }
   .linha-num {
@@ -162,21 +166,23 @@
       });
   }
 
-  function desenhar(d) {
-    var pins = d.pins || [];
-
+  // Um pedido pode cobrir VÁRIAS peças do mesmo lote (ver devolverParaDesigner,
+  // AprovacaoInterna.gs) — cada uma com os próprios pontos. Sem `pecas`
+  // (pedido antigo, de antes disso existir), cai numa lista de uma peça só.
+  function desenharPeca(p) {
+    var pins = p.pins || [];
     var palco = "";
-    if (d.ehVideo && d.fileId) {
+    if (p.ehVideo && p.fileId) {
       // Em vídeo não dá pra desenhar ponto: o quadro muda o tempo todo, e
       // uma marcação fixa apontaria pro lugar errado em quase todos eles.
       // Fica o player e a lista escrita, que continua valendo.
       palco = '<div class="palco"><iframe src="https://drive.google.com/file/d/'
-        + encodeURIComponent(d.fileId) + '/preview" allow="autoplay" allowfullscreen></iframe></div>';
-    } else if (d.base64) {
-      palco = '<div class="palco"><img src="data:' + escaparTexto(d.mimeType) + ';base64,' + d.base64 + '" alt="'
-        + escaparTexto(d.nomeArquivo) + '">'
-        + pins.map(function (p, i) {
-            return '<span class="ponto" style="left:' + Number(p.x) + '%;top:' + Number(p.y) + '%">' + (i + 1) + '</span>';
+        + encodeURIComponent(p.fileId) + '/preview" allow="autoplay" allowfullscreen></iframe></div>';
+    } else if (p.base64) {
+      palco = '<div class="palco"><img src="data:' + escaparTexto(p.mimeType) + ';base64,' + p.base64 + '" alt="'
+        + escaparTexto(p.nomeArquivo) + '">'
+        + pins.map(function (pt, i) {
+            return '<span class="ponto" style="left:' + Number(pt.x) + '%;top:' + Number(pt.y) + '%">' + (i + 1) + '</span>';
           }).join("")
         + '</div>';
     } else {
@@ -184,19 +190,26 @@
     }
 
     var lista = pins.length
-      ? '<div class="lista">' + pins.map(function (p, i) {
+      ? '<div class="lista">' + pins.map(function (pt, i) {
           return '<div class="linha"><span class="linha-num">' + (i + 1) + '</span><span>'
-            + escaparTexto(p.texto || "(sem descrição)") + '</span></div>';
+            + escaparTexto(pt.texto || "(sem descrição)") + '</span></div>';
         }).join("") + '</div>'
       : "";
 
+    return palco + lista;
+  }
+
+  function desenhar(d) {
+    var pecas = (d.pecas && d.pecas.length) ? d.pecas : [d];
+
     mostrar(
       '<div class="card">'
-      + '<h1>' + escaparTexto(d.nomePeca || "Pedido de ajuste") + '</h1>'
+      + '<h1>' + escaparTexto(pecas.length > 1 ? pecas.length + " peças" : (d.nomePeca || "Pedido de ajuste")) + '</h1>'
       + '<p class="sub">' + escaparTexto(d.cliente || "") + '</p>'
       + (d.motivo ? '<p class="motivo">' + escaparTexto(d.motivo) + '</p>' : "")
-      + palco
-      + lista
+      + pecas.map(function (p) {
+          return (pecas.length > 1 ? '<h2 class="peca-nome">' + escaparTexto(p.nomePeca || "") + '</h2>' : "") + desenharPeca(p);
+        }).join("")
       + '</div>'
     );
   }

@@ -116,7 +116,21 @@ let apvLinkGerado = "";
 // Pontos marcados na imagem ao devolver: [{ x, y, texto }], x/y em PORCENTAGEM
 // da imagem (0 a 100), nunca em pixel — mesmo formato que aprovar.html usa, e é
 // o que mantém o ponto no lugar certo em qualquer tamanho de tela.
+//
+// Aponta sempre pro array da peça ATIVA no carrossel (ver apvIndicePeca) —
+// nunca reatribuir sem também gravar em apvPinsPorPeca[apvIndicePeca], senão
+// os pontos da peça anterior somem ao trocar de peça no lote (ver apvIrParaPeca).
 let apvPinsDevolucao = [];
+
+// Qual peça do LOTE está no palco agora (índice em apvPecaAberta.pecas). Um
+// lote de peça única nunca sai do 0 — o carrossel some sozinho nesse caso
+// (ver apvRenderCarrosselPecas).
+let apvIndicePeca = 0;
+
+// Os pontos marcados de CADA peça do lote, por índice — é o que faz a
+// marcação de uma peça sobreviver a olhar outra no carrossel antes de
+// devolver o lote inteiro (ver apvDevolverPara).
+let apvPinsPorPeca = {};
 
 // Modo "clicar na peça marca um ponto" ligado/desligado.
 let apvMarcando = false;
@@ -202,27 +216,36 @@ function apvRenderFila(itens) {
     return;
   }
 
-  lista.innerHTML = itens.map((item, i) => `
+  lista.innerHTML = itens.map((item, i) => {
+    const pecas = item.pecas || [];
+    // Um lote de peça só mostra o nome dela, igual sempre foi; com mais de
+    // uma, "N peças" — a lista completa fica pro carrossel de dentro da
+    // conferência, aqui só precisa dizer "tem várias".
+    const rotuloPeca = pecas.length > 1
+      ? `${pecas.length} peças (${pecas.map(p => p.nomePeca).join(", ")})`
+      : (pecas[0] ? pecas[0].nomePeca : (item.tituloTarefa || ""));
+    return `
     <article class="apv-card" data-apv-idx="${i}">
-      <div class="apv-card-mini" data-apv-thumb="${escaparHTML(item.fileId || "")}"></div>
+      <div class="apv-card-mini" data-apv-thumb="${escaparHTML((pecas[0] && pecas[0].fileId) || "")}"></div>
       <div class="apv-card-corpo">
         <span class="apv-card-cliente">${escaparHTML(item.cliente || "Sem cliente")}</span>
-        <span class="apv-card-peca">${escaparHTML(item.nomePeca || item.tituloTarefa || "")}</span>
+        <span class="apv-card-peca">${escaparHTML(rotuloPeca)}</span>
         <div class="apv-card-meta">
           <span class="apv-card-designer">${escaparHTML(item.designer || "")}</span>
-          <span class="apv-pill apv-pill-versao">versão ${item.versaoAtual || 1}</span>
+          ${pecas.length <= 1 ? `<span class="apv-pill apv-pill-versao">versão ${(pecas[0] && pecas[0].versaoAtual) || 1}</span>` : ""}
           ${item.status === "aprovada"
             ? `<span class="apv-pill apv-pill-aprovada">aprovada${item.aprovadoPor ? " por " + escaparHTML(item.aprovadoPor) : ""} · falta enviar</span>`
             : `<span class="apv-pill apv-pill-espera">${apvTempoDeEspera(item.pedidoEm)}</span>`}
           ${item.temVersaoNova ? `<span class="apv-pill apv-pill-nova">versão nova chegou</span>` : ""}
-          ${item.arquivoSumiu ? `<span class="apv-pill apv-pill-nova">o arquivo saiu da pasta</span>` : ""}
+          ${item.arquivoSumiu ? `<span class="apv-pill apv-pill-nova">${pecas.length > 1 ? "os arquivos saíram" : "o arquivo saiu"} da pasta</span>` : ""}
         </div>
       </div>
       <div class="apv-card-acao">
         <button type="button" class="apv-btn ${item.arquivoSumiu ? "apv-btn-neutro" : "apv-btn-primario"}" data-apv-conferir="${i}">${item.arquivoSumiu ? "Arquivo sumiu" : (item.status === "aprovada" ? "Continuar envio" : "Conferir")}</button>
       </div>
     </article>
-  `).join("");
+  `;
+  }).join("");
 
   lista.querySelectorAll("[data-apv-conferir]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -233,10 +256,11 @@ function apvRenderFila(itens) {
       // com esse nome — abrir a conferência só pra mostrar esse mesmo erro
       // um segundo depois é um beco sem saída disfarçado de botão normal.
       if (item.arquivoSumiu) {
-        mostrarToast(`"${item.nomePeca}" não está mais na pasta do card — pode ter sido movida ou renomeada. Confere com ${item.designer || "o designer"} e pede pra subir de novo com o mesmo nome.`, "erro");
+        const nomes = (item.pecas || []).map(p => p.nomePeca).join(", ");
+        mostrarToast(`"${nomes}" não está mais na pasta do card — pode ter sido movida ou renomeada. Confere com ${item.designer || "o designer"} e pede pra subir de novo com o mesmo nome.`, "erro");
         return;
       }
-      apvAbrirConferencia(item.taskId, item.nomePeca);
+      apvAbrirConferencia(item.taskId, item.loteId);
     });
   });
 
@@ -302,15 +326,17 @@ async function atualizarBadgeAprovacao() {
  * (que dispara a transição). Sem os dois passos o navegador pula a animação,
  * porque o elemento nasce e muda de estado no mesmo instante.
  */
-async function apvAbrirConferencia(taskId, nomePeca) {
+async function apvAbrirConferencia(taskId, loteId) {
   const overlay = document.getElementById("apvConferencia");
   if (!overlay) return;
 
-  if (typeof roteadorAoAbrirConferencia === "function") roteadorAoAbrirConferencia(taskId, nomePeca);
+  if (typeof roteadorAoAbrirConferencia === "function") roteadorAoAbrirConferencia(taskId, loteId);
 
   apvPecaAberta = null;
   apvVersaoNaTela = null;
   apvLinkGerado = "";
+  apvIndicePeca = 0;
+  apvPinsPorPeca = {};
   apvPinsDevolucao = [];
   apvMarcando = false;
   apvPedidoEmAtual = null;
@@ -352,10 +378,10 @@ async function apvAbrirConferencia(taskId, nomePeca) {
 
   // Guarda de quando foi o pedido ANTES de qualquer coisa filtrar a fila
   // (apvConfirmarAprovacao remove o item de apvFila assim que aprova).
-  const itemDaFila = apvFila.find(i => String(i.taskId) === String(taskId) && i.nomePeca === nomePeca);
+  const itemDaFila = apvFila.find(i => String(i.taskId) === String(taskId) && i.loteId === loteId);
   apvPedidoEmAtual = itemDaFila ? itemDaFila.pedidoEm : null;
 
-  const data = await chamarBackend({ acao: "dadosDaConferencia", taskId, nomePeca });
+  const data = await chamarBackend({ acao: "dadosDaConferencia", taskId, loteId });
 
   if (caiuARede(data) || !data.ok) {
     document.getElementById("apvPalcoSlot").innerHTML = `
@@ -368,16 +394,22 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   }
 
   apvPecaAberta = data;
-  apvVersaoNaTela = data.peca.versoes.length; // começa na mais recente
+  apvIndicePeca = 0;
+  apvPecaAberta.peca = apvPecaAberta.pecas[0];
+  apvVersaoNaTela = apvPecaAberta.peca.versoes.length; // começa na mais recente
+  apvPinsDevolucao = apvPinsPorPeca[0] = [];
 
   document.getElementById("apvContextoCliente").textContent = data.cliente || "";
-  document.getElementById("apvContextoPeca").textContent = data.peca.nomePeca || data.titulo || "";
+  document.getElementById("apvContextoPeca").textContent = data.pecas.length > 1
+    ? `${data.pecas.length} peças`
+    : (data.peca.nomePeca || data.titulo || "");
   const restam = Math.max(0, apvFila.length - 1);
   document.getElementById("apvContextoRestam").textContent =
     restam ? `${restam} ${restam === 1 ? "peça ainda esperando" : "peças ainda esperando"}` : "última da fila";
 
   apvRenderBriefing(data);
   apvRenderPeca(data);
+  apvRenderCarrosselPecas();
 
   // Essa peça já foi aprovada internamente antes (reabriu pela fila depois
   // de um F5, por exemplo) — pula direto pro painel de envio, com a mesma
@@ -707,6 +739,81 @@ async function apvMostrarNoPalco(peca, versao) {
   if (imgNova) imgNova.addEventListener("load", () => apvRenderPinsDevolucao());
 }
 
+// ---------------------------------------------------------------------------
+// O carrossel de peças — só aparece quando o LOTE tem mais de uma
+// (pedido do Cláudio, 2026-08-05: várias peças mandadas juntas viram uma
+// conferência só, com uma decisão só, e o atendimento usa este carrossel
+// pra passar por cada uma e marcar pontos nela antes de decidir).
+// ---------------------------------------------------------------------------
+
+/**
+ * Troca qual peça do lote está no palco. Funciona trocando o que
+ * `apvPecaAberta.peca` aponta — TODO o resto da tela (seletor de versão,
+ * palco, aviso de versão nova) já lê daquele campo sozinho, então trocar
+ * ele e chamar `apvRenderPeca` de novo é o bastante; não existe uma
+ * segunda cópia dessa lógica só pra peça ativa.
+ */
+function apvIrParaPeca(indice) {
+  if (!apvPecaAberta || !Array.isArray(apvPecaAberta.pecas)) return;
+  if (indice < 0 || indice >= apvPecaAberta.pecas.length || indice === apvIndicePeca) return;
+
+  apvIndicePeca = indice;
+  apvPecaAberta.peca = apvPecaAberta.pecas[indice];
+  apvVersaoNaTela = apvPecaAberta.peca.versoes.length; // começa na mais recente desta peça
+  // Pontos marcados nesta peça antes (voltou pra ela depois de olhar
+  // outra) continuam aqui — cada índice tem o próprio array, guardado
+  // enquanto a conferência estiver aberta.
+  apvPinsDevolucao = apvPinsPorPeca[indice] = (apvPinsPorPeca[indice] || []);
+
+  apvRenderPeca(apvPecaAberta);
+  apvRenderPinsDevolucao();
+  apvRenderCarrosselPecas();
+}
+
+/**
+ * Desenha a fileira de miniaturas do carrossel. Some sozinha quando o
+ * lote é de uma peça só — nada aparece sem ter função nesta tela (mesma
+ * regra do resto da conferência).
+ */
+function apvRenderCarrosselPecas() {
+  const linha = document.getElementById("apvCarrosselPecas");
+  const legenda = document.getElementById("apvCarrosselLegenda");
+  if (!linha || !legenda || !apvPecaAberta) return;
+
+  const pecas = apvPecaAberta.pecas || [];
+  if (pecas.length <= 1) {
+    linha.hidden = true;
+    legenda.hidden = true;
+    linha.innerHTML = "";
+    return;
+  }
+
+  // Quais peças o backend já avisou que têm versão mais nova do que a
+  // pedida — o mesmo aviso amarelo de sempre (apvRenderAvisoVersaoNova),
+  // só que aqui é por peça, pra saber qual olhar de novo antes de decidir.
+  const daFila = apvFila.find(i => String(i.taskId) === String(apvPecaAberta.taskId) && i.loteId === apvPecaAberta.loteId);
+  const nomesComVersaoNova = new Set((daFila && daFila.pecas || []).filter(p => p.temVersaoNova).map(p => p.nomePeca));
+
+  legenda.hidden = false;
+  legenda.textContent = `${pecas.length} peças neste lote — clica pra conferir cada uma.`;
+  linha.hidden = false;
+  linha.innerHTML = pecas.map((p, i) => {
+    const marcada = (apvPinsPorPeca[i] || []).some(pin => String(pin.texto || "").trim());
+    const classes = ["apv-carrossel-item"];
+    if (i === apvIndicePeca) classes.push("ativa");
+    if (marcada) classes.push("apv-carrossel-item-marcada");
+    if (nomesComVersaoNova.has(p.nomePeca)) classes.push("apv-carrossel-item-nova");
+    return `<button type="button" class="${classes.join(" ")}" data-apv-peca-idx="${i}" data-apv-thumb="${escaparHTML(p.ultima.fileId)}" title="${escaparHTML(p.nomePeca)}" aria-label="${escaparHTML(p.nomePeca)}"></button>`;
+  }).join("");
+
+  linha.querySelectorAll("[data-apv-peca-idx]").forEach(btn => {
+    btn.addEventListener("click", () => apvIrParaPeca(Number(btn.dataset.apvPecaIdx)));
+  });
+  linha.querySelectorAll("[data-apv-thumb]").forEach(el => {
+    if (el.dataset.apvThumb) apvCarregarMiniatura(el.dataset.apvThumb, el);
+  });
+}
+
 /**
  * O aviso "chegou uma versão mais nova".
  *
@@ -716,7 +823,8 @@ async function apvMostrarNoPalco(peca, versao) {
  */
 function apvRenderAvisoVersaoNova(peca) {
   const aviso = document.getElementById("apvAvisoNova");
-  const daFila = apvFila.find(i => String(i.taskId) === String(peca.taskId) && i.nomePeca === peca.peca.nomePeca);
+  const daFila = apvFila.find(i => String(i.taskId) === String(peca.taskId) && i.loteId === peca.loteId);
+  const daFilaPeca = daFila && (daFila.pecas || []).find(p => p.nomePeca === peca.peca.nomePeca);
   const total = peca.peca.versoes.length;
 
   // Duas condições, e as DUAS precisam valer:
@@ -731,7 +839,7 @@ function apvRenderAvisoVersaoNova(peca) {
   // continuava lá dizendo que existia uma versão nova pra ver. Um aviso que
   // não some quando você faz o que ele pede vira ruído, e ruído a gente
   // aprende a ignorar — inclusive quando ele estiver certo.
-  const temNova = !!(daFila && daFila.temVersaoNova) && apvVersaoNaTela < total;
+  const temNova = !!(daFilaPeca && daFilaPeca.temVersaoNova) && apvVersaoNaTela < total;
 
   aviso.hidden = !temNova;
   if (!temNova) return;
@@ -771,6 +879,22 @@ function apvAprovar() {
     document.getElementById("apvConfirmaFundo").hidden = false;
     return;
   }
+
+  // Lote de mais de uma peça: a peça ativa no palco está na mais recente
+  // (checado acima), mas OUTRAS peças do mesmo lote podem ter ganhado
+  // versão nova sem o atendimento ter passado por elas no carrossel —
+  // avisa antes de aprovar o lote inteiro numa tacada só.
+  const daFila = apvFila.find(i => String(i.taskId) === String(apvPecaAberta.taskId) && i.loteId === apvPecaAberta.loteId);
+  const outrasDesatualizadas = (daFila && daFila.pecas || [])
+    .filter(p => p.temVersaoNova && p.nomePeca !== apvPecaAberta.peca.nomePeca)
+    .map(p => p.nomePeca);
+  if (outrasDesatualizadas.length) {
+    document.getElementById("apvConfirmaTxt").textContent =
+      `O designer subiu versão nova de ${outrasDesatualizadas.length === 1 ? "uma peça" : outrasDesatualizadas.length + " peças"} ` +
+      `deste lote depois do pedido: ${outrasDesatualizadas.join(", ")}. Vale conferir no carrossel antes de aprovar tudo junto.`;
+    document.getElementById("apvConfirmaFundo").hidden = false;
+    return;
+  }
   apvConfirmarAprovacao();
 }
 
@@ -797,10 +921,10 @@ async function apvConfirmarAprovacao() {
 
   const peca = apvPecaAberta;
   const taskId = peca.taskId;
-  const nomePeca = peca.peca.nomePeca;
-  const itemOtimista = apvFila.find(i => String(i.taskId) === String(taskId) && i.nomePeca === nomePeca);
+  const loteId = peca.loteId;
+  const itemOtimista = apvFila.find(i => String(i.taskId) === String(taskId) && i.loteId === loteId);
 
-  apvFila = apvFila.filter(i => !(String(i.taskId) === String(taskId) && i.nomePeca === nomePeca));
+  apvFila = apvFila.filter(i => !(String(i.taskId) === String(taskId) && i.loteId === loteId));
   atualizarBadgeAprovacao();
 
   apvAprovado = true;
@@ -812,17 +936,17 @@ async function apvConfirmarAprovacao() {
   const data = await chamarBackend({
     acao: "aprovarInternamente",
     taskId,
-    nomePeca,
+    loteId,
     aprovadoPor: DESIGNER_LOGADO,
   });
 
   // Trocou de peça enquanto a chamada ia e voltava? A pessoa já está
   // olhando outra coisa — não desfaz nada na tela dela.
-  if (!apvPecaAberta || String(apvPecaAberta.taskId) !== String(taskId) || apvPecaAberta.peca.nomePeca !== nomePeca) return;
+  if (!apvPecaAberta || String(apvPecaAberta.taskId) !== String(taskId) || apvPecaAberta.loteId !== loteId) return;
 
   if (!data || !data.ok) {
     // O Runrun.it/planilha recusou — volta tudo pro estado de antes,
-    // inclusive a peça de volta na fila (ela nunca chegou a sair de lá
+    // inclusive o lote de volta na fila (ele nunca chegou a sair de lá
     // de verdade).
     apvAprovado = false;
     apvDeslizarAcao(0);
@@ -830,9 +954,10 @@ async function apvConfirmarAprovacao() {
     apvMostrarEtapaDoCardMae(false);
     apvRedesenharPaineis();
     apvFila.push(itemOtimista || {
-      taskId, nomePeca, cliente: peca.cliente, tituloTarefa: peca.titulo,
+      taskId, loteId, cliente: peca.cliente, tituloTarefa: peca.titulo,
       designer: peca.designer, designerId: peca.designerId,
       pedidoEm: apvPedidoEmAtual || new Date().toISOString(), status: "pendente",
+      pecas: (peca.pecas || []).map(p => ({ nomePeca: p.nomePeca })),
     });
     apvRenderFila(apvFila);
     atualizarBadgeAprovacao();
@@ -1017,9 +1142,9 @@ function apvMarcarComoEnviado() {
     chamarBackend({
       acao: "marcarConferenciaEnviada",
       taskId: apvPecaAberta.taskId,
-      nomePeca: apvPecaAberta.peca.nomePeca,
+      loteId: apvPecaAberta.loteId,
     });
-    apvFila = apvFila.filter(i => !(String(i.taskId) === String(apvPecaAberta.taskId) && i.nomePeca === apvPecaAberta.peca.nomePeca));
+    apvFila = apvFila.filter(i => !(String(i.taskId) === String(apvPecaAberta.taskId) && i.loteId === apvPecaAberta.loteId));
     atualizarBadgeAprovacao();
   }
 }
@@ -1050,9 +1175,18 @@ function apvRenderEnvio(peca, aprovacao) {
     revisaoTempo.hidden = true;
   }
 
-  const versaoConferida = peca.peca.versoes[apvVersaoNaTela - 1];
+  // TODAS as peças do lote entram marcadas por padrão — foram aprovadas
+  // juntas, numa decisão só (ver aprovarInternamente, AprovacaoInterna.gs),
+  // então o link do cliente já nasce com o lote inteiro, no mesmo estilo
+  // de "várias peças num link só" que a página do cliente já usa. Cada
+  // peça vai na versão que estava na tela dela — a mais recente, a menos
+  // que o atendimento tenha voltado pra uma anterior de propósito.
   const opcoes = [
-    { fileId: versaoConferida.fileId, nome: peca.peca.nomePeca, sub: `${versaoConferida.nome} · aprovada agora`, marcada: true },
+    ...peca.pecas.map((p, i) => {
+      const versao = i === apvIndicePeca ? apvVersaoNaTela : p.versoes.length;
+      const arquivo = p.versoes[versao - 1] || p.ultima;
+      return { fileId: arquivo.fileId, nome: p.nomePeca, sub: `${arquivo.nome} · aprovada agora`, marcada: true };
+    }),
     ...peca.outrasPecas.map(p => ({
       fileId: p.ultima.fileId,
       nome: p.nomePeca,
@@ -1335,9 +1469,9 @@ function apvAbrirEscolhaDeDesigner() {
 }
 
 // Pedidos de alteração "a caminho", ainda dentro do prazo de desfazer (ver
-// apvDevolverPara) — chave "taskId::nomePeca". Existe só pra impedir a
-// MESMA peça de ser devolvida duas vezes enquanto a primeira ainda não foi
-// mandada de verdade.
+// apvDevolverPara) — chave "taskId::loteId". Existe só pra impedir o
+// MESMO lote de ser devolvido duas vezes enquanto o primeiro pedido ainda
+// não foi mandado de verdade.
 const apvDevolucoesPendentes = new Map();
 const APV_DESFAZER_MS = 10000;
 
@@ -1359,8 +1493,8 @@ function apvDevolverPara(nomeDesigner) {
   document.getElementById("apvDesignerMenu").hidden = true;
 
   const taskId = apvPecaAberta.taskId;
-  const nomePeca = apvPecaAberta.peca.nomePeca;
-  const chave = taskId + "::" + nomePeca;
+  const loteId = apvPecaAberta.loteId;
+  const chave = taskId + "::" + loteId;
   if (apvDevolucoesPendentes.has(chave)) {
     mostrarToast("Essa alteração já está a caminho — espera terminar ou desfaz na notificação.", "erro");
     return;
@@ -1375,14 +1509,26 @@ function apvDevolverPara(nomeDesigner) {
   // exatamente o que essa caixinha existe pra evitar.
   const ehOResponsavel = nomesCorrespondem(nomeDesigner, apvPecaAberta.designer || "");
   const designerId = ehOResponsavel ? apvPecaAberta.designerId : "";
-  const versaoConferida = apvPecaAberta.peca.versoes[apvVersaoNaTela - 1];
+
+  // Uma linha por peça do lote, cada uma com a versão que estava na tela
+  // dela (a mais recente, salvo se o atendimento voltou pra uma anterior
+  // de propósito) e os PONTOS QUE FORAM MARCADOS NELA — apvPinsPorPeca
+  // guarda isso por índice desde que a peça foi vista no carrossel (ver
+  // apvIrParaPeca), então o pino sobrevive a olhar outra peça antes de
+  // mandar o pedido.
+  const pecasParaEnvio = (apvPecaAberta.pecas || [apvPecaAberta.peca]).map((p, i) => {
+    const versao = i === apvIndicePeca ? apvVersaoNaTela : p.versoes.length;
+    const arquivo = p.versoes[versao - 1] || p.ultima;
+    // Ponto marcado sem texto não vira nada do outro lado — o designer
+    // veria "(alto à esquerda)" sozinho e não saberia o que fazer com aquilo.
+    const pins = (apvPinsPorPeca[i] || []).filter(pin => String(pin.texto || "").trim());
+    return { nomePeca: p.nomePeca, fileId: arquivo.fileId, nomeArquivo: arquivo.nome, mimeType: arquivo.mimeType, pins };
+  });
 
   const payload = {
     acao: "devolverParaDesigner",
-    taskId, nomePeca, motivo,
-    // Ponto marcado sem texto não vira nada do outro lado — o designer veria
-    // "(alto à esquerda)" sozinho e não saberia o que fazer com aquilo.
-    pins: apvPinsDevolucao.filter(p => String(p.texto || "").trim()),
+    taskId, loteId, motivo,
+    pecas: pecasParaEnvio,
     designer: nomeDesigner,
     designerId: designerId,
     autorNome: DESIGNER_LOGADO,
@@ -1393,11 +1539,6 @@ function apvDevolverPara(nomeDesigner) {
     // só o texto da assinatura.
     autor: DESIGNER_LOGADO,
     cliente: apvPecaAberta.cliente,
-    // Qual arquivo estava sendo conferido — é em cima DELE que os pontos
-    // foram marcados, e é ele que a página de ajuste vai mostrar.
-    fileId: versaoConferida ? versaoConferida.fileId : "",
-    nomeArquivo: versaoConferida ? versaoConferida.nome : "",
-    mimeType: versaoConferida ? versaoConferida.mimeType : "",
     // Só a interface sabe onde o Colmeia está publicado hoje (mesmo motivo
     // de gerarLinkDeAprovacao) — sem essa base, o backend não teria como
     // montar o link dos pontos.
@@ -1411,6 +1552,7 @@ function apvDevolverPara(nomeDesigner) {
   apvPintarBarra("alteracao");
   document.getElementById("apvMotivo").value = "";
   apvPinsDevolucao = [];
+  apvPinsPorPeca = {};
   apvFecharConferencia();
 
   const pendente = { cancelado: false };
@@ -1468,7 +1610,7 @@ async function apvExecutarDevolucao(chave, pendente, payload) {
     mostrarToast(partes.join(" ") + ".", data.foiProAjustes && data.alocou ? "sucesso" : "erro");
   }
 
-  apvFila = apvFila.filter(i => !(String(i.taskId) === String(payload.taskId) && i.nomePeca === payload.nomePeca));
+  apvFila = apvFila.filter(i => !(String(i.taskId) === String(payload.taskId) && i.loteId === payload.loteId));
   apvRenderFila(apvFila);
   atualizarBadgeAprovacao();
 }
@@ -1717,16 +1859,17 @@ async function pedirAprovacaoDoAtendimento(task, btn, nomesPecas) {
     return false;
   }
 
-  // Qual peça o backend realmente mandou — pode ser diferente do que veio
-  // no parâmetro (sem `nomePeca`, ele escolhe a mexida por último).
-  const pecaEnviada = (data.pecas || [])[0];
-  rascunharComentarioDeRevisao(task, data.pecas || []);
+  // Todas as peças mandadas juntas agora formam UM lote (`data.loteId`) —
+  // é ele que a tela de conferência abre, mostrando as peças todas juntas
+  // no carrossel, com uma decisão só (ver dadosDaConferencia,
+  // AprovacaoInterna.gs).
+  rascunharComentarioDeRevisao(task, data.loteId, data.pecas || []);
 
   // O botão passa a ser um atalho pra página de aprovação, na hora — sem
   // esperar reabrir o card. Guarda também na tarefa, pra sobreviver ao
   // pop-up ser redesenhado sozinho pela varredura do quadro.
-  task._conferenciaInfo = { taskId: String(task.id), nomePeca: pecaEnviada || "" };
-  if (btn) marcarBotaoComoJaEnviado(btn, task.id, pecaEnviada);
+  task._conferenciaInfo = { taskId: String(task.id), loteId: data.loteId || "" };
+  if (btn) marcarBotaoComoJaEnviado(btn, task.id, data.loteId);
 
   const nomes = (data.pecas || []).join(", ");
   mostrarToast(`${nomes || "A peça"} foi pro atendimento conferir.`, "sucesso");
@@ -1810,7 +1953,7 @@ async function verificarRevisaoJaEnviada(task, btn) {
   const taskId = task.id;
 
   if (task._conferenciaInfo !== undefined) {
-    if (task._conferenciaInfo) marcarBotaoComoJaEnviado(btn, task._conferenciaInfo.taskId, task._conferenciaInfo.nomePeca);
+    if (task._conferenciaInfo) marcarBotaoComoJaEnviado(btn, task._conferenciaInfo.taskId, task._conferenciaInfo.loteId);
     return;
   }
 
@@ -1832,8 +1975,8 @@ async function verificarRevisaoJaEnviada(task, btn) {
   if (!btnAgora) return;
 
   const c = data.conferencia;
-  task._conferenciaInfo = c ? { taskId: c.taskId, nomePeca: c.nomePeca || "" } : null;
-  if (c) marcarBotaoComoJaEnviado(btnAgora, c.taskId, c.nomePeca);
+  task._conferenciaInfo = c ? { taskId: c.taskId, loteId: c.loteId || c.nomePeca || "" } : null;
+  if (c) marcarBotaoComoJaEnviado(btnAgora, c.taskId, c.loteId || c.nomePeca);
 }
 
 /**
@@ -1869,9 +2012,9 @@ async function idsDaFamiliaDaTarefa(task) {
   return [];
 }
 
-function marcarBotaoComoJaEnviado(btn, taskId, nomePeca) {
+function marcarBotaoComoJaEnviado(btn, taskId, loteId) {
   if (typeof roteadorLinkDaConferencia !== "function") return;
-  btn.dataset.linkRevisao = roteadorLinkDaConferencia(taskId, nomePeca);
+  btn.dataset.linkRevisao = roteadorLinkDaConferencia(taskId, loteId);
   const label = document.getElementById("apvPedirBtnLabel");
   if (label) label.textContent = "Acessar página de aprovação";
 }
@@ -1897,14 +2040,16 @@ function marcarBotaoComoJaEnviado(btn, taskId, nomePeca) {
  * mesmo gesto, e faria pouco sentido um deles avisar o atendimento e o
  * outro não.
  */
-function rascunharComentarioDeRevisao(task, pecas) {
+function rascunharComentarioDeRevisao(task, loteId, pecas) {
   const campo = document.getElementById("commentInput");
   if (!campo || typeof roteadorLinkDaConferencia !== "function") return;
 
   const lista = Array.isArray(pecas) ? pecas.filter(Boolean) : [pecas].filter(Boolean);
-  // O link abre a primeira peça; a fila mostra as outras logo ali do lado.
-  // Um link por peça encheria o comentário de endereços quase iguais.
-  const link = roteadorLinkDaConferencia(task.id, lista[0]);
+  // Um link só, do LOTE inteiro: as peças mandadas junto abrem juntas na
+  // mesma conferência (ver dadosDaConferencia, AprovacaoInterna.gs), não
+  // uma por peça — um link por peça encheria o comentário de endereços
+  // quase iguais.
+  const link = roteadorLinkDaConferencia(task.id, loteId);
   const nomes = lista.join(" e ");
   const texto = lista.length > 1
     ? `${nomes} estão prontas pra revisão: ${link}`

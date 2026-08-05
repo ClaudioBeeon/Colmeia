@@ -298,13 +298,13 @@ function handleRequest(e, method) {
       } else if (body.acao === 'listarConferenciasPendentes') {
         output = listarConferenciasPendentes();
       } else if (body.acao === 'dadosDaConferencia') {
-        output = dadosDaConferencia(body.taskId, body.nomePeca);
+        output = dadosDaConferencia(body.taskId, body.loteId);
       } else if (body.acao === 'listarVersoesDasPecas') {
         output = listarVersoesDasPecas(body.taskId);
       } else if (body.acao === 'aprovarInternamente') {
-        output = aprovarInternamente(body.taskId, body.nomePeca, body.aprovadoPor);
+        output = aprovarInternamente(body.taskId, body.loteId, body.aprovadoPor);
       } else if (body.acao === 'marcarConferenciaEnviada') {
-        output = marcarConferenciaEnviada(body.taskId, body.nomePeca);
+        output = marcarConferenciaEnviada(body.taskId, body.loteId);
       } else if (body.acao === 'devolverParaDesigner') {
         output = devolverParaDesigner(body);
       } else if (body.acao === 'moverCardMaeParaAprovacaoCliente') {

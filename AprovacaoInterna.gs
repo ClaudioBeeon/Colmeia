@@ -48,13 +48,38 @@ function getConferenciasSheet() {
   var sheet = ss.getSheetByName('ConferenciaInterna');
   if (!sheet) {
     sheet = ss.insertSheet('ConferenciaInterna');
-    sheet.getRange('A1:O1').setValues([[
+    sheet.getRange('A1:P1').setValues([[
       'task_id', 'cliente', 'titulo_tarefa', 'nome_peca', 'designer', 'designer_id',
       'file_id', 'nome_arquivo', 'mime_type', 'versao_pedida',
-      'pedido_em', 'status', 'decidido_por', 'decidido_em', 'motivo'
+      'pedido_em', 'status', 'decidido_por', 'decidido_em', 'motivo', 'lote_id'
     ]]);
   }
   return sheet;
+}
+
+/**
+ * A identidade do LOTE de uma linha — o que agrupa várias peças mandadas
+ * juntas numa conferência só (pedido do Cláudio, 2026-08-05: "13 posts
+ * diferentes mandados de uma vez viram UM item na fila, com decisão única").
+ *
+ * Linha de ANTES dessa funcionalidade não tem a coluna `lote_id`
+ * preenchida — nesse caso o lote dela é ela mesma (taskId+nomePeca), o
+ * comportamento de sempre. Sem esse fallback, toda conferência pendente
+ * na planilha no dia do deploy virava "sem lote" e sumia da fila.
+ */
+function loteIdDaLinha(l) {
+  return String(l[15] || '') || (String(l[0]) + '::' + String(l[3]));
+}
+
+/** Todas as linhas (número 1-based da planilha) de um mesmo lote. */
+function linhasDoLote(linhas, taskId, loteId) {
+  var out = [];
+  if (!loteId) return out;
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) !== String(taskId)) continue;
+    if (loteIdDaLinha(linhas[i]) === loteId) out.push(i + 1);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------
@@ -190,6 +215,11 @@ function pedirConferenciaInterna(dados) {
   try {
     var linhas = sheet.getDataRange().getValues();
     var agora = new Date().toISOString();
+    // Um id novo por ENVIO, não por peça: é o que agrupa tudo que foi
+    // mandado junto numa fila (e numa conferência) só. Reenviar reatribui
+    // a peça pro lote de agora — o que está sendo pedido junto AGORA é o
+    // lote que interessa, mesmo que ela já pertencesse a outro antes.
+    var loteId = Utilities.getUuid().replace(/-/g, '');
     var criadas = [];
 
     alvos.forEach(function (peca) {
@@ -198,7 +228,7 @@ function pedirConferenciaInterna(dados) {
         String(dados.taskId), dados.cliente || '', dados.tituloTarefa || '', peca.nomePeca,
         dados.designer || '', dados.designerId || '',
         ultima.fileId, ultima.nome, ultima.mimeType, ultima.versao === null ? ultima.ordem : ultima.versao,
-        agora, 'pendente', '', '', ''
+        agora, 'pendente', '', '', '', loteId
       ];
       var existente = acharLinhaDaConferencia(linhas, dados.taskId, peca.nomePeca);
       if (existente) sheet.getRange(existente, 1, 1, valores.length).setValues([valores]);
@@ -206,7 +236,7 @@ function pedirConferenciaInterna(dados) {
       criadas.push(peca.nomePeca);
     });
 
-    return { ok: true, pecas: criadas };
+    return { ok: true, pecas: criadas, loteId: loteId };
   } finally {
     lock.releaseLock();
   }
@@ -243,8 +273,13 @@ function acharLinhaDaConferencia(linhas, taskId, nomePeca) {
 function listarConferenciasPendentes() {
   var sheet = getConferenciasSheet();
   var linhas = sheet.getDataRange().getValues();
-  var itens = [];
   var cachePastas = {};
+
+  // Agrupa por LOTE: cada linha é uma peça, mas o item da fila é o lote
+  // inteiro — é o que faz 13 peças mandadas juntas aparecerem como UMA
+  // coisa esperando decisão, não treze.
+  var grupos = {};
+  var ordem = [];
 
   for (var i = 1; i < linhas.length; i++) {
     var l = linhas[i];
@@ -253,6 +288,7 @@ function listarConferenciasPendentes() {
 
     var taskId = String(l[0]);
     var nomePeca = String(l[3]);
+    var loteId = loteIdDaLinha(l);
     var versaoPedida = Number(l[9]) || 0;
 
     if (!cachePastas[taskId]) cachePastas[taskId] = listarVersoesDasPecas(taskId);
@@ -267,13 +303,8 @@ function listarConferenciasPendentes() {
     var ultima = atual ? atual.ultima : null;
     var versaoAtual = ultima ? (ultima.versao === null ? ultima.ordem : ultima.versao) : versaoPedida;
 
-    itens.push({
-      taskId: taskId,
-      cliente: l[1],
-      tituloTarefa: l[2],
+    var peca = {
       nomePeca: nomePeca,
-      designer: l[4],
-      designerId: l[5],
       fileId: ultima ? ultima.fileId : l[6],
       nomeArquivo: ultima ? ultima.nome : l[7],
       mimeType: ultima ? ultima.mimeType : l[8],
@@ -288,17 +319,39 @@ function listarConferenciasPendentes() {
       // A peça sumiu da pasta depois do pedido (renomeada, movida,
       // apagada). Some da fila silenciosamente seria pior: quem pediu a
       // conferência acha que ela está na fila, e não está mais.
-      arquivoSumiu: !ultima,
-      pedidoEm: l[10],
-      // 'pendente' = ainda não conferida; 'aprovada' = já aprovada
-      // internamente, falta só mandar pro cliente (ver o comentário da
-      // função). O card da fila usa isso pra badge diferente e pra pular
-      // direto pro painel de envio ao reabrir.
-      status: status,
-      aprovadoPor: status === 'aprovada' ? l[12] : ''
-    });
+      arquivoSumiu: !ultima
+    };
+
+    var chave = taskId + '::' + loteId;
+    if (!grupos[chave]) {
+      grupos[chave] = {
+        taskId: taskId,
+        loteId: loteId,
+        cliente: l[1],
+        tituloTarefa: l[2],
+        designer: l[4],
+        designerId: l[5],
+        pedidoEm: l[10],
+        // 'pendente' = ainda não conferida; 'aprovada' = já aprovada
+        // internamente, falta só mandar pro cliente (ver o comentário da
+        // função). O card da fila usa isso pra badge diferente e pra pular
+        // direto pro painel de envio ao reabrir.
+        status: status,
+        aprovadoPor: status === 'aprovada' ? l[12] : '',
+        pecas: []
+      };
+      ordem.push(chave);
+    }
+    var g = grupos[chave];
+    if (String(l[10]) < String(g.pedidoEm)) g.pedidoEm = l[10];
+    g.pecas.push(peca);
   }
 
+  var itens = ordem.map(function (chave) { return grupos[chave]; });
+  itens.forEach(function (it) {
+    it.temVersaoNova = it.pecas.some(function (p) { return p.temVersaoNova; });
+    it.arquivoSumiu = it.pecas.every(function (p) { return p.arquivoSumiu; });
+  });
   itens.sort(function (a, b) { return String(a.pedidoEm).localeCompare(String(b.pedidoEm)); });
   return { ok: true, itens: itens };
 }
@@ -337,6 +390,7 @@ function buscarConferenciaDaTarefa(taskId, idsRelacionados) {
       // botão precisa apontar, não pro card que está aberto agora.
       taskId: String(linhas[i][0]),
       nomePeca: linhas[i][3],
+      loteId: loteIdDaLinha(linhas[i]),
       status: linhas[i][11],
       pedidoEm: linhas[i][10]
     };
@@ -354,7 +408,7 @@ function buscarConferenciaDaTarefa(taskId, idsRelacionados) {
  * front-end, deixariam a tela montando aos pedaços na frente de quem
  * abriu — justamente a pessoa que não conhece o app.
  */
-function dadosDaConferencia(taskId, nomePeca) {
+function dadosDaConferencia(taskId, loteId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
 
   var tarefa = runrunFetch('/tasks/' + taskId);
@@ -365,27 +419,41 @@ function dadosDaConferencia(taskId, nomePeca) {
   var lista = listarVersoesDasPecas(taskId);
   if (!lista.ok) return lista;
 
-  var peca = null;
-  for (var i = 0; i < lista.pecas.length; i++) {
-    if (!nomePeca || lista.pecas[i].nomePeca === nomePeca) { peca = lista.pecas[i]; break; }
+  var linhasSheet = getConferenciasSheet().getDataRange().getValues();
+  // As linhas do lote dizem QUAIS peças foram pedidas juntas (na ordem em
+  // que foram pedidas). Sem loteId (link antigo, de antes desta
+  // funcionalidade, que mandava o NOME da peça direto) ou lote vazio,
+  // `loteId` ainda funciona como nome de peça — é o mesmo caminho que
+  // `dadosDaConferencia` sempre teve, só que agora é o caso de exceção.
+  var linhasDoGrupo = linhasDoLote(linhasSheet, taskId, loteId);
+  var nomesPedidos = linhasDoGrupo.map(function (n) { return String(linhasSheet[n - 1][3]); });
+
+  var pecasEscolhidas;
+  if (nomesPedidos.length) {
+    pecasEscolhidas = lista.pecas.filter(function (p) { return nomesPedidos.indexOf(p.nomePeca) !== -1; });
+    pecasEscolhidas.sort(function (a, b) { return nomesPedidos.indexOf(a.nomePeca) - nomesPedidos.indexOf(b.nomePeca); });
+  } else if (loteId) {
+    // Compat com link antigo: `loteId` era o nome da peça.
+    pecasEscolhidas = lista.pecas.filter(function (p) { return p.nomePeca === loteId; });
+  } else {
+    pecasEscolhidas = lista.pecas.length ? [lista.pecas[0]] : [];
   }
-  if (!peca) return { ok: false, error: 'Não achei essa peça na pasta do card. Ela pode ter sido movida ou renomeada.' };
+  if (!pecasEscolhidas.length) return { ok: false, error: 'Não achei essa peça na pasta do card. Ela pode ter sido movida ou renomeada.' };
 
   var cardMaeId = tarefa.parent_task_id || null;
   var projetoFechado = projetoDaTarefaEstaFechado(tarefa);
 
-  // Se essa peça já foi aprovada internamente (ou já está pendente há um
+  // Se esse lote já foi aprovado internamente (ou já está pendente há um
   // tempo), a tela precisa saber pra abrir no painel certo — sem isso, dar
   // F5 depois de aprovar (mas antes de mandar pro cliente) jogava a pessoa
   // de volta pro painel "o que foi pedido", como se a aprovação não tivesse
   // acontecido (era exatamente isso, e não outra coisa, que tinha sido
   // salvo — só a TELA que esquecia).
-  var linhaConferencia = acharLinhaDaConferencia(getConferenciasSheet().getDataRange().getValues(), taskId, peca.nomePeca);
   var statusConferencia = 'pendente';
   var aprovadoPor = '';
   var aprovadoEm = '';
-  if (linhaConferencia) {
-    var valoresLinha = getConferenciasSheet().getRange(linhaConferencia, 1, 1, 15).getValues()[0];
+  if (linhasDoGrupo.length) {
+    var valoresLinha = getConferenciasSheet().getRange(linhasDoGrupo[0], 1, 1, 16).getValues()[0];
     statusConferencia = String(valoresLinha[11]) || 'pendente';
     aprovadoPor = valoresLinha[12] || '';
     aprovadoEm = valoresLinha[13] || '';
@@ -399,9 +467,15 @@ function dadosDaConferencia(taskId, nomePeca) {
   // outros dois terços dos casos (pendente/aprovada).
   var linkCliente = statusConferencia === 'enviada' ? buscarLinkClienteMaisRecente(taskId) : null;
 
+  var nomesEscolhidos = pecasEscolhidas.map(function (p) { return p.nomePeca; });
+
   return {
     ok: true,
     taskId: String(taskId),
+    // O id do lote de verdade — pode ter vindo como "nome de peça" (link
+    // antigo); a partir daqui a tela usa este valor pra aprovar/devolver/
+    // marcar como enviado o lote inteiro.
+    loteId: linhasDoGrupo.length ? loteIdDaLinha(linhasSheet[linhasDoGrupo[0] - 1]) : (loteId || pecasEscolhidas[0].nomePeca),
     titulo: tarefa.title || '',
     cliente: tarefa.client_name || '',
     descricao: tarefa.description || '',
@@ -417,8 +491,12 @@ function dadosDaConferencia(taskId, nomePeca) {
     // link pro designer. `listarVersoesDasPecas` já sabia a pasta; só não
     // estava contando.
     pastaUrl: lista.pastaUrl || '',
-    peca: peca,
-    outrasPecas: lista.pecas.filter(function (p) { return p.nomePeca !== peca.nomePeca; }),
+    // TODAS as peças deste lote (o carrossel da tela de conferência
+    // percorre esta lista — ver apvIrParaPeca, js/pagina-aprovacao.js).
+    pecas: pecasEscolhidas,
+    // Compat: a primeira peça do lote, pro que ainda lê o campo singular.
+    peca: pecasEscolhidas[0],
+    outrasPecas: lista.pecas.filter(function (p) { return nomesEscolhidos.indexOf(p.nomePeca) === -1; }),
     statusConferencia: statusConferencia,
     aprovadoPor: aprovadoPor,
     aprovadoEm: aprovadoEm,
@@ -452,17 +530,22 @@ function projetoDaTarefaEstaFechado(tarefa) {
  * mensagem. Separar os dois é o que permite mandar Feed e Stories no
  * mesmo link.
  */
-function aprovarInternamente(taskId, nomePeca, aprovadoPor) {
+function aprovarInternamente(taskId, loteId, aprovadoPor) {
   if (!taskId || !aprovadoPor) return { ok: false, error: 'taskId ou quem aprovou não informado.' };
 
   var sheet = getConferenciasSheet();
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
-    var linha = acharLinhaDaConferencia(sheet.getDataRange().getValues(), taskId, nomePeca);
-    if (!linha) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
+    var linhas = linhasDoLote(sheet.getDataRange().getValues(), taskId, loteId);
+    if (!linhas.length) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
     var agora = new Date().toISOString();
-    sheet.getRange(linha, 12, 1, 3).setValues([['aprovada', aprovadoPor, agora]]);
+    // Aprova TODAS as peças do lote de uma vez — é a decisão única que o
+    // Cláudio pediu: quem confere um lote de várias peças aprova (ou pede
+    // alteração) o lote inteiro, não peça por peça.
+    linhas.forEach(function (linha) {
+      sheet.getRange(linha, 12, 1, 3).setValues([['aprovada', aprovadoPor, agora]]);
+    });
     return { ok: true, aprovadoPor: aprovadoPor, aprovadoEm: agora };
   } finally {
     lock.releaseLock();
@@ -828,29 +911,42 @@ function devolverParaDesigner(dados) {
 
   var fechado = projetoDaTarefaEstaFechado(tarefa);
 
+  // Uma ou várias peças no MESMO pedido de alteração (pedido do Cláudio,
+  // 2026-08-05): quando o lote tinha várias peças, tudo volta junto, com o
+  // que precisa mudar EM CADA UMA marcado nela — em vez de um pedido de
+  // alteração por peça. `pecas` é o formato novo; sem ele (chamada
+  // antiga, um card em cache de antes do deploy), cai no formato de
+  // peça única de sempre.
+  var pecas = Array.isArray(dados.pecas) && dados.pecas.length
+    ? dados.pecas
+    : [{
+        nomePeca: dados.nomePeca || '',
+        fileId: dados.fileId || '',
+        nomeArquivo: dados.nomeArquivo || '',
+        mimeType: dados.mimeType || '',
+        pins: dados.pins || []
+      }];
+  var nomesPecas = pecas.map(function (p) { return p.nomePeca; }).filter(Boolean);
+
   // Guarda a devolução ANTES de escrever no Runrun.it: é dela que sai o
   // link, e o link precisa estar dentro do texto que vai ser escrito.
   var codigo = gravarDevolucao({
     taskIdOrigem: taskId,
     cardMaeId: cardMaeId,
     cliente: dados.cliente || tarefa.client_name || '',
-    nomePeca: dados.nomePeca || '',
-    fileId: dados.fileId || '',
-    nomeArquivo: dados.nomeArquivo || '',
-    mimeType: dados.mimeType || '',
     motivo: motivo,
-    pins: dados.pins || []
+    pecas: pecas
   });
 
-  var textoPins = textoDosPins(dados.pins);
-  var corpo = motivo + (textoPins ? '\n\n' + textoPins : '');
+  var temAlgumPin = pecas.some(function (p) { return Array.isArray(p.pins) && p.pins.length; });
+  var corpo = motivo + '\n\n' + textoDosPinsPorPeca(pecas);
 
-  // O LINK que abre a peça com os pontos desenhados em cima. Só a
+  // O LINK que abre a(s) peça(s) com os pontos desenhados em cima. Só a
   // interface sabe em que endereço o Colmeia está publicado hoje (mesmo
   // motivo de gerarLinkDeAprovacao), então a base vem de lá — sem ela, o
   // pedido ainda funciona, só sem o link.
-  if (Array.isArray(dados.pins) && dados.pins.length && dados.baseUrl) {
-    corpo += '\n\nVer os pontos marcados na peça: ' + dados.baseUrl + 'ajuste.html?codigo=' + codigo;
+  if (temAlgumPin && dados.baseUrl) {
+    corpo += '\n\nVer os pontos marcados n' + (pecas.length > 1 ? 'as peças' : 'a peça') + ': ' + dados.baseUrl + 'ajuste.html?codigo=' + codigo;
   }
 
   var assinatura = '\n\n— pedido por ' + (dados.autorNome || 'atendimento') + ' na conferência interna do Colmeia';
@@ -869,7 +965,7 @@ function devolverParaDesigner(dados) {
     // cliente de verdade ali; sobrescrever isso apagaria um dado real.
     var rEtapaMae = moverEtapaTarefa(cardMaeId, 'ajustes', dados.autor);
 
-    marcarConferenciaDevolvida(taskId, dados.nomePeca, dados.autorNome, motivo);
+    marcarConferenciaDevolvida(taskId, dados.loteId, dados.autorNome, motivo, nomesPecas);
     return {
       ok: true,
       caminho: 'projetoFechado',
@@ -885,8 +981,11 @@ function devolverParaDesigner(dados) {
   }
 
   var numero = proximoNumeroDeAlteracao(cardMaeId);
+  var tituloPecas = nomesPecas.length > 1
+    ? nomesPecas.length + ' peças (' + nomesPecas.join(', ') + ')'
+    : (nomesPecas[0] || tarefa.title || '');
   var criada = criarTarefaRunrun({
-    titulo: 'Alteração V' + numero + ' — ' + (dados.nomePeca || tarefa.title || ''),
+    titulo: 'Alteração V' + numero + ' — ' + tituloPecas,
     parentTaskId: cardMaeId,
     responsavelId: designerId,
     responsavelNome: designer,
@@ -916,7 +1015,7 @@ function devolverParaDesigner(dados) {
   // designer abrir a alteração (ver buscarDevolucaoDaTarefa).
   vincularDevolucaoAAlteracao(codigo, criada.taskId);
 
-  marcarConferenciaDevolvida(taskId, dados.nomePeca, dados.autorNome, motivo);
+  marcarConferenciaDevolvida(taskId, dados.loteId, dados.autorNome, motivo, nomesPecas);
   return {
     ok: true,
     caminho: 'subtarefa',
@@ -1006,6 +1105,21 @@ function textoDosPins(pins) {
   return 'Pontos marcados na peça:\n' + linhas.join('\n');
 }
 
+/**
+ * A mesma coisa que `textoDosPins`, mas pra um LOTE de peças: com uma peça
+ * só, o texto sai idêntico a antes (compat); com mais de uma, cada peça
+ * que tem ponto marcado ganha o nome dela na frente, senão o designer não
+ * saberia qual arte cada linha se refere.
+ */
+function textoDosPinsPorPeca(pecas) {
+  if (!Array.isArray(pecas) || !pecas.length) return '';
+  if (pecas.length === 1) return textoDosPins(pecas[0].pins);
+  return pecas.map(function (p) {
+    var texto = textoDosPins(p.pins);
+    return texto ? (p.nomePeca + ':\n' + texto) : '';
+  }).filter(Boolean).join('\n\n');
+}
+
 // ---------------------------------------------------------------------
 // A devolução guardada: é o que faz os pinos sobreviverem à ida pro
 // Runrun.it, onde marcação em imagem não existe
@@ -1016,9 +1130,9 @@ function getDevolucoesSheet() {
   var sheet = ss.getSheetByName('Devolucoes');
   if (!sheet) {
     sheet = ss.insertSheet('Devolucoes');
-    sheet.getRange('A1:L1').setValues([[
+    sheet.getRange('A1:M1').setValues([[
       'codigo', 'task_id_alteracao', 'task_id_origem', 'card_mae_id', 'cliente',
-      'nome_peca', 'file_id', 'nome_arquivo', 'mime_type', 'motivo', 'pins', 'devolvido_em'
+      'nome_peca', 'file_id', 'nome_arquivo', 'mime_type', 'motivo', 'pins', 'devolvido_em', 'pecas_json'
     ]]);
   }
   return sheet;
@@ -1043,19 +1157,28 @@ function gravarDevolucao(dados) {
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
+    // Um lote de várias peças grava a lista inteira em `pecas_json`; as
+    // colunas antigas (nome_peca/file_id/...) continuam recebendo a
+    // PRIMEIRA peça, pra qualquer leitor antigo (ou aba em cache de antes
+    // do deploy) continuar enxergando alguma coisa em vez de vazio.
+    var pecas = Array.isArray(dados.pecas) && dados.pecas.length
+      ? dados.pecas
+      : [{ nomePeca: dados.nomePeca || '', fileId: dados.fileId || '', nomeArquivo: dados.nomeArquivo || '', mimeType: dados.mimeType || '', pins: dados.pins || [] }];
+    var primeira = pecas[0];
     sheet.appendRow([
       codigo,
       dados.taskIdAlteracao || '',
       dados.taskIdOrigem || '',
       dados.cardMaeId || '',
       dados.cliente || '',
-      dados.nomePeca || '',
-      dados.fileId || '',
-      dados.nomeArquivo || '',
-      dados.mimeType || '',
+      primeira.nomePeca || '',
+      primeira.fileId || '',
+      primeira.nomeArquivo || '',
+      primeira.mimeType || '',
       dados.motivo || '',
-      JSON.stringify(dados.pins || []),
-      new Date().toISOString()
+      JSON.stringify(primeira.pins || []),
+      new Date().toISOString(),
+      JSON.stringify(pecas)
     ]);
   } finally {
     lock.releaseLock();
@@ -1066,18 +1189,29 @@ function gravarDevolucao(dados) {
 function linhaParaDevolucao(l) {
   var pins = [];
   try { pins = JSON.parse(l[10] || '[]'); } catch (e) { pins = []; }
+  var pecas = [];
+  try { pecas = JSON.parse(l[12] || '[]'); } catch (e) { pecas = []; }
+  // Linha de antes de `pecas_json` existir: reconstrói uma peça só a
+  // partir das colunas antigas, pra continuar lendo devolução gravada
+  // antes deste deploy.
+  if (!pecas.length) {
+    pecas = [{ nomePeca: l[5], fileId: l[6], nomeArquivo: l[7], mimeType: l[8], pins: pins }];
+  }
   return {
     codigo: l[0],
     taskIdAlteracao: String(l[1] || ''),
     taskIdOrigem: String(l[2] || ''),
     cardMaeId: String(l[3] || ''),
     cliente: l[4],
-    nomePeca: l[5],
-    fileId: l[6],
-    nomeArquivo: l[7],
-    mimeType: l[8],
+    // Compat: continuam existindo pra quem só lê a peça única (sempre a
+    // primeira do lote) — quem quer o lote inteiro usa `pecas` abaixo.
+    nomePeca: pecas[0].nomePeca,
+    fileId: pecas[0].fileId,
+    nomeArquivo: pecas[0].nomeArquivo,
+    mimeType: pecas[0].mimeType,
+    pins: pecas[0].pins || [],
     motivo: l[9],
-    pins: pins,
+    pecas: pecas,
     devolvidoEm: l[11]
   };
 }
@@ -1097,20 +1231,33 @@ function buscarDevolucaoPublica(codigo) {
   for (var i = 1; i < linhas.length; i++) {
     if (String(linhas[i][0]) !== String(codigo)) continue;
     var d = linhaParaDevolucao(linhas[i]);
-    var ehVideo = String(d.mimeType || '').indexOf('video/') === 0;
-    if (!ehVideo && d.fileId) {
-      var img = buscarImagemCheiaDrive(d.fileId);
-      if (img && img.ok) {
-        d.base64 = img.base64;
-        d.mimeType = img.mimeType || d.mimeType;
-      } else {
-        // A peça pode ter sido movida/renomeada depois. O pedido não se
-        // perde por causa disso — o motivo e a lista de pontos continuam
-        // aparecendo, com um aviso no lugar da imagem.
-        d.semImagem = true;
+    // Carrega a imagem de CADA peça do lote — ajuste.html mostra todas,
+    // no mesmo estilo em carrossel que a página de aprovação do cliente
+    // já usa pra várias peças no mesmo link.
+    d.pecas.forEach(function (p) {
+      p.ehVideo = String(p.mimeType || '').indexOf('video/') === 0;
+      if (!p.ehVideo && p.fileId) {
+        var img = buscarImagemCheiaDrive(p.fileId);
+        if (img && img.ok) {
+          p.base64 = img.base64;
+          p.mimeType = img.mimeType || p.mimeType;
+        } else {
+          // A peça pode ter sido movida/renomeada depois. O pedido não se
+          // perde por causa disso — o motivo e a lista de pontos continuam
+          // aparecendo, com um aviso no lugar da imagem.
+          p.semImagem = true;
+        }
       }
+    });
+    // Compat: os campos singulares espelham a primeira peça, já com a
+    // imagem carregada, pra quem só lê o formato antigo.
+    var primeira = d.pecas[0];
+    if (primeira) {
+      d.base64 = primeira.base64;
+      d.mimeType = primeira.mimeType;
+      d.semImagem = primeira.semImagem;
+      d.ehVideo = primeira.ehVideo;
     }
-    d.ehVideo = ehVideo;
     return { ok: true, devolucao: d };
   }
   return { ok: false, error: 'Esse link de ajuste não existe mais.' };
@@ -1136,7 +1283,8 @@ function buscarDevolucaoDaTarefa(taskId) {
     if (bate && (!achada || String(d.devolvidoEm) > String(achada.devolvidoEm))) achada = d;
   }
   if (!achada) return { ok: true, devolucao: null };
-  achada.ehVideo = String(achada.mimeType || '').indexOf('video/') === 0;
+  achada.pecas.forEach(function (p) { p.ehVideo = String(p.mimeType || '').indexOf('video/') === 0; });
+  achada.ehVideo = achada.pecas[0] ? achada.pecas[0].ehVideo : false;
   return { ok: true, devolucao: achada };
 }
 
@@ -1155,28 +1303,44 @@ function regiaoDoPonto(x, y) {
  * hipóteses a peça continua aparecendo na fila como "aprovada, falta
  * enviar" mesmo já tendo sido mandada — chato, não perigoso.
  */
-function marcarConferenciaEnviada(taskId, nomePeca) {
+function marcarConferenciaEnviada(taskId, loteId) {
   var sheet = getConferenciasSheet();
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
-    var linha = acharLinhaDaConferencia(sheet.getDataRange().getValues(), taskId, nomePeca);
-    if (!linha) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
-    sheet.getRange(linha, 12, 1, 1).setValues([['enviada']]);
+    var linhas = linhasDoLote(sheet.getDataRange().getValues(), taskId, loteId);
+    if (!linhas.length) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
+    linhas.forEach(function (linha) {
+      sheet.getRange(linha, 12, 1, 1).setValues([['enviada']]);
+    });
     return { ok: true };
   } finally {
     lock.releaseLock();
   }
 }
 
-function marcarConferenciaDevolvida(taskId, nomePeca, quem, motivo) {
+/**
+ * `nomesPecas` é o caminho de reserva: se por algum motivo o `loteId` não
+ * bater com nenhuma linha (ex: um lote antigo, de antes da coluna
+ * existir), ainda dá pra achar cada peça pelo nome — melhor que a linha
+ * ficar 'pendente' pra sempre depois de já ter sido devolvida de verdade.
+ */
+function marcarConferenciaDevolvida(taskId, loteId, quem, motivo, nomesPecas) {
   var sheet = getConferenciasSheet();
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
-    var linha = acharLinhaDaConferencia(sheet.getDataRange().getValues(), taskId, nomePeca);
-    if (!linha) return;
-    sheet.getRange(linha, 12, 1, 4).setValues([['devolvida', quem || '', new Date().toISOString(), motivo || '']]);
+    var linhasTodas = sheet.getDataRange().getValues();
+    var alvo = linhasDoLote(linhasTodas, taskId, loteId);
+    if (!alvo.length && Array.isArray(nomesPecas)) {
+      nomesPecas.forEach(function (nome) {
+        var linha = acharLinhaDaConferencia(linhasTodas, taskId, nome);
+        if (linha && alvo.indexOf(linha) === -1) alvo.push(linha);
+      });
+    }
+    alvo.forEach(function (linha) {
+      sheet.getRange(linha, 12, 1, 4).setValues([['devolvida', quem || '', new Date().toISOString(), motivo || '']]);
+    });
   } finally {
     lock.releaseLock();
   }

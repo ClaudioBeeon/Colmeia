@@ -264,32 +264,46 @@ async function renderDevolucaoNoCard(task) {
     return;
   }
 
-  const pins = d.pins || [];
+  // Um pedido pode cobrir VÁRIAS peças do mesmo lote (ver devolverParaDesigner,
+  // AprovacaoInterna.gs) — cada uma com os próprios pontos marcados. Sem
+  // `pecas` (devolução antiga, gravada antes disso existir), cai numa lista
+  // de uma peça só a partir dos campos singulares de compat.
+  const pecas = Array.isArray(d.pecas) && d.pecas.length
+    ? d.pecas
+    : [{ nomePeca: d.nomePeca, fileId: d.fileId, nomeArquivo: d.nomeArquivo, mimeType: d.mimeType, pins: d.pins || [], ehVideo: d.ehVideo }];
+
   const html = `
     <div class="devolucao-topo">
       <span class="devolucao-selo">Pedido de ajuste</span>
-      <span class="devolucao-quando">${escaparHTML(d.nomePeca || "")}</span>
+      <span class="devolucao-quando">${pecas.length > 1 ? pecas.length + " peças" : escaparHTML(pecas[0].nomePeca || "")}</span>
     </div>
     ${d.motivo ? `<p class="devolucao-motivo">${escaparHTML(d.motivo)}</p>` : ""}
-    ${pins.length ? `
-      <div class="devolucao-palco" id="devolucaoPalco" data-file-id="${escaparHTML(d.fileId || "")}" data-video="${d.ehVideo ? "1" : ""}">
-        <div class="devolucao-carregando">Carregando a peça com os pontos...</div>
-      </div>
-      <div class="devolucao-lista">
-        ${pins.map((p, i) => `
-          <div class="devolucao-linha">
-            <span class="devolucao-num">${i + 1}</span>
-            <span>${escaparHTML(p.texto || "(sem descrição)")}</span>
-          </div>`).join("")}
-      </div>
-    ` : ""}
+    ${pecas.map((p, i) => {
+      const pins = p.pins || [];
+      if (!pins.length) return "";
+      return `
+        ${pecas.length > 1 ? `<p class="devolucao-peca-nome">${escaparHTML(p.nomePeca || "")}</p>` : ""}
+        <div class="devolucao-palco" id="devolucaoPalco-${i}" data-file-id="${escaparHTML(p.fileId || "")}" data-video="${p.ehVideo ? "1" : ""}">
+          <div class="devolucao-carregando">Carregando a peça com os pontos...</div>
+        </div>
+        <div class="devolucao-lista">
+          ${pins.map((pt, j) => `
+            <div class="devolucao-linha">
+              <span class="devolucao-num">${j + 1}</span>
+              <span>${escaparHTML(pt.texto || "(sem descrição)")}</span>
+            </div>`).join("")}
+        </div>
+      `;
+    }).join("")}
   `;
 
   task._devolucaoHTML = html;
   blocoAgora.innerHTML = html;
   blocoAgora.hidden = false;
 
-  if (pins.length) carregarPecaDaDevolucao(d, pins);
+  pecas.forEach((p, i) => {
+    if ((p.pins || []).length) carregarPecaDaDevolucao(p, p.pins, i);
+  });
 }
 
 /**
@@ -302,8 +316,9 @@ async function renderDevolucaoNoCard(task) {
  * marcação fixa apontaria pro lugar errado em quase todos eles. Fica o player
  * e a lista escrita, que continua valendo.
  */
-async function carregarPecaDaDevolucao(d, pins) {
-  const palco = document.getElementById("devolucaoPalco");
+async function carregarPecaDaDevolucao(d, pins, indice) {
+  const id = "devolucaoPalco" + (indice !== undefined ? "-" + indice : "");
+  const palco = document.getElementById(id);
   if (!palco || !d.fileId) return;
 
   if (d.ehVideo) {
@@ -312,7 +327,7 @@ async function carregarPecaDaDevolucao(d, pins) {
   }
 
   const img = await chamarBackend({ acao: "buscarImagemCheiaDrive", fileId: d.fileId });
-  const palcoAgora = document.getElementById("devolucaoPalco");
+  const palcoAgora = document.getElementById(id);
   if (!palcoAgora) return;
 
   if (!img || !img.ok || !img.base64) {

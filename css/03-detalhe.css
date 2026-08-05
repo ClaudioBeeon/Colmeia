@@ -1218,6 +1218,14 @@
   font-size: 14px; line-height: 1.55; white-space: pre-wrap;
   margin: 0 0 12px; color: var(--text-primary);
 }
+/* Nome da peça, só quando o pedido cobre mais de uma (ver
+   renderDevolucaoNoCard, js/detalhe-alteracao.js) — separa visualmente
+   os pontos de uma peça dos da peça seguinte. */
+.devolucao-peca-nome {
+  font-size: 12.5px; font-weight: 700; color: var(--text-secondary);
+  margin: 14px 0 6px;
+}
+.devolucao-peca-nome:first-of-type { margin-top: 0; }
 
 /* `position: relative` no palco + `%` em cada ponto: é o que mantém a
    marcação no lugar certo em qualquer largura de tela. Os pontos são
