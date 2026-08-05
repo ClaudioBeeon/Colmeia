@@ -135,6 +135,10 @@ let apvPinsPorPeca = {};
 // Modo "clicar na peça marca um ponto" ligado/desligado.
 let apvMarcando = false;
 
+// M16: id do setInterval que reconfere a pasta do Drive enquanto a
+// conferência fica aberta (ver apvChecarVersaoNovaPeriodicamente).
+let apvVersaoNovaIntervalId = null;
+
 // A peça já foi aprovada internamente (nesta sessão de conferência)? Rege
 // tanto o rótulo do botão da pílula (Aprovar / Enviar para o cliente)
 // quanto qual painel a coluna esquerda mostra — ver apvClickAcao,
@@ -197,10 +201,11 @@ async function buildAprovacaoPage() {
 /**
  * Desenha a lista dentro de #apvFilaLista.
  *
- * ORDENAÇÃO: o backend devolve por ordem de pedido (quem está esperando há mais
- * tempo primeiro), e o tempo de espera fica visível no card. O prazo do cliente
- * seria um critério melhor de urgência — ficou registrado com o Cláudio como
- * possível ajuste depois de umas semanas de uso real.
+ * ORDENAÇÃO (M1, 2026-08-05): o backend ordena pela entrega desejada da
+ * tarefa (`item.prazo`, o mesmo campo que a conferência já mostra como
+ * "Entrega desejada") — quem tem prazo mais próximo vem primeiro, e só
+ * desempata por tempo de espera. Antes ordenava só por quem chegou primeiro,
+ * que não é a mesma coisa que urgência de verdade.
  */
 function apvRenderFila(itens) {
   const lista = document.getElementById("apvFilaLista");
@@ -212,7 +217,9 @@ function apvRenderFila(itens) {
         Nada esperando conferência agora. 🎉
         <br><br>
         Quando um designer terminar uma peça e mandar pra cá, ela aparece nesta lista.
-      </div>`;
+      </div>
+      <div id="apvVazioEspera"></div>`;
+    apvRenderEsperaDoCliente();
     return;
   }
 
@@ -224,6 +231,11 @@ function apvRenderFila(itens) {
     const rotuloPeca = pecas.length > 1
       ? `${pecas.length} peças (${pecas.map(p => p.nomePeca).join(", ")})`
       : (pecas[0] ? pecas[0].nomePeca : (item.tituloTarefa || ""));
+    // M1: entrega desejada da tarefa, mesmo dado que já é usado pra ordenar
+    // a fila — vermelho quando já passou, mesmo critério da conferência
+    // (ver apvRenderPeca/"atrasada").
+    const entrega = item.prazo ? new Date(item.prazo) : null;
+    const atrasada = entrega && entrega < new Date(new Date().toDateString());
     return `
     <article class="apv-card" data-apv-idx="${i}">
       <div class="apv-card-mini" data-apv-thumb="${escaparHTML((pecas[0] && pecas[0].fileId) || "")}"></div>
@@ -233,8 +245,13 @@ function apvRenderFila(itens) {
         <div class="apv-card-meta">
           <span class="apv-card-designer">${escaparHTML(item.designer || "")}</span>
           ${pecas.length <= 1 ? `<span class="apv-pill apv-pill-versao">versão ${(pecas[0] && pecas[0].versaoAtual) || 1}</span>` : ""}
+          ${entrega ? `<span class="apv-pill apv-pill-prazo${atrasada ? " apv-pill-prazo-atrasada" : ""}">entrega ${apvDataCurta(item.prazo)}</span>` : ""}
           ${item.status === "aprovada"
-            ? `<span class="apv-pill apv-pill-aprovada">aprovada${item.aprovadoPor ? " por " + escaparHTML(item.aprovadoPor) : ""} · falta enviar</span>`
+            // M10 (2026-08-05): "aprovada · falta enviar" não dizia quem devia
+            // mandar quando quem confere e quem envia são pessoas diferentes —
+            // "pronta pra enviar" primeiro deixa claro que É uma ação esperando
+            // alguém, e "aprovada por X" continua dizendo quem já decidiu.
+            ? `<span class="apv-pill apv-pill-aprovada">pronta pra enviar${item.aprovadoPor ? " · aprovada por " + escaparHTML(item.aprovadoPor) : ""}</span>`
             : `<span class="apv-pill apv-pill-espera">${apvTempoDeEspera(item.pedidoEm)}</span>`}
           ${item.temVersaoNova ? `<span class="apv-pill apv-pill-nova">versão nova chegou</span>` : ""}
           ${item.arquivoSumiu ? `<span class="apv-pill apv-pill-nova">${pecas.length > 1 ? "os arquivos saíram" : "o arquivo saiu"} da pasta</span>` : ""}
@@ -270,6 +287,59 @@ function apvRenderFila(itens) {
   lista.querySelectorAll("[data-apv-thumb]").forEach(el => {
     const fileId = el.dataset.apvThumb;
     if (fileId) apvCarregarMiniatura(fileId, el);
+  });
+}
+
+/**
+ * M15 (2026-08-05): a fila vazia é a tela mais vista (é a que aparece toda
+ * vez que não tem nada pra conferir) e era também a menos útil — só "🎉" e
+ * parava aí. Agora, quando não tem nada esperando CONFERÊNCIA, mostra o que
+ * já foi pro cliente e ainda está esperando resposta / voltou pedindo
+ * ajuste — vira um painel em vez de um beco.
+ *
+ * Reaproveita `carregarAprovacoesDoRepasse()` (js/pagina-repasse.js, aba
+ * "Aprovações" da Fila de repasse) em vez de inventar uma busca nova — é a
+ * MESMA informação, só filtrada aqui pro que ainda pede atenção.
+ */
+async function apvRenderEsperaDoCliente() {
+  const slot = document.getElementById("apvVazioEspera");
+  if (!slot) return;
+
+  const lista = await carregarAprovacoesDoRepasse();
+  // A fila pode ter deixado de estar vazia enquanto isso vinha (chegou peça
+  // nova) — não desenha por cima de uma fila que já tem conteúdo de novo.
+  const slotAgora = document.getElementById("apvVazioEspera");
+  if (!slotAgora || apvFila.length) return;
+  if (!lista) return; // sem rede: fica só o "🎉" de cima, sem inventar erro
+
+  const esperando = lista.filter(a => a.status === "pendente" || a.status === "ajuste");
+  if (!esperando.length) return;
+
+  // O botão "Ver tudo em Aprovações" só faz sentido pra quem enxerga a Fila
+  // de repasse — hoje só o Cláudio (ver buildRepassePage, js/pagina-repasse.js).
+  // O atendimento (quem mais vê esta tela vazia) não tem acesso a essa
+  // página; pra eles a lista fica só de leitura mesmo, sem link morto.
+  const podeVerRepasse = typeof souClaudio === "function" && souClaudio();
+
+  slotAgora.innerHTML = `
+    <div class="apv-vazio-espera-titulo">Esperando o cliente (${esperando.length})</div>
+    ${esperando.slice(0, 8).map(a => `
+      <div class="apv-vazio-espera-item ${a.status === "ajuste" ? "apv-vazio-espera-ajuste" : ""}">
+        <span class="apv-vazio-espera-dot"></span>
+        <div class="apv-vazio-espera-corpo">
+          <span class="apv-vazio-espera-cliente">${escaparHTML(a.cliente || "Sem cliente")}</span>
+          <span class="apv-vazio-espera-peca">${escaparHTML(a.nomeArquivo || a.tituloTarefa || "")}</span>
+        </div>
+        <span class="apv-vazio-espera-status">${a.status === "ajuste" ? "pediu ajuste" : "aguardando"}</span>
+      </div>
+    `).join("")}
+    ${podeVerRepasse ? `<button type="button" class="apv-btn apv-btn-neutro apv-btn-p" id="apvVazioVerTudo">Ver tudo em Aprovações</button>` : ""}
+  `;
+
+  document.getElementById("apvVazioVerTudo")?.addEventListener("click", () => {
+    mostrarPagina("repasse");
+    const tab = document.querySelector('.repasse-tab[data-mode="aprovacoes"]');
+    if (tab) tab.click();
   });
 }
 
@@ -411,6 +481,14 @@ async function apvAbrirConferencia(taskId, loteId) {
   apvRenderPeca(data);
   apvRenderCarrosselPecas();
 
+  // M16 (2026-08-05): antes o aviso "versão nova chegou" só era calculado
+  // na ABERTURA da peça — se o designer subisse uma v4 com o atendimento já
+  // conferindo a v3, a tela nunca ficava sabendo, e a proteção que existe
+  // pra não aprovar a versão errada não disparava. Agora reconfere a pasta
+  // periodicamente enquanto a conferência ficar aberta.
+  clearInterval(apvVersaoNovaIntervalId);
+  apvVersaoNovaIntervalId = setInterval(apvChecarVersaoNovaPeriodicamente, 30000);
+
   // Essa peça já foi aprovada internamente antes (reabriu pela fila depois
   // de um F5, por exemplo) — pula direto pro painel de envio, com a mesma
   // aprovação já registrada, em vez de fingir que ainda está por conferir.
@@ -441,7 +519,47 @@ function apvFecharConferencia() {
   overlay.classList.remove("open");
   setTimeout(() => overlay.classList.remove("visible"), 220);
   apvPecaAberta = null;
+  clearInterval(apvVersaoNovaIntervalId);
+  apvVersaoNovaIntervalId = null;
   if (typeof roteadorAoFecharConferencia === "function") roteadorAoFecharConferencia();
+}
+
+/**
+ * Reconfere a pasta do Drive da peça aberta (ver o comentário de M16 em
+ * apvAbrirConferencia). Não some com nada que já estava na tela se a rede
+ * falhar — só tenta de novo no próximo tique.
+ */
+async function apvChecarVersaoNovaPeriodicamente() {
+  if (!apvPecaAberta) return;
+  const taskId = apvPecaAberta.taskId;
+  const loteId = apvPecaAberta.loteId;
+
+  const data = await chamarBackend({ acao: "listarVersoesDasPecas", taskId });
+  if (caiuARede(data) || !data.ok || !apvPecaAberta || String(apvPecaAberta.taskId) !== String(taskId)) return;
+
+  const daFila = apvFila.find(i => String(i.taskId) === String(taskId) && i.loteId === loteId);
+  let mudouAlgo = false;
+
+  apvPecaAberta.pecas.forEach((p, idx) => {
+    const atualNaPasta = (data.pecas || []).find(x => x.nomePeca === p.nomePeca);
+    if (!atualNaPasta || atualNaPasta.versoes.length <= p.versoes.length) return;
+
+    // Chegou versão nova de verdade: atualiza a lista de versões guardada
+    // (o seletor ‹ v1 v2 v3 › passa a ter a nova assim que a pessoa olhar
+    // essa peça de novo) e acende o mesmo aviso amarelo de sempre.
+    apvPecaAberta.pecas[idx] = atualNaPasta;
+    if (idx === apvIndicePeca) apvPecaAberta.peca = atualNaPasta;
+    if (daFila) {
+      const daFilaPeca = (daFila.pecas || []).find(x => x.nomePeca === p.nomePeca);
+      if (daFilaPeca) { daFilaPeca.temVersaoNova = true; daFilaPeca.totalVersoes = atualNaPasta.versoes.length; }
+    }
+    mudouAlgo = true;
+  });
+
+  if (!mudouAlgo || !apvPecaAberta) return;
+  apvRenderSeletorDeVersao(apvPecaAberta);
+  apvRenderAvisoVersaoNova(apvPecaAberta);
+  apvRenderCarrosselPecas();
 }
 
 /**
@@ -701,6 +819,7 @@ function apvIrParaVersao(versao) {
 async function apvMostrarNoPalco(peca, versao) {
   const slot = document.getElementById("apvPalcoSlot");
   const arquivo = peca.peca.versoes[versao - 1];
+  const zoomBtn = document.getElementById("apvPalcoZoom");
   if (!arquivo) return;
 
   if ((arquivo.mimeType || "").indexOf("video/") === 0) {
@@ -708,7 +827,15 @@ async function apvMostrarNoPalco(peca, versao) {
       <iframe class="apv-palco-video" src="https://drive.google.com/file/d/${encodeURIComponent(arquivo.fileId)}/preview"
               allow="autoplay" allowfullscreen title="${escaparHTML(arquivo.nome)}"></iframe>
       <a class="apv-palco-drive" href="https://drive.google.com/file/d/${encodeURIComponent(arquivo.fileId)}/view" target="_blank" rel="noopener">Abrir no Drive</a>`;
+    // Vídeo já tem o player do próprio Drive pra ampliar (tela cheia do iframe) — sem zoom aqui.
+    if (zoomBtn) zoomBtn.hidden = true;
     return;
+  }
+
+  if (zoomBtn) {
+    zoomBtn.hidden = false;
+    zoomBtn.dataset.fileId = arquivo.fileId;
+    zoomBtn.dataset.nome = arquivo.nome;
   }
 
   slot.innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
@@ -1735,6 +1862,14 @@ function apvLigarEventos() {
   liga("apvBtnDevolver", "click", apvConfirmarDevolucao);
   liga("apvMarcarBtn", "click", apvAlternarMarcacao);
   liga("apvPalco", "click", apvCliqueNoPalcoParaMarcar);
+
+  // M14: zoom da peça (o palco não deixa ver letra miúda). stopPropagation
+  // pra não borbulhar pro clique do próprio palco (que MARCA UM PONTO).
+  liga("apvPalcoZoom", "click", (e) => {
+    e.stopPropagation();
+    const btn = document.getElementById("apvPalcoZoom");
+    if (btn && btn.dataset.fileId) abrirImagemAmpliadaDoDrive(btn.dataset.fileId, btn.dataset.nome);
+  });
   liga("apvVerVersaoNova", "click", () => apvIrParaVersao(apvPecaAberta ? apvPecaAberta.peca.versoes.length : 1));
 
   liga("apvTabConferencia", "click", () => apvTrocarAba("conferencia"));
@@ -1780,6 +1915,13 @@ function apvLigarEventos() {
   liga("apvMotivo", "input", () => {
     document.getElementById("apvErroMotivo").hidden = true;
     document.getElementById("apvMotivo").classList.remove("invalido");
+  });
+
+  // M9 (2026-08-05): a explicação da pílula "Projeto fechado" só existia no
+  // `title` (hover) — no celular isso nunca aparece. Um toque agora mostra o
+  // mesmo texto como toast, sem precisar de popover novo nem CSS extra.
+  liga("apvExcecaoPill", "click", () => {
+    mostrarToast(document.getElementById("apvExcecaoPill").getAttribute("title") || "");
   });
 
   liga("apvCopiarLinkMae", "click", async () => {

@@ -47,7 +47,26 @@ function getAprovacoesSheet() {
   // aprovando?" (pedido do Cláudio, 2026-08-05) — só existe quando ele
   // aprovou; pedido de ajuste não pergunta isso.
   if (sheet.getLastColumn() < 15) sheet.getRange(1, 15).setValue('quem_aprovou');
+  // Coluna P: resposta POR PEÇA (M5, 2026-08-05) — JSON, um item por peça
+  // do link (mesma ordem de idsDaLinhaDeAprovacao(fileId)), cada um
+  // `null` (ainda não respondida) ou `{status, texto, quemAprovou,
+  // respondidoEm}`. As colunas I/J/K/O continuam existindo como o
+  // AGREGADO (preenchidas só quando TODAS as peças já têm resposta) —
+  // é o que a aba "Aprovações" da Fila de repasse (que só olha o
+  // agregado) continua enxergando sem precisar saber que isso existe.
+  if (sheet.getLastColumn() < 16) sheet.getRange(1, 16).setValue('respostas_pecas');
   return sheet;
+}
+
+/** Uma célula pode ter várias respostas, uma por peça (ver getAprovacoesSheet). */
+function parsearRespostasPecas(json, quantasPecas) {
+  var lista = [];
+  if (json) {
+    try { lista = JSON.parse(json); } catch (e) { lista = []; }
+  }
+  if (!Array.isArray(lista)) lista = [];
+  while (lista.length < quantasPecas) lista.push(null);
+  return lista;
 }
 
 /**
@@ -381,9 +400,16 @@ function buscarAprovacaoPublica(codigo) {
     nomeArquivo: linha.nomeArquivo,
     status: linha.status,
     respostaTexto: linha.respostaTexto,
+    respondidoEm: linha.respondidoEm || null,
     quemAprovou: linha.quemAprovou,
     pins: parsearPins(linha.pins),
     pecas: pecas,
+    // M5 (2026-08-05): resposta POR PEÇA — um item por peça, na mesma
+    // ordem de `pecas` (null = essa peça ainda não foi respondida). Com
+    // uma peça só isso sempre bate com o `status`/`respostaTexto` de cima;
+    // é o que faz o front continuar funcionando sem checar isso quando o
+    // link é de peça única.
+    respostasPorPeca: parsearRespostasPecas(linha.respostasPecas, pecas.length),
     // Campos antigos, só pra uma aba já aberta com a versão anterior do
     // aprovar.html não quebrar de vez enquanto o GitHub Pages atualiza.
     base64: primeira.base64 || null,
@@ -496,6 +522,120 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins, quemRe
   return { ok: true, status: linha.status, avisoChegou: avisoChegou, quemAprovou: linha.quemAprovou };
 }
 
+/**
+ * O cliente respondeu UMA peça de um link com VÁRIAS (M5, 2026-08-05:
+ * "o cliente não consegue responder peça por peça" — ele aprovava o Feed
+ * e o Stories juntos, mesmo quando só um dos dois precisava de ajuste).
+ *
+ * Cada peça vira uma entrada independente em `respostas_pecas` (coluna P).
+ * As colunas de sempre (status/respostaTexto/respondidoEm/quemAprovou, que
+ * a aba "Aprovações" da Fila de repasse já lê) só são preenchidas quando
+ * TODAS as peças do link já tiverem resposta — antes disso o link inteiro
+ * continua "pendente" pra quem olha de fora, mesmo já tendo uma peça
+ * decidida, porque ainda falta decisão de verdade sobre o resto.
+ *
+ * O AVISO NO RUNRUN.IT sai na hora, por peça — o designer não devia esperar
+ * as outras duas peças serem respondidas pra saber que uma já pode seguir.
+ */
+function responderPecaAprovacaoPublica(codigo, indicePeca, aprovado, respostaTexto, pins, quemRespondeu) {
+  if (!codigo) return { ok: false, error: 'Link inválido.' };
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  var linha, respostas, quantasPecas, todasRespondidas;
+  try {
+    var sheet = getAprovacoesSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var indiceLinha = -1;
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) === String(codigo)) { indiceLinha = i; break; }
+    }
+    if (indiceLinha === -1) { lock.releaseLock(); return { ok: false, error: 'Não encontrei essa aprovação.' }; }
+    linha = linhaParaObjetoDeAprovacao(linhas[indiceLinha]);
+
+    quantasPecas = idsDaLinhaDeAprovacao(linha.fileId).length || 1;
+    if (indicePeca < 0 || indicePeca >= quantasPecas) { lock.releaseLock(); return { ok: false, error: 'Peça inválida.' }; }
+
+    respostas = parsearRespostasPecas(linha.respostasPecas, quantasPecas);
+    if (respostas[indicePeca]) {
+      // Essa peça específica já tinha resposta — devolve o que já estava
+      // gravado, sem sobrescrever (mesmo espírito do `jaRespondido` de
+      // responderAprovacaoPublica).
+      lock.releaseLock();
+      return { ok: true, jaRespondido: true, status: respostas[indicePeca].status,
+        respostaTexto: respostas[indicePeca].texto, quemAprovou: respostas[indicePeca].quemAprovou };
+    }
+
+    var statusPeca = aprovado ? 'aprovado' : 'ajuste';
+    respostas[indicePeca] = {
+      status: statusPeca,
+      texto: respostaTexto || '',
+      quemAprovou: aprovado ? String(quemRespondeu || '').trim() : '',
+      respondidoEm: new Date().getTime()
+    };
+
+    // Junta os pins desta peça com os que já existiam de OUTRAS peças —
+    // sem isso, responder a peça 2 apagaria os pontos já marcados na 1.
+    var pinsExistentes = parsearPins(linha.pins).filter(function (p) { return Number(p.peca) !== indicePeca; });
+    var pinsDestaPeca = (pins || []).map(function (p) { return { x: p.x, y: p.y, texto: p.texto, peca: indicePeca }; });
+    var pinsTodos = pinsExistentes.concat(pinsDestaPeca);
+
+    sheet.getRange(indiceLinha + 1, 16).setValue(JSON.stringify(respostas));
+    sheet.getRange(indiceLinha + 1, 13).setValue(pinsTodos.length ? JSON.stringify(pinsTodos) : '');
+
+    todasRespondidas = respostas.every(function (r) { return !!r; });
+    if (todasRespondidas) {
+      var todasAprovadas = respostas.every(function (r) { return r.status === 'aprovado'; });
+      var primeiroAprovador = respostas.filter(function (r) { return r.quemAprovou; })[0];
+      var textoAgregado = respostas
+        .map(function (r, idx) { return r.texto ? '(' + (idx + 1) + ') ' + r.texto : ''; })
+        .filter(function (t) { return !!t; }).join(' · ');
+      sheet.getRange(indiceLinha + 1, 9, 1, 3).setValues([[
+        todasAprovadas ? 'aprovado' : 'ajuste', textoAgregado, new Date().getTime()
+      ]]);
+      sheet.getRange(indiceLinha + 1, 15).setValue(todasAprovadas && primeiroAprovador ? primeiroAprovador.quemAprovou : '');
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  var nomesPecas = String(linha.nomeArquivo || '').split('|');
+  var nomeDaPeca = nomesPecas[indicePeca] || linha.nomeArquivo || ('peça ' + (indicePeca + 1));
+  var avisoChegou = false;
+  try {
+    var partes = ['Alterações do cliente (via link de aprovação):'];
+    partes.push(aprovado
+      ? '✅ Aprovou "' + nomeDaPeca + '"' + (quemRespondeu ? ' — ' + quemRespondeu : '') + '.'
+      : '✏️ Pediu ajuste em "' + nomeDaPeca + '".');
+    if (respostaTexto) partes.push(respostaTexto);
+    var pinsDaResposta = (pins || []);
+    if (pinsDaResposta.length) {
+      partes.push((pinsDaResposta.length === 1 ? '1 ponto marcado' : pinsDaResposta.length + ' pontos marcados') +
+        ' nesta peça — abre o link de aprovação de novo pra ver exatamente onde:');
+      pinsDaResposta.forEach(function (p, i) { partes.push((i + 1) + '. ' + (p.texto || '(sem descrição)')); });
+    }
+    if (quantasPecas > 1) {
+      partes.push(todasRespondidas
+        ? '(era a última peça deste link — todas já têm resposta)'
+        : '(ainda faltam peças deste mesmo link pra responder)');
+    }
+    var envio = adicionarComentario(linha.taskId, partes.join('\n'), null);
+    avisoChegou = !!(envio && envio.ok);
+  } catch (e) {
+    avisoChegou = false;
+  }
+
+  if (!avisoChegou) marcarAvisoDeAprovacaoPendente(codigo);
+
+  return {
+    ok: true,
+    status: respostas[indicePeca].status,
+    quemAprovou: respostas[indicePeca].quemAprovou,
+    avisoChegou: avisoChegou,
+    todasRespondidas: todasRespondidas
+  };
+}
+
 // Coluna N da aba Aprovacoes: "1" enquanto o aviso na tarefa não saiu.
 var COLUNA_AVISO_PENDENTE = 14;
 
@@ -594,7 +734,7 @@ function linhaParaObjetoDeAprovacao(linha) {
     codigo: linha[0], taskId: linha[1], cliente: linha[2], tituloTarefa: linha[3],
     fileId: linha[4], nomeArquivo: linha[5], mimeType: linha[6], criadoEm: linha[7],
     status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11],
-    pins: linha[12] || '', quemAprovou: linha[14] || ''
+    pins: linha[12] || '', quemAprovou: linha[14] || '', respostasPecas: linha[15] || ''
   };
 }
 
@@ -649,7 +789,13 @@ function listarAprovacoesDoCliente(cliente) {
       status: obj.status,
       criadoEm: obj.criadoEm,
       respondidoEm: obj.respondidoEm,
-      respostaTexto: obj.respostaTexto
+      respostaTexto: obj.respostaTexto,
+      // M11 (2026-08-05): "quem aprovou" some do cartão da Fila de repasse
+      // depois de 7 dias — este é o caminho que continua enxergando (até
+      // os 30 dias de retenção da aba, ver limparAprovacoesAntigas): o Hub
+      // do cliente já é, na prática, a busca de histórico por cliente que
+      // faltava.
+      quemAprovou: obj.quemAprovou
     });
   }
   lista.sort(function (a, b) { return b.criadoEm - a.criadoEm; });

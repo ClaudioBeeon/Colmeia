@@ -328,6 +328,10 @@ function handleRequest(e, method) {
         output = buscarAprovacaoPublica(body.codigo);
       } else if (body.acao === 'responderAprovacaoPublica') {
         output = responderAprovacaoPublica(body.codigo, body.aprovado, body.respostaTexto, body.pins, body.quemRespondeu);
+      } else if (body.acao === 'responderPecaAprovacaoPublica') {
+        // M5 (2026-08-05): resposta POR PEÇA, usada quando o link tem mais
+        // de uma (ver Aprovacao.gs) — também PÚBLICA, mesmo código protege.
+        output = responderPecaAprovacaoPublica(body.codigo, body.indicePeca, body.aprovado, body.respostaTexto, body.pins, body.quemRespondeu);
       } else if (body.acao === 'listarAprovacoesDoCliente') {
         output = listarAprovacoesDoCliente(body.cliente);
       } else if (body.acao === 'beeGerarImagem') {

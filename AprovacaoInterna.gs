@@ -274,6 +274,7 @@ function listarConferenciasPendentes() {
   var sheet = getConferenciasSheet();
   var linhas = sheet.getDataRange().getValues();
   var cachePastas = {};
+  var cacheTarefas = {};
 
   // Agrupa por LOTE: cada linha é uma peça, mas o item da fila é o lote
   // inteiro — é o que faz 13 peças mandadas juntas aparecerem como UMA
@@ -351,8 +352,32 @@ function listarConferenciasPendentes() {
   itens.forEach(function (it) {
     it.temVersaoNova = it.pecas.some(function (p) { return p.temVersaoNova; });
     it.arquivoSumiu = it.pecas.every(function (p) { return p.arquivoSumiu; });
+
+    // Entrega desejada da tarefa (mesmo campo que a tela de conferência já
+    // mostra, `dadosDaConferencia` -> `tarefa.desired_date`) — pedido do
+    // Cláudio (M1, 2026-08-05): a fila ordenava só por quem chegou primeiro,
+    // sem olhar o prazo do cliente. Uma leitura por taskId (cacheada aqui
+    // dentro), não por lote — várias peças da mesma tarefa não pagam a busca
+    // de novo.
+    if (!(it.taskId in cacheTarefas)) {
+      var t = runrunFetch('/tasks/' + it.taskId);
+      cacheTarefas[it.taskId] = (t && !t.erroFetch) ? (t.desired_date || null) : null;
+    }
+    it.prazo = cacheTarefas[it.taskId];
   });
-  itens.sort(function (a, b) { return String(a.pedidoEm).localeCompare(String(b.pedidoEm)); });
+
+  // Ordena por URGÊNCIA DE VERDADE: quem tem prazo mais próximo vem
+  // primeiro; quem não tem prazo (nunca deveria acontecer, mas por segurança)
+  // vai pro fim. Dentro do mesmo prazo (ou mesma ausência dele), desempata
+  // por quem está esperando há mais tempo — o critério antigo, que sozinho
+  // não bastava (uma peça pedida há 20min com entrega hoje é mais urgente
+  // que uma de 3h com entrega semana que vem).
+  itens.sort(function (a, b) {
+    var pa = a.prazo ? new Date(a.prazo).getTime() : Infinity;
+    var pb = b.prazo ? new Date(b.prazo).getTime() : Infinity;
+    if (pa !== pb) return pa - pb;
+    return String(a.pedidoEm).localeCompare(String(b.pedidoEm));
+  });
   return { ok: true, itens: itens };
 }
 

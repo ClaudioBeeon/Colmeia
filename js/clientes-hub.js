@@ -141,7 +141,7 @@ function renderAprovacoesDoClienteHTML(lista) {
           ${a.respostaTexto ? `<span class="ch-aprov-resposta">“${escaparHTML(a.respostaTexto)}”</span>` : ""}
         </div>
         <div class="ch-aprov-lado">
-          <span class="ch-aprov-status ${info.cls}">${info.texto}</span>
+          <span class="ch-aprov-status ${info.cls}">${info.texto}${a.quemAprovou ? ` · ${escaparHTML(a.quemAprovou)}` : ""}</span>
           <span class="ch-aprov-data">${dataTexto}</span>
           <button type="button" class="ch-aprov-copiar" data-codigo="${a.codigo}" title="Copiar link de novo">🔗</button>
         </div>

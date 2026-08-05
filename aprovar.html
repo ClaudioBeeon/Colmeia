@@ -245,6 +245,11 @@
     transition: border-color var(--dur-fast) var(--ease);
   }
   .filme-item.ativa .filme-mini { border-color: var(--amarelo); }
+  /* M5: peça já respondida — borda verde (aprovada) ou laranja (ajuste),
+     pra saber de longe o que ainda falta decidir num link de várias peças. */
+  .filme-item.filme-item-respondida .filme-mini { border-color: var(--verde); }
+  .filme-item.filme-item-respondida.filme-item-ajuste .filme-mini { border-color: var(--laranja); }
+  .filme-item.filme-item-respondida:not(.ativa) { opacity: .85; }
   .filme-mini img { width: 100%; height: 100%; object-fit: cover; }
   .filme-mini-icone { font-size: 20px; }
   .filme-rotulo {
@@ -361,6 +366,7 @@
   .pill-aprovado { background: var(--verde-bg); color: var(--verde); }
   .pill-ajuste { background: var(--laranja-bg); color: var(--laranja); }
   .respondido-texto { font-size: 13.5px; line-height: 1.5; color: var(--text-2); margin: 0; }
+  .respondido-quando { font-size: 12px; color: var(--text-3); margin: 6px 0 0; }
 
   /* "Nosso sistema está fora do ar" — tom calmo de propósito: pro cliente
      isso não é erro dele nem problema dele, e a resposta que ele acabou
@@ -462,7 +468,11 @@
         </div>
 
         <div class="cartao" style="margin-top:12px;">
-          <p class="cartao-rotulo">O que você achou?</p>
+          <p class="cartao-rotulo" id="rotuloOQueAchou">O que você achou?</p>
+          <!-- M5: link com várias peças — esta peça já foi respondida antes
+               (o cliente pode navegar pelo carrossel e responder cada uma
+               na hora que quiser). Sem botões aqui, só o que foi decidido. -->
+          <div id="respostaPecaFeita" hidden></div>
           <div class="acoes-coluna" id="acoesPrincipais">
             <button type="button" class="btn btn-aprovar btn-bloco" id="btnAprovar">✅ Aprovar</button>
             <button type="button" class="btn btn-ajuste btn-bloco" id="btnPedirAjuste">✏️ Pedir ajuste</button>
@@ -481,6 +491,10 @@
         <div class="cartao">
           <span class="pill" id="pillStatus"></span>
           <p class="respondido-texto" id="textoRespondido"></p>
+          <!-- M6 (2026-08-05): comprovante pro cliente, não só pro time —
+               data/hora + nome. Aviso claro de que isso é controle interno,
+               não prova jurídica (o campo é texto livre). -->
+          <p class="respondido-quando" id="respondidoQuando" hidden></p>
 
           <!-- Só aparece quando o sistema da equipe (Runrun.it) estava
                fora do ar na hora: a resposta do cliente FOI salva, mas o
@@ -523,8 +537,8 @@
        quem aprovou". Só no caminho do Aprovar; Pedir ajuste não pergunta
        isso (o texto do pedido já identifica o suficiente). -->
   <div class="modal-fundo" id="modalQuemAprova" hidden>
-    <div class="modal-caixa">
-      <p class="modal-titulo">Quem está aprovando?</p>
+    <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="modalQuemAprovaTitulo">
+      <p class="modal-titulo" id="modalQuemAprovaTitulo">Quem está aprovando?</p>
       <p class="modal-txt">Só pra gente saber quem confirmou, caso precise checar depois.</p>
       <input type="text" id="nomeAprovador" placeholder="Seu nome" autocomplete="name">
       <p class="erro-nome" id="erroNome">Escreve seu nome antes de confirmar.</p>
@@ -542,8 +556,8 @@
        página, pelo mesmo motivo do "versão não é a mais nova" na tela do
        atendimento: é exatamente o erro que este aviso existe pra evitar. -->
   <div class="modal-fundo" id="modalAvisoPins" hidden>
-    <div class="modal-caixa">
-      <p class="modal-titulo">Tem ponto marcado na peça</p>
+    <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="modalAvisoPinsTitulo">
+      <p class="modal-titulo" id="modalAvisoPinsTitulo">Tem ponto marcado na peça</p>
       <p class="modal-txt" id="avisoPinsTexto">Você marcou pontos na arte — isso normalmente é pra pedir um ajuste. Se aprovar mesmo assim, isso vai junto no aviso pro time, mas a peça já entra como aprovada. Tem certeza?</p>
       <div class="acoes-coluna">
         <button type="button" class="btn btn-aprovar btn-bloco" id="btnAprovarMesmoAssim">✅ Aprovar mesmo assim</button>
@@ -619,12 +633,55 @@
     return div.innerHTML;
   }
 
+  // ===== M13 (2026-08-05): acessibilidade básica nas caixinhas =====
+  // A tela de conferência do atendimento já prende o foco dentro do
+  // popup; as duas caixinhas do CLIENTE (aqui) tinham ficado de fora — o
+  // Tab escapava pra trás do fundo escuro. Um trap simples: Tab no último
+  // elemento focável volta pro primeiro, Shift+Tab no primeiro vai pro
+  // último. Guarda quem estava com foco ANTES de abrir, pra devolver ao
+  // fechar (senão o foco "some" pro topo da página).
+  var focoAnterior = null;
+  function prenderFoco(container) {
+    focoAnterior = document.activeElement;
+    function focaveis() {
+      return Array.prototype.slice.call(
+        container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+      ).filter(function (el) { return !el.disabled && el.offsetParent !== null; });
+    }
+    function aoTab(e) {
+      if (e.key !== "Tab" || container.hidden) return;
+      var lista = focaveis();
+      if (!lista.length) return;
+      var primeiro = lista[0], ultimo = lista[lista.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+      else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+    }
+    container._aoTab = aoTab;
+    document.addEventListener("keydown", aoTab);
+  }
+  function soltarFoco() {
+    document.querySelectorAll(".modal-fundo").forEach(function (m) {
+      if (m._aoTab) { document.removeEventListener("keydown", m._aoTab); m._aoTab = null; }
+    });
+    if (focoAnterior && typeof focoAnterior.focus === "function") focoAnterior.focus();
+    focoAnterior = null;
+  }
+
   // ===== Estado =====
   var codigo = pegarCodigo();
   var pecas = [];          // todas as peças do link
   var pecaAtual = 0;       // qual está no visor
   var pins = [];           // [{x, y, texto, peca}] — `peca` = índice da peça
   var modoLeitura = false; // link já respondido: mostra os pontos, não deixa mexer
+
+  // M5 (2026-08-05): resposta POR PEÇA — um item por peça (mesma ordem de
+  // `pecas`), null = ainda não respondida. Só é usado de verdade quando o
+  // link tem mais de uma peça (ver respondePorPeca()); com peça única o
+  // fluxo antigo (um Aprovar/Pedir ajuste pro link inteiro) continua igual,
+  // de propósito — é o caso comum, e não vale o risco de mexer nele.
+  var respostasPorPeca = [];
+  function respondePorPeca() { return pecas.length > 1; }
+  function todasPecasRespondidas() { return respostasPorPeca.length > 0 && respostasPorPeca.every(function (r) { return !!r; }); }
 
   /**
    * A peça nem chegou a carregar porque o nosso lado está fora do ar.
@@ -653,6 +710,12 @@
    *  pra saber onde ele caiu. */
   function aceitaPins(peca) {
     return !!peca && !peca.erro && !peca.previewUrl && !peca.ehVideo;
+  }
+
+  /** Peça já respondida (M5, link com várias) não aceita mais ponto novo —
+   *  a decisão dela já foi mandada, marcar em cima não muda nada. */
+  function pecaJaRespondida(indice) {
+    return respondePorPeca() && !!respostasPorPeca[indice];
   }
 
   function desenharPeca(indice, animar) {
@@ -691,7 +754,8 @@
     posicionarOverlayPins();
 
     var visor = document.getElementById("visor");
-    visor.classList.toggle("marcavel", !modoLeitura && aceitaPins(peca));
+    var marcavel = !modoLeitura && aceitaPins(peca) && !pecaJaRespondida(indice);
+    visor.classList.toggle("marcavel", marcavel);
     if (animar) {
       visor.classList.remove("trocou");
       void visor.offsetWidth;   // reinicia a animação
@@ -699,12 +763,13 @@
     }
 
     var dica = document.getElementById("dicaPins");
-    if (dica) dica.hidden = modoLeitura || !aceitaPins(peca);
+    if (dica) dica.hidden = !marcavel;
 
     document.querySelectorAll(".filme-item").forEach(function (b, i) {
       b.classList.toggle("ativa", i === indice);
     });
     renderPins();
+    if (!modoLeitura) atualizarCardDecisao();
   }
 
   function irParaPeca(indice, animar) {
@@ -740,6 +805,17 @@
 
     filme.querySelectorAll("[data-peca]").forEach(function (b) {
       b.addEventListener("click", function () { irParaPeca(Number(b.dataset.peca)); });
+    });
+    atualizarBadgesCarrossel();
+  }
+
+  /** M5: marca no carrossel quais peças já têm resposta (✓ aprovada / ✏️ ajuste). */
+  function atualizarBadgesCarrossel() {
+    if (!respondePorPeca()) return;
+    document.querySelectorAll(".filme-item").forEach(function (b, i) {
+      var r = respostasPorPeca[i];
+      b.classList.toggle("filme-item-respondida", !!r);
+      b.classList.toggle("filme-item-ajuste", !!(r && r.status === "ajuste"));
     });
   }
 
@@ -853,7 +929,7 @@
   }
 
   document.getElementById("visor").addEventListener("click", function (e) {
-    if (modoLeitura || !aceitaPins(pecas[pecaAtual])) return;
+    if (modoLeitura || !aceitaPins(pecas[pecaAtual]) || pecaJaRespondida(pecaAtual)) return;
     if (e.target.closest(".pin") || e.target.closest(".seta")) return;
     // Mede pela IMAGEM, não pela caixa: com object-fit: contain sobra
     // fundo dos lados (ou em cima e embaixo), e medir pela caixa poria o
@@ -869,8 +945,54 @@
     if (novo) novo.focus();
   });
 
+  /**
+   * M5: desenha o cartão "O que você achou?" pra refletir a PEÇA que está
+   * no visor agora — com link de peça única, esta função não faz nada (o
+   * cartão fica do jeito que sempre foi, botões fixos pro link inteiro).
+   */
+  function atualizarCardDecisao() {
+    if (!respondePorPeca()) return;
+    var resposta = respostasPorPeca[pecaAtual];
+    var rotulo = document.getElementById("rotuloOQueAchou");
+    var acoes = document.getElementById("acoesPrincipais");
+    var form = document.getElementById("formAjuste");
+    var feita = document.getElementById("respostaPecaFeita");
+
+    var pendentes = respostasPorPeca.filter(function (r) { return !r; }).length;
+    rotulo.textContent = "O que você achou desta peça?" + (pecas.length > 1 ? " (faltam " + pendentes + " de " + pecas.length + ")" : "");
+
+    if (resposta) {
+      acoes.hidden = true;
+      form.classList.remove("aberto");
+      feita.hidden = false;
+      feita.innerHTML = resposta.status === "aprovado"
+        ? "<p class=\"cartao-texto\">✅ Você já aprovou esta peça" + (resposta.quemAprovou ? " — " + escaparTexto(resposta.quemAprovou) : "") + ".</p>"
+        : "<p class=\"cartao-texto\">✏️ Você já pediu ajuste nesta peça" + (resposta.texto ? ": “" + escaparTexto(resposta.texto) + "”" : "") + ".</p>";
+    } else {
+      feita.hidden = true;
+      acoes.hidden = false;
+    }
+  }
+
+  /**
+   * M6 (2026-08-05): "agora que a gente sabe quem aprovou, o passo natural
+   * é o cliente também ver isso" — data, hora e o nome, na própria tela de
+   * "Aprovado". Fica claro que é controle interno (o campo é texto livre,
+   * não assinatura), não uma prova de nada.
+   */
+  function mostrarQuandoRespondeu(respondidoEm, quemAprovou) {
+    var el = document.getElementById("respondidoQuando");
+    if (!el) return;
+    if (!respondidoEm) { el.hidden = true; return; }
+    var d = new Date(Number(respondidoEm));
+    var quando = d.toLocaleDateString("pt-BR", { day: "numeric", month: "long" }) +
+      " às " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    el.textContent = (quemAprovou ? quemAprovou + " aprovou em " : "Aprovado em ") + quando + ".";
+    el.hidden = false;
+  }
+
   // ===== Depois de responder =====
-  function mostrarComoRespondido(status, respostaTexto, avisoChegou, quemAprovou) {
+  function mostrarComoRespondido(status, respostaTexto, avisoChegou, quemAprovou, respondidoEm) {
     if (avisoChegou === undefined) avisoChegou = true; // link já respondido antes
     document.getElementById("blocoPendente").hidden = true;
     document.getElementById("blocoRespondido").hidden = false;
@@ -891,6 +1013,7 @@
       // Sem o aviso automático, o WhatsApp deixa de ser um extra e passa
       // a ser o caminho recomendado — então aparece também no "aprovado".
       acoesWhatsapp.hidden = avisoChegou;
+      mostrarQuandoRespondeu(respondidoEm, quemAprovou);
     } else {
       pill.className = "pill pill-ajuste";
       pill.textContent = "✏️ Ajuste pedido";
@@ -979,11 +1102,19 @@
         return { x: p.x, y: p.y, texto: p.texto, peca: typeof p.peca === "number" ? p.peca : 0 };
       });
 
+      // M5: uma resposta por peça — só existe de verdade (e só importa)
+      // quando o link tem mais de uma. O topo (status/respostaTexto) só
+      // vira != "pendente" quando TODAS já tiverem resposta (ver
+      // responderPecaAprovacaoPublica, Aprovacao.gs).
+      respostasPorPeca = (data.respostasPorPeca && data.respostasPorPeca.length === pecas.length)
+        ? data.respostasPorPeca
+        : pecas.map(function () { return null; });
+
       montarCarrossel();
       mostrarTela("telaAprovacao");
 
       if (data.status && data.status !== "pendente") {
-        mostrarComoRespondido(data.status, data.respostaTexto, undefined, data.quemAprovou);
+        mostrarComoRespondido(data.status, data.respostaTexto, undefined, data.quemAprovou, data.respondidoEm);
       } else {
         // O cartão de pontos só aparece se ALGUMA peça do link aceitar
         // ponto marcado. Num link só de vídeo ele seria um bloco vazio
@@ -994,12 +1125,14 @@
       }
 
       document.getElementById("btnAprovar").addEventListener("click", function () {
-        if (pins.length) {
-          document.getElementById("avisoPinsTexto").textContent = (pins.length === 1
+        var pinsDaPeca = respondePorPeca() ? pins.filter(function (p) { return p.peca === pecaAtual; }) : pins;
+        if (pinsDaPeca.length) {
+          document.getElementById("avisoPinsTexto").textContent = (pinsDaPeca.length === 1
             ? 'Você marcou 1 ponto na arte'
-            : 'Você marcou ' + pins.length + ' pontos na arte')
+            : 'Você marcou ' + pinsDaPeca.length + ' pontos na arte')
             + ' — isso normalmente é pra pedir um ajuste. Se aprovar mesmo assim, isso vai junto no aviso pro time, mas a peça já entra como aprovada. Tem certeza?';
           document.getElementById("modalAvisoPins").hidden = false;
+          prenderFoco(document.getElementById("modalAvisoPins"));
           return;
         }
         abrirModalQuemAprova();
@@ -1014,9 +1147,52 @@
         document.getElementById("acoesPrincipais").hidden = false;
       });
       document.getElementById("btnConfirmarAjuste").addEventListener("click", function () {
-        enviarResposta(false, document.getElementById("textoAjuste").value.trim());
+        var texto = document.getElementById("textoAjuste").value.trim();
+        if (respondePorPeca()) enviarRespostaPeca(false, texto, "");
+        else enviarResposta(false, texto);
       });
     });
+  }
+
+  /** M5: envia a resposta de UMA peça (link com várias). */
+  function enviarRespostaPeca(aprovado, respostaTexto, quemRespondeu) {
+    var botoes = document.querySelectorAll("#blocoPendente button");
+    botoes.forEach(function (b) { b.disabled = true; });
+    document.getElementById("erroEnvio").style.display = "none";
+    var indice = pecaAtual;
+    var pinsDaPeca = pins.filter(function (p) { return p.peca === indice; });
+
+    chamar({ acao: "responderPecaAprovacaoPublica", codigo: codigo, indicePeca: indice, aprovado: aprovado, respostaTexto: respostaTexto, pins: pinsDaPeca, quemRespondeu: quemRespondeu || "" })
+      .then(function (data) {
+        botoes.forEach(function (b) { b.disabled = false; });
+        if (!data || !data.ok) {
+          var erro = document.getElementById("erroEnvio");
+          erro.textContent = (data && data.error) || "Não consegui enviar agora. Tenta de novo em alguns segundos.";
+          erro.style.display = "block";
+          return;
+        }
+        respostasPorPeca[indice] = { status: data.status, texto: respostaTexto, quemAprovou: data.quemAprovou, respondidoEm: Date.now() };
+        document.getElementById("formAjuste").classList.remove("aberto");
+
+        if (data.todasRespondidas) {
+          // Busca de novo pra pegar o AGREGADO calculado no backend
+          // (status/respostaTexto/quemAprovou juntando as N peças) — mais
+          // seguro que recalcular aqui e correr o risco de divergir.
+          chamar({ acao: "buscarAprovacaoPublica", codigo: codigo }).then(function (fresh) {
+            var ok = fresh && fresh.ok;
+            mostrarComoRespondido(
+              ok ? fresh.status : data.status,
+              ok ? fresh.respostaTexto : respostaTexto,
+              data.avisoChegou !== false,
+              ok ? fresh.quemAprovou : data.quemAprovou,
+              ok ? fresh.respondidoEm : Date.now()
+            );
+          });
+        } else {
+          atualizarBadgesCarrossel();
+          atualizarCardDecisao();
+        }
+      });
   }
 
   function enviarResposta(aprovado, respostaTexto, quemRespondeu) {
@@ -1045,14 +1221,36 @@
   // Abre antes de mandar a resposta de verdade — pedido do Cláudio
   // (2026-08-05): "pra gente ter um controle e saber quem aprovou". Só
   // no caminho do Aprovar (ver o click de btnAprovar, mais acima).
+
+  // M12 (2026-08-05): o nome era texto livre puro — "Maria", "maria
+  // clara", "Mari"... a mesma pessoa virava três registros diferentes com
+  // o tempo. O navegador agora lembra o ÚLTIMO nome usado NAQUELE cliente
+  // (chave por nome do cliente, um link é sempre do mesmo cliente) e
+  // pré-preenche — a pessoa só confirma, em vez de digitar de novo toda
+  // vez, e o dado sai mais consistente sozinho.
+  function chaveNomeAprovador() {
+    var cliente = (document.getElementById("nomeCliente").textContent || "").trim().toLowerCase();
+    return "colmeia_aprovador_" + cliente;
+  }
+  function lembrarNomeAprovador(nome) {
+    try { localStorage.setItem(chaveNomeAprovador(), nome); } catch (e) { /* localStorage indisponível: só não pré-preenche da próxima vez */ }
+  }
+  function ultimoNomeAprovador() {
+    try { return localStorage.getItem(chaveNomeAprovador()) || ""; } catch (e) { return ""; }
+  }
+
   function abrirModalQuemAprova() {
     document.getElementById("erroNome").style.display = "none";
-    document.getElementById("nomeAprovador").value = "";
+    document.getElementById("nomeAprovador").value = ultimoNomeAprovador();
     document.getElementById("modalQuemAprova").hidden = false;
-    document.getElementById("nomeAprovador").focus();
+    var campo = document.getElementById("nomeAprovador");
+    campo.focus();
+    campo.select();
+    prenderFoco(document.getElementById("modalQuemAprova"));
   }
   function fecharModalQuemAprova() {
     document.getElementById("modalQuemAprova").hidden = true;
+    soltarFoco();
   }
   function confirmarAprovacaoComNome() {
     var nome = document.getElementById("nomeAprovador").value.trim();
@@ -1061,8 +1259,10 @@
       document.getElementById("nomeAprovador").focus();
       return;
     }
+    lembrarNomeAprovador(nome);
     fecharModalQuemAprova();
-    enviarResposta(true, "", nome);
+    if (respondePorPeca()) enviarRespostaPeca(true, "", nome);
+    else enviarResposta(true, "", nome);
   }
   document.getElementById("btnConfirmarAprovar").addEventListener("click", confirmarAprovacaoComNome);
   document.getElementById("btnCancelarAprovar").addEventListener("click", fecharModalQuemAprova);
@@ -1086,6 +1286,7 @@
   // ===== Aviso de pontos marcados (ver btnAprovar, mais acima) =====
   function fecharModalAvisoPins() {
     document.getElementById("modalAvisoPins").hidden = true;
+    soltarFoco();
   }
   document.getElementById("btnAprovarMesmoAssim").addEventListener("click", function () {
     fecharModalAvisoPins();

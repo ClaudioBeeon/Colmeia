@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-06d">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06d">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06d">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06d">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06d">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06d">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-06e">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06e">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06e">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06e">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06e">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06e">
 </head>
 <body>
 
@@ -1026,6 +1026,14 @@
         <div class="apv-palco" id="apvPalco">
           <div class="apv-palco-slot" id="apvPalcoSlot"></div>
           <!-- os pontos marcados (.apv-marca) entram aqui via JS -->
+          <!-- M14: zoom pra ler letra miúda — reaproveita o mesmo visualizador
+               ampliado das fotos do Drive (js/config.js). Botão separado do
+               clique na peça de propósito: clicar na peça MARCA UM PONTO
+               (ver apvCliqueNoPalcoParaMarcar) — um zoom por clique-na-imagem
+               brigaria com isso. -->
+          <button type="button" class="apv-palco-zoom" id="apvPalcoZoom" hidden aria-label="Ampliar a peça" title="Ampliar a peça">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.3-4.3M9 11h4M11 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
         </div>
 
         <!-- Só aparece quando o lote tem mais de uma peça (ver
@@ -1194,31 +1202,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-06d"></script>
-<script src="js/fila-offline.js?v=2026-08-06d"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-06d"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-06d"></script>
-<script src="js/kanban-polling.js?v=2026-08-06d"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-06d"></script>
-<script src="js/regras-briefing.js?v=2026-08-06d"></script>
-<script src="js/kanban-board.js?v=2026-08-06d"></script>
-<script src="js/clientes-hub.js?v=2026-08-06d"></script>
-<script src="js/chat-comentarios.js?v=2026-08-06d"></script>
-<script src="js/detalhe-modal.js?v=2026-08-06d"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-06d"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-06d"></script>
-<script src="js/bee.js?v=2026-08-06d"></script>
-<script src="js/paginas-designers.js?v=2026-08-06d"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-06d"></script>
-<script src="js/pagina-repasse.js?v=2026-08-06d"></script>
-<script src="js/pagina-horas.js?v=2026-08-06d"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-06d"></script>
-<script src="js/paleta-comando.js?v=2026-08-06d"></script>
-<script src="js/roteador-url.js?v=2026-08-06d"></script>
-<script src="js/detalhe-historia.js?v=2026-08-06d"></script>
-<script src="js/modo-foco.js?v=2026-08-06d"></script>
-<script src="js/pagina-bee.js?v=2026-08-06d"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-06d"></script>
-<script src="js/login-boot.js?v=2026-08-06d"></script>
+<script src="js/config.js?v=2026-08-06e"></script>
+<script src="js/fila-offline.js?v=2026-08-06e"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-06e"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-06e"></script>
+<script src="js/kanban-polling.js?v=2026-08-06e"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-06e"></script>
+<script src="js/regras-briefing.js?v=2026-08-06e"></script>
+<script src="js/kanban-board.js?v=2026-08-06e"></script>
+<script src="js/clientes-hub.js?v=2026-08-06e"></script>
+<script src="js/chat-comentarios.js?v=2026-08-06e"></script>
+<script src="js/detalhe-modal.js?v=2026-08-06e"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-06e"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-06e"></script>
+<script src="js/bee.js?v=2026-08-06e"></script>
+<script src="js/paginas-designers.js?v=2026-08-06e"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-06e"></script>
+<script src="js/pagina-repasse.js?v=2026-08-06e"></script>
+<script src="js/pagina-horas.js?v=2026-08-06e"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-06e"></script>
+<script src="js/paleta-comando.js?v=2026-08-06e"></script>
+<script src="js/roteador-url.js?v=2026-08-06e"></script>
+<script src="js/detalhe-historia.js?v=2026-08-06e"></script>
+<script src="js/modo-foco.js?v=2026-08-06e"></script>
+<script src="js/pagina-bee.js?v=2026-08-06e"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-06e"></script>
+<script src="js/login-boot.js?v=2026-08-06e"></script>
 </body>
 </html>
