@@ -906,32 +906,55 @@ function apvRenderStatusCliente() {
 }
 
 /**
- * Copia o link do cliente (+ a mensagem, se tiver escrito uma) — é o que o
- * botão "Enviar para o cliente" faz ao ser clicado. Reusa o MESMO link
- * gerado no "Ver como o cliente vê" (apvGarantirLink nunca gera dois).
+ * Manda o link do cliente pelo canal escolhido — os três botões do cartão
+ * de envio ("Mandar no WhatsApp" / "Copiar link" / "E-mail",
+ * data-apv-envio) e o botão "Enviar para o cliente" da pílula de cima (que
+ * sempre fez a mesma coisa que "Copiar link", ver apvClickAcao) chamam
+ * esta função. Reusa o MESMO link gerado no "Ver como o cliente vê"
+ * (apvGarantirLink nunca gera dois).
  */
-async function apvCopiarLinkCliente() {
+async function apvEnviarPara(canal) {
   const link = await apvGarantirLink();
   if (!link) return;
 
   const msg = (document.getElementById("apvMsgCliente").value || "").trim();
   const texto = (msg ? msg + "\n\n" : "") + link;
 
-  try {
-    await navigator.clipboard.writeText(texto);
-  } catch (err) {
-    mostrarToast("Não consegui copiar sozinho — o link é: " + link, "erro");
-    return;
+  if (canal === "whatsapp") {
+    window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+  } else if (canal === "email") {
+    const assunto = "Peça pra aprovação" + (apvPecaAberta && apvPecaAberta.cliente ? " — " + apvPecaAberta.cliente : "");
+    window.open("mailto:?subject=" + encodeURIComponent(assunto) + "&body=" + encodeURIComponent(texto), "_blank");
+  } else {
+    try {
+      await navigator.clipboard.writeText(texto);
+    } catch (err) {
+      mostrarToast("Não consegui copiar sozinho — o link é: " + link, "erro");
+      return;
+    }
+    mostrarToast("Link copiado.", "sucesso");
   }
 
+  apvMarcarComoEnviado();
+}
+
+/** Compatibilidade: o botão "Enviar para o cliente" da pílula chama isto. */
+function apvCopiarLinkCliente() {
+  return apvEnviarPara("link");
+}
+
+/**
+ * O que acontece depois que o link SAI pra algum canal, qualquer que seja:
+ * a aba "Aprovação do cliente" passa a ter o que mostrar, e a peça sai de
+ * vez da fila de conferência — enquanto só estava "aprovada" ela continuava
+ * lá, de propósito (ver o comentário de listarConferenciasPendentes,
+ * AprovacaoInterna.gs). Não trava a tela por isso: o link já foi mandado,
+ * que é o que importa pra quem está usando.
+ */
+function apvMarcarComoEnviado() {
   apvEnviado = true;
-  mostrarToast("Link copiado.", "sucesso");
   if (apvAbaAtiva === "cliente") apvRenderStatusCliente();
 
-  // Só AGORA a peça sai de vez da fila de conferência — enquanto só estava
-  // "aprovada" ela continuava lá, de propósito (ver o comentário de
-  // listarConferenciasPendentes, AprovacaoInterna.gs). Não trava a tela por
-  // isso: o link já foi copiado, que é o que importa pra quem está usando.
   if (apvPecaAberta) {
     chamarBackend({
       acao: "marcarConferenciaEnviada",
@@ -1488,6 +1511,14 @@ function apvLigarEventos() {
   liga("apvConfirmaSegue", "click", apvConfirmarAprovacao);
 
   liga("apvBtnPreview", "click", apvAoVerPreview);
+
+  // Os três jeitos de mandar o link — WhatsApp, copiar, e-mail — dentro do
+  // cartão "Anexos" do painel de envio. Ligados uma vez só: este bloco é
+  // markup estático do index.html, nunca recriado (mesmo padrão do resto
+  // desta função).
+  document.querySelectorAll("#apvEnvioBotoes [data-apv-envio]").forEach(btn => {
+    btn.addEventListener("click", () => apvEnviarPara(btn.dataset.apvEnvio));
+  });
 
   // O erro do motivo some assim que a pessoa começa a digitar, não só quando
   // reenvia — cobrar de novo o que ela já está corrigindo é ruído.

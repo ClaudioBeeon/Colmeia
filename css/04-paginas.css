@@ -989,6 +989,23 @@ body.card-aberto .quick-access-panel { display: none; }
   align-items: center;
   gap: 8px;
 }
+/* `hidden` tem que vencer, sempre (mesmo cuidado do CLAUDE.md/.apv-area):
+   sem isso, `.login-form { display:flex }` (regra do autor) vence a regra
+   `[hidden]{display:none}` do navegador (que é só do USER AGENT, perde de
+   qualquer regra do autor com a mesma especificidade). Na prática: trocar
+   pra "Sou do atendimento" deixava as DUAS caixas de senha visíveis juntas,
+   e digitar o código não escondia o campo do código depois — ele ficava
+   flutuando por cima da lista de nomes. */
+.login-form[hidden] { display: none; }
+/* A caixa que envolve #loginForm (a chave de acesso) fica vazia — só
+   padding e borda — quando o formulário de dentro se esconde pra dar
+   lugar à entrada do atendimento. `:has()` já é usado em `.login-atendimento`
+   logo abaixo, mesmo suporte de navegador. Só mira o loginForm por ID de
+   propósito: `#loginAtendimento` também é um `.login-dock` e também tem um
+   `.login-form` (o `#atdCodigoForm`) que se esconde no passo 2 — sem o ID
+   aqui, essa regra esconderia a caixa inteira dele, levando a lista de
+   nomes junto. */
+.login-dock:has(> #loginForm[hidden]) { display: none; }
 .login-form input {
   flex: 1; min-width: 0;
   height: 50px;
