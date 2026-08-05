@@ -280,7 +280,11 @@ function listarConferenciasPendentes() {
       versaoPedida: versaoPedida,
       versaoAtual: versaoAtual,
       totalVersoes: atual ? atual.versoes.length : 1,
-      temVersaoNova: versaoAtual > versaoPedida,
+      // `versaoPedida` 0 significa "não sei" (linha antiga, célula vazia),
+      // não "versão zero" — e nesse caso QUALQUER arquivo na pasta parecia
+      // versão nova, acendendo o aviso pra sempre numa peça em que ninguém
+      // tinha subido nada. Sem saber, não avisa.
+      temVersaoNova: versaoPedida > 0 && versaoAtual > versaoPedida,
       // A peça sumiu da pasta depois do pedido (renomeada, movida,
       // apagada). Some da fila silenciosamente seria pior: quem pediu a
       // conferência acha que ela está na fila, e não está mais.

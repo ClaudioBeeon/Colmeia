@@ -193,7 +193,7 @@
    marca das informações da tarefa: são coisas de natureza diferente, e sem
    ele o nome do cliente parecia colado na assinatura. */
 .apv-contexto-logo {
-  height: 19px; width: auto; flex-shrink: 0;
+  height: 30px; width: auto; flex-shrink: 0;
   padding-right: 14px; margin-right: -4px;
   border-right: 1px solid var(--border);
 }
@@ -816,3 +816,39 @@
 .apv-mover-mae:hover { border-color: var(--text-muted); }
 .apv-mover-mae input { margin-top: 2px; flex-shrink: 0; accent-color: var(--kanban-yellow); width: 16px; height: 16px; }
 .apv-mover-mae-sub { display: block; font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+/* ----- A pílula de cima muda de cor conforme o estado da peça -----
+   Pedido do Cláudio: clicar em aprovar sobe o rótulo e a barra fica
+   verde, e continua verde; pedir alteração deixa ela amarela.
+
+   Por que a barra INTEIRA e não só o botão: o estado é da peça, não do
+   controle. Pintando a barra, a resposta pra "essa aqui eu já resolvi?"
+   está sempre no campo de visão de quem confere 15 peças por dia, sem ele
+   ter que procurar um selo em canto nenhum.
+
+   `transition` na cor, sem animação de entrada: a troca acompanha o
+   deslize do rótulo (mesma --dur-base do resto do app) em vez de
+   acontecer num tempo próprio. */
+.apv-contexto {
+  transition: background var(--dur-base) var(--ease-apple),
+              border-color var(--dur-base) var(--ease-apple);
+  border: 1px solid transparent;
+}
+.apv-estado-aprovado {
+  background: var(--success-soft, #E4F6EF);
+  border-color: var(--success);
+}
+.apv-estado-alteracao {
+  background: var(--warning-soft);
+  border-color: var(--kanban-yellow);
+}
+[data-theme="dark"] .apv-estado-aprovado { background: rgba(95, 224, 174, 0.14); }
+
+/* O botão acompanha o estado da barra. Em alteração ele fica só como
+   AVISO — não tem pra onde levar (a peça está com o designer), então
+   perde o clique em vez de fingir que ainda faz alguma coisa. */
+.apv-estado-aprovado .apv-acao-btn { background: var(--success); }
+.apv-estado-aprovado .apv-acao-btn:hover { background: #1C9A6D; }
+.apv-estado-aprovado .apv-acao-item { color: #06301F; }
+[data-theme="dark"] .apv-estado-aprovado .apv-acao-item { color: #06301F; }
+.apv-estado-alteracao .apv-acao-btn { background: var(--kanban-yellow); pointer-events: none; }

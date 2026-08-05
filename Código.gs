@@ -102,10 +102,26 @@ var RUNRUN_TOKENS_POR_EMAIL = {
 // é ele que chega como `autor`. Não batendo, cai no token do Cláudio, que
 // é o comportamento de sempre pra quem ainda não tem token: funciona, só
 // com a autoria errada.
+// Esta lista faz DUAS coisas ao mesmo tempo, e é de propósito que seja uma
+// só: além de decidir o token, ela é a lista de nomes do "Quem é você?" da
+// entrada do atendimento (ver entrarComoAtendimento, AprovacaoInterna.gs).
+// Separadas, alguém podia aparecer lá e não ter token aqui — entrando, mas
+// comentando no nome do Cláudio sem ninguém perceber.
+//
+// Quem ainda não tem token cadastrado entra e trabalha normalmente; só a
+// AUTORIA no Runrun.it sai como a do Cláudio, que é o comportamento de
+// sempre pra quem não tem token (ver "TOKEN POR PESSOA" acima). Pra
+// corrigir, é só criar a propriedade correspondente.
 var RUNRUN_TOKENS_ATENDIMENTO = {
   'Laura': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_LAURA'),
   'Manu': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_MANU'),
-  'Giovanna': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_GIOVANNA')
+  'Giovanna': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_GIOVANNA'),
+  'João Paulo': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_JOAO_PAULO'),
+  'Lucas': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_LUCAS'),
+  // O Cláudio coordena e cobre a conferência quando precisa. O token dele
+  // já existe (RUNRUN_USER_TOKEN), então aqui é só pra ele aparecer na
+  // lista de "Quem é você?" junto com o resto.
+  'Cláudio': RUNRUN_USER_TOKEN
 };
 
 // URL do Web App do painel-designers-beeon (o outro painel, já publicado).

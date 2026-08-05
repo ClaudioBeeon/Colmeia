@@ -304,6 +304,10 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   apvMarcando = false;
   apvPedidoEmAtual = null;
   apvCardMaeMovido = false;
+  // Peça nova, estado novo: a cor e o rótulo da pílula não podem ficar do
+  // que estava aberto antes.
+  apvDeslizarAcao(0);
+  apvPintarBarra("neutro");
   apvAprovado = false;
   apvEnviado = false;
   apvAbaAtiva = "conferencia";
@@ -493,6 +497,10 @@ function apvIrParaVersao(versao) {
 
   apvVersaoNaTela = versao;
   apvRenderSeletorDeVersao(apvPecaAberta);
+  // O aviso de versão nova depende de qual versão está na tela, então tem
+  // que ser reavaliado a cada troca — senão ele fica preso mesmo depois de
+  // a pessoa já estar vendo a mais recente.
+  apvRenderAvisoVersaoNova(apvPecaAberta);
   apvMostrarNoPalco(apvPecaAberta, versao);
 
   const palco = document.getElementById("apvPalco");
@@ -569,14 +577,29 @@ async function apvMostrarNoPalco(peca, versao) {
 function apvRenderAvisoVersaoNova(peca) {
   const aviso = document.getElementById("apvAvisoNova");
   const daFila = apvFila.find(i => String(i.taskId) === String(peca.taskId) && i.nomePeca === peca.peca.nomePeca);
-  const temNova = daFila && daFila.temVersaoNova;
+  const total = peca.peca.versoes.length;
+
+  // Duas condições, e as DUAS precisam valer:
+  //
+  //   1. chegou mesmo versão nova depois do pedido (o backend compara com a
+  //      versão que estava valendo na hora — e não afirma nada quando não
+  //      sabe, ver temVersaoNova em AprovacaoInterna.gs);
+  //   2. a pessoa NÃO está olhando a mais recente agora.
+  //
+  // A segunda faltava, e era o que deixava o aviso preso na tela: mesmo
+  // depois de clicar em "Ver a mais nova" e já estar vendo ela, o aviso
+  // continuava lá dizendo que existia uma versão nova pra ver. Um aviso que
+  // não some quando você faz o que ele pede vira ruído, e ruído a gente
+  // aprende a ignorar — inclusive quando ele estiver certo.
+  const temNova = !!(daFila && daFila.temVersaoNova) && apvVersaoNaTela < total;
 
   aviso.hidden = !temNova;
   if (!temNova) return;
 
-  const ultima = peca.peca.versoes[peca.peca.versoes.length - 1];
+  const ultima = peca.peca.versoes[total - 1];
+  const numero = ultima.versao === null ? ultima.ordem : ultima.versao;
   document.getElementById("apvAvisoNovaTxt").textContent =
-    `${peca.designer || "O designer"} subiu a v${ultima.versao || peca.peca.versoes.length} depois de mandar essa peça pra conferência.`;
+    `${peca.designer || "O designer"} subiu a v${numero} depois de mandar essa peça pra conferência.`;
 }
 
 /**
@@ -673,10 +696,42 @@ function apvClickAcao() {
  * um dia.
  */
 function apvMarcarBotaoComoAprovado() {
+  apvDeslizarAcao(1);
+  // A pílula inteira fica VERDE e continua verde — o estado da peça não é
+  // uma coisa do botão, é da tela toda. Enquanto o atendimento estiver
+  // nessa peça, a cor responde sozinha "essa já foi aprovada", sem ele
+  // precisar procurar um selo em canto nenhum.
+  apvPintarBarra("aprovado");
+}
+
+/**
+ * Desliza a pilha de rótulos do botão pra posição pedida.
+ *
+ * A altura do item é lida do próprio DOM (offsetHeight), nunca um número
+ * fixo repetido aqui — evita o CSS e o JS descombinarem se ela mudar.
+ */
+function apvDeslizarAcao(indice) {
   const track = document.getElementById("apvAcaoTrack");
+  if (!track) return;
   const item = track.children[0];
   const altura = item ? item.offsetHeight : 42;
-  track.style.transform = `translateY(-${altura}px)`;
+  track.style.transform = `translateY(-${altura * indice}px)`;
+}
+
+/**
+ * Pinta a pílula de cima conforme o estado da peça: verde (aprovada),
+ * amarelo (em alteração) ou neutro.
+ *
+ * Uma classe só no elemento, e o CSS resolve o resto — assim não existe
+ * cor escrita à mão em lugar nenhum do JS, e trocar o tom é mexer num
+ * lugar só.
+ */
+function apvPintarBarra(estado) {
+  const barra = document.querySelector(".apv-contexto");
+  if (!barra) return;
+  barra.classList.remove("apv-estado-aprovado", "apv-estado-alteracao");
+  if (estado === "aprovado") barra.classList.add("apv-estado-aprovado");
+  else if (estado === "alteracao") barra.classList.add("apv-estado-alteracao");
 }
 
 /**
@@ -688,7 +743,8 @@ function apvMarcarBotaoComoAprovado() {
  */
 function apvVoltarParaConferencia() {
   apvAprovado = false;
-  document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
+  apvDeslizarAcao(0);
+  apvPintarBarra("neutro");
   apvAbaAtiva = "conferencia";
   apvRedesenharAbas();
   apvRedesenharPaineis();
@@ -1087,6 +1143,12 @@ async function apvDevolverPara(nomeDesigner) {
     mostrarToast((data && data.error) || "Não consegui pedir a alteração agora.", "erro");
     return;
   }
+
+  // A pílula fica AMARELA: essa peça saiu de "esperando conferência" e
+  // virou "em alteração". Mesma ideia do verde de aprovado — a cor da tela
+  // responde em que pé a peça está, sem precisar procurar um selo.
+  apvDeslizarAcao(2);
+  apvPintarBarra("alteracao");
 
   // O aviso conta o que REALMENTE aconteceu, peça por peça. Um "pronto!"
   // genérico esconderia, por exemplo, uma subtarefa criada que não foi pra
