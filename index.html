@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-05s">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05s">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05s">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05s">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05s">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05s">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-05t">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05t">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05t">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05t">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05t">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05t">
 </head>
 <body>
 
@@ -753,6 +753,23 @@
         <span class="apv-contexto-peca" id="apvContextoPeca">Feed — Combo de Verão</span>
       </div>
 
+      <!-- Pra onde o card mãe vai, no MEIO da barra e junto do resto das
+           informações (pedido do Cláudio). Nasce escondido e entra com um
+           deslize curto pra cima quando a peça é aprovada — os mesmos
+           pills de etapa do cabeçalho da tarefa. Clicar na setinha move, e
+           é isso: sem pergunta e sem dois botões.
+
+           Não é mais uma "face" separada trocando com a barra inteira:
+           aquilo movia tudo de uma vez, lia como lento, e quebrou o
+           layout duas vezes. -->
+      <div class="apv-contexto-etapa" id="apvContextoEtapa" hidden>
+        <span class="apv-etapa-de">Card mãe</span>
+        <button type="button" class="apv-etapa-seta" id="apvMoverMaeSim" title="Mover o card mãe para Aprovação Cliente" aria-label="Mover o card mãe para Aprovação Cliente">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="apv-etapa-para">Aprovação Cliente</span>
+      </div>
+
       <span class="apv-contexto-restam" id="apvContextoRestam">3 peças ainda esperando</span>
       <button type="button" class="apv-acao-btn" id="apvBtnAprovar">
         <span class="apv-acao-track" id="apvAcaoTrack">
@@ -778,24 +795,6 @@
            está amarela: sem ela, quem pediu a alteração ficava preso ali,
            sem caminho de volta pra reler a peça ou mudar de ideia. -->
       <button type="button" class="apv-sair-alteracao" id="apvSairAlteracao">Voltar</button>
-      </div>
-
-      <!-- A segunda FACE da pílula: sobe no carrossel logo que aprova, e
-           mostra só pra onde o card mãe vai — os mesmos pills de etapa que
-           o Colmeia já usa no cabeçalho da tarefa. Sem pergunta e sem dois
-           botões: clicar na setinha move, e é isso.
-
-           Ela é `position:absolute` cobrindo a face de baixo, e não um
-           irmão em fluxo, DE PROPÓSITO: como irmã, a pílula crescia pra
-           caber as duas ao mesmo tempo e a barra inteira esticava. Assim a
-           altura continua sendo só a da face normal, sem JS nenhum
-           medindo nada. -->
-      <div class="apv-contexto-etapa" id="apvContextoEtapa" aria-hidden="true">
-        <span class="apv-etapa-de">Card mãe</span>
-        <button type="button" class="apv-etapa-seta" id="apvMoverMaeSim" title="Mover o card mãe para Aprovação Cliente" aria-label="Mover o card mãe para Aprovação Cliente">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <span class="apv-etapa-para">Aprovação Cliente</span>
       </div>
     </div>
 
@@ -1168,31 +1167,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-05s"></script>
-<script src="js/fila-offline.js?v=2026-08-05s"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-05s"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-05s"></script>
-<script src="js/kanban-polling.js?v=2026-08-05s"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-05s"></script>
-<script src="js/regras-briefing.js?v=2026-08-05s"></script>
-<script src="js/kanban-board.js?v=2026-08-05s"></script>
-<script src="js/clientes-hub.js?v=2026-08-05s"></script>
-<script src="js/chat-comentarios.js?v=2026-08-05s"></script>
-<script src="js/detalhe-modal.js?v=2026-08-05s"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-05s"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-05s"></script>
-<script src="js/bee.js?v=2026-08-05s"></script>
-<script src="js/paginas-designers.js?v=2026-08-05s"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-05s"></script>
-<script src="js/pagina-repasse.js?v=2026-08-05s"></script>
-<script src="js/pagina-horas.js?v=2026-08-05s"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-05s"></script>
-<script src="js/paleta-comando.js?v=2026-08-05s"></script>
-<script src="js/roteador-url.js?v=2026-08-05s"></script>
-<script src="js/detalhe-historia.js?v=2026-08-05s"></script>
-<script src="js/modo-foco.js?v=2026-08-05s"></script>
-<script src="js/pagina-bee.js?v=2026-08-05s"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-05s"></script>
-<script src="js/login-boot.js?v=2026-08-05s"></script>
+<script src="js/config.js?v=2026-08-05t"></script>
+<script src="js/fila-offline.js?v=2026-08-05t"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-05t"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-05t"></script>
+<script src="js/kanban-polling.js?v=2026-08-05t"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-05t"></script>
+<script src="js/regras-briefing.js?v=2026-08-05t"></script>
+<script src="js/kanban-board.js?v=2026-08-05t"></script>
+<script src="js/clientes-hub.js?v=2026-08-05t"></script>
+<script src="js/chat-comentarios.js?v=2026-08-05t"></script>
+<script src="js/detalhe-modal.js?v=2026-08-05t"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-05t"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-05t"></script>
+<script src="js/bee.js?v=2026-08-05t"></script>
+<script src="js/paginas-designers.js?v=2026-08-05t"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-05t"></script>
+<script src="js/pagina-repasse.js?v=2026-08-05t"></script>
+<script src="js/pagina-horas.js?v=2026-08-05t"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-05t"></script>
+<script src="js/paleta-comando.js?v=2026-08-05t"></script>
+<script src="js/roteador-url.js?v=2026-08-05t"></script>
+<script src="js/detalhe-historia.js?v=2026-08-05t"></script>
+<script src="js/modo-foco.js?v=2026-08-05t"></script>
+<script src="js/pagina-bee.js?v=2026-08-05t"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-05t"></script>
+<script src="js/login-boot.js?v=2026-08-05t"></script>
 </body>
 </html>

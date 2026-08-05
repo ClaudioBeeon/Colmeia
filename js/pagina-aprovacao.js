@@ -835,11 +835,13 @@ function apvDeslizarAcao(indice) {
  * lugar só.
  */
 function apvMostrarEtapaDoCardMae(mostrar) {
-  const barra = document.querySelector(".apv-contexto");
-  if (!barra) return;
-  barra.classList.toggle("apv-mostrando-etapa", !!mostrar);
   const etapa = document.getElementById("apvContextoEtapa");
-  if (etapa) etapa.setAttribute("aria-hidden", mostrar ? "false" : "true");
+  if (!etapa) return;
+  // Mostrar/esconder e pronto: os pills entram no meio da barra com um
+  // deslize curto (a animação está no CSS). Não existe mais troca de face
+  // — mover a barra inteira lia como lento, porque o olho tinha que
+  // reencontrar tudo de lugar.
+  etapa.hidden = !mostrar;
 }
 
 function apvPintarBarra(estado) {

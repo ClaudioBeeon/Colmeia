@@ -844,15 +844,31 @@
 
    O texto vira #16181D nos dois — é o mesmo preto que o app já usa sobre
    o amarelo da marca, e ele lê bem sobre o verde também. */
-.apv-estado-aprovado,
 .apv-estado-alteracao { border-color: transparent; color: #16181D; }
-.apv-estado-aprovado { background: var(--success); }
+/* No verde escuro o texto vai em branco; no amarelo, preto. */
+.apv-estado-aprovado { border-color: transparent; color: #fff; }
+/* Verde escolhido pelo Cláudio — mais fechado que o --success do app,
+   que é claro demais pra carregar uma barra inteira. */
+.apv-estado-aprovado { background: #1E7A4C; }
 .apv-estado-alteracao { background: var(--kanban-yellow); }
 
 /* Tudo que tem cor própria dentro da barra passa a herdar o preto do
    estado — senão o texto secundário (cinza claro) sumia no verde. */
-.apv-estado-aprovado .apv-contexto-face *,
-.apv-estado-alteracao .apv-contexto-face * { color: #16181D; }
+/* A classe de estado fica NA PRÓPRIA barra, então o texto de dentro é
+   alcançado com um descendente simples — não com `.apv-contexto > *`, que
+   procuraria uma barra dentro da barra e não pegava nada. */
+.apv-estado-alteracao .apv-contexto-id,
+.apv-estado-alteracao .apv-contexto-restam,
+.apv-estado-alteracao .apv-contexto-nome * { color: #16181D; }
+.apv-estado-aprovado .apv-contexto-id,
+.apv-estado-aprovado .apv-contexto-restam,
+.apv-estado-aprovado .apv-contexto-nome * { color: #fff; }
+/* Os pills de etapa têm cor própria (preto e amarelo) e não herdam nada:
+   eles precisam ler igual sobre verde e sobre amarelo. */
+.apv-estado-aprovado .apv-etapa-de,
+.apv-estado-alteracao .apv-etapa-de { color: #fff; }
+.apv-estado-aprovado .apv-etapa-para,
+.apv-estado-alteracao .apv-etapa-para { color: #16181D; }
 
 /* O botão acompanha o estado da barra. Em alteração ele fica só como
    AVISO — não tem pra onde levar (a peça está com o designer), então
@@ -860,11 +876,11 @@
 /* Com a barra em cor cheia, o botão precisa se destacar DELA, não repetir
    a mesma cor — senão ele desaparece dentro do fundo. Vira preto, que é o
    contraste mais forte que existe sobre verde e sobre amarelo. */
-.apv-estado-aprovado .apv-acao-btn,
+.apv-estado-aprovado .apv-acao-btn { background: #fff; }
+.apv-estado-aprovado .apv-acao-btn:hover { background: #EDEFF2; }
+.apv-estado-aprovado .apv-acao-item { color: #16181D; }
 .apv-estado-alteracao .apv-acao-btn { background: #16181D; }
-.apv-estado-aprovado .apv-acao-btn:hover,
 .apv-estado-alteracao .apv-acao-btn:hover { background: #2A2C33; }
-.apv-estado-aprovado .apv-acao-item,
 .apv-estado-alteracao .apv-acao-item { color: #fff; }
 /* Em alteração o botão é só AVISO: a peça está com o designer, não tem
    pra onde levar. */
@@ -885,39 +901,30 @@
    então o fundo da própria pílula — que a essa altura já está verde —
    aparece atrás dela, sem precisar repetir a cor e sem dobrar a
    transparência. */
-.apv-contexto { position: relative; overflow: hidden; }
-/* As duas faces da pílula, com a MESMA mecânica e o MESMO tempo do pill
-   do cabeçalho da tarefa (.detail-header-pill, css/03-detalhe.css) —
-   pedido do Cláudio: "usa como referência as animações do pill do card".
+.apv-contexto { position: relative; }
+/* Os pills de etapa vivem DENTRO da barra, no meio, junto do resto das
+   informações — não são mais uma "face" que troca com a barra inteira.
+   Aquilo movia todo o conteúdo de uma vez: lia como lento (o olho tem que
+   reencontrar tudo de lugar) e quebrou o layout duas vezes.
 
-   Duas coisas fazem parecer rápido, e nenhuma delas é a duração:
-
-   1. Cada face é UM elemento só. Antes cada filho da barra (logo, número,
-      nome, botão) animava por conta, e os pedaços saíam soltos uns dos
-      outros — parecia arrastado mesmo estando em 150ms.
-   2. O caminho é translateY(-100%), a altura exata da face. Antes era
-      -160%, uma distância maior que o necessário: o mesmo tempo pra
-      percorrer mais espaço lê como mais lento.
-
-   A curva é a `--ease-apple-spring`, a de entrada com molinha, igual à
-   do pill do card. */
-.apv-contexto-face,
+   `margin: 0 auto` centraliza no espaço que sobra entre o nome (à
+   esquerda) e o "peças esperando" (que já se empurra pra direita com
+   margin-left:auto). Nada de posição absoluta: a barra continua sendo uma
+   fileira simples. */
 .apv-contexto-etapa {
-  transition: transform var(--dur-slow) var(--ease-apple-spring),
-              opacity 0.24s var(--ease-apple);
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  margin: 0 auto;
+  animation: apvEtapaEntra var(--dur-fast) var(--ease-apple-spring);
 }
-.apv-contexto-face {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  min-width: 0; flex: 1;
+@keyframes apvEtapaEntra {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
-.apv-contexto-etapa {
-  position: absolute; inset: 0; z-index: 2;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  padding: 0 14px;
-  transform: translateY(100%); opacity: 0;
-}
-.apv-mostrando-etapa .apv-contexto-face { transform: translateY(-100%); opacity: 0; }
-.apv-mostrando-etapa .apv-contexto-etapa { transform: translateY(0); opacity: 1; }
+/* O envelope da face some do layout (`contents`): os filhos dele voltam a
+   ser itens diretos da fileira da barra. Ele só existiu pro carrossel que
+   foi removido — em vez de mexer no HTML de novo e arriscar outro erro de
+   fechamento de tag, ele fica aqui, invisível pro CSS. */
+.apv-contexto-face { display: contents; }
 
 .apv-etapa-de,
 .apv-etapa-para {
