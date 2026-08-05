@@ -700,7 +700,6 @@
       </div>
     </section>
 
-  </div>
     <!-- Duas colunas, como no protótipo aprovado: feed à esquerda, chat
          à direita. O chat NÃO é markup novo — abrirPaginaBee()
          (js/pagina-bee.js) MOVE o #beePainel de verdade (o mesmo da
@@ -714,8 +713,11 @@
         <div class="bee-painel-slot" id="beePainelSlot"></div>
       </div>
     </section>
-
   </div>
+  <!-- ↑ fecha .main. #page-bee precisa estar DENTRO de .main, junto dos
+       outros .app-page (kanban, clientes, aprovação...) — um bug antigo
+       fechava .main um passo cedo demais, ver a nota de 2026-08-06 no
+       fim do arquivo sobre esse mesmo acidente com #apvConfirmaFundo. -->
 
 
   <!-- ============ TELAS 2 e 3: CONFERÊNCIA E ENVIO ============
@@ -1047,6 +1049,7 @@
         <button type="button" class="apv-btn apv-btn-neutro" id="apvConfirmaSegue">Aprovar esta mesmo</button>
       </div>
     </div>
+  </div>
 
   <!-- A Bee solta: aqui ela NÃO lê tarefa nenhuma, é só uma especialista
        em design com quem dá pra pensar em voz alta. A Bee que conhece a
