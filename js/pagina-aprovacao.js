@@ -419,10 +419,23 @@ function apvRenderBriefing(peca) {
 
   const entrega = peca.prazo ? new Date(peca.prazo) : null;
   const atrasada = entrega && entrega < new Date(new Date().toDateString());
+  // O link do Runrun.it é o mesmo que o chip "#11500" da pílula de cima já
+  // usa (idChip.href, logo ali em cima) — aqui é a MESMA informação, só que
+  // como um botão de verdade, fácil de achar: o atendimento trabalha no
+  // Runrun.it, não no Colmeia, e a tarefa é pra onde ele às vezes precisa
+  // voltar (ver o histórico de comentários, por exemplo).
+  const linkRunrun = peca.cardMaeLink || `https://runrun.it/tasks/${peca.taskId}`;
   document.getElementById("apvBriefSpecs").innerHTML = `
     <div class="apv-spec">
       <span class="apv-spec-rotulo">Entrega desejada</span>
       <span class="apv-spec-valor ${atrasada ? "atencao" : ""}">${entrega ? apvDataCurta(peca.prazo) : "sem data"}</span>
+    </div>
+    <div class="apv-spec">
+      <span class="apv-spec-rotulo">Tarefa</span>
+      <a class="apv-spec-valor apv-spec-link" href="${escaparHTML(linkRunrun)}" target="_blank" rel="noopener">
+        Abrir no Runrun.it
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
     </div>
     ${peca.pastaUrl ? `
       <div class="apv-spec">
@@ -746,40 +759,63 @@ function apvAprovar() {
  * peça continua ali do lado, sempre visível. Quem acabou de aprovar quer
  * mandar agora, não navegar.
  *
- * O botão de ação (na pílula de cima) troca de rótulo NA HORA — pedido do
- * Cláudio, "instantâneo como o resto do Colmeia" — sem pausa artificial no
- * meio. A confirmação é um toast, o mesmo mecanismo de confirmação usado em
- * qualquer outra ação do app.
+ * ANIMAÇÃO OTIMISTA — mesma técnica do botão "Entregar" do pop-up de tarefa
+ * (ver wireWorkflowArrows, js/detalhe-modal.js): tudo isso acontece NA HORA
+ * do clique, ANTES de qualquer resposta do backend — pílula fica verde,
+ * painel de envio aparece, toast confirma. Esperar a ida e volta ao
+ * Runrun.it/planilha pra só então reagir é o que fazia a animação parecer
+ * lenta (pedido do Cláudio, "instantâneo como o resto do Colmeia" — igual
+ * já valia pro TROCAR DE RÓTULO do botão, mas faltava valer pro CLIQUE
+ * também). Se o backend recusar, desfaz tudo sozinho e avisa — mesmo
+ * comportamento do "Entregar" quando o Runrun.it recusa.
  */
 async function apvConfirmarAprovacao() {
   if (!apvPecaAberta) return;
   document.getElementById("apvConfirmaFundo").hidden = true;
 
-  const btn = document.getElementById("apvBtnAprovar");
-  btn.disabled = true;
+  const peca = apvPecaAberta;
+  const taskId = peca.taskId;
+  const nomePeca = peca.peca.nomePeca;
+  const itemOtimista = apvFila.find(i => String(i.taskId) === String(taskId) && i.nomePeca === nomePeca);
 
-  const data = await chamarBackend({
-    acao: "aprovarInternamente",
-    taskId: apvPecaAberta.taskId,
-    nomePeca: apvPecaAberta.peca.nomePeca,
-    aprovadoPor: DESIGNER_LOGADO,
-  });
-
-  btn.disabled = false;
-
-  if (!data || !data.ok) {
-    mostrarToast((data && data.error) || "Não consegui registrar a aprovação agora.", "erro");
-    return;
-  }
-
-  apvFila = apvFila.filter(i => !(String(i.taskId) === String(apvPecaAberta.taskId) && i.nomePeca === apvPecaAberta.peca.nomePeca));
+  apvFila = apvFila.filter(i => !(String(i.taskId) === String(taskId) && i.nomePeca === nomePeca));
   atualizarBadgeAprovacao();
 
   apvAprovado = true;
   mostrarToast("Aprovado internamente.", "sucesso");
   apvMarcarBotaoComoAprovado();
-  apvRenderEnvio(apvPecaAberta, data);
+  apvRenderEnvio(peca, { aprovadoPor: DESIGNER_LOGADO, aprovadoEm: new Date().toISOString() });
   apvRedesenharPaineis();
+
+  const data = await chamarBackend({
+    acao: "aprovarInternamente",
+    taskId,
+    nomePeca,
+    aprovadoPor: DESIGNER_LOGADO,
+  });
+
+  // Trocou de peça enquanto a chamada ia e voltava? A pessoa já está
+  // olhando outra coisa — não desfaz nada na tela dela.
+  if (!apvPecaAberta || String(apvPecaAberta.taskId) !== String(taskId) || apvPecaAberta.peca.nomePeca !== nomePeca) return;
+
+  if (!data || !data.ok) {
+    // O Runrun.it/planilha recusou — volta tudo pro estado de antes,
+    // inclusive a peça de volta na fila (ela nunca chegou a sair de lá
+    // de verdade).
+    apvAprovado = false;
+    apvDeslizarAcao(0);
+    apvPintarBarra("neutro");
+    apvMostrarEtapaDoCardMae(false);
+    apvRedesenharPaineis();
+    apvFila.push(itemOtimista || {
+      taskId, nomePeca, cliente: peca.cliente, tituloTarefa: peca.titulo,
+      designer: peca.designer, designerId: peca.designerId,
+      pedidoEm: apvPedidoEmAtual || new Date().toISOString(), status: "pendente",
+    });
+    apvRenderFila(apvFila);
+    atualizarBadgeAprovacao();
+    mostrarToast((data && data.error) || "Não consegui registrar a aprovação agora — tenta de novo.", "erro");
+  }
 }
 
 /**
