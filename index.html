@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-05b">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05b">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05b">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05b">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05b">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05b">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-05c">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05c">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05c">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05c">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05c">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05c">
 </head>
 <body>
 
@@ -751,6 +751,60 @@
             <!-- EXEMPLO -->
             <div class="apv-spec"><span class="apv-spec-rotulo">Entrega desejada</span><span class="apv-spec-valor atencao">hoje, 18h</span></div>
           </div>
+
+          <!-- Só quando o projeto do mês já foi fechado no Runrun.it —
+               populado por apvRenderBriefing() ao carregar a peça. Nesse
+               caso não dá pra criar subtarefa (projeto fechado não aceita
+               tarefa nova); o texto abaixo vira comentário no card mãe. -->
+          <div class="apv-excecao" id="apvExcecaoFechado" hidden>
+            <div class="apv-excecao-topo">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
+              <span class="apv-excecao-titulo">Esse projeto já foi fechado</span>
+            </div>
+            <p class="apv-excecao-txt" id="apvExcecaoTxt">
+              Esse card mãe é de um mês que já encerrou, e projetos encerrados
+              não aceitam tarefa nova. O que você escrever abaixo vira um
+              comentário nele, marcando o designer, em vez de uma subtarefa.
+            </p>
+            <div class="apv-link-copiar">
+              <span class="apv-link-url" id="apvLinkMaeUrl">runrun.it/tasks/…</span>
+              <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" id="apvCopiarLinkMae">Copiar</button>
+            </div>
+          </div>
+
+          <!-- "O que precisa mudar" — pedido do Cláudio, sempre visível
+               aqui (não atrás de um botão que abre outra tela). Vai pro
+               Runrun.it: vira a descrição da subtarefa de alteração, ou o
+               comentário no card mãe no caso do projeto fechado (ver
+               devolverParaDesigner, AprovacaoInterna.gs). -->
+          <div>
+            <label class="apv-campo-rotulo" for="apvMotivo">
+              O que precisa mudar? <span class="apv-obrigatorio">obrigatório</span>
+            </label>
+            <textarea class="apv-campo" id="apvMotivo" placeholder="Escreve como você explicaria pro designer no WhatsApp..."></textarea>
+            <div class="apv-erro" id="apvErroMotivo" hidden>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v5.5M12 16v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+              Escreve o motivo antes de pedir alteração — sem isso o designer não sabe o que refazer.
+            </div>
+          </div>
+
+          <!-- Pontos marcados: o clique é DIRETO na peça, ali do lado —
+               nada de tela ou cópia da imagem separada. A lista também
+               explica isso quando está vazia (ver apvRenderPinsDevolucao). -->
+          <div class="apv-marcar-lista" id="apvMarcarLista">
+            <p class="apv-campo-ajuda">Clica em "Adicionar ponto" e depois na peça, ao lado, pra apontar exatamente onde.</p>
+          </div>
+
+          <div class="apv-fim-briefing">
+            <button type="button" class="apv-marcar-btn" id="apvMarcarBtn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.7 7-11a7 7 0 10-14 0c0 5.3 7 11 7 11z" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="1.9"/></svg>
+              Adicionar ponto
+            </button>
+            <button type="button" class="apv-btn apv-btn-perigo apv-btn-g" id="apvBtnDevolver">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14l-5-5 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h11a5 5 0 015 5v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="apvBtnDevolverTxt">Pedir alteração</span>
+            </button>
+          </div>
         </div>
 
         <!-- Painel B: aprovado, preparando o envio. Some sozinho ao abrir
@@ -844,114 +898,10 @@
           <div class="apv-palco-slot" id="apvPalcoSlot"></div>
           <!-- os pontos marcados (.apv-marca) entram aqui via JS -->
         </div>
-
-        <!-- Some depois de aprovar — devolver deixa de fazer sentido uma
-             vez que o envio já está sendo preparado. -->
-        <div class="apv-acoes" id="apvAcoesDevolver">
-          <button type="button" class="apv-btn apv-btn-perigo apv-btn-g" id="apvBtnDevolver">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14l-5-5 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h11a5 5 0 015 5v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Devolver pro designer
-          </button>
-        </div>
       </div>
     </div>
   </div>
 
-  <!-- ============ TELAS 4 e 5: DEVOLVER / PROJETO FECHADO ============
-       Mesmo painel: o que muda entre os dois casos é o conteúdo, não o
-       lugar. O caso "projeto fechado" é detectado AO ABRIR, nunca depois
-       de a pessoa escrever — e o texto dela vale do mesmo jeito, só vai
-       por outro caminho. Ver apvAbrirDevolver(). -->
-  <div class="apv-overlay apv-area" id="apvOverlayDevolver" hidden>
-    <div class="apv-painel" role="dialog" aria-modal="true" aria-labelledby="apvPainelTitulo">
-      <div class="apv-painel-topo">
-        <span class="apv-painel-titulo" id="apvPainelTitulo">Devolver pro designer</span>
-        <button type="button" class="apv-fechar" id="apvFecharPainel" aria-label="Fechar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-
-      <div class="apv-painel-corpo">
-        <!-- Caso normal -->
-        <div class="apv-explica" id="apvExplicaNormal">
-          <div class="apv-explica-linha">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>Cria a subtarefa de <b>alteração</b> dentro do card mãe.</span>
-          </div>
-          <div class="apv-explica-linha">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>Já entra na fila de quem fez essa peça.</span>
-          </div>
-          <div class="apv-explica-linha">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>O que você escrever abaixo vira o comentário da tarefa.</span>
-          </div>
-        </div>
-
-        <!-- Caso de exceção: projeto do mês já fechado no Runrun.it -->
-        <div class="apv-excecao" id="apvExcecaoFechado" hidden>
-          <div class="apv-excecao-topo">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
-            <span class="apv-excecao-titulo">Esse projeto já foi fechado</span>
-          </div>
-          <p class="apv-excecao-txt" id="apvExcecaoTxt">
-            Essa peça é de um mês que já encerrou, e projetos encerrados não
-            aceitam tarefa nova. Então não dá pra abrir a subtarefa de alteração
-            aqui.
-            <br><br>
-            <b>O que o Colmeia vai fazer no lugar:</b> comentar no card mãe
-            marcando o designer e passar o card pra ele. Ele recebe do mesmo
-            jeito — só não vira uma subtarefa separada. O texto que você
-            escreveu abaixo continua valendo, vai como o comentário.
-          </p>
-        </div>
-
-        <div>
-          <label class="apv-campo-rotulo" for="apvMotivo">
-            O que precisa mudar? <span class="apv-obrigatorio">obrigatório</span>
-          </label>
-          <p class="apv-campo-ajuda">
-            Escreve como você explicaria pro designer no WhatsApp. Quanto mais
-            específico, menos idas e vindas.
-          </p>
-          <textarea class="apv-campo" id="apvMotivo" placeholder="Ex: o desconto está 20% mas o combo aprovado era 15%. E o logo tem que ser a versão horizontal."></textarea>
-          <div class="apv-erro" id="apvErroMotivo" hidden>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v5.5M12 16v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-            Escreve o motivo antes de devolver — sem isso o designer não sabe o que refazer.
-          </div>
-        </div>
-
-        <div>
-          <button type="button" class="apv-marcar-btn" id="apvMarcarBtn">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.7 7-11a7 7 0 10-14 0c0 5.3 7 11 7 11z" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="1.9"/></svg>
-            <span>
-              Marcar pontos na imagem
-              <span class="apv-marcar-btn-sub">Clica na peça pra apontar exatamente onde</span>
-            </span>
-          </button>
-          <div class="apv-marcar-area" id="apvMarcarArea" hidden>
-            <div class="apv-marcar-palco" id="apvMarcarPalco"></div>
-            <div class="apv-marcar-lista" id="apvMarcarLista"></div>
-          </div>
-        </div>
-
-        <!-- Só no caso de projeto fechado -->
-        <div id="apvBlocoLinkMae" hidden>
-          <label class="apv-campo-rotulo">Link do card mãe</label>
-          <p class="apv-campo-ajuda">Copia e manda no WhatsApp do designer, pra ele abrir direto.</p>
-          <div class="apv-link-copiar">
-            <span class="apv-link-url" id="apvLinkMaeUrl">runrun.it/tasks/…</span>
-            <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" id="apvCopiarLinkMae">Copiar</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="apv-painel-rodape">
-        <button type="button" class="apv-btn apv-btn-neutro" id="apvCancelarDevolver">Cancelar</button>
-        <button type="button" class="apv-btn apv-btn-primario" id="apvConfirmarDevolver">Devolver</button>
-      </div>
-    </div>
-  </div>
 
   <!-- ============ CONFIRMAÇÃO DE VERSÃO ============
        Só aparece no caso perigoso: aprovar uma versão que não é a mais
@@ -1109,31 +1059,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-05b"></script>
-<script src="js/fila-offline.js?v=2026-08-05b"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-05b"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-05b"></script>
-<script src="js/kanban-polling.js?v=2026-08-05b"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-05b"></script>
-<script src="js/regras-briefing.js?v=2026-08-05b"></script>
-<script src="js/kanban-board.js?v=2026-08-05b"></script>
-<script src="js/clientes-hub.js?v=2026-08-05b"></script>
-<script src="js/chat-comentarios.js?v=2026-08-05b"></script>
-<script src="js/detalhe-modal.js?v=2026-08-05b"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-05b"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-05b"></script>
-<script src="js/bee.js?v=2026-08-05b"></script>
-<script src="js/paginas-designers.js?v=2026-08-05b"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-05b"></script>
-<script src="js/pagina-repasse.js?v=2026-08-05b"></script>
-<script src="js/pagina-horas.js?v=2026-08-05b"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-05b"></script>
-<script src="js/paleta-comando.js?v=2026-08-05b"></script>
-<script src="js/roteador-url.js?v=2026-08-05b"></script>
-<script src="js/detalhe-historia.js?v=2026-08-05b"></script>
-<script src="js/modo-foco.js?v=2026-08-05b"></script>
-<script src="js/pagina-bee.js?v=2026-08-05b"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-05b"></script>
-<script src="js/login-boot.js?v=2026-08-05b"></script>
+<script src="js/config.js?v=2026-08-05c"></script>
+<script src="js/fila-offline.js?v=2026-08-05c"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-05c"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-05c"></script>
+<script src="js/kanban-polling.js?v=2026-08-05c"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-05c"></script>
+<script src="js/regras-briefing.js?v=2026-08-05c"></script>
+<script src="js/kanban-board.js?v=2026-08-05c"></script>
+<script src="js/clientes-hub.js?v=2026-08-05c"></script>
+<script src="js/chat-comentarios.js?v=2026-08-05c"></script>
+<script src="js/detalhe-modal.js?v=2026-08-05c"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-05c"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-05c"></script>
+<script src="js/bee.js?v=2026-08-05c"></script>
+<script src="js/paginas-designers.js?v=2026-08-05c"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-05c"></script>
+<script src="js/pagina-repasse.js?v=2026-08-05c"></script>
+<script src="js/pagina-horas.js?v=2026-08-05c"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-05c"></script>
+<script src="js/paleta-comando.js?v=2026-08-05c"></script>
+<script src="js/roteador-url.js?v=2026-08-05c"></script>
+<script src="js/detalhe-historia.js?v=2026-08-05c"></script>
+<script src="js/modo-foco.js?v=2026-08-05c"></script>
+<script src="js/pagina-bee.js?v=2026-08-05c"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-05c"></script>
+<script src="js/login-boot.js?v=2026-08-05c"></script>
 </body>
 </html>

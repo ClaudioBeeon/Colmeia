@@ -305,7 +305,6 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   // pilha (Aprovar), destravado.
   document.getElementById("apvPainelBriefing").hidden = false;
   document.getElementById("apvPainelEnvio").hidden = true;
-  document.getElementById("apvAcoesDevolver").hidden = false;
   apvFaseAcao = "aprovar";
   document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
   document.getElementById("apvAcaoCopiado").classList.remove("mostra");
@@ -314,6 +313,15 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
   document.getElementById("apvContextoCliente").textContent = "";
   document.getElementById("apvContextoPeca").textContent = "Carregando...";
+
+  // Limpa o pedido de alteração da peça anterior — motivo, pontos marcados
+  // e o modo de marcação, que não fazem sentido pra uma peça nova.
+  document.getElementById("apvMotivo").value = "";
+  document.getElementById("apvErroMotivo").hidden = true;
+  document.getElementById("apvMotivo").classList.remove("invalido");
+  document.getElementById("apvPalco").classList.remove("marcando");
+  document.getElementById("apvMarcarBtn").classList.remove("ativo");
+  apvRenderPinsDevolucao();
 
   overlay.classList.add("visible");
   requestAnimationFrame(() => overlay.classList.add("open"));
@@ -391,6 +399,8 @@ function apvRenderBriefing(peca) {
       <span class="apv-spec-valor ${atrasada ? "atencao" : ""}">${entrega ? apvDataCurta(peca.prazo) : "sem data"}</span>
     </div>
   `;
+
+  apvPrepararPedirAlteracao(peca);
 }
 
 function apvDataCurta(iso) {
@@ -521,6 +531,12 @@ async function apvMostrarNoPalco(peca, versao) {
     return;
   }
   slotAgora.innerHTML = `<img class="apv-palco-img" src="data:${data.mimeType || arquivo.mimeType};base64,${data.base64}" alt="${escaparHTML(arquivo.nome)}">`;
+
+  // Os pontos já marcados (se tiver) precisam se realinhar com a imagem
+  // NOVA — a caixa dela só existe depois que o navegador termina de
+  // desenhar, daí o "load" em vez de chamar na hora.
+  const imgNova = slotAgora.querySelector(".apv-palco-img");
+  if (imgNova) imgNova.addEventListener("load", () => apvRenderPinsDevolucao());
 }
 
 /**
@@ -609,7 +625,6 @@ async function apvConfirmarAprovacao() {
 
   document.getElementById("apvPainelBriefing").hidden = true;
   document.getElementById("apvPainelEnvio").hidden = false;
-  document.getElementById("apvAcoesDevolver").hidden = true;
   apvRenderEnvio(apvPecaAberta, data);
   apvIniciarAnimacaoAprovado();
 }
@@ -856,55 +871,36 @@ async function moverCardMaeSeMarcado() {
 }
 
 // ---------------------------------------------------------------------------
-// TELAS 4 e 5 — Devolver pro designer / projeto fechado
+// Pedir alteração — inline na coluna do briefing, sempre visível
 // ---------------------------------------------------------------------------
 
 /**
- * Abre o painel de devolução.
+ * Prepara o bloco de "pedir alteração" ao carregar a peça — o caso do
+ * projeto fechado é detectado JUNTO com o resto do briefing (o backend já
+ * manda `projetoFechado`), não só quando alguém decide devolver: o pior
+ * desenho possível seria escrever três parágrafos e só então descobrir que
+ * não dá.
  *
- * O caso do projeto fechado é detectado AO ABRIR — o backend já mandou
- * `projetoFechado` junto dos dados da conferência. O pior desenho possível
- * seria a pessoa escrever três parágrafos e só então descobrir que não dá.
- *
- * E o texto dela NÃO É PERDIDO nesse caso: vira o comentário no card mãe do
- * mesmo jeito. É isso que faz a exceção não parecer um beco sem saída — o
- * caminho muda, o trabalho da pessoa não.
+ * E o texto NÃO SE PERDE nesse caso: vira o comentário no card mãe do mesmo
+ * jeito. É isso que faz a exceção não parecer um beco sem saída — o caminho
+ * muda, o trabalho da pessoa não.
  */
-function apvAbrirDevolver() {
-  if (!apvPecaAberta) return;
-  const fechado = !!apvPecaAberta.projetoFechado;
+function apvPrepararPedirAlteracao(peca) {
+  const fechado = !!peca.projetoFechado;
+  const excecao = document.getElementById("apvExcecaoFechado");
+  excecao.hidden = !fechado;
 
-  document.getElementById("apvExplicaNormal").hidden = fechado;
-  document.getElementById("apvExcecaoFechado").hidden = !fechado;
-  document.getElementById("apvBlocoLinkMae").hidden = !fechado;
-  document.getElementById("apvErroMotivo").hidden = true;
-  document.getElementById("apvMotivo").classList.remove("invalido");
-
-  if (fechado) {
-    document.getElementById("apvLinkMaeUrl").textContent =
-      apvPecaAberta.cardMaeLink || "sem card mãe";
-    document.getElementById("apvConfirmarDevolver").textContent =
-      `Comentar e passar pro ${apvPecaAberta.designer || "designer"}`;
-  } else {
-    document.getElementById("apvConfirmarDevolver").textContent = "Devolver";
-  }
-
-  document.getElementById("apvOverlayDevolver").hidden = false;
-  document.getElementById("apvMotivo").focus();
-}
-
-function apvFecharDevolver() {
-  document.getElementById("apvOverlayDevolver").hidden = true;
-  apvMarcando = false;
-  document.getElementById("apvMarcarArea").hidden = true;
+  document.getElementById("apvBtnDevolverTxt").textContent = fechado
+    ? `Comentar e passar pro ${peca.designer || "designer"}`
+    : "Pedir alteração";
 }
 
 /**
- * Confirma a devolução.
+ * Pede a alteração (ou, no caso do projeto fechado, comenta e reatribui).
  *
- * O motivo é OBRIGATÓRIO — sem ele o designer não sabe o que refazer, e a
- * devolução vira uma ida e volta perdida. O erro aparece NO CAMPO, não num
- * alerta que some sozinho, e some assim que a pessoa começa a digitar.
+ * O motivo é OBRIGATÓRIO — sem ele o designer não sabe o que refazer. O erro
+ * aparece NO CAMPO, não num alerta que some sozinho, e some assim que a
+ * pessoa começa a digitar.
  */
 async function apvConfirmarDevolucao() {
   if (!apvPecaAberta) return;
@@ -919,10 +915,8 @@ async function apvConfirmarDevolucao() {
   }
 
   const versaoConferida = apvPecaAberta.peca.versoes[apvVersaoNaTela - 1];
-  const btn = document.getElementById("apvConfirmarDevolver");
-  const original = btn.textContent;
+  const btn = document.getElementById("apvBtnDevolver");
   btn.disabled = true;
-  btn.textContent = "Devolvendo...";
 
   const data = await chamarBackend({
     acao: "devolverParaDesigner",
@@ -948,10 +942,9 @@ async function apvConfirmarDevolucao() {
   });
 
   btn.disabled = false;
-  btn.textContent = original;
 
   if (!data || !data.ok) {
-    mostrarToast((data && data.error) || "Não consegui devolver a peça agora.", "erro");
+    mostrarToast((data && data.error) || "Não consegui pedir a alteração agora.", "erro");
     return;
   }
 
@@ -973,75 +966,88 @@ async function apvConfirmarDevolucao() {
   apvFila = apvFila.filter(i => !(String(i.taskId) === String(apvPecaAberta.taskId) && i.nomePeca === apvPecaAberta.peca.nomePeca));
   campo.value = "";
   apvPinsDevolucao = [];
-  apvFecharDevolver();
   apvFecharConferencia();
   apvRenderFila(apvFila);
   atualizarBadgeAprovacao();
 }
 
 /**
- * Marcar pontos na imagem (opcional).
+ * Liga/desliga o modo "clicar na peça marca um ponto" — clique é DIRETO em
+ * cima da peça de verdade (o palco da coluna da direita), nada de tela ou
+ * cópia da imagem à parte.
  *
- * x/y ficam em PORCENTAGEM da imagem, nunca em pixel: assim o ponto continua no
- * lugar certo em qualquer tamanho de tela. Mesmo formato que aprovar.html usa.
- *
- * No Runrun.it não existe marcação em imagem, então cada ponto vira uma linha
- * de texto no pedido ("(alto à esquerda) trocar o logo") — ver textoDosPins,
- * AprovacaoInterna.gs.
+ * x/y ficam em PORCENTAGEM da imagem, nunca em pixel: assim o ponto continua
+ * no lugar certo em qualquer tamanho de tela. Mesmo formato que aprovar.html
+ * usa. No Runrun.it não existe marcação em imagem, então cada ponto vira uma
+ * linha de texto no pedido ("(alto à esquerda) trocar o logo") — ver
+ * textoDosPins, AprovacaoInterna.gs.
  */
 function apvAlternarMarcacao() {
   if (!apvPecaAberta) return;
-  const area = document.getElementById("apvMarcarArea");
-  apvMarcando = !apvMarcando;
-  area.hidden = !apvMarcando;
-  if (!apvMarcando) return;
-
   const arquivo = apvPecaAberta.peca.versoes[apvVersaoNaTela - 1];
   if ((arquivo.mimeType || "").indexOf("video/") === 0) {
-    area.innerHTML = `<p class="apv-campo-ajuda">Essa peça é um vídeo — dá pra escrever o minuto no texto acima, mas não dá pra marcar ponto na tela.</p>`;
+    mostrarToast("Essa peça é um vídeo — dá pra escrever o minuto no texto acima, mas não dá pra marcar ponto nela.", "erro");
     return;
   }
 
-  const palco = document.getElementById("apvMarcarPalco");
-  // Reaproveita a imagem que já está no palco da conferência, em vez de buscar
-  // de novo no Drive: é o mesmo arquivo, e já está carregado.
-  const imgAtual = document.querySelector("#apvPalcoSlot .apv-palco-img");
-  palco.innerHTML = imgAtual
-    ? `<img class="apv-marcar-img" src="${imgAtual.src}" alt="${escaparHTML(arquivo.nome)}">`
-    : `<p class="apv-campo-ajuda">A peça ainda está carregando.</p>`;
-
-  const img = palco.querySelector(".apv-marcar-img");
-  if (img) {
-    // Clicar cria o ponto JÁ com um campo de texto vazio embaixo, em vez de
-    // abrir uma caixinha do navegador perguntando: é o que o desenho previu
-    // (.apv-marcar-linha input, css/06-aprovacao.css), e deixa escrever,
-    // reler e corrigir os vários pontos lado a lado antes de mandar.
-    img.addEventListener("click", (e) => {
-      const r = img.getBoundingClientRect();
-      apvPinsDevolucao.push({
-        x: ((e.clientX - r.left) / r.width) * 100,
-        y: ((e.clientY - r.top) / r.height) * 100,
-        texto: "",
-      });
-      apvRenderPinsDevolucao();
-      const campos = document.querySelectorAll("#apvMarcarLista input");
-      if (campos.length) campos[campos.length - 1].focus();
-    });
-  }
-  apvRenderPinsDevolucao();
+  apvMarcando = !apvMarcando;
+  document.getElementById("apvPalco").classList.toggle("marcando", apvMarcando);
+  document.getElementById("apvMarcarBtn").classList.toggle("ativo", apvMarcando);
 }
 
+/**
+ * A caixa da IMAGEM em pixels, relativa ao palco — usada tanto pra medir o
+ * clique quanto pra desenhar o ponto de volta, sempre com a MESMA
+ * referência. Precisa disso (em vez de só porcentagem direto no palco)
+ * porque `object-fit: contain` deixa fundo sobrando dos lados (ou em cima e
+ * embaixo) quando a proporção da peça não bate com a do palco — medir
+ * direto pelo palco poria o ponto deslocado em relação à arte.
+ */
+function apvCaixaDaImagemNoPalco() {
+  const palco = document.getElementById("apvPalco");
+  const img = document.querySelector("#apvPalcoSlot .apv-palco-img");
+  if (!palco || !img) return null;
+  const pr = palco.getBoundingClientRect();
+  const ir = img.getBoundingClientRect();
+  if (!ir.width || !ir.height) return null;
+  return { left: ir.left - pr.left, top: ir.top - pr.top, width: ir.width, height: ir.height };
+}
+
+/** Clique no palco, só quando "Adicionar ponto" está ligado. */
+function apvCliqueNoPalcoParaMarcar(e) {
+  if (!apvMarcando) return;
+  const img = document.querySelector("#apvPalcoSlot .apv-palco-img");
+  if (!img) return; // vídeo, ou a peça ainda está carregando
+  const r = img.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width) * 100;
+  const y = ((e.clientY - r.top) / r.height) * 100;
+  if (x < 0 || x > 100 || y < 0 || y > 100) return; // clicou no fundo, fora da arte
+
+  // Clicar cria o ponto JÁ com um campo de texto vazio na lista, em vez de
+  // abrir uma caixinha do navegador perguntando: deixa escrever, reler e
+  // corrigir os vários pontos lado a lado antes de mandar.
+  apvPinsDevolucao.push({ x, y, texto: "" });
+  apvRenderPinsDevolucao();
+  const campos = document.querySelectorAll("#apvMarcarLista input");
+  if (campos.length) campos[campos.length - 1].focus();
+}
+
+/** Redesenha os pontinhos em cima do palco e a lista editável na lateral. */
 function apvRenderPinsDevolucao() {
-  const palco = document.getElementById("apvMarcarPalco");
+  const palco = document.getElementById("apvPalco");
   palco.querySelectorAll(".apv-marca").forEach(el => el.remove());
-  apvPinsDevolucao.forEach((p, i) => {
-    const marca = document.createElement("span");
-    marca.className = "apv-marca";
-    marca.style.left = p.x + "%";
-    marca.style.top = p.y + "%";
-    marca.textContent = String(i + 1);
-    palco.appendChild(marca);
-  });
+
+  const caixa = apvCaixaDaImagemNoPalco();
+  if (caixa) {
+    apvPinsDevolucao.forEach((p, i) => {
+      const marca = document.createElement("span");
+      marca.className = "apv-marca";
+      marca.style.left = (caixa.left + (p.x / 100) * caixa.width) + "px";
+      marca.style.top = (caixa.top + (p.y / 100) * caixa.height) + "px";
+      marca.textContent = String(i + 1);
+      palco.appendChild(marca);
+    });
+  }
 
   const lista = document.getElementById("apvMarcarLista");
   lista.innerHTML = apvPinsDevolucao.length
@@ -1051,7 +1057,7 @@ function apvRenderPinsDevolucao() {
           <input type="text" data-apv-pin-txt="${i}" value="${escaparHTML(p.texto)}" placeholder="O que muda aqui?">
           <button type="button" class="apv-marcar-remover" data-apv-pin="${i}" aria-label="Tirar esse ponto">×</button>
         </div>`).join("")
-    : `<p class="apv-campo-ajuda">Clica na peça pra apontar exatamente onde.</p>`;
+    : `<p class="apv-campo-ajuda">Clica em "Adicionar ponto" e depois na peça, ao lado, pra apontar exatamente onde.</p>`;
 
   lista.querySelectorAll("[data-apv-pin-txt]").forEach(campo => {
     campo.addEventListener("input", () => {
@@ -1084,7 +1090,9 @@ function apvLigarEventos() {
   };
 
   liga("apvBtnAprovar", "click", apvClickAcao);
-  liga("apvBtnDevolver", "click", apvAbrirDevolver);
+  liga("apvBtnDevolver", "click", apvConfirmarDevolucao);
+  liga("apvMarcarBtn", "click", apvAlternarMarcacao);
+  liga("apvPalco", "click", apvCliqueNoPalcoParaMarcar);
   liga("apvVerVersaoNova", "click", () => apvIrParaVersao(apvPecaAberta ? apvPecaAberta.peca.versoes.length : 1));
 
   liga("apvConfirmaVer", "click", () => {
@@ -1094,11 +1102,6 @@ function apvLigarEventos() {
   liga("apvConfirmaSegue", "click", apvConfirmarAprovacao);
 
   liga("apvBtnPreview", "click", apvAoVerPreview);
-
-  liga("apvFecharPainel", "click", apvFecharDevolver);
-  liga("apvCancelarDevolver", "click", apvFecharDevolver);
-  liga("apvConfirmarDevolver", "click", apvConfirmarDevolucao);
-  liga("apvMarcarBtn", "click", apvAlternarMarcacao);
 
   // O erro do motivo some assim que a pessoa começa a digitar, não só quando
   // reenvia — cobrar de novo o que ela já está corrigindo é ruído.
@@ -1117,28 +1120,13 @@ function apvLigarEventos() {
     }
   });
 
-  // Clicar no fundo escuro fecha o painel, mas só quando o clique COMEÇOU no
-  // fundo: sem isso, arrastar pra selecionar texto de dentro e soltar por fora
-  // fechava o painel e apagava o que a pessoa escreveu.
-  const overlayDevolver = document.getElementById("apvOverlayDevolver");
-  if (overlayDevolver) {
-    let comecouNoFundo = false;
-    overlayDevolver.addEventListener("mousedown", (e) => { comecouNoFundo = e.target === overlayDevolver; });
-    overlayDevolver.addEventListener("click", (e) => {
-      if (e.target === overlayDevolver && comecouNoFundo) apvFecharDevolver();
-    });
-  }
-
-  // Esc fecha o de CIMA primeiro, nunca os dois de uma vez. Em fase de captura,
-  // mesmo padrão da paleta de comando e do visualizador de imagem: sem isso, o
-  // Esc chegaria antes em outro dono de tecla da tela.
+  // Esc só tem mais um nível aqui dentro (a confirmação de versão) — o
+  // pedido de alteração não é mais uma tela separada, então não tem o que
+  // fechar antes de fechar a conferência inteira.
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!document.getElementById("apvConfirmaFundo")?.hidden) {
       document.getElementById("apvConfirmaFundo").hidden = true;
-      e.stopPropagation();
-    } else if (!document.getElementById("apvOverlayDevolver")?.hidden) {
-      apvFecharDevolver();
       e.stopPropagation();
     } else if (document.getElementById("apvConferencia")?.classList.contains("visible")) {
       apvFecharConferencia();
