@@ -52,7 +52,10 @@
 // RUNRUN_USER_TOKEN_GUSTAVO, RUNRUN_USER_TOKEN_ERICK — as duas últimas
 // são o token pessoal de cada um (gerado por ELES, dentro da própria
 // conta deles no Runrun.it — o do Cláudio não serve pros dois), ver o
-// comentário "TOKEN POR PESSOA" ali em cima. A geração de imagem da Bee
+// comentário "TOKEN POR PESSOA" ali em cima. Desde 2026-08-05 o
+// ATENDIMENTO também tem os seus, pelo mesmo motivo (elas comentam e
+// reatribuem de verdade na tela de conferência): RUNRUN_USER_TOKEN_LAURA,
+// RUNRUN_USER_TOKEN_MANU e RUNRUN_USER_TOKEN_GIOVANNA. A geração de imagem da Bee
 // (NanoBanana.gs) NÃO precisa de chave nova: usa a mesma GEMINI_API_KEY
 // dos textos dela.
 var RUNRUN_APP_KEY = PropertiesService.getScriptProperties().getProperty('RUNRUN_APP_KEY');
@@ -82,6 +85,27 @@ var RUNRUN_TOKENS_POR_EMAIL = {
   'claudio@beeon.com.br': RUNRUN_USER_TOKEN,
   'gustavo@beeon.com.br': RUNRUN_USER_TOKEN_GUSTAVO,
   'erick@beeon.com.br': RUNRUN_USER_TOKEN_ERICK
+};
+
+// O ATENDIMENTO (2026-08-05). Elas entraram no Colmeia por causa da tela
+// de conferência, e daí saem escritas de verdade no Runrun.it: o
+// comentário do pedido de alteração, a reatribuição do card. Sem token
+// próprio, tudo isso apareceria lá como se fosse o Cláudio fazendo.
+//
+// POR QUE NÃO ENTRAM EM RUNRUN_USUARIOS: aquela lista não é "as pessoas
+// da agência" — é quem tem QUADRO. Ela é varrida a cada atualização do
+// quadro (buscarTarefasAbertasSeparadas) pra buscar as tarefas abertas de
+// cada uma. Pôr o atendimento lá faria a varredura procurar o dobro de
+// gente, mais devagar, atrás de tarefa que não existe.
+//
+// O nome aqui tem que bater com o nome do LOGIN (aba Login da planilha) —
+// é ele que chega como `autor`. Não batendo, cai no token do Cláudio, que
+// é o comportamento de sempre pra quem ainda não tem token: funciona, só
+// com a autoria errada.
+var RUNRUN_TOKENS_ATENDIMENTO = {
+  'Laura': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_LAURA'),
+  'Manu': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_MANU'),
+  'Giovanna': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_GIOVANNA')
 };
 
 // URL do Web App do painel-designers-beeon (o outro painel, já publicado).

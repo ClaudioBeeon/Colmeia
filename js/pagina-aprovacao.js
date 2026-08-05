@@ -915,6 +915,7 @@ async function moverCardMaeSeMarcado() {
   const data = await chamarBackend({
     acao: "moverCardMaeParaAprovacaoCliente",
     taskId: apvPecaAberta.taskId,
+    autor: DESIGNER_LOGADO,
   });
 
   if (!data || !data.ok) {
@@ -1056,6 +1057,12 @@ async function apvDevolverPara(nomeDesigner) {
     designer: nomeDesigner,
     designerId: designerId,
     autorNome: DESIGNER_LOGADO,
+    // `autor` decide COM QUAL CONTA do Runrun.it a escrita acontece (ver
+    // tokenRunrunDoAutor). Agora que o atendimento tem token próprio, o
+    // comentário do pedido sai no nome de quem pediu de verdade — antes
+    // saía como se fosse o Cláudio. Não confundir com `autorNome`, que é
+    // só o texto da assinatura.
+    autor: DESIGNER_LOGADO,
     cliente: apvPecaAberta.cliente,
     // Qual arquivo estava sendo conferido — é em cima DELE que os pontos
     // foram marcados, e é ele que a página de ajuste vai mostrar.
