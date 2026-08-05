@@ -475,6 +475,17 @@
 .apv-brief-texto p:last-child,
 .apv-brief-texto ul:last-child { margin-bottom: 0; }
 
+/* Animação da colmeia (logo flutuando + frases em rodízio) enquanto o
+   briefing carrega — mesma de `.board-loading` (css/04-paginas.css, usada
+   na entrada do app), só menor: o original nasceu pro quadro inteiro
+   (min-height 400px) e aqui é uma coluna estreita dentro de um cartão. */
+.apv-brief-loading {
+  min-height: 130px; border-radius: var(--radius-md);
+  background: var(--apv-superficie-2, var(--card-bg));
+}
+.apv-brief-loading .board-loading-bee { width: 32px; height: 32px; }
+.apv-brief-loading .board-loading-text { font-size: 13px; }
+
 /* Entrega desejada: rótulo miúdo em maiúsculas de um lado, valor como
    pílula amarela do outro — mesmo par rótulo/valor do resto do app
    (ex.: `.apv-spec-valor` já existia; só o desenho ao redor mudou). */

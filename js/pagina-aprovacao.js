@@ -444,6 +444,23 @@ async function apvAbrirConferencia(taskId, loteId) {
   document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
   document.getElementById("apvContextoId").hidden = true;
   document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
+  // O texto que ficava aqui era o EXEMPLO estático do protótipo ("Post de
+  // feed anunciando o combo de verão...") — nunca era pra ficar visível de
+  // verdade, mas como só era trocado depois que `dadosDaConferencia`
+  // respondesse, dava pra ver ele piscando antes de carregar. Agora usa a
+  // mesma animação da colmeia (logo flutuando + frases em rodízio) que a
+  // entrada do app já usa, em vez de um texto solto que parece um bug.
+  document.getElementById("apvBriefTexto").innerHTML = `
+    <div class="board-loading apv-brief-loading">
+      <div class="board-loading-glass"></div>
+      <div class="board-loading-content">
+        <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="board-loading-bee" alt="Colmeia">
+        <p class="board-loading-text" id="apvLoadingMsg">${mensagensCarregando[0]}</p>
+      </div>
+    </div>
+  `;
+  document.getElementById("apvBriefSpecs").innerHTML = "";
+  apvIniciarMensagensCarregando();
   document.getElementById("apvContextoCliente").textContent = "";
   document.getElementById("apvContextoPeca").textContent = "Carregando...";
 
@@ -653,6 +670,29 @@ function apvRenderBriefing(peca) {
  * conteúdo — mudou um comentário, o resumo é refeito; não mudou, volta na
  * hora.
  */
+// Gira as frases do tema colmeia (mesmo array `mensagensCarregando`,
+// js/pessoas-fotos.js) dentro do card "O que foi pedido" enquanto o
+// briefing carrega. Não reaproveita `iniciarMensagensCarregando()` porque
+// ela mira num id fixo (`loadingMsg`, do carregamento do quadro) — as duas
+// telas podem existir na mesma hora (a conferência abre por cima do
+// quadro), e duas animações escrevendo no mesmo id embaralhariam uma na
+// outra. Auto-desliga sozinha quando o elemento some (peça carregou e
+// `carregarBriefingDaBee` já trocou o conteúdo), mesmo padrão da original.
+let apvIntervalMsgCarregando = null;
+function apvIniciarMensagensCarregando() {
+  clearInterval(apvIntervalMsgCarregando);
+  let indice = 0;
+  apvIntervalMsgCarregando = setInterval(() => {
+    indice = (indice + 1) % mensagensCarregando.length;
+    const el = document.getElementById("apvLoadingMsg");
+    if (!el) { clearInterval(apvIntervalMsgCarregando); return; }
+    el.classList.remove("fade-in");
+    void el.offsetWidth; // reinicia a animação CSS
+    el.textContent = mensagensCarregando[indice];
+    el.classList.add("fade-in");
+  }, 1800);
+}
+
 async function carregarBriefingDaBee(peca) {
   const el = document.getElementById("apvBriefTexto");
   if (!el) return;
