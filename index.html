@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-05d">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05d">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05d">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05d">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05d">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05d">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-05e">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05e">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05e">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05e">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05e">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05e">
 </head>
 <body>
 
@@ -709,6 +709,16 @@
         <span class="apv-contexto-cliente" id="apvContextoCliente">Grão Café</span>
         <span class="apv-contexto-peca" id="apvContextoPeca">Feed — Combo de Verão</span>
       </div>
+
+      <!-- Duas pílulas, sempre visíveis: "Conferência" é o trabalho de
+           agora (pedido → depois de aprovar, o envio); "Aprovação do
+           cliente" mostra se já foi mandado e o que o cliente respondeu.
+           Ver apvTrocarAba(). -->
+      <div class="apv-tabs">
+        <div class="apv-tab-wrap"><button type="button" class="apv-tab-pill ativa" id="apvTabConferencia">Conferência</button></div>
+        <div class="apv-tab-wrap"><button type="button" class="apv-tab-pill" id="apvTabCliente">Aprovação do cliente</button></div>
+      </div>
+
       <span class="apv-contexto-restam" id="apvContextoRestam">3 peças ainda esperando</span>
       <button type="button" class="apv-acao-btn" id="apvBtnAprovar">
         <span class="apv-acao-track" id="apvAcaoTrack">
@@ -727,15 +737,6 @@
     <div class="apv-colunas">
       <!-- ---------- ESQUERDA: o que foi pedido → depois de aprovar, virar o envio ---------- -->
       <div class="apv-coluna apv-coluna-pedido">
-        <!-- Duas pílulas, sempre visíveis: "Conferência" é o trabalho de
-             agora (pedido → depois de aprovar, o envio); "Aprovação do
-             cliente" mostra se já foi mandado e o que o cliente respondeu.
-             Ver apvTrocarAba(). -->
-        <div class="apv-tabs">
-          <div class="apv-tab-wrap"><button type="button" class="apv-tab-pill ativa" id="apvTabConferencia">Conferência</button></div>
-          <div class="apv-tab-wrap"><button type="button" class="apv-tab-pill" id="apvTabCliente">Aprovação do cliente</button></div>
-        </div>
-
         <!-- Painel A: o que foi pedido. Só o texto de verdade escrito na
              tarefa — sem resumo por IA e sem repetir cliente/peça/designer,
              que já aparecem na pílula de cima. -->
@@ -759,21 +760,15 @@
           <!-- Só quando o projeto do mês já foi fechado no Runrun.it —
                populado por apvRenderBriefing() ao carregar a peça. Nesse
                caso não dá pra criar subtarefa (projeto fechado não aceita
-               tarefa nova); o texto abaixo vira comentário no card mãe. -->
-          <div class="apv-excecao" id="apvExcecaoFechado" hidden>
-            <div class="apv-excecao-topo">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
-              <span class="apv-excecao-titulo">Esse projeto já foi fechado</span>
-            </div>
-            <p class="apv-excecao-txt" id="apvExcecaoTxt">
-              Esse card mãe é de um mês que já encerrou, e projetos encerrados
-              não aceitam tarefa nova. O que você escrever abaixo vira um
-              comentário nele, marcando o designer, em vez de uma subtarefa.
-            </p>
-            <div class="apv-link-copiar">
-              <span class="apv-link-url" id="apvLinkMaeUrl">runrun.it/tasks/…</span>
-              <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" id="apvCopiarLinkMae">Copiar</button>
-            </div>
+               tarefa nova); o texto abaixo vira comentário no card mãe. Só
+               uma pílula com dica (title) — o texto grande explicando tudo
+               isso, testado, era demais pra uma exceção rara. -->
+          <div class="apv-excecao-linha" id="apvExcecaoFechado" hidden>
+            <span class="apv-excecao-pill" id="apvExcecaoPill" title="Esse card mãe é de um mês que já encerrou, e projetos encerrados não aceitam tarefa nova. O que você escrever abaixo vira um comentário nele, marcando o designer, em vez de uma subtarefa.">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5.5M12 8v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Projeto fechado
+            </span>
+            <button type="button" class="apv-link-mae-mini" id="apvCopiarLinkMae">Copiar link do card mãe</button>
           </div>
 
           <!-- "O que precisa mudar" — pedido do Cláudio, sempre visível
@@ -799,7 +794,9 @@
             <p class="apv-campo-ajuda">Clica em "Adicionar ponto" e depois na peça, ao lado, pra apontar exatamente onde.</p>
           </div>
 
-          <div class="apv-fim-briefing">
+          <!-- Rodapé fixo — não rola com o resto do painel, pedido do
+               Cláudio (ver .apv-rodape-coluna, css/06-aprovacao.css). -->
+          <div class="apv-rodape-coluna">
             <button type="button" class="apv-marcar-btn" id="apvMarcarBtn">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.7 7-11a7 7 0 10-14 0c0 5.3 7 11 7 11z" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="1.9"/></svg>
               Adicionar ponto
@@ -871,14 +868,17 @@
             </label>
           </div>
 
-          <!-- Maior botão do painel de propósito, e o botão de enviar (lá
-               em cima, na pílula) só libera depois que ele foi usado uma
-               vez. Ver apvAoVerPreview(). -->
-          <button type="button" class="apv-preview" id="apvBtnPreview">
-            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
-            Ver como o cliente vê
-          </button>
-          <p class="apv-preview-nota" id="apvPreviewNota">Dá uma olhada antes de mandar — é a última chance de pegar algo errado.</p>
+          <!-- Rodapé fixo — não rola com o resto do painel, pedido do
+               Cláudio (ver .apv-rodape-coluna, css/06-aprovacao.css).
+               Maior botão do painel de propósito: o convite pra olhar
+               antes de mandar. Ver apvAoVerPreview(). -->
+          <div class="apv-rodape-coluna">
+            <button type="button" class="apv-preview" id="apvBtnPreview">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+              Ver como o cliente vê
+            </button>
+            <p class="apv-preview-nota" id="apvPreviewNota">Dá uma olhada antes de mandar — é a última chance de pegar algo errado.</p>
+          </div>
         </div>
 
         <!-- Painel C: aba "Aprovação do cliente" — status de quem já
@@ -1091,31 +1091,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-05d"></script>
-<script src="js/fila-offline.js?v=2026-08-05d"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-05d"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-05d"></script>
-<script src="js/kanban-polling.js?v=2026-08-05d"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-05d"></script>
-<script src="js/regras-briefing.js?v=2026-08-05d"></script>
-<script src="js/kanban-board.js?v=2026-08-05d"></script>
-<script src="js/clientes-hub.js?v=2026-08-05d"></script>
-<script src="js/chat-comentarios.js?v=2026-08-05d"></script>
-<script src="js/detalhe-modal.js?v=2026-08-05d"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-05d"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-05d"></script>
-<script src="js/bee.js?v=2026-08-05d"></script>
-<script src="js/paginas-designers.js?v=2026-08-05d"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-05d"></script>
-<script src="js/pagina-repasse.js?v=2026-08-05d"></script>
-<script src="js/pagina-horas.js?v=2026-08-05d"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-05d"></script>
-<script src="js/paleta-comando.js?v=2026-08-05d"></script>
-<script src="js/roteador-url.js?v=2026-08-05d"></script>
-<script src="js/detalhe-historia.js?v=2026-08-05d"></script>
-<script src="js/modo-foco.js?v=2026-08-05d"></script>
-<script src="js/pagina-bee.js?v=2026-08-05d"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-05d"></script>
-<script src="js/login-boot.js?v=2026-08-05d"></script>
+<script src="js/config.js?v=2026-08-05e"></script>
+<script src="js/fila-offline.js?v=2026-08-05e"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-05e"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-05e"></script>
+<script src="js/kanban-polling.js?v=2026-08-05e"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-05e"></script>
+<script src="js/regras-briefing.js?v=2026-08-05e"></script>
+<script src="js/kanban-board.js?v=2026-08-05e"></script>
+<script src="js/clientes-hub.js?v=2026-08-05e"></script>
+<script src="js/chat-comentarios.js?v=2026-08-05e"></script>
+<script src="js/detalhe-modal.js?v=2026-08-05e"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-05e"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-05e"></script>
+<script src="js/bee.js?v=2026-08-05e"></script>
+<script src="js/paginas-designers.js?v=2026-08-05e"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-05e"></script>
+<script src="js/pagina-repasse.js?v=2026-08-05e"></script>
+<script src="js/pagina-horas.js?v=2026-08-05e"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-05e"></script>
+<script src="js/paleta-comando.js?v=2026-08-05e"></script>
+<script src="js/roteador-url.js?v=2026-08-05e"></script>
+<script src="js/detalhe-historia.js?v=2026-08-05e"></script>
+<script src="js/modo-foco.js?v=2026-08-05e"></script>
+<script src="js/pagina-bee.js?v=2026-08-05e"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-05e"></script>
+<script src="js/login-boot.js?v=2026-08-05e"></script>
 </body>
 </html>

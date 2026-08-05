@@ -109,10 +109,6 @@ let apvPecaAberta = null;
 // da mais recente — é justamente esse descompasso que apvAprovar vigia.
 let apvVersaoNaTela = null;
 
-// O "Ver como o cliente vê" já foi aberto pra ESTA seleção de peças? Os botões
-// de envio só acendem depois. Ver apvAoVerPreview().
-let apvPreviewVisto = false;
-
 // O link do cliente, depois de gerado. Trocar a seleção de peças zera ele —
 // senão dava pra revisar um link e mandar outro.
 let apvLinkGerado = "";
@@ -301,7 +297,6 @@ async function apvAbrirConferencia(taskId, nomePeca) {
 
   apvPecaAberta = null;
   apvVersaoNaTela = null;
-  apvPreviewVisto = false;
   apvLinkGerado = "";
   apvPinsDevolucao = [];
   apvMarcando = false;
@@ -313,14 +308,13 @@ async function apvAbrirConferencia(taskId, nomePeca) {
 
   // Volta pra pílula "Conferência" e pro painel "o que foi pedido" — a tela
   // pode ter ficado noutro estado da peça anterior. O botão de ação volta
-  // pro início da pilha (Aprovar), destravado.
+  // pro início da pilha (Aprovar).
   document.getElementById("apvTabConferencia").classList.add("ativa");
   document.getElementById("apvTabCliente").classList.remove("ativa");
   document.getElementById("apvPainelBriefing").hidden = false;
   document.getElementById("apvPainelEnvio").hidden = true;
   document.getElementById("apvPainelStatus").hidden = true;
   document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
-  document.getElementById("apvBtnAprovar").classList.remove("travado");
   document.getElementById("apvContextoId").hidden = true;
   document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
   document.getElementById("apvContextoCliente").textContent = "";
@@ -794,12 +788,10 @@ function apvRenderEnvio(peca, aprovacao) {
   document.querySelectorAll("#apvListaPecasEnvio [data-apv-file]").forEach(btn => {
     btn.addEventListener("click", () => {
       btn.classList.toggle("marcada");
-      // Trocar a seleção invalida o link já gerado e volta a travar o envio:
-      // revisar um link e mandar outro seria exatamente o erro que essa tela
-      // existe pra evitar.
+      // Trocar a seleção invalida o link já gerado — revisar um link e
+      // mandar outro seria exatamente o erro que essa tela existe pra
+      // evitar, então gera um novo na próxima vez que precisar.
       apvLinkGerado = "";
-      apvPreviewVisto = false;
-      document.getElementById("apvBtnAprovar").classList.add("travado");
       document.getElementById("apvPreviewNota").textContent =
         "A seleção mudou — dá uma olhada de novo antes de mandar.";
     });
@@ -808,7 +800,6 @@ function apvRenderEnvio(peca, aprovacao) {
     if (el.dataset.apvThumb) apvCarregarMiniatura(el.dataset.apvThumb, el);
   });
 
-  document.getElementById("apvBtnAprovar").classList.add("travado");
   document.getElementById("apvPreviewNota").textContent =
     "Dá uma olhada antes de mandar — é a última chance de pegar algo errado.";
 }
@@ -820,25 +811,11 @@ function apvArquivosEscolhidos() {
     .filter(Boolean);
 }
 
-/**
- * Gera o link de verdade e abre a página do cliente numa aba nova.
- *
- * O botão é o maior do painel DE PROPÓSITO, e o botão de enviar (na pílula
- * de cima) nasce apagado até ele ser usado. Botão grande sozinho é sugestão,
- * não proteção; a trava é o que de fato impede "mandei sem olhar", e custa
- * um clique.
- *
- * COMO TIRAR, se um dia incomodar: é só parar de pôr a classe .travado em
- * #apvBtnAprovar. O botão de enviar continua ali, sem a trava. Foi combinado
- * assim com o Cláudio — vale reavaliar depois de umas semanas.
- */
+/** Gera o link de verdade e abre a página do cliente numa aba nova. */
 async function apvAoVerPreview() {
   const link = await apvGarantirLink();
   if (!link) return;
-  apvPreviewVisto = true;
-  document.getElementById("apvBtnAprovar").classList.remove("travado");
-  document.getElementById("apvPreviewNota").textContent =
-    "Você já viu como o cliente vê. O botão de enviar está liberado.";
+  document.getElementById("apvPreviewNota").textContent = "Você já viu como o cliente vê.";
   window.open(link, "_blank", "noopener");
 }
 
@@ -939,8 +916,10 @@ async function moverCardMaeSeMarcado() {
  */
 function apvPrepararPedirAlteracao(peca) {
   const fechado = !!peca.projetoFechado;
-  const excecao = document.getElementById("apvExcecaoFechado");
-  excecao.hidden = !fechado;
+  document.getElementById("apvExcecaoFechado").hidden = !fechado;
+  // Guardado no próprio botão (não tem mais um campo de texto visível com
+  // o link) — é o que apvCopiarLinkMae lê na hora de copiar.
+  document.getElementById("apvCopiarLinkMae").dataset.link = peca.cardMaeLink || "";
 
   document.getElementById("apvBtnDevolverTxt").textContent = fechado
     ? `Comentar e passar pro ${peca.designer || "designer"}`
@@ -1180,12 +1159,13 @@ function apvLigarEventos() {
   });
 
   liga("apvCopiarLinkMae", "click", async () => {
-    const url = document.getElementById("apvLinkMaeUrl").textContent;
+    const url = document.getElementById("apvCopiarLinkMae").dataset.link || "";
+    if (!url) { mostrarToast("Sem link do card mãe pra copiar.", "erro"); return; }
     try {
       await navigator.clipboard.writeText(url);
       mostrarToast("Link do card mãe copiado.", "sucesso");
     } catch (err) {
-      mostrarToast("Não consegui copiar sozinho — o link está aí na tela.", "erro");
+      mostrarToast("Não consegui copiar sozinho — o link é: " + url, "erro");
     }
   });
 
