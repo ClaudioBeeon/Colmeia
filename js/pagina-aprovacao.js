@@ -400,6 +400,19 @@ async function apvAbrirConferencia(taskId, loteId) {
   const overlay = document.getElementById("apvConferencia");
   if (!overlay) return;
 
+  // A conferência é uma tela separada do resto do Colmeia (pedido do
+  // Cláudio) — antes disso o overlay flutuava com 22px de margem em volta,
+  // deixando o quadro/sidebar/acesso rápido por trás aparecerem nessa
+  // faixa. Este fundo sólido cobre o VIEWPORT inteiro (não só o espaço
+  // dentro de `.apv-conferencia`, que fica com `transform` — por isso é um
+  // elemento à parte, não um `::before` dela, mesmo padrão de
+  // `.apv-confirma-fundo`).
+  const fundo = document.getElementById("apvConferenciaFundo");
+  if (fundo) {
+    fundo.classList.add("visible");
+    requestAnimationFrame(() => fundo.classList.add("open"));
+  }
+
   if (typeof roteadorAoAbrirConferencia === "function") roteadorAoAbrirConferencia(taskId, loteId);
 
   apvPecaAberta = null;
@@ -518,6 +531,11 @@ function apvFecharConferencia() {
   if (!overlay) return;
   overlay.classList.remove("open");
   setTimeout(() => overlay.classList.remove("visible"), 220);
+  const fundo = document.getElementById("apvConferenciaFundo");
+  if (fundo) {
+    fundo.classList.remove("open");
+    setTimeout(() => fundo.classList.remove("visible"), 220);
+  }
   apvPecaAberta = null;
   clearInterval(apvVersaoNovaIntervalId);
   apvVersaoNovaIntervalId = null;

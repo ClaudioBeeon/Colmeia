@@ -191,6 +191,26 @@
    sempre: quem confere 15 peças por dia não pode ter que rolar pra ver
    o rodapé da arte — é assim que passa um detalhe errado. */
 
+/* Fundo sólido atrás da conferência — cobre o VIEWPORT inteiro (não só o
+   espaço dentro do `.apv-conferencia`, que fica 22px pra dentro de cada
+   borda pelo visual de "card flutuante"). Sem isso, o quadro, a barra
+   lateral e o painel de acesso rápido do Colmeia apareciam por trás na
+   faixa de 22px em volta — a conferência é pensada como uma tela
+   SEPARADA do resto do app, não deveria deixar nada dele espiando.
+   Elemento à parte (não um `::before` de `.apv-conferencia`) porque ela
+   tem `transform` no CSS (mesmo em repouso) — isso a torna containing
+   block de descendentes `position: fixed`, e um `::before` fixo ali
+   dentro ficaria preso ao tamanho DELA, não do viewport. Mesmo problema
+   que `.apv-confirma-fundo` já resolve do mesmo jeito, um pouco abaixo. */
+.apv-conferencia-fundo {
+  display: none; position: fixed; inset: 0; z-index: 119;
+  background: var(--page-bg);
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-apple-spring);
+}
+.apv-conferencia-fundo.visible { display: block; }
+.apv-conferencia-fundo.open { opacity: 1; }
+
 .apv-conferencia {
   display: none; position: fixed;
   /* Cobre a largura toda disponível — sem reservar a faixa da barra
