@@ -211,13 +211,15 @@ function apvRenderFila(itens) {
         <div class="apv-card-meta">
           <span class="apv-card-designer">${escaparHTML(item.designer || "")}</span>
           <span class="apv-pill apv-pill-versao">versão ${item.versaoAtual || 1}</span>
-          <span class="apv-pill apv-pill-espera">${apvTempoDeEspera(item.pedidoEm)}</span>
+          ${item.status === "aprovada"
+            ? `<span class="apv-pill apv-pill-aprovada">aprovada${item.aprovadoPor ? " por " + escaparHTML(item.aprovadoPor) : ""} · falta enviar</span>`
+            : `<span class="apv-pill apv-pill-espera">${apvTempoDeEspera(item.pedidoEm)}</span>`}
           ${item.temVersaoNova ? `<span class="apv-pill apv-pill-nova">versão nova chegou</span>` : ""}
           ${item.arquivoSumiu ? `<span class="apv-pill apv-pill-nova">o arquivo saiu da pasta</span>` : ""}
         </div>
       </div>
       <div class="apv-card-acao">
-        <button type="button" class="apv-btn apv-btn-primario" data-apv-conferir="${i}">Conferir</button>
+        <button type="button" class="apv-btn apv-btn-primario" data-apv-conferir="${i}">${item.status === "aprovada" ? "Continuar envio" : "Conferir"}</button>
       </div>
     </article>
   `).join("");
@@ -360,6 +362,18 @@ async function apvAbrirConferencia(taskId, nomePeca) {
 
   apvRenderBriefing(data);
   apvRenderPeca(data);
+
+  // Essa peça já foi aprovada internamente antes (reabriu pela fila depois
+  // de um F5, por exemplo) — pula direto pro painel de envio, com a mesma
+  // aprovação já registrada, em vez de fingir que ainda está por conferir.
+  // Ver o comentário de listarConferenciasPendentes (AprovacaoInterna.gs)
+  // pro porquê disso ser necessário.
+  if (data.statusConferencia === "aprovada" || data.statusConferencia === "enviada") {
+    apvAprovado = true;
+    apvMarcarBotaoComoAprovado();
+    apvRenderEnvio(data, data);
+  }
+  apvRedesenharPaineis();
 }
 
 /** Fecha a conferência e volta pra fila. Caminho inverso da abertura. */
@@ -738,6 +752,20 @@ async function apvCopiarLinkCliente() {
   apvEnviado = true;
   mostrarToast("Link copiado.", "sucesso");
   if (apvAbaAtiva === "cliente") apvRenderStatusCliente();
+
+  // Só AGORA a peça sai de vez da fila de conferência — enquanto só estava
+  // "aprovada" ela continuava lá, de propósito (ver o comentário de
+  // listarConferenciasPendentes, AprovacaoInterna.gs). Não trava a tela por
+  // isso: o link já foi copiado, que é o que importa pra quem está usando.
+  if (apvPecaAberta) {
+    chamarBackend({
+      acao: "marcarConferenciaEnviada",
+      taskId: apvPecaAberta.taskId,
+      nomePeca: apvPecaAberta.peca.nomePeca,
+    });
+    apvFila = apvFila.filter(i => !(String(i.taskId) === String(apvPecaAberta.taskId) && i.nomePeca === apvPecaAberta.peca.nomePeca));
+    atualizarBadgeAprovacao();
+  }
 }
 
 /**
@@ -1081,14 +1109,12 @@ function apvRenderPinsDevolucao() {
   }
 
   const lista = document.getElementById("apvMarcarLista");
-  lista.innerHTML = apvPinsDevolucao.length
-    ? apvPinsDevolucao.map((p, i) => `
+  lista.innerHTML = apvPinsDevolucao.map((p, i) => `
         <div class="apv-marcar-linha">
           <span class="apv-marcar-num">${i + 1}</span>
           <input type="text" data-apv-pin-txt="${i}" value="${escaparHTML(p.texto)}" placeholder="O que muda aqui?">
           <button type="button" class="apv-marcar-remover" data-apv-pin="${i}" aria-label="Tirar esse ponto">×</button>
-        </div>`).join("")
-    : `<p class="apv-campo-ajuda">Clica em "Adicionar ponto" e depois na peça, ao lado, pra apontar exatamente onde.</p>`;
+        </div>`).join("");
 
   lista.querySelectorAll("[data-apv-pin-txt]").forEach(campo => {
     campo.addEventListener("input", () => {

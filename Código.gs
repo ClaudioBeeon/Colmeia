@@ -263,6 +263,8 @@ function handleRequest(e, method) {
         output = listarVersoesDasPecas(body.taskId);
       } else if (body.acao === 'aprovarInternamente') {
         output = aprovarInternamente(body.taskId, body.nomePeca, body.aprovadoPor);
+      } else if (body.acao === 'marcarConferenciaEnviada') {
+        output = marcarConferenciaEnviada(body.taskId, body.nomePeca);
       } else if (body.acao === 'devolverParaDesigner') {
         output = devolverParaDesigner(body);
       } else if (body.acao === 'moverCardMaeParaAprovacaoCliente') {

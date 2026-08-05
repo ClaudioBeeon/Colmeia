@@ -90,6 +90,7 @@
 .apv-pill-espera { background: var(--apv-superficie-2); color: var(--text-secondary); border: 1px solid var(--border); }
 .apv-pill-espera.atrasado { background: var(--warning-soft); color: var(--warning); border-color: transparent; }
 .apv-pill-nova { background: var(--apv-amarelo-suave); color: var(--kanban-yellow-text); }
+.apv-pill-aprovada { background: var(--apv-sucesso-suave); color: var(--success); }
 
 .apv-rotulo {
   font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
@@ -244,6 +245,14 @@
 .apv-coluna-pedido {
   overflow-y: auto; padding: 22px 24px 0;
   background: var(--page-bg); border-right: 1px solid var(--border);
+  /* Vira um contêiner flex (coluna) pra o painel visível poder crescer até
+     o fim de verdade (ver `.apv-blocos-coluna` "flex: 1 0 auto" abaixo) —
+     uma altura em `%` sozinha não dava conta porque não descontava a
+     barra de abas (.apv-tabs-blocos), que é irmã dos painéis: a soma dos
+     dois estourava o espaço disponível e empurrava o botão pra fora da
+     tela. Com flexbox, quem calcula "o que sobra" é o próprio navegador,
+     olhando TODOS os irmãos de uma vez — não tem como descontar errado. */
+  display: flex; flex-direction: column;
 }
 /* Mesmo cinza escuro que `.apv-colunas` já usa no fundo do overlay
    inteiro (não o `--page-bg` padrão do resto do app) — pra não sobrar
@@ -259,10 +268,30 @@
    X", a pílula de exceção) usam esse mesmo gap uniforme, então eles têm
    `margin` zerada — é o pai quem espaça, não cada filho por conta
    própria. */
-.apv-blocos-coluna { display: flex; flex-direction: column; gap: 12px; }
+/* `flex: 1 0 auto` é o que permite o último bloco (.apv-bloco-motivo)
+   esticar até o fim da coluna quando o conteúdo é curto — o painel vira
+   um item flex do `.apv-coluna-pedido` de cima, então cresce pra ocupar
+   o que sobrar DEPOIS da barra de abas (não um `%` solto, que não sabia
+   descontar ela). O `0` do meio (flex-shrink) impede o painel de
+   encolher abaixo do próprio conteúdo quando ele é mais alto que a tela
+   — nesse caso quem rola é `.apv-coluna-pedido`, o painel nunca é
+   espremido. */
+.apv-blocos-coluna { display: flex; flex-direction: column; gap: 12px; flex: 1 0 auto; }
 .apv-bloco-card {
   background: var(--card-bg); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card); padding: 18px;
+}
+
+/* O cartão "O que precisa mudar?" é o único com `flex: 1 1 auto` — ocupa
+   todo o resto vertical da coluna (pedido do Cláudio), com o motivo e os
+   pontos marcados no topo e os botões de ação SEMPRE perto do final,
+   empurrados pra baixo por `margin-top: auto` — o respiro entre o
+   conteúdo e os botões cresce ou encolhe sozinho, sem precisar de um
+   rodapé fixo separado (que existia antes e foi removido daqui). */
+.apv-bloco-motivo { flex: 1 1 auto; display: flex; flex-direction: column; }
+.apv-bloco-motivo-rodape {
+  margin-top: auto; padding-top: 18px;
+  display: flex; flex-direction: column; gap: 10px;
 }
 
 /* ----- Rodapé fixo da coluna esquerda -----
@@ -280,19 +309,23 @@
 }
 [data-theme="dark"] .apv-rodape-coluna { background: rgba(255, 255, 255, 0.02); }
 
-/* Duas pílulas segmentadas, DENTRO da pílula branca de cima (pedido do
-   Cláudio) — mesmo padrão do cabeçalho do painel de comentários do card
-   (Comentários/Bee, css/03-detalhe.css): cada botão mora num DIV (não o
-   botão direto), porque um <button> como item flex resiste a encolher
-   sozinho. Aqui cada pílula tem o tamanho do próprio texto (não
-   flex:1/width:100% — isso era pra um contêiner largo tipo sidebar; aqui
-   é um item a mais na barra de cima, compacto). */
-.apv-tabs { display: flex; gap: 6px; flex: 0 0 auto; }
-.apv-tab-wrap { flex: 0 0 auto; }
+/* Duas pílulas segmentadas — "Conferência" / "Aprovação do cliente" — no
+   TOPO da coluna esquerda, junto dos blocos (pedido do Cláudio; moravam na
+   pílula branca de cima antes). Mesma barra branca com sombra que o
+   seletor de versão já usa (.apv-versao-switch) — "também com os blocos":
+   reusa o desenho, não inventa um terceiro. `flex: 1 1 0` faz os dois
+   botões dividirem a barra em partes iguais, mesmo com textos de tamanho
+   diferente ("Conferência" vs. "Aprovação do cliente"). */
+.apv-tabs-blocos {
+  flex: 0 0 auto; display: flex; gap: 4px; padding: 4px; margin-bottom: 12px;
+  background: var(--card-bg); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
 .apv-tab-pill {
-  font-family: var(--font-body); font-size: 12px; font-weight: 600;
-  padding: 7px 13px; border: none; border-radius: 999px; cursor: pointer;
-  background: var(--apv-superficie-2); color: var(--text-secondary);
+  flex: 1 1 0; text-align: center;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  padding: 9px 10px; border: none; border-radius: calc(var(--radius-lg) - 4px); cursor: pointer;
+  background: none; color: var(--text-secondary);
   transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
   white-space: nowrap;
 }
@@ -519,10 +552,6 @@
    não deveria precisar abrir outra tela pra escrever o que precisa mudar. */
 
 .apv-campo-rotulo { display: block; font-size: 13.5px; font-weight: 700; margin-bottom: 4px; }
-.apv-campo-ajuda {
-  font-family: var(--apv-fonte-texto); font-size: 12.5px; line-height: 1.45;
-  color: var(--text-secondary); margin-bottom: 9px;
-}
 .apv-obrigatorio { color: var(--danger); font-weight: 700; }
 .apv-erro {
   display: flex; align-items: center; gap: 7px; margin-top: 8px;
@@ -543,7 +572,8 @@
 .apv-marcar-btn.ativo { border-color: var(--kanban-yellow); background: var(--apv-amarelo-suave); color: var(--kanban-yellow-text); }
 .apv-marcar-btn svg { flex-shrink: 0; }
 
-.apv-marcar-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.apv-marcar-lista { display: flex; flex-direction: column; gap: 8px; }
+.apv-marcar-lista:not(:empty) { margin-top: 10px; }
 .apv-marcar-linha { display: flex; align-items: center; gap: 9px; }
 .apv-marcar-num {
   width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;

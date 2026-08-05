@@ -225,7 +225,14 @@ function acharLinhaDaConferencia(linhas, taskId, nomePeca) {
 }
 
 /**
- * A fila do atendimento: o que está esperando conferência.
+ * A fila do atendimento: o que está esperando ALGUMA ação de quem confere —
+ * ou ainda não olhou ('pendente'), ou já aprovou mas ainda não mandou pro
+ * cliente ('aprovada'). As duas continuam na fila de propósito: se só a
+ * 'pendente' contasse, dar F5 no meio do envio (depois de aprovar, antes de
+ * copiar o link) fazia a peça sumir da lista sem deixar rastro — parecia
+ * que a aprovação "não tinha ficado salva", quando na verdade só não tinha
+ * mais como voltar pra ela. Só sai da fila de vez quando o link é copiado
+ * de fato (ver marcarConferenciaEnviada, chamada por apvCopiarLinkCliente).
  *
  * Lê o Drive de cada peça pra saber se chegou versão nova DEPOIS do
  * pedido — é o `temVersaoNova` que acende o aviso no card da fila e, mais
@@ -241,7 +248,8 @@ function listarConferenciasPendentes() {
 
   for (var i = 1; i < linhas.length; i++) {
     var l = linhas[i];
-    if (String(l[11]) !== 'pendente') continue;
+    var status = String(l[11]);
+    if (status !== 'pendente' && status !== 'aprovada') continue;
 
     var taskId = String(l[0]);
     var nomePeca = String(l[3]);
@@ -277,7 +285,13 @@ function listarConferenciasPendentes() {
       // apagada). Some da fila silenciosamente seria pior: quem pediu a
       // conferência acha que ela está na fila, e não está mais.
       arquivoSumiu: !ultima,
-      pedidoEm: l[10]
+      pedidoEm: l[10],
+      // 'pendente' = ainda não conferida; 'aprovada' = já aprovada
+      // internamente, falta só mandar pro cliente (ver o comentário da
+      // função). O card da fila usa isso pra badge diferente e pra pular
+      // direto pro painel de envio ao reabrir.
+      status: status,
+      aprovadoPor: status === 'aprovada' ? l[12] : ''
     });
   }
 
@@ -356,6 +370,23 @@ function dadosDaConferencia(taskId, nomePeca) {
   var cardMaeId = tarefa.parent_task_id || null;
   var projetoFechado = projetoDaTarefaEstaFechado(tarefa);
 
+  // Se essa peça já foi aprovada internamente (ou já está pendente há um
+  // tempo), a tela precisa saber pra abrir no painel certo — sem isso, dar
+  // F5 depois de aprovar (mas antes de mandar pro cliente) jogava a pessoa
+  // de volta pro painel "o que foi pedido", como se a aprovação não tivesse
+  // acontecido (era exatamente isso, e não outra coisa, que tinha sido
+  // salvo — só a TELA que esquecia).
+  var linhaConferencia = acharLinhaDaConferencia(getConferenciasSheet().getDataRange().getValues(), taskId, peca.nomePeca);
+  var statusConferencia = 'pendente';
+  var aprovadoPor = '';
+  var aprovadoEm = '';
+  if (linhaConferencia) {
+    var valoresLinha = getConferenciasSheet().getRange(linhaConferencia, 1, 1, 15).getValues()[0];
+    statusConferencia = String(valoresLinha[11]) || 'pendente';
+    aprovadoPor = valoresLinha[12] || '';
+    aprovadoEm = valoresLinha[13] || '';
+  }
+
   return {
     ok: true,
     taskId: String(taskId),
@@ -369,7 +400,10 @@ function dadosDaConferencia(taskId, nomePeca) {
     cardMaeLink: cardMaeId ? 'https://runrun.it/tasks/' + cardMaeId : '',
     projetoFechado: projetoFechado,
     peca: peca,
-    outrasPecas: lista.pecas.filter(function (p) { return p.nomePeca !== peca.nomePeca; })
+    outrasPecas: lista.pecas.filter(function (p) { return p.nomePeca !== peca.nomePeca; }),
+    statusConferencia: statusConferencia,
+    aprovadoPor: aprovadoPor,
+    aprovadoEm: aprovadoEm
   };
 }
 
@@ -858,6 +892,29 @@ function regiaoDoPonto(x, y) {
   var vertical = y < 33 ? 'alto' : (y > 66 ? 'baixo' : 'meio');
   var horizontal = x < 33 ? 'à esquerda' : (x > 66 ? 'à direita' : 'ao centro');
   return vertical + ' ' + horizontal;
+}
+
+/**
+ * A peça saiu de vez da fila de quem confere: o link já foi copiado pra
+ * mandar pro cliente (ver apvCopiarLinkCliente, js/pagina-aprovacao.js).
+ * Até aqui ela ficava em 'aprovada' de propósito — só sai da fila quando
+ * o envio de verdade acontece, não quando só aprova (ver o comentário de
+ * listarConferenciasPendentes). Falhar aqui não é grave: na pior das
+ * hipóteses a peça continua aparecendo na fila como "aprovada, falta
+ * enviar" mesmo já tendo sido mandada — chato, não perigoso.
+ */
+function marcarConferenciaEnviada(taskId, nomePeca) {
+  var sheet = getConferenciasSheet();
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var linha = acharLinhaDaConferencia(sheet.getDataRange().getValues(), taskId, nomePeca);
+    if (!linha) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
+    sheet.getRange(linha, 12, 1, 1).setValues([['enviada']]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function marcarConferenciaDevolvida(taskId, nomePeca, quem, motivo) {

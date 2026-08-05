@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-05f">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05f">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05f">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05f">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05f">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05f">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-05g">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05g">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05g">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05g">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05g">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05g">
 </head>
 <body>
 
@@ -710,15 +710,6 @@
         <span class="apv-contexto-peca" id="apvContextoPeca">Feed — Combo de Verão</span>
       </div>
 
-      <!-- Duas pílulas, sempre visíveis: "Conferência" é o trabalho de
-           agora (pedido → depois de aprovar, o envio); "Aprovação do
-           cliente" mostra se já foi mandado e o que o cliente respondeu.
-           Ver apvTrocarAba(). -->
-      <div class="apv-tabs">
-        <div class="apv-tab-wrap"><button type="button" class="apv-tab-pill ativa" id="apvTabConferencia">Conferência</button></div>
-        <div class="apv-tab-wrap"><button type="button" class="apv-tab-pill" id="apvTabCliente">Aprovação do cliente</button></div>
-      </div>
-
       <span class="apv-contexto-restam" id="apvContextoRestam">3 peças ainda esperando</span>
       <button type="button" class="apv-acao-btn" id="apvBtnAprovar">
         <span class="apv-acao-track" id="apvAcaoTrack">
@@ -737,15 +728,27 @@
     <div class="apv-colunas">
       <!-- ---------- ESQUERDA: o que foi pedido → depois de aprovar, virar o envio ---------- -->
       <div class="apv-coluna apv-coluna-pedido">
+        <!-- Duas pílulas, sempre visíveis (não somem quando o painel troca
+             de briefing pra envio/status): "Conferência" é o trabalho de
+             agora; "Aprovação do cliente" mostra se já foi mandado e o que
+             o cliente respondeu. Ver apvTrocarAba(). Moraram na pílula
+             branca do topo antes; o Cláudio pediu pra virem pra cá, no
+             mesmo desenho dos "blocos" (mesma barra branca com sombra que
+             o seletor de versão, .apv-versao-switch, já usa). -->
+        <div class="apv-tabs-blocos" role="group" aria-label="Conferência ou aprovação do cliente">
+          <button type="button" class="apv-tab-pill ativa" id="apvTabConferencia">Conferência</button>
+          <button type="button" class="apv-tab-pill" id="apvTabCliente">Aprovação do cliente</button>
+        </div>
+
         <!-- Painel A: o que foi pedido. Só o texto de verdade escrito na
              tarefa — sem resumo por IA e sem repetir cliente/peça/designer,
-             que já aparecem na pílula de cima. -->
-        <!-- Estilo "Blocos" — escolhido pelo Cláudio entre 3 protótipos
-             visuais (artifact "Lateral da conferência", 2026-08-05): cada
-             seção vira um cartão branco separado, flutuando sobre o cinza
-             do app, com a mesma sombra que os cards do quadro já usam.
-             `.apv-blocos-coluna` só dá o espaçamento (gap) entre os
-             cartões; quem monta a "cara" de cartão é `.apv-bloco-card`. -->
+             que já aparecem na pílula de cima. Estilo "Blocos" — escolhido
+             pelo Cláudio entre 3 protótipos visuais (artifact "Lateral da
+             conferência", 2026-08-05): cada seção vira um cartão branco
+             separado, flutuando sobre o cinza do app, com a mesma sombra
+             que os cards do quadro já usam. `.apv-blocos-coluna` só dá o
+             espaçamento (gap) entre os cartões; quem monta a "cara" de
+             cartão é `.apv-bloco-card`. -->
         <div id="apvPainelBriefing" class="apv-blocos-coluna">
           <div class="apv-bloco-card">
             <p class="apv-rotulo">O que foi pedido</p>
@@ -784,9 +787,14 @@
                aqui (não atrás de um botão que abre outra tela). Vai pro
                Runrun.it: vira a descrição da subtarefa de alteração, ou o
                comentário no card mãe no caso do projeto fechado (ver
-               devolverParaDesigner, AprovacaoInterna.gs). Motivo e pontos
-               marcados ficam no MESMO cartão — são a mesma decisão. -->
-          <div class="apv-bloco-card">
+               devolverParaDesigner, AprovacaoInterna.gs). Motivo, pontos
+               marcados E os botões de ação ficam no MESMO cartão — são a
+               mesma decisão, do começo ao fim. Esse cartão é o único com
+               `flex: 1 1 auto` (.apv-bloco-motivo) — estica pra ocupar o
+               resto da coluna, e os botões (.apv-bloco-motivo-rodape) ficam
+               empurrados pro fim dele via `margin-top: auto`, sempre perto
+               do final, com respiro, em vez de um rodapé grudado separado. -->
+          <div class="apv-bloco-card apv-bloco-motivo">
             <label class="apv-campo-rotulo" for="apvMotivo">
               O que precisa mudar? <span class="apv-obrigatorio">obrigatório</span>
             </label>
@@ -797,24 +805,21 @@
             </div>
 
             <!-- Pontos marcados: o clique é DIRETO na peça, ali do lado —
-                 nada de tela ou cópia da imagem separada. A lista também
-                 explica isso quando está vazia (ver apvRenderPinsDevolucao). -->
-            <div class="apv-marcar-lista" id="apvMarcarLista">
-              <p class="apv-campo-ajuda">Clica em "Adicionar ponto" e depois na peça, ao lado, pra apontar exatamente onde.</p>
-            </div>
-          </div>
+                 nada de tela ou cópia da imagem separada. Vazia, fica sem
+                 nada escrito (ver apvRenderPinsDevolucao) — o botão "Adicionar
+                 ponto" logo abaixo já basta. -->
+            <div class="apv-marcar-lista" id="apvMarcarLista"></div>
 
-          <!-- Rodapé fixo — não rola com o resto do painel, pedido do
-               Cláudio (ver .apv-rodape-coluna, css/06-aprovacao.css). -->
-          <div class="apv-rodape-coluna">
-            <button type="button" class="apv-marcar-btn" id="apvMarcarBtn">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.7 7-11a7 7 0 10-14 0c0 5.3 7 11 7 11z" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="1.9"/></svg>
-              Adicionar ponto
-            </button>
-            <button type="button" class="apv-btn apv-btn-perigo apv-btn-g" id="apvBtnDevolver">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14l-5-5 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h11a5 5 0 015 5v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span id="apvBtnDevolverTxt">Pedir alteração</span>
-            </button>
+            <div class="apv-bloco-motivo-rodape">
+              <button type="button" class="apv-marcar-btn" id="apvMarcarBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.7 7-11a7 7 0 10-14 0c0 5.3 7 11 7 11z" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="1.9"/></svg>
+                Adicionar ponto
+              </button>
+              <button type="button" class="apv-btn apv-btn-perigo apv-btn-g" id="apvBtnDevolver">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14l-5-5 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h11a5 5 0 015 5v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span id="apvBtnDevolverTxt">Pedir alteração</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1101,31 +1106,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-05f"></script>
-<script src="js/fila-offline.js?v=2026-08-05f"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-05f"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-05f"></script>
-<script src="js/kanban-polling.js?v=2026-08-05f"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-05f"></script>
-<script src="js/regras-briefing.js?v=2026-08-05f"></script>
-<script src="js/kanban-board.js?v=2026-08-05f"></script>
-<script src="js/clientes-hub.js?v=2026-08-05f"></script>
-<script src="js/chat-comentarios.js?v=2026-08-05f"></script>
-<script src="js/detalhe-modal.js?v=2026-08-05f"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-05f"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-05f"></script>
-<script src="js/bee.js?v=2026-08-05f"></script>
-<script src="js/paginas-designers.js?v=2026-08-05f"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-05f"></script>
-<script src="js/pagina-repasse.js?v=2026-08-05f"></script>
-<script src="js/pagina-horas.js?v=2026-08-05f"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-05f"></script>
-<script src="js/paleta-comando.js?v=2026-08-05f"></script>
-<script src="js/roteador-url.js?v=2026-08-05f"></script>
-<script src="js/detalhe-historia.js?v=2026-08-05f"></script>
-<script src="js/modo-foco.js?v=2026-08-05f"></script>
-<script src="js/pagina-bee.js?v=2026-08-05f"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-05f"></script>
-<script src="js/login-boot.js?v=2026-08-05f"></script>
+<script src="js/config.js?v=2026-08-05g"></script>
+<script src="js/fila-offline.js?v=2026-08-05g"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-05g"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-05g"></script>
+<script src="js/kanban-polling.js?v=2026-08-05g"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-05g"></script>
+<script src="js/regras-briefing.js?v=2026-08-05g"></script>
+<script src="js/kanban-board.js?v=2026-08-05g"></script>
+<script src="js/clientes-hub.js?v=2026-08-05g"></script>
+<script src="js/chat-comentarios.js?v=2026-08-05g"></script>
+<script src="js/detalhe-modal.js?v=2026-08-05g"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-05g"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-05g"></script>
+<script src="js/bee.js?v=2026-08-05g"></script>
+<script src="js/paginas-designers.js?v=2026-08-05g"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-05g"></script>
+<script src="js/pagina-repasse.js?v=2026-08-05g"></script>
+<script src="js/pagina-horas.js?v=2026-08-05g"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-05g"></script>
+<script src="js/paleta-comando.js?v=2026-08-05g"></script>
+<script src="js/roteador-url.js?v=2026-08-05g"></script>
+<script src="js/detalhe-historia.js?v=2026-08-05g"></script>
+<script src="js/modo-foco.js?v=2026-08-05g"></script>
+<script src="js/pagina-bee.js?v=2026-08-05g"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-05g"></script>
+<script src="js/login-boot.js?v=2026-08-05g"></script>
 </body>
 </html>
