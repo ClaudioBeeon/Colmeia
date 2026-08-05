@@ -298,6 +298,7 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   apvPinsDevolucao = [];
   apvMarcando = false;
   apvPedidoEmAtual = null;
+  apvCardMaeMovido = false;
 
   // Volta pro painel "o que foi pedido" — a tela pode ter ficado no painel
   // de envio da peça anterior. E o botão de ação volta pro início da
@@ -657,6 +658,12 @@ async function apvCopiarLinkCliente() {
   const link = await apvGarantirLink();
   if (!link) return;
 
+  // O card mãe sai da produção e vai pra aba de espera do Runrun.it. Roda
+  // ANTES de copiar porque é a mesma ação — mandar pro cliente — e falhar
+  // aqui não deve atrasar nem cancelar a cópia do link (ver o comentário
+  // de moverCardMaeSeMarcado).
+  await moverCardMaeSeMarcado();
+
   const msg = (document.getElementById("apvMsgCliente").value || "").trim();
   const texto = (msg ? msg + "\n\n" : "") + link;
 
@@ -808,6 +815,44 @@ async function apvGarantirLink() {
   // js/roteador-url.js).
   apvLinkGerado = new URL(".", location.href).href + "aprovar.html?codigo=" + data.codigo;
   return apvLinkGerado;
+}
+
+/**
+ * Manda o card mãe pra etapa "Aprovação do Cliente" no Runrun.it, se a
+ * opção estiver marcada (pedido do Cláudio).
+ *
+ * POR QUE ISSO EXISTE: depois que o link vai pro cliente, o card mãe não é
+ * mais trabalho em produção — é coisa esperando resposta. Sem mover, ele
+ * continua parecendo pendência no quadro do Runrun.it, que é onde o resto
+ * do time olha.
+ *
+ * Acontece UMA VEZ por peça (`apvCardMaeMovido`): o botão "Enviar para o
+ * cliente" pode ser clicado de novo (pra copiar o link outra vez), e mover
+ * de novo a cada clique seria pedido repetido ao Runrun.it à toa.
+ *
+ * Falhar aqui NÃO cancela o envio: o link é a parte que importa, e já está
+ * pronto. O aviso conta o que não deu certo em vez de esconder.
+ */
+let apvCardMaeMovido = false;
+
+async function moverCardMaeSeMarcado() {
+  const marcar = document.getElementById("apvMoverMae");
+  if (!marcar || !marcar.checked || apvCardMaeMovido || !apvPecaAberta) return;
+  apvCardMaeMovido = true;
+
+  const data = await chamarBackend({
+    acao: "moverCardMaeParaAprovacaoCliente",
+    taskId: apvPecaAberta.taskId,
+  });
+
+  if (!data || !data.ok) {
+    // Deixa tentar de novo no próximo clique — pode ter sido só uma queda
+    // de rede.
+    apvCardMaeMovido = false;
+    mostrarToast((data && data.error) || "Não consegui mover o card mãe — o link está pronto, mas mova ele à mão no Runrun.it.", "erro");
+    return;
+  }
+  mostrarToast("Card mãe movido para Aprovação do Cliente.", "sucesso");
 }
 
 // ---------------------------------------------------------------------------

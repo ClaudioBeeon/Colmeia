@@ -586,6 +586,21 @@ mãe** (`taskIdAlteracao` vazio) — é por isso que `buscarDevolucaoDaTarefa` a
   (js/login-boot.js); o item de menu nasce `hidden` no index.html, então quem não se encaixa nunca
   vê a página.
 
+### O card mãe vai pra "Aprovação do Cliente" ao enviar
+
+Na tela de envio tem a marcação **"Mover o card mãe para Aprovação do Cliente"**, ligada por
+padrão: depois que o link vai pro cliente, o card mãe não é mais trabalho em produção — é coisa
+esperando resposta, e quem olha o quadro do **Runrun.it** (o time todo, não só quem usa o Colmeia)
+precisa ver isso. Acontece no mesmo clique que manda o link, uma vez por peça
+(`apvCardMaeMovido` — dá pra mandar o mesmo link por WhatsApp e por e-mail). Falhar não cancela o
+envio: o link é a parte que importa e já está pronto; o aviso conta o que não deu certo.
+
+**O id da etapa NÃO está escrito na mão.** `idDaEtapaPorNome` (AprovacaoInterna.gs) descobre pelo
+NOME, olhando uma tarefa que já esteja nela — o mesmo caminho que a página "Runrun completo" já
+usava pro arrastar-e-soltar, porque não existe endpoint que liste as etapas do quadro. Um número
+fixo aqui viraria uma quebra silenciosa no dia em que a agência renomeasse ou recriasse a etapa. O
+id fica 6h em cache. Se a etapa não for achada, a tela **diz isso** em vez de fingir que moveu.
+
 ### O que fica na planilha e o que é lido ao vivo
 
 A aba `ConferenciaInterna` guarda só a **decisão** (pediu / aprovou / devolveu) e **qual versão
