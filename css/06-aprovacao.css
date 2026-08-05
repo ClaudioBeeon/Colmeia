@@ -834,12 +834,23 @@
               border-color var(--dur-base) var(--ease-apple);
   border: 1px solid transparent;
 }
+/* O tom do estado vai POR CIMA de um fundo opaco, nunca no lugar dele.
+   `--apv-sucesso-suave` é um rgba() com 12% de opacidade — usado como
+   `background` sozinho, ele APAGA o branco da pílula e a barra vira um
+   vidro: o quadro dos designers aparecia atrás, com o texto do topo do
+   app cruzando os pills. Foi o que quebrou a tela em 05/08.
+
+   `background-color` (opaco) + `background-image` (a camada de cor) é o
+   que empilha os dois sem inventar uma cor nova pra cada tema — as
+   variáveis continuam sendo as mesmas do resto do arquivo. */
 .apv-estado-aprovado {
-  background: var(--apv-sucesso-suave);
+  background-color: var(--card-bg);
+  background-image: linear-gradient(var(--apv-sucesso-suave), var(--apv-sucesso-suave));
   border-color: var(--success);
 }
 .apv-estado-alteracao {
-  background: var(--apv-amarelo-suave);
+  background-color: var(--card-bg);
+  background-image: linear-gradient(var(--apv-amarelo-suave), var(--apv-amarelo-suave));
   border-color: var(--kanban-yellow);
 }
 
