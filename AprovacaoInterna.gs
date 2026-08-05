@@ -391,6 +391,14 @@ function dadosDaConferencia(taskId, nomePeca) {
     aprovadoEm = valoresLinha[13] || '';
   }
 
+  // A peça já foi mandada pro cliente antes — a tela precisa do código do
+  // link pra reconstruir a aba "Aprovação do cliente" ao reabrir (sem
+  // isso, dar F5 depois de mandar fazia a tela esquecer e mostrar "ainda
+  // não foi enviado", mesmo já tendo sido). Só busca quando faz sentido
+  // (status "enviada") — é uma leitura a mais na planilha, sem custo nos
+  // outros dois terços dos casos (pendente/aprovada).
+  var linkCliente = statusConferencia === 'enviada' ? buscarLinkClienteMaisRecente(taskId) : null;
+
   return {
     ok: true,
     taskId: String(taskId),
@@ -413,7 +421,8 @@ function dadosDaConferencia(taskId, nomePeca) {
     outrasPecas: lista.pecas.filter(function (p) { return p.nomePeca !== peca.nomePeca; }),
     statusConferencia: statusConferencia,
     aprovadoPor: aprovadoPor,
-    aprovadoEm: aprovadoEm
+    aprovadoEm: aprovadoEm,
+    linkCliente: linkCliente
   };
 }
 

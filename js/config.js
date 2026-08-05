@@ -707,8 +707,13 @@ function _renderIlha(evento) {
 
   clearTimeout(_ilhaTimeoutAtual);
   // Evento com botões de ação fica até a pessoa decidir — não some
-  // sozinho (senão a decisão se perde sem querer).
-  if (!evento.acoes) {
+  // sozinho (senão a decisão se perde sem querer). EXCEÇÃO: quando quem
+  // chamou passa `duracaoMs` mesmo tendo `acoes` — é o caso de um
+  // "desfazer" com prazo (ver apvDevolverPara, js/pagina-aprovacao.js):
+  // a ilha precisa sumir sozinha quando o prazo acaba, porque é isso que
+  // sinaliza "a ação virou definitiva". Quem chama cuida de rodar a ação
+  // de verdade nesse mesmo prazo, em paralelo — a ilha só cuida do visual.
+  if (!evento.acoes || evento.duracaoMs) {
     _ilhaTimeoutAtual = setTimeout(_fecharIlhaAtual, evento.duracaoMs || 5000);
   }
 }

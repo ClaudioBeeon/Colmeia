@@ -378,6 +378,16 @@ async function apvAbrirConferencia(taskId, nomePeca) {
     apvMarcarBotaoComoAprovado();
     apvRenderEnvio(data, data);
   }
+
+  // Já foi mandada pro cliente antes (reabriu depois de um F5, por
+  // exemplo) — sem isso a aba "Aprovação do cliente" esquecia e voltava
+  // pro estado vazio, como se nunca tivesse sido enviada (ver o
+  // comentário de dadosDaConferencia, AprovacaoInterna.gs).
+  if (data.statusConferencia === "enviada" && data.linkCliente && data.linkCliente.codigo) {
+    apvEnviado = true;
+    apvLinkGerado = new URL(".", location.href).href + "aprovar.html?codigo=" + data.linkCliente.codigo;
+  }
+
   apvRedesenharPaineis();
 }
 
@@ -1312,10 +1322,37 @@ function apvAbrirEscolhaDeDesigner() {
   }, 0);
 }
 
-/** Manda de verdade, já sabendo quem vai fazer o ajuste. */
-async function apvDevolverPara(nomeDesigner) {
+// Pedidos de alteração "a caminho", ainda dentro do prazo de desfazer (ver
+// apvDevolverPara) — chave "taskId::nomePeca". Existe só pra impedir a
+// MESMA peça de ser devolvida duas vezes enquanto a primeira ainda não foi
+// mandada de verdade.
+const apvDevolucoesPendentes = new Map();
+const APV_DESFAZER_MS = 10000;
+
+/**
+ * Prepara o pedido de alteração e dá 10s pra desfazer ANTES de mandar de
+ * verdade — mesmo mecanismo do "Desfazer" do Gmail: a mensagem só sai
+ * DEPOIS do prazo, nunca antes. Enquanto isso, nada foi criado nem alocado
+ * em lugar nenhum no Runrun.it — "desfazer" aqui é "não mandar", não é
+ * apagar o que já tinha acontecido (isso seria bem mais arriscado: exigiria
+ * desfazer criação de tarefa, alocação e troca de coluna, cada uma podendo
+ * falhar na volta).
+ *
+ * O visual já muda tudo NA HORA (pílula amarela, conferência fecha) —
+ * quem pediu já pode seguir pra próxima peça; o envio de verdade acontece
+ * sozinho em segundo plano, dali a 10 segundos.
+ */
+function apvDevolverPara(nomeDesigner) {
   if (!apvPecaAberta) return;
   document.getElementById("apvDesignerMenu").hidden = true;
+
+  const taskId = apvPecaAberta.taskId;
+  const nomePeca = apvPecaAberta.peca.nomePeca;
+  const chave = taskId + "::" + nomePeca;
+  if (apvDevolucoesPendentes.has(chave)) {
+    mostrarToast("Essa alteração já está a caminho — espera terminar ou desfaz na notificação.", "erro");
+    return;
+  }
 
   const motivo = (document.getElementById("apvMotivo").value || "").trim();
 
@@ -1326,16 +1363,11 @@ async function apvDevolverPara(nomeDesigner) {
   // exatamente o que essa caixinha existe pra evitar.
   const ehOResponsavel = nomesCorrespondem(nomeDesigner, apvPecaAberta.designer || "");
   const designerId = ehOResponsavel ? apvPecaAberta.designerId : "";
-
   const versaoConferida = apvPecaAberta.peca.versoes[apvVersaoNaTela - 1];
-  const btn = document.getElementById("apvBtnDevolver");
-  btn.disabled = true;
 
-  const data = await chamarBackend({
+  const payload = {
     acao: "devolverParaDesigner",
-    taskId: apvPecaAberta.taskId,
-    nomePeca: apvPecaAberta.peca.nomePeca,
-    motivo,
+    taskId, nomePeca, motivo,
     // Ponto marcado sem texto não vira nada do outro lado — o designer veria
     // "(alto à esquerda)" sozinho e não saberia o que fazer com aquilo.
     pins: apvPinsDevolucao.filter(p => String(p.texto || "").trim()),
@@ -1358,20 +1390,56 @@ async function apvDevolverPara(nomeDesigner) {
     // de gerarLinkDeAprovacao) — sem essa base, o backend não teria como
     // montar o link dos pontos.
     baseUrl: new URL(".", location.href).href,
-  });
-
-  btn.disabled = false;
-
-  if (!data || !data.ok) {
-    mostrarToast((data && data.error) || "Não consegui pedir a alteração agora.", "erro");
-    return;
-  }
+  };
 
   // A pílula fica AMARELA: essa peça saiu de "esperando conferência" e
   // virou "em alteração". Mesma ideia do verde de aprovado — a cor da tela
   // responde em que pé a peça está, sem precisar procurar um selo.
   apvDeslizarAcao(2);
   apvPintarBarra("alteracao");
+  document.getElementById("apvMotivo").value = "";
+  apvPinsDevolucao = [];
+  apvFecharConferencia();
+
+  const pendente = { cancelado: false };
+  apvDevolucoesPendentes.set(chave, pendente);
+
+  mostrarIlha({
+    icone: reopenIcon,
+    titulo: `Mandando a alteração pro ${nomeDesigner}...`,
+    subtitulo: "Você tem 10 segundos pra desfazer.",
+    duracaoMs: APV_DESFAZER_MS,
+    acoes: [{
+      label: "Desfazer",
+      principal: true,
+      onClick: () => {
+        pendente.cancelado = true;
+        apvDevolucoesPendentes.delete(chave);
+        mostrarToast("Alteração cancelada — nada foi mandado pro Runrun.it.", "sucesso");
+      },
+    }],
+  });
+
+  setTimeout(() => apvExecutarDevolucao(chave, pendente, payload), APV_DESFAZER_MS);
+}
+
+/**
+ * Passado o prazo de desfazer, manda de verdade pro Runrun.it — ou não,
+ * se a pessoa desfez a tempo. Não depende de `apvPecaAberta`/`apvFila` do
+ * jeito que estavam no momento do clique: tudo que precisa já veio junto
+ * no `payload`, porque a essa altura a pessoa já pode estar conferindo
+ * outra peça (ou até ter fechado o Colmeia da aba, sem fechar o navegador).
+ */
+async function apvExecutarDevolucao(chave, pendente, payload) {
+  apvDevolucoesPendentes.delete(chave);
+  if (pendente.cancelado) return;
+
+  const data = await chamarBackend(payload);
+
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "Não consegui pedir a alteração agora.", "erro");
+    return;
+  }
 
   // O aviso conta o que REALMENTE aconteceu, peça por peça. Um "pronto!"
   // genérico esconderia, por exemplo, uma subtarefa criada que não foi pra
@@ -1388,10 +1456,7 @@ async function apvDevolverPara(nomeDesigner) {
     mostrarToast(partes.join(" ") + ".", data.foiProAjustes && data.alocou ? "sucesso" : "erro");
   }
 
-  apvFila = apvFila.filter(i => !(String(i.taskId) === String(apvPecaAberta.taskId) && i.nomePeca === apvPecaAberta.peca.nomePeca));
-  campo.value = "";
-  apvPinsDevolucao = [];
-  apvFecharConferencia();
+  apvFila = apvFila.filter(i => !(String(i.taskId) === String(payload.taskId) && i.nomePeca === payload.nomePeca));
   apvRenderFila(apvFila);
   atualizarBadgeAprovacao();
 }

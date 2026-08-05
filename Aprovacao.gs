@@ -212,31 +212,52 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
  * célula, separados por "|" — id do Drive nunca tem esse caractere, e
  * assim nada muda pra quem lê uma linha antiga (um id só continua sendo
  * uma lista de um item, ver idsDaLinhaDeAprovacao).
+ *
+ * REAPROVEITA o código quando já existe um link PENDENTE (ainda sem
+ * resposta) pra essa MESMA tarefa com o MESMO conjunto de peças — sem
+ * isso, reabrir a conferência e mandar de novo (ex: depois de um F5)
+ * criava uma linha nova a cada vez: dois cartões pra mesma peça na aba
+ * Aprovações, e o link velho continuava "vivo" esperando uma resposta que
+ * nunca ia chegar, porque ninguém estava mais olhando pra ele. Uma vez
+ * que o cliente já respondeu (status deixou de ser 'pendente'), um novo
+ * envio é mesmo uma rodada nova — aí cria linha nova normalmente.
  */
 function gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, arquivos) {
   var ids = arquivos.map(function (a) { return a.getId(); }).join('|');
   var nomes = arquivos.map(function (a) { return a.getName(); }).join('|');
   var tipos = arquivos.map(function (a) { return a.getMimeType(); }).join('|');
 
-  var codigo = Utilities.getUuid().replace(/-/g, '');
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
     var sheet = getAprovacoesSheet();
+    var linhas = sheet.getDataRange().getValues();
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][1]) === String(taskId) && String(linhas[i][4]) === ids && String(linhas[i][8]) === 'pendente') {
+        return {
+          ok: true,
+          codigo: linhas[i][0],
+          nomeArquivo: arquivos.map(function (a) { return a.getName(); }).join(', '),
+          quantasPecas: arquivos.length,
+          reaproveitado: true
+        };
+      }
+    }
+
+    var codigo = Utilities.getUuid().replace(/-/g, '');
     sheet.appendRow([
       codigo, taskId, cliente || '', tituloTarefa || '', ids, nomes,
       tipos, new Date().getTime(), 'pendente', '', '', autor || ''
     ]);
+    return {
+      ok: true,
+      codigo: codigo,
+      nomeArquivo: arquivos.map(function (a) { return a.getName(); }).join(', '),
+      quantasPecas: arquivos.length
+    };
   } finally {
     lock.releaseLock();
   }
-
-  return {
-    ok: true,
-    codigo: codigo,
-    nomeArquivo: arquivos.map(function (a) { return a.getName(); }).join(', '),
-    quantasPecas: arquivos.length
-  };
 }
 
 /**
@@ -533,6 +554,26 @@ function reenviarAvisosDeAprovacaoPendentes() {
     reenviados++;
   }
   return { ok: true, reenviados: reenviados };
+}
+
+/**
+ * O link de cliente mais recente pra uma tarefa (peça), qualquer que seja
+ * o status. Usado por dadosDaConferencia (AprovacaoInterna.gs) pra
+ * reconstruir a aba "Aprovação do cliente" ao reabrir uma peça já
+ * mandada — sem isso, a tela esquecia que já tinha sido enviada e voltava
+ * pro estado "ainda não foi enviado", mesmo já tendo sido.
+ */
+function buscarLinkClienteMaisRecente(taskId) {
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var achada = null;
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][1]) !== String(taskId)) continue;
+    var obj = linhaParaObjetoDeAprovacao(linhas[i]);
+    if (!achada || Number(obj.criadoEm) > Number(achada.criadoEm)) achada = obj;
+  }
+  if (!achada) return null;
+  return { codigo: achada.codigo, status: achada.status, criadoEm: achada.criadoEm };
 }
 
 function linhaParaObjetoDeAprovacao(linha) {
