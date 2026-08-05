@@ -40,7 +40,7 @@
 // ----------------------------------------------------------------------------
 //   1. Fila               #page-aprovacao      → lista o que espera conferência
 //   2. Conferência        #apvConferencia      → briefing | peça (overlay)
-//   3. Envio              #apvEstadoEnvio      → MESMA tela da 2, estado trocado
+//   3. Envio              #apvPainelEnvio      → MESMA tela da 2, painel esquerdo trocado
 //   4. Devolver           #apvOverlayDevolver  → painel lateral
 //   5. Projeto fechado    #apvExcecaoFechado   → dentro do MESMO painel da 4
 //
@@ -124,6 +124,17 @@ let apvPinsDevolucao = [];
 
 // Modo "clicar na peça marca um ponto" ligado/desligado.
 let apvMarcando = false;
+
+// Fase do botão de ação da pílula (ver apvClickAcao):
+//   "aprovar"  → clicar chama apvAprovar()
+//   "animando" → clique ignorado, o rótulo está deslizando sozinho
+//   "enviar"   → clicar copia o link pro cliente
+let apvFaseAcao = "aprovar";
+
+// Quando ESTA peça foi pedida pra conferência (peca.pedidoEm da fila),
+// guardado no momento de abrir — apvFila já pode ter perdido o item depois
+// de aprovar (ele é filtrado antes do painel de envio desenhar).
+let apvPedidoEmAtual = null;
 
 // ---------------------------------------------------------------------------
 // TELA 1 — Fila de aprovação
@@ -286,18 +297,30 @@ async function apvAbrirConferencia(taskId, nomePeca) {
   apvLinkGerado = "";
   apvPinsDevolucao = [];
   apvMarcando = false;
+  apvPedidoEmAtual = null;
 
-  // Volta pro estado "conferindo" — a tela pode ter ficado no estado de envio
-  // da peça anterior.
-  document.getElementById("apvEstadoConferindo").hidden = false;
-  document.getElementById("apvEstadoEnvio").hidden = true;
-  document.getElementById("apvBeeResultado").hidden = true;
+  // Volta pro painel "o que foi pedido" — a tela pode ter ficado no painel
+  // de envio da peça anterior. E o botão de ação volta pro início da
+  // pilha (Aprovar), destravado.
+  document.getElementById("apvPainelBriefing").hidden = false;
+  document.getElementById("apvPainelEnvio").hidden = true;
+  document.getElementById("apvAcoesDevolver").hidden = false;
+  apvFaseAcao = "aprovar";
+  document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
+  document.getElementById("apvAcaoCopiado").classList.remove("mostra");
+  document.getElementById("apvBtnAprovar").classList.remove("travado");
+  document.getElementById("apvContextoId").hidden = true;
   document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
   document.getElementById("apvContextoCliente").textContent = "";
   document.getElementById("apvContextoPeca").textContent = "Carregando...";
 
   overlay.classList.add("visible");
   requestAnimationFrame(() => overlay.classList.add("open"));
+
+  // Guarda de quando foi o pedido ANTES de qualquer coisa filtrar a fila
+  // (apvConfirmarAprovacao remove o item de apvFila assim que aprova).
+  const itemDaFila = apvFila.find(i => String(i.taskId) === String(taskId) && i.nomePeca === nomePeca);
+  apvPedidoEmAtual = itemDaFila ? itemDaFila.pedidoEm : null;
 
   const data = await chamarBackend({ acao: "dadosDaConferencia", taskId, nomePeca });
 
@@ -336,13 +359,20 @@ function apvFecharConferencia() {
 /**
  * Coluna da ESQUERDA — o que foi pedido.
  *
- * Prazo estourado é o ÚNICO caso de vermelho nesta tela (classe .atencao); todo
- * o resto de aviso é amarelo, seguindo o app.
+ * Só o texto de verdade escrito na tarefa (sem resumo por IA) e sem repetir
+ * cliente/peça/designer — esses já aparecem na pílula de cima.
+ *
+ * Entrega estourada é o ÚNICO caso de vermelho nesta tela (classe .atencao);
+ * todo o resto de aviso é amarelo, seguindo o app.
  */
 function apvRenderBriefing(peca) {
-  document.getElementById("apvBriefTitulo").textContent = peca.titulo || peca.peca.nomePeca;
-  document.getElementById("apvBriefCliente").textContent =
-    [peca.cliente, peca.designer ? `feito por ${peca.designer}` : ""].filter(Boolean).join(" · ");
+  // O número em cima é do CARD MÃE quando existe (é o que o time reconhece
+  // como "a tarefa"); sem card mãe (peça avulsa), mostra o id dela mesma.
+  const idChip = document.getElementById("apvContextoId");
+  const idMostrado = peca.cardMaeId || peca.taskId;
+  idChip.textContent = "#" + idMostrado;
+  idChip.href = peca.cardMaeLink || `https://runrun.it/tasks/${peca.taskId}`;
+  idChip.hidden = false;
 
   const texto = document.getElementById("apvBriefTexto");
   // A descrição vem do Runrun.it já como HTML. É conteúdo de dentro de casa
@@ -352,22 +382,13 @@ function apvRenderBriefing(peca) {
     ? peca.descricao
     : `<p class="apv-vazio-inline">Essa tarefa não tem descrição escrita no Runrun.it. Vale conferir com quem pediu antes de aprovar.</p>`;
 
-  const prazo = peca.prazo ? new Date(peca.prazo) : null;
-  const atrasado = prazo && prazo < new Date(new Date().toDateString());
+  const entrega = peca.prazo ? new Date(peca.prazo) : null;
+  const atrasada = entrega && entrega < new Date(new Date().toDateString());
   document.getElementById("apvBriefSpecs").innerHTML = `
     <div class="apv-spec">
-      <span class="apv-spec-rotulo">Prazo do cliente</span>
-      <span class="apv-spec-valor ${atrasado ? "atencao" : ""}">${prazo ? apvDataCurta(peca.prazo) : "sem prazo"}</span>
+      <span class="apv-spec-rotulo">Entrega desejada</span>
+      <span class="apv-spec-valor ${atrasada ? "atencao" : ""}">${entrega ? apvDataCurta(peca.prazo) : "sem data"}</span>
     </div>
-    <div class="apv-spec">
-      <span class="apv-spec-rotulo">Arquivo</span>
-      <span class="apv-spec-valor">${escaparHTML(peca.peca.ultima.nome)}</span>
-    </div>
-    ${peca.cardMaeId ? `
-      <div class="apv-spec">
-        <span class="apv-spec-rotulo">Card mãe</span>
-        <span class="apv-spec-valor"><a href="${peca.cardMaeLink}" target="_blank" rel="noopener">#${peca.cardMaeId}</a></span>
-      </div>` : ""}
   `;
 }
 
@@ -522,57 +543,6 @@ function apvRenderAvisoVersaoNova(peca) {
 }
 
 /**
- * A Bee confere a peça contra o briefing.
- *
- * SÓ RODA NO CLIQUE, nunca sozinha ao abrir a tela: é uma chamada de IA, cara e
- * lenta, e a maior parte das conferências não precisa dela.
- */
-async function apvPedirConferenciaDaBee() {
-  if (!apvPecaAberta) return;
-  const btn = document.getElementById("apvBeeBtn");
-  const caixa = document.getElementById("apvBeeResultado");
-  const original = btn.textContent;
-
-  btn.disabled = true;
-  btn.textContent = "A Bee está olhando...";
-  caixa.hidden = false;
-  caixa.innerHTML = `<p>Ela está lendo o que foi pedido e comparando com a peça. Leva alguns segundos.</p>`;
-
-  const data = await chamarBackend({
-    acao: "beeConferirEntrega",
-    taskId: apvPecaAberta.taskId,
-    cliente: apvPecaAberta.cliente,
-  });
-
-  btn.disabled = false;
-  btn.textContent = original;
-
-  const caixaAgora = document.getElementById("apvBeeResultado");
-  if (!caixaAgora) return;
-
-  if (!data || !data.ok) {
-    caixaAgora.innerHTML = `<p>Não consegui pedir a conferência pra Bee agora. ${escaparHTML((data && data.error) || "")}</p>`;
-    return;
-  }
-
-  // A Bee devolve texto corrido. Cada linha vira um item, e as que ela marca
-  // como dúvida/atenção ganham o destaque amarelo que o desenho previu.
-  const linhas = String(data.texto || data.resposta || "")
-    .split("\n").map(l => l.trim()).filter(Boolean);
-
-  caixaAgora.innerHTML = linhas.map(linha => {
-    const duvida = /^[-•*]?\s*(⚠|❗|atenção|confere|conferir|talvez|parece|faltando|não )/i.test(linha);
-    return `
-      <div class="apv-bee-item ${duvida ? "duvida" : "ok"}">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">${duvida
-          ? `<path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>`
-          : `<path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`}</svg>
-        <span>${escaparHTML(linha.replace(/^[-•*]\s*/, ""))}</span>
-      </div>`;
-  }).join("") + `<p class="apv-bee-nota">A Bee erra. Ela é uma segunda opinião — quem decide é você.</p>`;
-}
-
-/**
  * Aprovar internamente.
  *
  * ESTE É O PONTO MAIS IMPORTANTE DO ARQUIVO.
@@ -605,11 +575,12 @@ function apvAprovar() {
 }
 
 /**
- * Registra a aprovação e troca o estado da coluna da direita.
+ * Registra a aprovação e troca o painel da coluna ESQUERDA (briefing → envio).
  *
- * NÃO troca de tela: o #apvEstadoConferindo some, o #apvEstadoEnvio aparece, e
- * a coluna do briefing continua ali de lado. Quem acabou de aprovar quer mandar
- * agora, não navegar.
+ * NÃO troca de tela: o #apvPainelBriefing some, o #apvPainelEnvio aparece, e a
+ * peça continua ali do lado, sempre visível. Quem acabou de aprovar quer
+ * mandar agora, não navegar. O botão de ação (na pílula de cima) anima pra
+ * "Aprovado" e depois pra "Enviar para o cliente" — ver apvIniciarAnimacaoAprovado.
  */
 async function apvConfirmarAprovacao() {
   if (!apvPecaAberta) return;
@@ -635,9 +606,70 @@ async function apvConfirmarAprovacao() {
   apvFila = apvFila.filter(i => !(String(i.taskId) === String(apvPecaAberta.taskId) && i.nomePeca === apvPecaAberta.peca.nomePeca));
   atualizarBadgeAprovacao();
 
-  document.getElementById("apvEstadoConferindo").hidden = true;
-  document.getElementById("apvEstadoEnvio").hidden = false;
+  document.getElementById("apvPainelBriefing").hidden = true;
+  document.getElementById("apvPainelEnvio").hidden = false;
+  document.getElementById("apvAcoesDevolver").hidden = true;
   apvRenderEnvio(apvPecaAberta, data);
+  apvIniciarAnimacaoAprovado();
+}
+
+/**
+ * O clique único do botão da pílula: o que ele faz depende da FASE
+ * (apvFaseAcao) — nunca da posição visual do rótulo, que é só animação.
+ */
+function apvClickAcao() {
+  if (apvFaseAcao === "aprovar") { apvAprovar(); return; }
+  if (apvFaseAcao === "animando") return; // clique no meio da animação: ignora
+  apvCopiarLinkCliente(); // apvFaseAcao === "enviar"
+}
+
+/**
+ * Desliza o rótulo do botão em DUAS etapas — Aprovar → Aprovado → Enviar
+ * para o cliente — dentro do mesmo botão, na pílula de cima. A largura do
+ * botão é fixa (CSS) de propósito: só o texto mudando de tamanho no meio da
+ * animação faria ele pular de largura.
+ *
+ * A altura do item é lida do próprio DOM (offsetHeight), nunca um número
+ * fixo repetido aqui — evita o CSS e o JS descombinarem se a altura mudar
+ * um dia.
+ */
+function apvIniciarAnimacaoAprovado() {
+  const track = document.getElementById("apvAcaoTrack");
+  const item = track.children[0];
+  const altura = item ? item.offsetHeight : 42;
+  const reduzMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  apvFaseAcao = "animando";
+  track.style.transform = `translateY(-${altura}px)`;
+
+  setTimeout(() => {
+    track.style.transform = `translateY(-${altura * 2}px)`;
+    apvFaseAcao = "enviar";
+  }, reduzMovimento ? 0 : 900);
+}
+
+/**
+ * Copia o link do cliente (+ a mensagem, se tiver escrito uma) — é o que o
+ * botão "Enviar para o cliente" faz ao ser clicado. Reusa o MESMO link
+ * gerado no "Ver como o cliente vê" (apvGarantirLink nunca gera dois).
+ */
+async function apvCopiarLinkCliente() {
+  const link = await apvGarantirLink();
+  if (!link) return;
+
+  const msg = (document.getElementById("apvMsgCliente").value || "").trim();
+  const texto = (msg ? msg + "\n\n" : "") + link;
+
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch (err) {
+    mostrarToast("Não consegui copiar sozinho — o link é: " + link, "erro");
+    return;
+  }
+
+  const flash = document.getElementById("apvAcaoCopiado");
+  flash.classList.add("mostra");
+  setTimeout(() => flash.classList.remove("mostra"), 1400);
 }
 
 /**
@@ -656,6 +688,15 @@ function apvRenderEnvio(peca, aprovacao) {
     .toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   document.getElementById("apvSeloTxt").textContent =
     `Aprovado internamente por ${aprovacao.aprovadoPor || DESIGNER_LOGADO} · ${hora}`;
+
+  const revisaoTempo = document.getElementById("apvRevisaoTempo");
+  if (apvPedidoEmAtual) {
+    revisaoTempo.hidden = false;
+    document.getElementById("apvRevisaoTempoTxt").textContent =
+      `Pedida pra conferência há ${apvTempoDeEspera(apvPedidoEmAtual).replace(" esperando", "")}`;
+  } else {
+    revisaoTempo.hidden = true;
+  }
 
   const versaoConferida = peca.peca.versoes[apvVersaoNaTela - 1];
   const opcoes = [
@@ -684,7 +725,7 @@ function apvRenderEnvio(peca, aprovacao) {
       // existe pra evitar.
       apvLinkGerado = "";
       apvPreviewVisto = false;
-      document.getElementById("apvEnvioBotoes").classList.add("apv-envio-travado");
+      document.getElementById("apvBtnAprovar").classList.add("travado");
       document.getElementById("apvPreviewNota").textContent =
         "A seleção mudou — dá uma olhada de novo antes de mandar.";
     });
@@ -693,7 +734,7 @@ function apvRenderEnvio(peca, aprovacao) {
     if (el.dataset.apvThumb) apvCarregarMiniatura(el.dataset.apvThumb, el);
   });
 
-  document.getElementById("apvEnvioBotoes").classList.add("apv-envio-travado");
+  document.getElementById("apvBtnAprovar").classList.add("travado");
   document.getElementById("apvPreviewNota").textContent =
     "Dá uma olhada antes de mandar — é a última chance de pegar algo errado.";
 }
@@ -708,21 +749,22 @@ function apvArquivosEscolhidos() {
 /**
  * Gera o link de verdade e abre a página do cliente numa aba nova.
  *
- * O botão é o maior da tela DE PROPÓSITO, e os botões de envio nascem apagados
- * até ele ser usado. Botão grande sozinho é sugestão, não proteção; a trava é o
- * que de fato impede "mandei sem olhar", e custa um clique.
+ * O botão é o maior do painel DE PROPÓSITO, e o botão de enviar (na pílula
+ * de cima) nasce apagado até ele ser usado. Botão grande sozinho é sugestão,
+ * não proteção; a trava é o que de fato impede "mandei sem olhar", e custa
+ * um clique.
  *
- * COMO TIRAR, se um dia incomodar: é só parar de pôr a classe
- * .apv-envio-travado em #apvEnvioBotoes. O botão continua grande, sem a trava.
- * Foi combinado assim com o Cláudio — vale reavaliar depois de umas semanas.
+ * COMO TIRAR, se um dia incomodar: é só parar de pôr a classe .travado em
+ * #apvBtnAprovar. O botão de enviar continua ali, sem a trava. Foi combinado
+ * assim com o Cláudio — vale reavaliar depois de umas semanas.
  */
 async function apvAoVerPreview() {
   const link = await apvGarantirLink();
   if (!link) return;
   apvPreviewVisto = true;
-  document.getElementById("apvEnvioBotoes").classList.remove("apv-envio-travado");
+  document.getElementById("apvBtnAprovar").classList.remove("travado");
   document.getElementById("apvPreviewNota").textContent =
-    "Você já viu como o cliente vê. Os botões de envio estão liberados.";
+    "Você já viu como o cliente vê. O botão de enviar está liberado.";
   window.open(link, "_blank", "noopener");
 }
 
@@ -766,35 +808,6 @@ async function apvGarantirLink() {
   // js/roteador-url.js).
   apvLinkGerado = new URL(".", location.href).href + "aprovar.html?codigo=" + data.codigo;
   return apvLinkGerado;
-}
-
-/**
- * Dispara o envio pelo canal escolhido.
- *
- * WhatsApp usa wa.me SEM número na frente, pra abrir o seletor de conversa do
- * próprio celular — quem escolhe pra quem vai é a pessoa, não o Colmeia. Mesmo
- * caminho que aprovar.html já usa.
- */
-async function apvEnviarProCliente(canal) {
-  const link = await apvGarantirLink();
-  if (!link) return;
-
-  const msg = (document.getElementById("apvMsgCliente").value || "").trim();
-  const texto = (msg ? msg + "\n\n" : "") + link;
-
-  if (canal === "whatsapp") {
-    window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
-  } else if (canal === "email") {
-    const assunto = `Aprovação — ${apvPecaAberta ? apvPecaAberta.peca.nomePeca : "peça"}`;
-    window.open(`mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(texto)}`, "_blank");
-  } else {
-    try {
-      await navigator.clipboard.writeText(link);
-      mostrarToast("Link copiado.", "sucesso");
-    } catch (err) {
-      mostrarToast("Não consegui copiar sozinho — o link é: " + link, "erro");
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1025,9 +1038,7 @@ function apvLigarEventos() {
     if (el) el.addEventListener(evento, fn);
   };
 
-  liga("apvVoltar", "click", apvFecharConferencia);
-  liga("apvBeeBtn", "click", apvPedirConferenciaDaBee);
-  liga("apvBtnAprovar", "click", apvAprovar);
+  liga("apvBtnAprovar", "click", apvClickAcao);
   liga("apvBtnDevolver", "click", apvAbrirDevolver);
   liga("apvVerVersaoNova", "click", () => apvIrParaVersao(apvPecaAberta ? apvPecaAberta.peca.versoes.length : 1));
 
@@ -1038,9 +1049,6 @@ function apvLigarEventos() {
   liga("apvConfirmaSegue", "click", apvConfirmarAprovacao);
 
   liga("apvBtnPreview", "click", apvAoVerPreview);
-  document.querySelectorAll("[data-apv-envio]").forEach(btn => {
-    btn.addEventListener("click", () => apvEnviarProCliente(btn.dataset.apvEnvio));
-  });
 
   liga("apvFecharPainel", "click", apvFecharDevolver);
   liga("apvCancelarDevolver", "click", apvFecharDevolver);

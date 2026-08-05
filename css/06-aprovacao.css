@@ -160,11 +160,13 @@
 
 .apv-conferencia {
   display: none; position: fixed;
-  top: 22px; right: 22px; bottom: 22px; left: 106px;
+  /* Cobre a largura toda disponível — sem reservar a faixa da barra
+     lateral do Colmeia atrás dela (era `left: 106px`). Quem usa esta
+     tela não usa o resto do app, então não faz sentido deixar a
+     navegação do Colmeia espiando do lado (pedido do Cláudio). */
+  top: 22px; right: 22px; bottom: 22px; left: 22px;
   z-index: 120;
-  flex-direction: column; overflow: hidden;
-  background: var(--page-bg); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-hover);
+  flex-direction: column; gap: 14px; overflow: hidden;
   font-family: var(--font-body); color: var(--text-primary);
   opacity: 0; transform: translateX(24px) scale(0.99);
   transition: opacity var(--dur-slow) var(--ease-apple-spring),
@@ -172,30 +174,71 @@
 }
 .apv-conferencia.visible { display: flex; }
 .apv-conferencia.open { opacity: 1; transform: translateX(0) scale(1); }
-[data-theme="dark"] .apv-conferencia { background: #0C0B12; }
 
+/* Pílula de cima: cantos 100% arredondados, flutuando sozinha (não
+   mais uma barra colada no topo do card grande). */
 .apv-contexto {
   flex: 0 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 12px 22px; background: var(--card-bg); border-bottom: 1px solid var(--border);
+  padding: 10px 10px 10px 22px; background: var(--card-bg);
+  border-radius: 999px; box-shadow: var(--shadow-card);
 }
-[data-theme="dark"] .apv-contexto { background: rgba(255, 255, 255, 0.03); }
-.apv-voltar {
-  display: inline-flex; align-items: center; gap: 7px;
-  border: none; background: none; cursor: pointer;
-  font-family: var(--font-body); font-size: 13.5px; font-weight: 600;
-  color: var(--text-secondary); padding: 7px 12px; border-radius: 999px;
-  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+.apv-contexto-id {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+  color: var(--text-muted); text-decoration: none; font-variant-numeric: tabular-nums;
 }
-.apv-voltar:hover { background: var(--apv-superficie-2); color: var(--text-primary); }
+.apv-contexto-id:hover { color: var(--text-secondary); text-decoration: underline; }
 .apv-contexto-nome { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
 .apv-contexto-cliente { font-family: var(--font-display); font-size: 16px; }
 .apv-contexto-peca { font-family: var(--apv-fonte-texto); font-size: 14px; color: var(--text-secondary); }
 .apv-contexto-restam { margin-left: auto; font-size: 12.5px; color: var(--text-muted); }
 
+/* ----- O botão de ação, dentro da pílula -----
+   UM botão só, que muda de rótulo sozinho: Aprovar → Aprovado → Enviar
+   para o cliente (ver apvClickAcao/apvIniciarAnimacaoAprovado,
+   js/pagina-aprovacao.js). Os três rótulos ficam empilhados dentro de
+   uma janela da altura de UM item (overflow:hidden) e o "carrossel" é
+   só a pilha inteira deslizando pra cima via transform — a largura fica
+   fixa de propósito, senão o texto mudando de tamanho (Aprovar → Enviar
+   para o cliente) faria o botão pular de largura no meio da animação. */
+.apv-acao-btn {
+  position: relative; overflow: hidden;
+  border: none; cursor: pointer; border-radius: 999px;
+  width: 210px; height: 42px; padding: 0;
+  background: var(--kanban-yellow);
+  transition: background var(--dur-fast) var(--ease-apple), opacity var(--dur-fast) var(--ease-apple);
+}
+.apv-acao-btn:hover { background: #F0BC00; }
+.apv-acao-btn.travado { opacity: 0.45; pointer-events: none; }
+.apv-acao-track {
+  display: flex; flex-direction: column;
+  transition: transform 460ms var(--ease-apple-spring);
+}
+.apv-acao-item {
+  height: 42px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-body); font-size: 14px; font-weight: 700;
+  color: #16181D; white-space: nowrap;
+}
+.apv-acao-copiado {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  background: var(--success); color: #fff;
+  font-family: var(--font-body); font-size: 14px; font-weight: 700;
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-fast) ease;
+}
+.apv-acao-copiado.mostra { opacity: 1; }
+
+/* O card grande de baixo — antes era o `.apv-conferencia` inteiro que
+   carregava fundo/borda/sombra; agora ele só empilha a pílula de cima
+   com este card, então quem carrega a "cara" de card é este aqui. */
 .apv-colunas {
   flex: 1; min-height: 0;
+  background: var(--page-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-hover);
+  overflow: hidden;
   display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
 }
+[data-theme="dark"] .apv-colunas { background: #0C0B12; }
 .apv-coluna { display: flex; flex-direction: column; min-height: 0; }
 
 /* Briefing: rola por dentro dele mesmo. Texto longo é normal ali, e
@@ -206,16 +249,14 @@
 }
 [data-theme="dark"] .apv-coluna-pedido { background: rgba(255, 255, 255, 0.02); }
 
-/* A peça: NÃO rola em hipótese nenhuma. Distribui a altura disponível
-   entre o seletor de versão, a peça e a barra de ação. */
-.apv-coluna-feito { overflow: hidden; padding: 18px 24px 0; }
-.apv-estado-conferindo { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-/* O estado de envio tem lista + campo de texto + botões, então esse
-   sim rola por dentro. */
-.apv-estado-envio { overflow-y: auto; min-height: 0; height: 100%; padding-bottom: 24px; }
+/* A peça: NÃO rola em hipótese nenhuma. A coluna toda é a barra de
+   versão + o aviso (se tiver) + a peça + o botão de devolver — sempre
+   nessa ordem, sempre visível, nos dois estados (conferindo/aprovado). */
+.apv-coluna-feito {
+  overflow: hidden; padding: 18px 24px 18px;
+  display: flex; flex-direction: column; min-height: 0;
+}
 
-.apv-brief-titulo { font-family: var(--font-display); font-size: 21px; line-height: 1.25; margin-bottom: 4px; }
-.apv-brief-cliente { font-family: var(--apv-fonte-texto); font-size: 13.5px; color: var(--text-secondary); margin-bottom: 18px; }
 .apv-brief-texto { font-family: var(--apv-fonte-texto); font-size: 14px; line-height: 1.65; }
 .apv-brief-texto p { margin-bottom: 12px; }
 .apv-brief-texto ul { margin: 0 0 12px; padding-left: 20px; }
@@ -234,30 +275,6 @@
 .apv-spec-rotulo { color: var(--text-secondary); }
 .apv-spec-valor { font-weight: 600; text-align: right; }
 .apv-spec-valor.atencao { color: var(--warning); }
-
-/* A Bee: roda SÓ quando clicam, nunca sozinha — ver o comentário no
-   topo de js/pagina-aprovacao.js. */
-.apv-bee { background: var(--apv-amarelo-suave); border-radius: var(--radius-md); padding: 16px; }
-.apv-bee-titulo {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
-  font-size: 13.5px; font-weight: 700; color: var(--kanban-yellow-text);
-}
-.apv-bee-desc {
-  font-family: var(--apv-fonte-texto); font-size: 12.5px; line-height: 1.5;
-  color: var(--text-secondary); margin-bottom: 12px;
-}
-.apv-bee-resultado { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; }
-.apv-bee-item {
-  display: flex; gap: 9px; align-items: flex-start;
-  font-family: var(--apv-fonte-texto); font-size: 12.5px; line-height: 1.5;
-}
-.apv-bee-item svg { flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px; }
-.apv-bee-item.ok { color: var(--text-secondary); }
-.apv-bee-item.duvida { color: var(--kanban-yellow-text); font-weight: 600; }
-.apv-bee-nota {
-  font-family: var(--apv-fonte-texto); font-size: 11.5px;
-  color: var(--text-muted); font-style: italic; margin-top: 4px;
-}
 
 /* ----- Seletor de versão -----
    Fica sempre visível, nunca escondido atrás de menu. Se a versão nunca
@@ -353,6 +370,12 @@
 }
 
 /* ----- TELA 3: aprovado, preparando o envio (MESMA tela) ----- */
+.apv-revisao-tempo {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.apv-revisao-tempo svg { flex-shrink: 0; }
 .apv-selo {
   display: flex; align-items: center; gap: 11px;
   background: var(--apv-sucesso-suave); border-radius: var(--radius-md);
@@ -404,10 +427,11 @@
 .apv-campo:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .apv-campo.invalido { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
 
-/* "Ver como o cliente vê" é o maior botão da tela DE PROPÓSITO, e os
-   botões de envio nascem apagados até ele ser usado uma vez. É a trava
-   mais barata que existe contra "mandei sem olhar" — e é fácil de tirar
-   depois se incomodar: some com a classe .apv-envio-travado. */
+/* "Ver como o cliente vê" é o maior botão do painel DE PROPÓSITO, e o
+   botão de enviar (lá em cima, na pílula) nasce apagado até ele ser
+   usado uma vez. É a trava mais barata que existe contra "mandei sem
+   olhar" — e é fácil de tirar depois se incomodar: some com a classe
+   .travado em #apvBtnAprovar (ver apvAoVerPreview, js/pagina-aprovacao.js). */
 .apv-preview {
   width: 100%; padding: 20px; margin-bottom: 8px; cursor: pointer;
   border: none; border-radius: var(--radius-lg);
@@ -429,9 +453,6 @@
   color: var(--text-secondary); text-align: center; margin-bottom: 18px;
 }
 .apv-preview-nota.ok { color: var(--success); }
-.apv-envio-botoes { display: flex; gap: 10px; flex-wrap: wrap; }
-.apv-envio-botoes .apv-btn { flex: 1; min-width: 132px; }
-.apv-envio-travado { opacity: 0.4; pointer-events: none; }
 
 /* ===== TELAS 4 e 5 — Devolver pro designer / projeto fechado =========
    Mesmo painel: o que muda entre os dois é o conteúdo, não o lugar. */
@@ -604,18 +625,17 @@
    contrário do objetivo. A peça fica com 62% da altura da tela (ainda
    grande, ainda inteira, sem cortar) e a coluna rola. */
 @media (max-width: 900px) {
-  .apv-conferencia { top: 0; right: 0; bottom: 0; left: 0; border-radius: 0; border: none; }
-  .apv-contexto { padding: 10px 16px; }
+  .apv-conferencia { top: 0; right: 0; bottom: 0; left: 0; gap: 0; }
+  .apv-contexto { padding: 10px 16px; border-radius: 20px; }
   .apv-contexto-restam { width: 100%; margin-left: 0; }
-  .apv-colunas { grid-template-columns: 1fr; overflow-y: auto; }
+  .apv-acao-btn { width: 168px; }
+  .apv-colunas { grid-template-columns: 1fr; overflow-y: auto; border-radius: 0; border: none; box-shadow: none; }
   .apv-coluna { min-height: 0; }
   .apv-coluna-pedido {
     overflow-y: visible; border-right: none; border-bottom: 1px solid var(--border);
     padding: 18px 16px 24px;
   }
-  .apv-coluna-feito { overflow: visible; padding: 16px 16px 0; }
-  .apv-estado-conferindo,
-  .apv-estado-envio { height: auto; overflow: visible; }
+  .apv-coluna-feito { overflow: visible; padding: 16px 16px 16px; height: auto; }
   .apv-palco { flex: none; height: 62vh; min-height: 260px; }
   .apv-acoes { flex-direction: column; }
   .apv-acoes .apv-btn { width: 100%; }
