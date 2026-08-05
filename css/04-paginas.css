@@ -1126,6 +1126,10 @@ body.card-aberto .quick-access-panel { display: none; }
   flex-shrink: 0; font-size: 11px; font-weight: 500; opacity: 0.6;
   font-variant-numeric: tabular-nums;
 }
+/* Linha final "+ N arquivos" quando a subida em lote tem mais do que os
+   2 primeiros com preview — sem thumbnail, só o texto, pra fala não
+   estourar de altura e esconder a caixa de comentar embaixo. */
+.upload-notif-mais .upload-notif-nome { opacity: 0.7; font-weight: 500; cursor: default; }
 
 /* ===== Reações de emoji nos comentários ===== */
 .comment-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

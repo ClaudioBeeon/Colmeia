@@ -225,10 +225,17 @@ async function renderNotificacoesUpload(task) {
   // arquivo é uma imagem (PNG/JPG), entra também um preview pequeno —
   // clicar nele abre a imagem cheia quase em tela cheia (ver
   // abrirImagemAmpliadaDoDrive, js/config.js).
-  const listaArquivos = arquivosRelevantes
-    .slice()
-    .sort((a, b) => (b.quando || 0) - (a.quando || 0))
-    .map(u => `
+  //
+  // Com muitos arquivos de uma vez (subida em lote), mostrar TODOS com
+  // preview estourava a altura da fala e escondia a caixa de comentar
+  // embaixo, sem scroll pra compensar. Agora só os 2 mais recentes ganham
+  // preview; o resto vira uma linha só, textual — "+ N arquivos" — pra
+  // fala nunca crescer demais.
+  const ordenados = arquivosRelevantes.slice().sort((a, b) => (b.quando || 0) - (a.quando || 0));
+  const LIMITE_PREVIEW = 2;
+  const comPreview = ordenados.slice(0, LIMITE_PREVIEW);
+  const resto = ordenados.slice(LIMITE_PREVIEW);
+  const listaArquivos = comPreview.map(u => `
       <li>
         <span class="upload-notif-nome">${escaparHTML(u.arquivo)}</span>
         <span class="upload-notif-idade" data-quando="${u.quando}">${idadeDoUpload(u.quando)}</span>
@@ -236,7 +243,12 @@ async function renderNotificacoesUpload(task) {
           <img class="upload-notif-thumb" data-file-id="${escaparHTML(u.id)}" data-nome="${escaparHTML(u.arquivo)}" alt="Preview de ${escaparHTML(u.arquivo)}">
         ` : ""}
       </li>
-    `).join("");
+    `).join("")
+    + (resto.length ? `
+      <li class="upload-notif-mais" title="${escaparHTML(resto.map(u => u.arquivo).join(", "))}">
+        <span class="upload-notif-nome">+ ${resto.length} arquivo${resto.length > 1 ? "s" : ""}</span>
+      </li>
+    ` : "");
   // Nome de verdade da pasta (normalmente o título da tarefa) — o
   // backend não manda mais o texto fixo "pasta do card"; se por algum
   // motivo vier vazio, cai no título da própria tarefa como último recurso.
