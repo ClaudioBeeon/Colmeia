@@ -834,34 +834,41 @@
               border-color var(--dur-fast) var(--ease-apple);
   border: 1px solid transparent;
 }
-/* O tom do estado vai POR CIMA de um fundo opaco, nunca no lugar dele.
-   `--apv-sucesso-suave` é um rgba() com 12% de opacidade — usado como
-   `background` sozinho, ele APAGA o branco da pílula e a barra vira um
-   vidro: o quadro dos designers aparecia atrás, com o texto do topo do
-   app cruzando os pills. Foi o que quebrou a tela em 05/08.
+/* Verde verde e amarelo amarelo, sem contorno (pedido do Cláudio). Cor
+   CHEIA, não um tom lavado por cima do branco: o estado da peça é a
+   informação mais forte da tela, e meio-tom pedia atenção pra ser notado.
 
-   `background-color` (opaco) + `background-image` (a camada de cor) é o
-   que empilha os dois sem inventar uma cor nova pra cada tema — as
-   variáveis continuam sendo as mesmas do resto do arquivo. */
-.apv-estado-aprovado {
-  background-color: var(--card-bg);
-  background-image: linear-gradient(var(--apv-sucesso-suave), var(--apv-sucesso-suave));
-  border-color: var(--success);
-}
-.apv-estado-alteracao {
-  background-color: var(--card-bg);
-  background-image: linear-gradient(var(--apv-amarelo-suave), var(--apv-amarelo-suave));
-  border-color: var(--kanban-yellow);
-}
+   Sem `border`: com o fundo sólido o contorno não separa nada de nada, só
+   cria uma linha a mais. A borda transparente continua declarada pra
+   pílula não mudar de tamanho ao trocar de estado.
+
+   O texto vira #16181D nos dois — é o mesmo preto que o app já usa sobre
+   o amarelo da marca, e ele lê bem sobre o verde também. */
+.apv-estado-aprovado,
+.apv-estado-alteracao { border-color: transparent; color: #16181D; }
+.apv-estado-aprovado { background: var(--success); }
+.apv-estado-alteracao { background: var(--kanban-yellow); }
+
+/* Tudo que tem cor própria dentro da barra passa a herdar o preto do
+   estado — senão o texto secundário (cinza claro) sumia no verde. */
+.apv-estado-aprovado .apv-contexto-face *,
+.apv-estado-alteracao .apv-contexto-face * { color: #16181D; }
 
 /* O botão acompanha o estado da barra. Em alteração ele fica só como
    AVISO — não tem pra onde levar (a peça está com o designer), então
    perde o clique em vez de fingir que ainda faz alguma coisa. */
-.apv-estado-aprovado .apv-acao-btn { background: var(--success); }
-.apv-estado-aprovado .apv-acao-btn:hover { background: #1C9A6D; }
-.apv-estado-aprovado .apv-acao-item { color: #06301F; }
-[data-theme="dark"] .apv-estado-aprovado .apv-acao-item { color: #06301F; }
-.apv-estado-alteracao .apv-acao-btn { background: var(--kanban-yellow); pointer-events: none; }
+/* Com a barra em cor cheia, o botão precisa se destacar DELA, não repetir
+   a mesma cor — senão ele desaparece dentro do fundo. Vira preto, que é o
+   contraste mais forte que existe sobre verde e sobre amarelo. */
+.apv-estado-aprovado .apv-acao-btn,
+.apv-estado-alteracao .apv-acao-btn { background: #16181D; }
+.apv-estado-aprovado .apv-acao-btn:hover,
+.apv-estado-alteracao .apv-acao-btn:hover { background: #2A2C33; }
+.apv-estado-aprovado .apv-acao-item,
+.apv-estado-alteracao .apv-acao-item { color: #fff; }
+/* Em alteração o botão é só AVISO: a peça está com o designer, não tem
+   pra onde levar. */
+.apv-estado-alteracao .apv-acao-btn { pointer-events: none; }
 
 /* ----- A segunda face da pílula: pra onde o card mãe vai -----
    Sobe no carrossel logo que aprova. São só os pills de etapa, o mesmo
@@ -879,32 +886,38 @@
    aparece atrás dela, sem precisar repetir a cor e sem dobrar a
    transparência. */
 .apv-contexto { position: relative; overflow: hidden; }
-/* `--dur-fast` (150ms), não `--dur-base`: pedido do Cláudio depois de
-   sentir a tela "travada". Esse carrossel é resposta a um clique, não uma
-   entrada de painel — o app inteiro usa o tempo curto pra isso (hover,
-   toggle, troca de estado). Com 220ms em vários elementos ao mesmo tempo,
-   a soma dava sensação de espera. */
+/* As duas faces da pílula, com a MESMA mecânica e o MESMO tempo do pill
+   do cabeçalho da tarefa (.detail-header-pill, css/03-detalhe.css) —
+   pedido do Cláudio: "usa como referência as animações do pill do card".
+
+   Duas coisas fazem parecer rápido, e nenhuma delas é a duração:
+
+   1. Cada face é UM elemento só. Antes cada filho da barra (logo, número,
+      nome, botão) animava por conta, e os pedaços saíam soltos uns dos
+      outros — parecia arrastado mesmo estando em 150ms.
+   2. O caminho é translateY(-100%), a altura exata da face. Antes era
+      -160%, uma distância maior que o necessário: o mesmo tempo pra
+      percorrer mais espaço lê como mais lento.
+
+   A curva é a `--ease-apple-spring`, a de entrada com molinha, igual à
+   do pill do card. */
+.apv-contexto-face,
+.apv-contexto-etapa {
+  transition: transform var(--dur-slow) var(--ease-apple-spring),
+              opacity 0.24s var(--ease-apple);
+}
+.apv-contexto-face {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  min-width: 0; flex: 1;
+}
 .apv-contexto-etapa {
   position: absolute; inset: 0; z-index: 2;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   padding: 0 14px;
-  transform: translateY(100%);
-  transition: transform var(--dur-fast) var(--ease-apple);
+  transform: translateY(100%); opacity: 0;
 }
-.apv-mostrando-etapa .apv-contexto-etapa { transform: translateY(0); }
-/* A face normal sai pra cima ao mesmo tempo — é o que faz as duas se
-   moverem juntas, como um carrossel, em vez de uma piscar sobre a outra.
-   Só `opacity` + `transform`: são as duas propriedades que o navegador
-   anima sem refazer o desenho da página, e aqui são vários elementos de
-   uma vez. */
-.apv-contexto > *:not(.apv-contexto-etapa) {
-  transition: transform var(--dur-fast) var(--ease-apple),
-              opacity var(--dur-fast) var(--ease-apple);
-  will-change: transform;
-}
-.apv-mostrando-etapa > *:not(.apv-contexto-etapa) {
-  transform: translateY(-160%); opacity: 0;
-}
+.apv-mostrando-etapa .apv-contexto-face { transform: translateY(-100%); opacity: 0; }
+.apv-mostrando-etapa .apv-contexto-etapa { transform: translateY(0); opacity: 1; }
 
 .apv-etapa-de,
 .apv-etapa-para {

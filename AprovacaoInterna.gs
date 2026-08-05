@@ -704,6 +704,17 @@ function idDaEtapaPorNome(nomeProcurado) {
   var alvos = nomes.map(normalizarNomeDeEtapa).filter(function (n) { return !!n; });
   if (!alvos.length) return null;
 
+  // ATALHO DIRETO: a propriedade de script STAGE_ID_APROVACAO_CLIENTE, se
+  // existir, ganha de tudo. A varredura por nome é conveniente mas depende
+  // de o Runrun.it devolver o nome da etapa na listagem — e quando isso
+  // falha, não há nada que o Cláudio possa fazer sozinho. Com a
+  // propriedade, ele resolve na hora, sem depender de deploy nem de mim.
+  // Ver diagnosticoEtapasDoRunrun() logo abaixo pra descobrir o número.
+  if (alvos.indexOf(normalizarNomeDeEtapa(ETAPA_APROVACAO_CLIENTE)) !== -1) {
+    var fixo = PropertiesService.getScriptProperties().getProperty('STAGE_ID_APROVACAO_CLIENTE');
+    if (fixo) return String(fixo).trim();
+  }
+
   var chaveCache = 'colmeia_etapa_id_' + alvos[0];
   var cache = CacheService.getScriptCache();
   var guardado = cache.get(chaveCache);
@@ -1146,4 +1157,56 @@ function limparConferenciasAntigas() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * DIAGNÓSTICO — roda à mão no editor do Apps Script.
+ *
+ * Lista as etapas que o Runrun.it está devolvendo de verdade, com o
+ * número de cada uma. Existe porque a busca por NOME falhou em produção e
+ * não dá pra descobrir o motivo de fora: pode ser o nome escrito
+ * diferente, pode ser o campo vindo vazio na listagem.
+ *
+ * Como usar: abra o editor do Apps Script, escolha esta função na lista
+ * de cima e clique em Executar. Depois abra "Registro de execução" e
+ * copie o que apareceu.
+ */
+function diagnosticoEtapasDoRunrun() {
+  Logger.log('=== ETAPAS QUE O RUNRUN.IT DEVOLVE ===');
+
+  // 1) Uma tarefa que o Cláudio confirmou estar em "Aprovação Cliente".
+  //    É a resposta mais confiável: vem do endpoint de UMA tarefa, que
+  //    devolve o registro completo.
+  var exemplo = runrunFetch('/tasks/112696');
+  if (exemplo && !exemplo.erroFetch) {
+    Logger.log('Tarefa 112696 ("' + (exemplo.title || '?') + '"):');
+    Logger.log('  board_stage_name: ' + exemplo.board_stage_name);
+    Logger.log('  task_state_name:  ' + exemplo.task_state_name);
+    Logger.log('  task_state_id:    ' + exemplo.task_state_id + '   <<< é ESTE número');
+    Logger.log('  board_stage_id:   ' + exemplo.board_stage_id);
+  } else {
+    Logger.log('Não consegui ler a tarefa 112696.');
+  }
+
+  // 2) O que a LISTAGEM devolve — é dela que a busca automática depende.
+  Logger.log('\n=== Etapas distintas nas tarefas abertas (o que a varredura enxerga) ===');
+  var vistas = {};
+  for (var pagina = 1; pagina <= 3; pagina++) {
+    var lote = runrunFetch('/tasks?is_closed=false&sort=updated_at&sortDir=desc&limit=100&page=' + pagina);
+    if (!lote || lote.erroFetch || !lote.length) break;
+    for (var i = 0; i < lote.length; i++) {
+      var nome = lote[i].board_stage_name || lote[i].task_state_name || '(sem nome)';
+      if (!vistas[nome]) vistas[nome] = lote[i].task_state_id;
+    }
+    if (lote.length < 100) break;
+  }
+  Object.keys(vistas).forEach(function (nome) {
+    Logger.log('  "' + nome + '"  ->  ' + vistas[nome]);
+  });
+  if (!Object.keys(vistas).length) {
+    Logger.log('  NENHUMA. A listagem não está devolvendo nome de etapa — é por isso');
+    Logger.log('  que a busca automática falha. Use o número da tarefa 112696 acima.');
+  }
+
+  Logger.log('\n=== FIM. Copie TUDO acima e mande pro Claude. ===');
 }
