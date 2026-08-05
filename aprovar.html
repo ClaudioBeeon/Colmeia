@@ -318,6 +318,34 @@
   textarea:focus { outline: none; border-color: var(--text-3); background: var(--card); }
   .erro-envio { color: var(--vermelho); font-size: 13px; margin: 8px 0 0; display: none; }
 
+  /* ===== "Quem está aprovando?" =====
+     Pedido do Cláudio (2026-08-05): "pra gente ter um controle e saber
+     quem aprovou". Só entra no caminho do Aprovar — pedir ajuste já vem
+     com o texto do pedido, que identifica o suficiente sozinho. */
+  .modal-fundo {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(12,10,20,0.45);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    animation: modalFade .15s var(--ease);
+  }
+  @keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
+  .modal-caixa {
+    width: min(380px, 100%); background: var(--card); border-radius: 18px;
+    padding: 24px; box-shadow: var(--sombra-alta);
+    animation: modalEntra .18s var(--mola);
+  }
+  @keyframes modalEntra { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .modal-titulo { font-size: 17px; font-weight: 700; margin: 0 0 6px; }
+  .modal-txt { font-size: 13.5px; color: var(--text-2); line-height: 1.5; margin: 0 0 16px; }
+  .modal-caixa input {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 14.5px; color: var(--text);
+    background: var(--superficie-2); border: 1px solid var(--border);
+    border-radius: 11px; padding: 12px 14px;
+  }
+  .modal-caixa input:focus { outline: none; border-color: var(--text-3); background: var(--card); }
+  .modal-caixa .acoes-coluna { margin-top: 16px; }
+  .erro-nome { color: var(--vermelho); font-size: 12.5px; margin: 7px 0 0; display: none; }
+
   /* ===== Depois de responder ===== */
   .pill {
     display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
@@ -474,6 +502,24 @@
       </div>
     </aside>
   </main>
+
+  <!-- ===== "Quem está aprovando?" =====
+       Abre ao clicar em Aprovar, antes de mandar a resposta de verdade —
+       pedido do Cláudio (2026-08-05): "pra gente ter um controle e saber
+       quem aprovou". Só no caminho do Aprovar; Pedir ajuste não pergunta
+       isso (o texto do pedido já identifica o suficiente). -->
+  <div class="modal-fundo" id="modalQuemAprova" hidden>
+    <div class="modal-caixa">
+      <p class="modal-titulo">Quem está aprovando?</p>
+      <p class="modal-txt">Só pra gente saber quem confirmou, caso precise checar depois.</p>
+      <input type="text" id="nomeAprovador" placeholder="Seu nome" autocomplete="name">
+      <p class="erro-nome" id="erroNome">Escreve seu nome antes de confirmar.</p>
+      <div class="acoes-coluna">
+        <button type="button" class="btn btn-aprovar btn-bloco" id="btnConfirmarAprovar">✅ Confirmar aprovação</button>
+        <button type="button" class="btn btn-texto btn-bloco" id="btnCancelarAprovar">Cancelar</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -783,7 +829,7 @@
   });
 
   // ===== Depois de responder =====
-  function mostrarComoRespondido(status, respostaTexto, avisoChegou) {
+  function mostrarComoRespondido(status, respostaTexto, avisoChegou, quemAprovou) {
     if (avisoChegou === undefined) avisoChegou = true; // link já respondido antes
     document.getElementById("blocoPendente").hidden = true;
     document.getElementById("blocoRespondido").hidden = false;
@@ -795,8 +841,11 @@
     if (status === "aprovado") {
       pill.className = "pill pill-aprovado";
       pill.textContent = "✅ Aprovado";
+      // O nome só existe em aprovações feitas depois dessa mudança —
+      // link antigo, já respondido antes, cai no texto genérico.
+      var agradecimento = quemAprovou ? "Obrigado, " + quemAprovou + "!" : "Obrigado!";
       document.getElementById("textoRespondido").textContent = avisoChegou
-        ? "Obrigado! Já avisamos o time."
+        ? agradecimento + " Já avisamos o time."
         : "Sua aprovação foi registrada, tudo certo.";
       // Sem o aviso automático, o WhatsApp deixa de ser um extra e passa
       // a ser o caminho recomendado — então aparece também no "aprovado".
@@ -893,7 +942,7 @@
       mostrarTela("telaAprovacao");
 
       if (data.status && data.status !== "pendente") {
-        mostrarComoRespondido(data.status, data.respostaTexto);
+        mostrarComoRespondido(data.status, data.respostaTexto, undefined, data.quemAprovou);
       } else {
         // O cartão de pontos só aparece se ALGUMA peça do link aceitar
         // ponto marcado. Num link só de vídeo ele seria um bloco vazio
@@ -903,9 +952,7 @@
         desenharPeca(0, false);
       }
 
-      document.getElementById("btnAprovar").addEventListener("click", function () {
-        enviarResposta(true, "");
-      });
+      document.getElementById("btnAprovar").addEventListener("click", abrirModalQuemAprova);
       document.getElementById("btnPedirAjuste").addEventListener("click", function () {
         document.getElementById("formAjuste").classList.add("aberto");
         document.getElementById("acoesPrincipais").hidden = true;
@@ -921,12 +968,12 @@
     });
   }
 
-  function enviarResposta(aprovado, respostaTexto) {
+  function enviarResposta(aprovado, respostaTexto, quemRespondeu) {
     var botoes = document.querySelectorAll("#blocoPendente button");
     botoes.forEach(function (b) { b.disabled = true; });
     document.getElementById("erroEnvio").style.display = "none";
 
-    chamar({ acao: "responderAprovacaoPublica", codigo: codigo, aprovado: aprovado, respostaTexto: respostaTexto, pins: pins })
+    chamar({ acao: "responderAprovacaoPublica", codigo: codigo, aprovado: aprovado, respostaTexto: respostaTexto, pins: pins, quemRespondeu: quemRespondeu || "" })
       .then(function (data) {
         if (!data || !data.ok) {
           botoes.forEach(function (b) { b.disabled = false; });
@@ -939,9 +986,50 @@
         // estava fora do ar e o time não foi avisado automaticamente.
         // Contar isso é melhor que dizer "já avisamos o time" e ninguém
         // ficar sabendo (ver responderAprovacaoPublica, Aprovacao.gs).
-        mostrarComoRespondido(data.status, respostaTexto, data.avisoChegou !== false);
+        mostrarComoRespondido(data.status, respostaTexto, data.avisoChegou !== false, data.quemAprovou);
       });
   }
+
+  // ===== "Quem está aprovando?" =====
+  // Abre antes de mandar a resposta de verdade — pedido do Cláudio
+  // (2026-08-05): "pra gente ter um controle e saber quem aprovou". Só
+  // no caminho do Aprovar (ver o click de btnAprovar, mais acima).
+  function abrirModalQuemAprova() {
+    document.getElementById("erroNome").style.display = "none";
+    document.getElementById("nomeAprovador").value = "";
+    document.getElementById("modalQuemAprova").hidden = false;
+    document.getElementById("nomeAprovador").focus();
+  }
+  function fecharModalQuemAprova() {
+    document.getElementById("modalQuemAprova").hidden = true;
+  }
+  function confirmarAprovacaoComNome() {
+    var nome = document.getElementById("nomeAprovador").value.trim();
+    if (!nome) {
+      document.getElementById("erroNome").style.display = "block";
+      document.getElementById("nomeAprovador").focus();
+      return;
+    }
+    fecharModalQuemAprova();
+    enviarResposta(true, "", nome);
+  }
+  document.getElementById("btnConfirmarAprovar").addEventListener("click", confirmarAprovacaoComNome);
+  document.getElementById("btnCancelarAprovar").addEventListener("click", fecharModalQuemAprova);
+  document.getElementById("nomeAprovador").addEventListener("input", function () {
+    document.getElementById("erroNome").style.display = "none";
+  });
+  document.getElementById("nomeAprovador").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); confirmarAprovacaoComNome(); }
+  });
+  // Clique fora da caixinha fecha — só quando o clique COMEÇOU no fundo
+  // (mousedown no próprio .modal-fundo), pra selecionar texto e soltar o
+  // mouse fora por acidente não fechar a caixinha sem querer.
+  document.getElementById("modalQuemAprova").addEventListener("mousedown", function (e) {
+    if (e.target === this) fecharModalQuemAprova();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !document.getElementById("modalQuemAprova").hidden) fecharModalQuemAprova();
+  });
 </script>
 </body>
 </html>

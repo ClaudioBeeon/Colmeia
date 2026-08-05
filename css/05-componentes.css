@@ -190,6 +190,8 @@
 .aprov-thumb.img { background: linear-gradient(135deg, #FFD36E, #FF8A5B); }
 
 .aprov-peca { font-size: 11.5px; color: var(--text-muted); margin: -6px 0 10px; }
+.aprov-quem { font-size: 12px; color: var(--success); margin-bottom: 8px; }
+.aprov-quem b { font-weight: 700; }
 .aprov-resposta {
   background: var(--page-bg); border-radius: 10px; padding: 9px 11px;
   font-size: 12px; color: var(--text-secondary); font-style: italic;

@@ -327,7 +327,7 @@ function handleRequest(e, method) {
         // Colmeia (ver Aprovacao.gs). Só o código aleatório protege.
         output = buscarAprovacaoPublica(body.codigo);
       } else if (body.acao === 'responderAprovacaoPublica') {
-        output = responderAprovacaoPublica(body.codigo, body.aprovado, body.respostaTexto, body.pins);
+        output = responderAprovacaoPublica(body.codigo, body.aprovado, body.respostaTexto, body.pins, body.quemRespondeu);
       } else if (body.acao === 'listarAprovacoesDoCliente') {
         output = listarAprovacoesDoCliente(body.cliente);
       } else if (body.acao === 'beeGerarImagem') {

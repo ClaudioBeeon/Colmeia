@@ -43,6 +43,10 @@ function getAprovacoesSheet() {
   // Coluna N: "1" enquanto o aviso na tarefa não saiu porque o Runrun.it
   // estava fora do ar (ver reenviarAvisosDeAprovacaoPendentes).
   if (sheet.getLastColumn() < 14) sheet.getRange(1, 14).setValue('aviso_pendente');
+  // Coluna O: o nome que o CLIENTE digitou na caixinha "Quem está
+  // aprovando?" (pedido do Cláudio, 2026-08-05) — só existe quando ele
+  // aprovou; pedido de ajuste não pergunta isso.
+  if (sheet.getLastColumn() < 15) sheet.getRange(1, 15).setValue('quem_aprovou');
   return sheet;
 }
 
@@ -343,6 +347,7 @@ function buscarAprovacaoPublica(codigo) {
     nomeArquivo: linha.nomeArquivo,
     status: linha.status,
     respostaTexto: linha.respostaTexto,
+    quemAprovou: linha.quemAprovou,
     pins: parsearPins(linha.pins),
     pecas: pecas,
     // Campos antigos, só pra uma aba já aberta com a versão anterior do
@@ -375,8 +380,16 @@ function parsearPins(json) {
  * comentário lista o texto de cada pin numerado e aponta de volta pro
  * MESMO link de aprovação, que passa a mostrar os pins de verdade,
  * sobre a imagem, na posição exata onde o cliente marcou.
+ *
+ * `quemRespondeu` (pedido do Cláudio, 2026-08-05: "pra gente ter um
+ * controle e saber quem aprovou") — o nome que o cliente escreveu numa
+ * caixinha antes de confirmar a APROVAÇÃO (aprovar.html pergunta isso só
+ * nesse caminho; pedido de ajuste continua sem perguntar, o texto do
+ * pedido já identifica o suficiente). Fica gravado na planilha e entra
+ * no comentário automático, pra saber de quem foi o "sim" se precisar
+ * confirmar depois.
  */
-function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
+function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins, quemRespondeu) {
   if (!codigo) return { ok: false, error: 'Link inválido.' };
 
   var lock = LockService.getScriptLock();
@@ -393,14 +406,17 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
     linha = linhaParaObjetoDeAprovacao(linhas[indice]);
     if (linha.status !== 'pendente') {
       lock.releaseLock();
-      return { ok: true, jaRespondido: true, status: linha.status, respostaTexto: linha.respostaTexto, pins: parsearPins(linha.pins) };
+      return { ok: true, jaRespondido: true, status: linha.status, respostaTexto: linha.respostaTexto, pins: parsearPins(linha.pins), quemAprovou: linha.quemAprovou };
     }
     var status = aprovado ? 'aprovado' : 'ajuste';
     var pinsTexto = (pins && pins.length) ? JSON.stringify(pins) : '';
+    var nomeAprovador = aprovado ? String(quemRespondeu || '').trim() : '';
     sheet.getRange(indice + 1, 9, 1, 3).setValues([[status, respostaTexto || '', new Date().getTime()]]);
     sheet.getRange(indice + 1, 13).setValue(pinsTexto);
+    sheet.getRange(indice + 1, 15).setValue(nomeAprovador);
     linha.status = status;
     linha.pins = pinsTexto;
+    linha.quemAprovou = nomeAprovador;
   } finally {
     lock.releaseLock();
   }
@@ -415,7 +431,7 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
     // link de aprovação — não uma opinião pessoal dele.
     var partes = ['Alterações do cliente (via link de aprovação):'];
     partes.push(aprovado
-      ? '✅ Aprovou "' + linha.nomeArquivo + '".'
+      ? '✅ Aprovou "' + linha.nomeArquivo + '"' + (linha.quemAprovou ? ' — ' + linha.quemAprovou : '') + '.'
       : '✏️ Pediu ajuste em "' + linha.nomeArquivo + '".');
     if (respostaTexto) partes.push(respostaTexto);
     if (pinsList.length) {
@@ -443,7 +459,7 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins) {
     marcarAvisoDeAprovacaoPendente(codigo);
   }
 
-  return { ok: true, status: linha.status, avisoChegou: avisoChegou };
+  return { ok: true, status: linha.status, avisoChegou: avisoChegou, quemAprovou: linha.quemAprovou };
 }
 
 // Coluna N da aba Aprovacoes: "1" enquanto o aviso na tarefa não saiu.
@@ -524,7 +540,7 @@ function linhaParaObjetoDeAprovacao(linha) {
     codigo: linha[0], taskId: linha[1], cliente: linha[2], tituloTarefa: linha[3],
     fileId: linha[4], nomeArquivo: linha[5], mimeType: linha[6], criadoEm: linha[7],
     status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11],
-    pins: linha[12] || ''
+    pins: linha[12] || '', quemAprovou: linha[14] || ''
   };
 }
 
@@ -610,6 +626,7 @@ function listarAprovacoesPendentes() {
       criadoEm: obj.criadoEm,
       respondidoEm: obj.respondidoEm,
       respostaTexto: obj.respostaTexto,
+      quemAprovou: obj.quemAprovou,
       quantosPins: parsearPins(obj.pins).length,
       // O cliente respondeu, mas o aviso ainda não chegou na tarefa (o
       // Runrun.it estava fora) — a aba mostra isso pra você não achar

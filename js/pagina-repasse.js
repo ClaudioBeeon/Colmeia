@@ -1190,6 +1190,7 @@ function cardDeAprovacaoHTML(a) {
       ${legendaPecas ? `<div class="aprov-peca">${escaparHTML(legendaPecas)}</div>` : ""}
       <div class="repasse-card-tempo ${tempo.alerta ? "aprov-alerta" : ""}">${tempo.texto}</div>
       ${a.avisoPendente ? `<div class="aprov-preso">⚠️ O cliente já respondeu, mas o Runrun.it estava fora do ar e o aviso ainda não entrou na tarefa. O Colmeia reenvia sozinho assim que eles voltarem.</div>` : ""}
+      ${status === "aprovado" && a.quemAprovou ? `<div class="aprov-quem">✓ Aprovado por <b>${escaparHTML(a.quemAprovou)}</b></div>` : ""}
       ${a.respostaTexto ? `<div class="aprov-resposta">“${escaparHTML(a.respostaTexto)}”</div>` : ""}
       ${a.quantosPins ? `<span class="aprov-pins">📍 ${a.quantosPins} ponto${a.quantosPins > 1 ? "s" : ""} marcado${a.quantosPins > 1 ? "s" : ""}</span>` : ""}
       <div class="repasse-card-actions">
