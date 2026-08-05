@@ -164,6 +164,93 @@ document.getElementById("loginForm").addEventListener("submit", async e => {
   }
 });
 
+// ===== A entrada do ATENDIMENTO =====
+//
+// Elas não têm conta no Colmeia: chegam por um link de conferência colado
+// num comentário do Runrun.it, muitas vezes noutro navegador ou numa aba
+// anônima. Antes disso, batiam numa tela de senha que nunca ia funcionar
+// pra elas — o link simplesmente não servia pra quem ele foi feito.
+//
+// Dois passos, cada um resolvendo uma coisa: o CÓDIGO (um só, do time
+// inteiro) mantém a tela fechada pra quem só esbarrou no endereço; o NOME
+// resolve a identidade. Sem o nome, o pedido de alteração sairia no
+// Runrun.it na conta errada, que é justamente o que os tokens por pessoa
+// acabaram de corrigir.
+//
+// Isso NÃO afrouxa o app: a senha do Colmeia sempre protegeu só a tela —
+// nenhuma ação do backend confere sessão nenhuma. Os designers continuam
+// entrando com a chave de acesso de sempre; só quem cai num link de
+// conferência sem sessão vê esta tela.
+
+/** A URL de entrada é um link de conferência (ou a fila de aprovações)? */
+function chegouPorLinkDeConferencia() {
+  if (typeof roteadorInterpretarRota !== "function") return false;
+  const rota = roteadorInterpretarRota();
+  return rota.tipo === "conferencia" || (rota.tipo === "pagina" && rota.pagina === "aprovacao");
+}
+
+function mostrarEntradaDoAtendimento(mostrar) {
+  document.getElementById("loginForm").hidden = mostrar;
+  document.getElementById("loginAtendimento").hidden = !mostrar;
+  document.getElementById("loginErro").hidden = true;
+  const troca = document.getElementById("loginTrocaModo");
+  troca.hidden = false;
+  troca.textContent = mostrar ? "Sou do time de design" : "Sou do atendimento";
+  (mostrar ? document.getElementById("atdCodigo") : document.getElementById("loginSenha")).focus();
+}
+
+document.getElementById("loginTrocaModo").addEventListener("click", () => {
+  mostrarEntradaDoAtendimento(document.getElementById("loginAtendimento").hidden);
+});
+
+document.getElementById("atdCodigoForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const codigo = document.getElementById("atdCodigo").value;
+  const btn = document.getElementById("atdCodigoBtn");
+  const erroEl = document.getElementById("loginErro");
+  erroEl.hidden = true;
+  if (!codigo) return;
+  btn.disabled = true;
+
+  const data = await chamarBackend({ acao: "entrarComoAtendimento", codigo });
+  btn.disabled = false;
+
+  if (!data || !data.ok) {
+    erroEl.textContent = caiuARede(data)
+      ? "Sem conexão com o servidor. Tenta de novo em instantes."
+      : (data.error || "Não consegui entrar.");
+    erroEl.hidden = false;
+    return;
+  }
+
+  // Passo 2: quem é você. O código sai da tela — já cumpriu o papel, e
+  // deixá-lo ali sugeriria que ainda falta alguma coisa nele.
+  document.getElementById("atdCodigoForm").hidden = true;
+  const quem = document.getElementById("atdQuem");
+  document.getElementById("atdQuemLista").innerHTML = (data.pessoas || []).map(nome => `
+    <button type="button" class="atd-pessoa" data-atd-nome="${escaparHTML(nome)}">
+      ${avatarAtendimentoHTML(nome, "avatar-sm")}
+      <span>${escaparHTML(nome)}</span>
+    </button>
+  `).join("");
+  quem.hidden = false;
+
+  quem.querySelectorAll("[data-atd-nome]").forEach(btn2 => {
+    btn2.addEventListener("click", () => {
+      const nome = btn2.dataset.atdNome;
+      DESIGNER_LOGADO = nome;
+      PAPEL_LOGADO = "atendimento";
+      // O atendimento não tem quadro, então não tem id de responsável no
+      // Runrun.it — `ehMinhaTarefa` cai na comparação por nome, que é o
+      // caminho de reserva que já existe. Não faz diferença aqui: elas não
+      // têm tarefas próprias no quadro.
+      DESIGNER_ID_LOGADO = null;
+      salvarSessao(nome, "atendimento", null);
+      iniciarAppPosLogin();
+    });
+  });
+});
+
 // Se já tiver uma sessão salva nesse navegador, entra direto sem pedir
 // senha de novo.
 const sessaoSalva = lerSessaoSalva();
@@ -176,6 +263,10 @@ if (sessaoSalva && sessaoSalva.nome && sessaoSalva.papel) {
   iniciarAppPosLogin();
 } else {
   buscarFraseDoDia();
+  // Chegou por um link de conferência sem sessão salva? É quase sempre o
+  // atendimento — abre já na entrada delas, em vez da senha que elas não
+  // têm. Quem for do design troca no botão logo abaixo.
+  if (chegouPorLinkDeConferencia()) mostrarEntradaDoAtendimento(true);
 }
 // Senão, a tela de login (já visível por padrão no HTML) fica esperando
 // o formulário ser enviado — o resto acontece no listener do submit acima.

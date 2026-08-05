@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-05k">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05k">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05k">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05k">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05k">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05k">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-05l">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05l">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05l">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05l">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05l">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05l">
 </head>
 <body>
 
@@ -46,7 +46,38 @@
           </button>
         </form>
       </div>
+
+      <!-- ENTRADA DO ATENDIMENTO — só aparece quem chega por um link de
+           conferência sem sessão salva (ver mostrarEntradaDoAtendimento,
+           js/login-boot.js). Elas NÃO têm conta no Colmeia: chegam de um
+           comentário do Runrun.it, muitas vezes noutro navegador ou numa
+           aba anônima, e batiam numa tela de senha que nunca ia funcionar
+           pra elas.
+
+           São dois passos de propósito: o CÓDIGO (um só, do time inteiro)
+           mantém a tela fechada pra quem só esbarrou no endereço; o NOME
+           resolve a identidade — sem ele o pedido de alteração sairia no
+           Runrun.it no nome errado, que é o que os tokens por pessoa
+           acabaram de corrigir. -->
+      <div class="login-dock login-atendimento" id="loginAtendimento" hidden>
+        <form id="atdCodigoForm" class="login-form">
+          <input type="password" id="atdCodigo" placeholder="Código do atendimento" autocomplete="off" required>
+          <button type="submit" id="atdCodigoBtn" aria-label="Continuar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+        <div class="atd-quem" id="atdQuem" hidden>
+          <p class="atd-quem-titulo">Quem é você?</p>
+          <div class="atd-quem-lista" id="atdQuemLista"></div>
+        </div>
+      </div>
+
       <p class="login-erro" id="loginErro" hidden></p>
+
+      <!-- A saída pro caminho de sempre: quem é do time de design cai aqui
+           por engano se abrir um link de conferência, e precisa conseguir
+           voltar pra senha sem ficar preso. -->
+      <button type="button" class="login-troca" id="loginTrocaModo" hidden></button>
     </div>
   </div>
 </div>
@@ -1119,31 +1150,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-05k"></script>
-<script src="js/fila-offline.js?v=2026-08-05k"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-05k"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-05k"></script>
-<script src="js/kanban-polling.js?v=2026-08-05k"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-05k"></script>
-<script src="js/regras-briefing.js?v=2026-08-05k"></script>
-<script src="js/kanban-board.js?v=2026-08-05k"></script>
-<script src="js/clientes-hub.js?v=2026-08-05k"></script>
-<script src="js/chat-comentarios.js?v=2026-08-05k"></script>
-<script src="js/detalhe-modal.js?v=2026-08-05k"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-05k"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-05k"></script>
-<script src="js/bee.js?v=2026-08-05k"></script>
-<script src="js/paginas-designers.js?v=2026-08-05k"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-05k"></script>
-<script src="js/pagina-repasse.js?v=2026-08-05k"></script>
-<script src="js/pagina-horas.js?v=2026-08-05k"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-05k"></script>
-<script src="js/paleta-comando.js?v=2026-08-05k"></script>
-<script src="js/roteador-url.js?v=2026-08-05k"></script>
-<script src="js/detalhe-historia.js?v=2026-08-05k"></script>
-<script src="js/modo-foco.js?v=2026-08-05k"></script>
-<script src="js/pagina-bee.js?v=2026-08-05k"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-05k"></script>
-<script src="js/login-boot.js?v=2026-08-05k"></script>
+<script src="js/config.js?v=2026-08-05l"></script>
+<script src="js/fila-offline.js?v=2026-08-05l"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-05l"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-05l"></script>
+<script src="js/kanban-polling.js?v=2026-08-05l"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-05l"></script>
+<script src="js/regras-briefing.js?v=2026-08-05l"></script>
+<script src="js/kanban-board.js?v=2026-08-05l"></script>
+<script src="js/clientes-hub.js?v=2026-08-05l"></script>
+<script src="js/chat-comentarios.js?v=2026-08-05l"></script>
+<script src="js/detalhe-modal.js?v=2026-08-05l"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-05l"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-05l"></script>
+<script src="js/bee.js?v=2026-08-05l"></script>
+<script src="js/paginas-designers.js?v=2026-08-05l"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-05l"></script>
+<script src="js/pagina-repasse.js?v=2026-08-05l"></script>
+<script src="js/pagina-horas.js?v=2026-08-05l"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-05l"></script>
+<script src="js/paleta-comando.js?v=2026-08-05l"></script>
+<script src="js/roteador-url.js?v=2026-08-05l"></script>
+<script src="js/detalhe-historia.js?v=2026-08-05l"></script>
+<script src="js/modo-foco.js?v=2026-08-05l"></script>
+<script src="js/pagina-bee.js?v=2026-08-05l"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-05l"></script>
+<script src="js/login-boot.js?v=2026-08-05l"></script>
 </body>
 </html>

@@ -1019,6 +1019,42 @@ body.card-aberto .quick-access-panel { display: none; }
 .login-form button:disabled { opacity: 0.6; cursor: default; }
 .login-erro { color: #FFB4B4; font-size: 12.5px; margin: 0; font-family: var(--font-body); text-align: center; }
 
+/* ----- Entrada do ATENDIMENTO -----
+   Mesma cápsula de vidro do login normal, porque é o mesmo lugar e a
+   mesma tela — só o conteúdo dentro dela muda. Quando o passo 2 aparece
+   ("quem é você?"), a cápsula deixa de ser uma pílula e vira um cartão:
+   uma lista de pessoas não cabe num formato de campo de texto. */
+.login-atendimento[hidden] { display: none; }
+.login-atendimento:has(.atd-quem:not([hidden])) { border-radius: var(--radius-lg); padding: 16px; }
+.atd-quem[hidden] { display: none; }
+.atd-quem-titulo {
+  margin: 0 0 12px; text-align: center;
+  font-family: var(--font-body); font-size: 13px; color: rgba(255,255,255,0.75);
+}
+.atd-quem-lista { display: flex; flex-direction: column; gap: 8px; }
+.atd-pessoa {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 10px 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14);
+  color: #fff; font-family: var(--font-body); font-size: 14.5px; text-align: left;
+  transition: background 180ms ease-out, border-color 180ms ease-out;
+}
+.atd-pessoa:hover { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.32); }
+.atd-pessoa .avatar { flex-shrink: 0; }
+
+/* A saída pro caminho de sempre: quem é do design cai na tela do
+   atendimento por engano se abrir um link de conferência, e precisa
+   conseguir voltar pra senha sem ficar preso. Discreto de propósito — é
+   escape, não uma escolha que a maioria precisa fazer. */
+.login-troca[hidden] { display: none; }
+.login-troca {
+  background: none; border: none; cursor: pointer; padding: 4px 8px;
+  font-family: var(--font-body); font-size: 12.5px;
+  color: rgba(255,255,255,0.55); text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.login-troca:hover { color: rgba(255,255,255,0.9); }
+
 @media (max-width: 640px) {
   .login-content { padding-top: 76px; }
   .login-frase { max-width: 12ch; }

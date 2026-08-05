@@ -451,6 +451,48 @@ function aprovarInternamente(taskId, nomePeca, aprovadoPor) {
 }
 
 // ---------------------------------------------------------------------
+// A entrada do atendimento (2026-08-05)
+// ---------------------------------------------------------------------
+
+/**
+ * O atendimento entra na tela de conferência SEM senha pessoal.
+ *
+ * O PROBLEMA QUE ISSO RESOLVE: elas chegam por um link de comentário do
+ * Runrun.it, muitas vezes noutro navegador ou numa aba anônima, e batiam
+ * numa tela de senha — sendo que elas não têm conta no Colmeia. O link
+ * simplesmente não funcionava pra quem ele foi feito.
+ *
+ * O QUE ISSO NÃO É: não é uma brecha nova. A senha do Colmeia sempre
+ * protegeu só a TELA — nenhuma ação deste backend confere sessão nenhuma
+ * (ver o comentário sobre segurança em Aprovacao.gs). Quem tem o endereço
+ * da API já podia chamar qualquer coisa, logado ou não.
+ *
+ * O QUE ELE GANHA: um código único do time (não senha por pessoa), que
+ * mantém a tela fechada pra quem só esbarrou no endereço, e a IDENTIDADE
+ * — sem saber quem é, o pedido de alteração sairia no Runrun.it no nome
+ * errado, justamente o que os tokens por pessoa acabaram de corrigir.
+ *
+ * O código fica em Propriedades do Script (CODIGO_ATENDIMENTO), nunca
+ * aqui: este repositório é público. Sem a propriedade criada, a entrada é
+ * RECUSADA — falhar fechado é o certo quando a dúvida é "posso deixar
+ * entrar?".
+ */
+function entrarComoAtendimento(codigo) {
+  var esperado = PropertiesService.getScriptProperties().getProperty('CODIGO_ATENDIMENTO');
+  if (!esperado) {
+    return { ok: false, error: 'A entrada do atendimento ainda não foi configurada. Fala com o Cláudio.' };
+  }
+  if (!codigo || String(codigo).trim().toLowerCase() !== String(esperado).trim().toLowerCase()) {
+    return { ok: false, error: 'Código errado.' };
+  }
+  // A lista sai de RUNRUN_TOKENS_ATENDIMENTO (Código.gs) de propósito: é o
+  // mesmo lugar que decide com qual conta do Runrun.it cada uma escreve.
+  // Duas listas separadas viravam a chance de alguém aparecer aqui e não
+  // ter token lá — entrando, mas comentando no nome do Cláudio.
+  return { ok: true, pessoas: Object.keys(RUNRUN_TOKENS_ATENDIMENTO) };
+}
+
+// ---------------------------------------------------------------------
 // Mandar o card mãe pra "Aprovação do Cliente"
 // ---------------------------------------------------------------------
 

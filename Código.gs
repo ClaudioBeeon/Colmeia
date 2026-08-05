@@ -293,6 +293,8 @@ function handleRequest(e, method) {
         output = devolverParaDesigner(body);
       } else if (body.acao === 'moverCardMaeParaAprovacaoCliente') {
         output = moverCardMaeParaAprovacaoCliente(body.taskId, body.autor);
+      } else if (body.acao === 'entrarComoAtendimento') {
+        output = entrarComoAtendimento(body.codigo);
       } else if (body.acao === 'buscarConferenciaDaTarefa') {
         output = buscarConferenciaDaTarefa(body.taskId, body.idsRelacionados);
       } else if (body.acao === 'buscarDevolucaoDaTarefa') {
