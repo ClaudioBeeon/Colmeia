@@ -545,28 +545,8 @@
 
 .apv-bloco { margin-bottom: 0; }
 .apv-bloco-sub { font-family: var(--apv-fonte-texto); font-size: 12.5px; color: var(--text-secondary); margin: -6px 0 10px; }
-.apv-escolha {
-  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 12px 14px; margin-bottom: 8px; cursor: pointer;
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-md);
-  transition: border-color var(--dur-fast) var(--ease-apple), background var(--dur-fast) var(--ease-apple);
-}
-.apv-escolha:hover { border-color: var(--apv-borda-forte); }
-.apv-escolha.marcada { border-color: var(--kanban-yellow); background: var(--apv-amarelo-suave); }
-.apv-check {
-  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
-  border: 2px solid var(--apv-borda-forte); color: transparent;
-  display: flex; align-items: center; justify-content: center;
-  transition: background var(--dur-fast) var(--ease-apple),
-              border-color var(--dur-fast) var(--ease-apple),
-              color var(--dur-fast) var(--ease-apple);
-}
-.apv-escolha.marcada .apv-check { background: var(--kanban-yellow); border-color: var(--kanban-yellow); color: #16181D; }
-.apv-escolha-mini { width: 34px; height: 42px; flex-shrink: 0; border-radius: 7px; overflow: hidden; border: 1px solid var(--border); }
-.apv-escolha-mini img,
-.apv-escolha-mini svg { width: 100%; height: 100%; object-fit: cover; display: block; }
-.apv-escolha-nome { flex: 1; min-width: 0; font-family: var(--apv-fonte-texto); font-size: 13.5px; font-weight: 600; }
-.apv-escolha-sub { display: block; font-size: 11.5px; color: var(--text-secondary); font-weight: 400; margin-top: 1px; }
+/* (A lista de peças com caixinhas saiu daqui: virou a fileira de anexos
+   do painel de envio — ver .apv-anexo no fim do arquivo.) */
 
 .apv-campo {
   width: 100%; padding: 12px 14px; resize: vertical; min-height: 82px;
@@ -1006,3 +986,74 @@
   margin: 0; font-family: var(--apv-fonte-texto);
   font-size: 11.5px; font-style: italic; color: var(--text-muted);
 }
+
+/* ----- Painel de envio no formato "mensagem" (versão 2, 05/08) ---------
+   As peças são ANEXOS numa fileira de etiquetas, a mensagem é o corpo e
+   mandar fica no rodapé do próprio cartão. Menos formulário, mais
+   "escrever pra alguém" — que é o que está acontecendo de verdade.
+
+   Usa o mesmo .apv-bloco-card dos cartões do briefing e do pedir
+   alteração: é a mesma coluna, e um terceiro desenho aqui faria a tela
+   parecer remendada. */
+.apv-envio-msg { display: flex; flex-direction: column; gap: 12px; }
+.apv-envio-msg-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.apv-envio-msg-topo .apv-rotulo { margin-bottom: 0; }
+.apv-envio-conta { font-family: var(--apv-fonte-texto); font-size: 11.5px; color: var(--text-muted); }
+/* Zero peça marcada é um beco: o envio não vai funcionar e a fileira de
+   etiquetas não deixa isso óbvio como uma lista de caixinhas deixava. */
+.apv-envio-conta.nenhum { color: var(--danger); font-weight: 700; }
+
+.apv-anexos { display: flex; flex-wrap: wrap; gap: 7px; }
+.apv-anexo {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  border-radius: 999px; padding: 5px 13px 5px 5px;
+  background: var(--card-bg); border: 1px solid var(--apv-borda-forte);
+  color: var(--text-secondary);
+  font-family: var(--apv-fonte-texto); font-size: 12.5px; font-weight: 600;
+  max-width: 100%; white-space: nowrap;
+  transition: border-color var(--dur-fast) var(--ease-apple),
+              background var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple);
+}
+.apv-anexo:hover { border-color: var(--text-muted); }
+.apv-anexo-mini {
+  width: 20px; height: 25px; border-radius: 5px; flex-shrink: 0; overflow: hidden;
+  background: var(--apv-palco); border: 1px solid var(--border);
+}
+.apv-anexo-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.apv-anexo-nome { overflow: hidden; text-overflow: ellipsis; }
+/* Marcado = verde, a mesma cor que "aprovado" tem em toda esta tela. */
+.apv-anexo.marcado {
+  border-color: var(--success); background: var(--apv-sucesso-suave); color: var(--success);
+}
+
+/* O corpo da mensagem: borda tracejada porque é campo de escrever livre,
+   não um dado do sistema — o mesmo sinal que o app usa no "marcar pontos". */
+.apv-envio-corpo {
+  min-height: 96px; border-style: dashed;
+  background: var(--card-bg);
+}
+
+/* Rodapé do cartão: um caminho principal (WhatsApp, que é como a agência
+   manda) e dois discretos ao lado. Três botões do mesmo peso faziam a
+   pessoa ter que escolher onde não havia escolha a fazer. */
+.apv-envio-acoes {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 2px -18px -18px; padding: 12px 18px;
+  background: var(--apv-superficie-2); border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.apv-envio-acoes .apv-btn-whats { flex: 1; min-width: 0; padding: 10px 14px; font-size: 13px; }
+.apv-envio-secundario {
+  border: none; background: none; cursor: pointer; padding: 8px 6px;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  color: var(--text-secondary);
+  transition: color var(--dur-fast) var(--ease-apple);
+}
+.apv-envio-secundario:hover { color: var(--text-primary); text-decoration: underline; }
+
+/* O "Ver como o cliente vê" fica FIXO embaixo, e com respiro claro do
+   cartão de cima (pedido do Cláudio): colado logo depois do último bloco,
+   ele parecia mais um pedaço do formulário — e ele não é um passo do
+   preenchimento, é a última olhada antes de mandar. */
+.apv-rodape-coluna { margin-top: 22px; }

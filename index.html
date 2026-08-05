@@ -13,12 +13,12 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-05v">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05v">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05v">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05v">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05v">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05v">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-05w">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-05w">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-05w">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-05w">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-05w">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-05w">
 </head>
 <body>
 
@@ -932,24 +932,36 @@
             </span>
           </div>
 
-          <div class="apv-bloco apv-bloco-card">
-            <p class="apv-rotulo">Quais peças vão no link</p>
-            <p class="apv-bloco-sub">O cliente vê todas juntas, numa página só, e responde uma por uma.</p>
-            <div id="apvListaPecasEnvio">
+          <!-- O envio montado como a MENSAGEM que vai pro cliente
+               (versão 2, aprovada pelo Cláudio): as peças são anexos numa
+               fileira de etiquetas, a mensagem é o corpo, e mandar fica no
+               rodapé do próprio cartão. Menos "formulário", mais "escrever
+               pra alguém" — que é literalmente o que está acontecendo.
+
+               Segue o mesmo bloco (.apv-bloco-card) dos cartões do
+               briefing e do pedir alteração: é a mesma coluna, e inventar
+               um terceiro desenho aqui só faria a tela parecer remendada. -->
+          <div class="apv-bloco apv-bloco-card apv-envio-msg">
+            <div class="apv-envio-msg-topo">
+              <p class="apv-rotulo">Anexos</p>
+              <span class="apv-envio-conta" id="apvEnvioConta">1 de 1 marcado</span>
+            </div>
+            <div class="apv-anexos" id="apvListaPecasEnvio">
               <!-- EXEMPLO — trocar pelo que apvRenderEnvio() desenhar -->
-              <button type="button" class="apv-escolha marcada">
-                <span class="apv-check"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                <span class="apv-escolha-mini" style="background:linear-gradient(135deg,#7A4A21,#FFCC55);"></span>
-                <span class="apv-escolha-nome">Feed — Combo de Verão<span class="apv-escolha-sub">v3 · aprovada agora</span></span>
+              <button type="button" class="apv-anexo marcado">
+                <span class="apv-anexo-mini"></span>
+                <span class="apv-anexo-nome">Feed — Combo de Verão</span>
               </button>
             </div>
-          </div>
 
-          <div class="apv-bloco apv-bloco-card">
-            <p class="apv-rotulo">Mensagem pro cliente (opcional)</p>
-            <textarea class="apv-campo" id="apvMsgCliente" placeholder="Oi! Segue a arte pra sua aprovação. Qualquer ajuste é só marcar direto na imagem."></textarea>
-          </div>
+            <textarea class="apv-campo apv-envio-corpo" id="apvMsgCliente" placeholder="Oi! Segue a arte pra sua aprovação. Qualquer ajuste é só marcar direto na imagem."></textarea>
 
+            <div class="apv-envio-acoes" id="apvEnvioBotoes">
+              <button type="button" class="apv-btn apv-btn-whats" data-apv-envio="whatsapp">Mandar no WhatsApp</button>
+              <button type="button" class="apv-envio-secundario" data-apv-envio="link">Copiar link</button>
+              <button type="button" class="apv-envio-secundario" data-apv-envio="email">E-mail</button>
+            </div>
+          </div>
 
           <!-- Rodapé fixo — não rola com o resto do painel, pedido do
                Cláudio (ver .apv-rodape-coluna, css/06-aprovacao.css).
@@ -1174,31 +1186,31 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-05v"></script>
-<script src="js/fila-offline.js?v=2026-08-05v"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-05v"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-05v"></script>
-<script src="js/kanban-polling.js?v=2026-08-05v"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-05v"></script>
-<script src="js/regras-briefing.js?v=2026-08-05v"></script>
-<script src="js/kanban-board.js?v=2026-08-05v"></script>
-<script src="js/clientes-hub.js?v=2026-08-05v"></script>
-<script src="js/chat-comentarios.js?v=2026-08-05v"></script>
-<script src="js/detalhe-modal.js?v=2026-08-05v"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-05v"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-05v"></script>
-<script src="js/bee.js?v=2026-08-05v"></script>
-<script src="js/paginas-designers.js?v=2026-08-05v"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-05v"></script>
-<script src="js/pagina-repasse.js?v=2026-08-05v"></script>
-<script src="js/pagina-horas.js?v=2026-08-05v"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-05v"></script>
-<script src="js/paleta-comando.js?v=2026-08-05v"></script>
-<script src="js/roteador-url.js?v=2026-08-05v"></script>
-<script src="js/detalhe-historia.js?v=2026-08-05v"></script>
-<script src="js/modo-foco.js?v=2026-08-05v"></script>
-<script src="js/pagina-bee.js?v=2026-08-05v"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-05v"></script>
-<script src="js/login-boot.js?v=2026-08-05v"></script>
+<script src="js/config.js?v=2026-08-05w"></script>
+<script src="js/fila-offline.js?v=2026-08-05w"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-05w"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-05w"></script>
+<script src="js/kanban-polling.js?v=2026-08-05w"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-05w"></script>
+<script src="js/regras-briefing.js?v=2026-08-05w"></script>
+<script src="js/kanban-board.js?v=2026-08-05w"></script>
+<script src="js/clientes-hub.js?v=2026-08-05w"></script>
+<script src="js/chat-comentarios.js?v=2026-08-05w"></script>
+<script src="js/detalhe-modal.js?v=2026-08-05w"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-05w"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-05w"></script>
+<script src="js/bee.js?v=2026-08-05w"></script>
+<script src="js/paginas-designers.js?v=2026-08-05w"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-05w"></script>
+<script src="js/pagina-repasse.js?v=2026-08-05w"></script>
+<script src="js/pagina-horas.js?v=2026-08-05w"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-05w"></script>
+<script src="js/paleta-comando.js?v=2026-08-05w"></script>
+<script src="js/roteador-url.js?v=2026-08-05w"></script>
+<script src="js/detalhe-historia.js?v=2026-08-05w"></script>
+<script src="js/modo-foco.js?v=2026-08-05w"></script>
+<script src="js/pagina-bee.js?v=2026-08-05w"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-05w"></script>
+<script src="js/login-boot.js?v=2026-08-05w"></script>
 </body>
 </html>

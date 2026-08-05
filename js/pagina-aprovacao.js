@@ -980,17 +980,23 @@ function apvRenderEnvio(peca, aprovacao) {
     })),
   ];
 
+  // Cada peça é um ANEXO — uma etiqueta com a miniatura e o nome, do jeito
+  // que um anexo aparece numa mensagem. O nome do arquivo e o "aprovada
+  // agora" saíram daqui: viraram o `title` (aparece ao passar o mouse). Na
+  // fileira de etiquetas eles ocupavam três linhas por peça e empurravam a
+  // mensagem — que é a parte que a pessoa veio escrever — pra fora da tela.
   document.getElementById("apvListaPecasEnvio").innerHTML = opcoes.map(o => `
-    <button type="button" class="apv-escolha ${o.marcada ? "marcada" : ""}" data-apv-file="${escaparHTML(o.fileId)}">
-      <span class="apv-check"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-      <span class="apv-escolha-mini" data-apv-thumb="${escaparHTML(o.fileId)}"></span>
-      <span class="apv-escolha-nome">${escaparHTML(o.nome)}<span class="apv-escolha-sub">${escaparHTML(o.sub)}</span></span>
+    <button type="button" class="apv-anexo ${o.marcada ? "marcado" : ""}" data-apv-file="${escaparHTML(o.fileId)}" title="${escaparHTML(o.sub)}">
+      <span class="apv-anexo-mini" data-apv-thumb="${escaparHTML(o.fileId)}"></span>
+      <span class="apv-anexo-nome">${escaparHTML(o.nome)}</span>
     </button>
   `).join("");
+  apvAtualizarContaDeAnexos();
 
   document.querySelectorAll("#apvListaPecasEnvio [data-apv-file]").forEach(btn => {
     btn.addEventListener("click", () => {
-      btn.classList.toggle("marcada");
+      btn.classList.toggle("marcado");
+      apvAtualizarContaDeAnexos();
       // Trocar a seleção invalida o link já gerado — revisar um link e
       // mandar outro seria exatamente o erro que essa tela existe pra
       // evitar, então gera um novo na próxima vez que precisar.
@@ -1008,8 +1014,24 @@ function apvRenderEnvio(peca, aprovacao) {
 }
 
 /** Os arquivos marcados pra ir no link. */
+/**
+ * "1 de 2 marcados" no topo do cartão. Sem isso, numa fileira de etiquetas
+ * dá pra desmarcar tudo sem perceber e só descobrir no erro ao mandar —
+ * numa lista com caixinhas isso era óbvio, numa fileira não é.
+ */
+function apvAtualizarContaDeAnexos() {
+  const el = document.getElementById("apvEnvioConta");
+  if (!el) return;
+  const total = document.querySelectorAll("#apvListaPecasEnvio .apv-anexo").length;
+  const marcados = apvArquivosEscolhidos().length;
+  el.textContent = total === 1
+    ? (marcados ? "1 peça" : "nenhuma marcada")
+    : `${marcados} de ${total} marcadas`;
+  el.classList.toggle("nenhum", marcados === 0);
+}
+
 function apvArquivosEscolhidos() {
-  return [...document.querySelectorAll("#apvListaPecasEnvio .apv-escolha.marcada")]
+  return [...document.querySelectorAll("#apvListaPecasEnvio .apv-anexo.marcado")]
     .map(el => el.dataset.apvFile)
     .filter(Boolean);
 }
