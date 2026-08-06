@@ -13,12 +13,13 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-06g">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06g">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06g">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06g">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06g">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06g">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-06h">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06h">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06h">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06h">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06h">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06h">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-06h">
 </head>
 <body>
 
@@ -142,6 +143,18 @@
           <span class="nav-badge" id="aprovacaoBadge" hidden>0</span>
         </span>
         <span class="nav-label">Aprovações</span>
+      </a>
+      <!-- Central do Atendimento — área NOVA e SEPARADA do resto do Colmeia
+           (pedido do Cláudio, 2026-08-06): quem tem papel "atendimento"
+           entra direto nela (ver abrirCentralAtendimento, chamada no fim de
+           iniciarAppPosLogin quando PAPEL_LOGADO === "atendimento") e nunca
+           vê o quadro/sidebar normal. Este ícone existe só pro Cláudio
+           conseguir abrir/testar de dentro do Colmeia — por isso `hidden`
+           por padrão, e só liberado pra ele em iniciarAppPosLogin (mesma
+           regra do ícone de Aprovações, dois itens acima). -->
+      <a href="#" class="nav-ic" title="Central do Atendimento" id="centralAtendimentoNavBtn" hidden>
+        <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 9.5h18" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 13.5h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <span class="nav-label">Central do Atendimento</span>
       </a>
     </nav>
 
@@ -1204,34 +1217,125 @@
   </aside>
 </div>
 
+<!-- ===========================================================================
+     CENTRAL DO ATENDIMENTO (2026-08-06)
+     ===========================================================================
+     Área NOVA e SEPARADA do resto do Colmeia (pedido explícito do Cláudio: "não
+     é pra substituir nada, vão ser coisas separadas a central do atendimento e
+     o Colmeia" — usa o MESMO backend/sessão/login, mas a interface é outra).
+
+     Por isso este bloco é irmão de #page no <body>, não um .app-page lá dentro:
+     quando aberto, cobre o VIEWPORT INTEIRO (position: fixed; inset: 0) por
+     cima de tudo — quadro, sidebar normal, topbar — como se fosse outro app.
+     Tem a PRÓPRIA sidebar (4 abas) e a PRÓPRIA barra preta do topo, no mesmo
+     desenho visual do Colmeia (mesmas variáveis de cor/sombra/raio de
+     css/01-base.css), só que com navegação própria — não usa mostrarPagina().
+
+     Quem entra aqui: todo mundo com papel "atendimento" (direto, ao logar —
+     ver o fim de iniciarAppPosLogin, js/login-boot.js) e o Cláudio, que abre
+     pelo ícone escondido "Central do Atendimento" da sidebar normal pra
+     cobrir/testar. Ver js/central-atendimento.js pra tudo que é funcional. -->
+<div class="central-overlay" id="centralAtendimento" hidden>
+  <aside class="central-sidebar">
+    <div class="central-sidebar-logo">
+      <svg viewBox="0 0 24 24"><path fill="#FFC700" d="M12 2l8.66 5v10L12 22l-8.66-5V7z"/><circle cx="12" cy="12" r="3.2" fill="#16181D"/></svg>
+      <span class="central-sidebar-logo-txt">Colmeia</span>
+    </div>
+    <nav class="central-sidebar-nav">
+      <button type="button" class="central-nav-ic active" data-central-tab="hoje">
+        <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 9.5V13l2.5 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="central-nav-label">Hoje</span>
+      </button>
+      <button type="button" class="central-nav-ic" data-central-tab="clientes">
+        <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <span class="central-nav-label">Radar de clientes</span>
+      </button>
+      <button type="button" class="central-nav-ic" data-central-tab="aprovacoes">
+        <span class="central-nav-icon-circle">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5l5 5 10-11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="central-nav-badge" id="centralBadgeAprovacoes" hidden>0</span>
+        </span>
+        <span class="central-nav-label">Aprovações</span>
+      </button>
+      <button type="button" class="central-nav-ic" data-central-tab="cobrancas">
+        <span class="central-nav-icon-circle">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span class="central-nav-badge" id="centralBadgeCobrancas" hidden>0</span>
+        </span>
+        <span class="central-nav-label">Cobranças</span>
+      </button>
+    </nav>
+    <div class="central-sidebar-profile">
+      <span class="central-sidebar-avatar" id="centralAvatarIniciais"></span>
+      <span class="central-sidebar-profile-name" id="centralNomeUsuario"></span>
+    </div>
+    <!-- Só aparece pro Cláudio (quem tem uma Colmeia "de verdade" atrás pra
+         voltar) — ver toggleFecharCentral em js/central-atendimento.js. O
+         atendimento não tem pra onde voltar, então só vê "Sair". -->
+    <button type="button" class="central-sidebar-voltar" id="centralVoltarBtn" hidden>← Voltar pro Colmeia</button>
+    <button type="button" class="central-sidebar-logout" id="centralLogoutBtn">Sair</button>
+  </aside>
+
+  <div class="central-main">
+    <header class="central-topbar">
+      <h1 class="central-topbar-title">Central do Atendimento</h1>
+      <div class="central-date-pill">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span id="centralDateText"></span>
+      </div>
+    </header>
+
+    <div class="central-content" id="centralContent">
+
+      <section class="central-tab" id="centralTabHoje">
+        <div class="central-vazio-inline">Carregando...</div>
+      </section>
+
+      <section class="central-tab" id="centralTabClientes" hidden>
+        <div class="central-vazio-inline">Carregando...</div>
+      </section>
+
+      <section class="central-tab" id="centralTabAprovacoes" hidden>
+        <div class="central-vazio-inline">Carregando...</div>
+      </section>
+
+      <section class="central-tab" id="centralTabCobrancas" hidden>
+        <div class="central-vazio-inline">Carregando...</div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-06g"></script>
-<script src="js/fila-offline.js?v=2026-08-06g"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-06g"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-06g"></script>
-<script src="js/kanban-polling.js?v=2026-08-06g"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-06g"></script>
-<script src="js/regras-briefing.js?v=2026-08-06g"></script>
-<script src="js/kanban-board.js?v=2026-08-06g"></script>
-<script src="js/clientes-hub.js?v=2026-08-06g"></script>
-<script src="js/chat-comentarios.js?v=2026-08-06g"></script>
-<script src="js/detalhe-modal.js?v=2026-08-06g"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-06g"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-06g"></script>
-<script src="js/bee.js?v=2026-08-06g"></script>
-<script src="js/paginas-designers.js?v=2026-08-06g"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-06g"></script>
-<script src="js/pagina-repasse.js?v=2026-08-06g"></script>
-<script src="js/pagina-horas.js?v=2026-08-06g"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-06g"></script>
-<script src="js/paleta-comando.js?v=2026-08-06g"></script>
-<script src="js/roteador-url.js?v=2026-08-06g"></script>
-<script src="js/detalhe-historia.js?v=2026-08-06g"></script>
-<script src="js/modo-foco.js?v=2026-08-06g"></script>
-<script src="js/pagina-bee.js?v=2026-08-06g"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-06g"></script>
-<script src="js/login-boot.js?v=2026-08-06g"></script>
+<script src="js/config.js?v=2026-08-06h"></script>
+<script src="js/fila-offline.js?v=2026-08-06h"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-06h"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-06h"></script>
+<script src="js/kanban-polling.js?v=2026-08-06h"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-06h"></script>
+<script src="js/regras-briefing.js?v=2026-08-06h"></script>
+<script src="js/kanban-board.js?v=2026-08-06h"></script>
+<script src="js/clientes-hub.js?v=2026-08-06h"></script>
+<script src="js/chat-comentarios.js?v=2026-08-06h"></script>
+<script src="js/detalhe-modal.js?v=2026-08-06h"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-06h"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-06h"></script>
+<script src="js/bee.js?v=2026-08-06h"></script>
+<script src="js/paginas-designers.js?v=2026-08-06h"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-06h"></script>
+<script src="js/pagina-repasse.js?v=2026-08-06h"></script>
+<script src="js/pagina-horas.js?v=2026-08-06h"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-06h"></script>
+<script src="js/paleta-comando.js?v=2026-08-06h"></script>
+<script src="js/roteador-url.js?v=2026-08-06h"></script>
+<script src="js/detalhe-historia.js?v=2026-08-06h"></script>
+<script src="js/modo-foco.js?v=2026-08-06h"></script>
+<script src="js/pagina-bee.js?v=2026-08-06h"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-06h"></script>
+<script src="js/central-atendimento.js?v=2026-08-06h"></script>
+<script src="js/login-boot.js?v=2026-08-06h"></script>
 </body>
 </html>

@@ -1,0 +1,240 @@
+/* -------------------------------------------------------------------
+   Central do Atendimento (2026-08-06) — área SEPARADA do resto do
+   Colmeia (ver o comentário grande em cima de #centralAtendimento no
+   index.html): tem a própria sidebar e a própria barra do topo, no
+   MESMO desenho visual do resto do app (reaproveita as variáveis de
+   cor/sombra/raio já definidas em css/01-base.css — inclusive o tema
+   escuro, automático via [data-theme="dark"] sem precisar redefinir
+   nada aqui), mas nunca aparece junto com o quadro/sidebar normal.
+
+   Prefixo `central-` em TODA classe daqui — sem isso, nomes genéricos
+   (".chip", ".client-card") colidiriam com classes que já existem em
+   outras páginas (ex: .client-card já é da grade "Meus clientes" dos
+   designers, css/01-base.css) e mudariam a aparência delas também.
+   ------------------------------------------------------------------- */
+
+.central-overlay {
+  /* z-index 50: alto o bastante pra cobrir o quadro/sidebar normal (que não
+     têm z-index próprio), mas ABAIXO da pilha da conferência de aprovação
+     (.apv-conferencia = 120, .apv-confirma-fundo = 700) — a Central abre a
+     MESMA tela de conferência que já existe (ver centralAbrirConferencia,
+     js/central-atendimento.js), então ela precisa continuar desenhando por
+     cima quando chamada de dentro daqui. */
+  position: fixed; inset: 0; z-index: 50;
+  display: none;
+  background: var(--page-bg);
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  /* --success-soft não existe em css/01-base.css (só --success) — mesmo
+     caso já resolvido em css/06-aprovacao.css (.apv-area): define uma vez
+     só aqui, escopado neste componente, nos dois temas. */
+  --central-sucesso-suave: rgba(34, 176, 125, 0.12);
+}
+[data-theme="dark"] .central-overlay { --central-sucesso-suave: rgba(95, 224, 174, 0.14); }
+.central-overlay:not([hidden]) { display: flex; gap: 14px; padding: 14px; }
+
+/* ===== Sidebar própria — MESMO comportamento da sidebar normal do
+   Colmeia (colapsada, expande no hover), copiado de propósito: é a
+   linguagem visual que já existe, não uma nova. ===== */
+.central-sidebar {
+  width: 64px; border-radius: 20px; display: flex; flex-direction: column;
+  align-items: stretch; gap: 14px; padding: 18px 10px; flex-shrink: 0;
+  overflow: hidden; transition: width var(--dur-base) var(--ease-apple);
+}
+.central-sidebar:hover {
+  width: 226px; background: var(--sidebar-bg); border: 1px solid var(--border);
+  box-shadow: var(--shadow-sidebar);
+}
+.central-sidebar-logo { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 2px; flex-shrink: 0; }
+.central-sidebar-logo svg { width: 26px; height: 26px; flex-shrink: 0; }
+.central-sidebar-logo-txt {
+  font-size: 15px; font-weight: 700; white-space: nowrap; opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-apple);
+}
+.central-sidebar:hover .central-sidebar-logo-txt { opacity: 1; transition-delay: 0.08s; }
+
+.central-sidebar-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; margin-top: 6px; }
+.central-nav-ic {
+  width: 100%; height: 40px; display: flex; align-items: center; gap: 10px;
+  color: var(--text-secondary); white-space: nowrap; background: none; border: none;
+  padding: 0; transition: color var(--dur-fast) var(--ease-apple); text-align: left; font-family: inherit;
+}
+.central-nav-ic:hover { color: var(--text-primary); }
+.central-nav-icon-circle {
+  width: 40px; height: 40px; min-width: 40px; border-radius: 50%; background: var(--page-bg);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-nav-icon-circle svg { width: 19px; height: 19px; flex-shrink: 0; }
+.central-nav-ic:hover .central-nav-icon-circle { background: var(--border); color: var(--text-primary); }
+.central-nav-ic.active .central-nav-icon-circle { background: var(--kanban-yellow); color: #16181D; }
+.central-nav-badge {
+  position: absolute; top: -3px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--sidebar-bg);
+}
+.central-nav-badge[hidden] { display: none; }
+.central-nav-label { font-size: 13.5px; font-weight: 500; opacity: 0; transition: opacity var(--dur-fast) var(--ease-apple); }
+.central-sidebar:hover .central-nav-label { opacity: 1; transition-delay: 0.08s; }
+
+.central-sidebar-profile {
+  margin-top: auto; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 2px; flex-shrink: 0;
+}
+.central-sidebar-avatar {
+  width: 32px; height: 32px; min-width: 32px; border-radius: 50%; background: var(--accent);
+  color: #fff; font-family: var(--font-display); font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.central-sidebar-profile-name {
+  font-size: 13px; font-weight: 600; opacity: 0; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; transition: opacity var(--dur-fast) var(--ease-apple);
+}
+.central-sidebar:hover .central-sidebar-profile-name { opacity: 1; transition-delay: 0.08s; }
+
+.central-sidebar-voltar,
+.central-sidebar-logout {
+  border: none; background: none; color: var(--text-muted); font-size: 12px; font-weight: 600;
+  text-align: left; padding: 4px 2px; opacity: 0; white-space: nowrap; font-family: inherit;
+  transition: opacity var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-sidebar:hover .central-sidebar-voltar,
+.central-sidebar:hover .central-sidebar-logout { opacity: 1; transition-delay: 0.08s; }
+.central-sidebar-voltar:hover,
+.central-sidebar-logout:hover { color: var(--danger); }
+.central-sidebar-voltar[hidden] { display: none; }
+
+/* ===== Main: barra preta + conteúdo ===== */
+.central-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+
+.central-topbar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 16px;
+  background: #14151A; border-radius: 999px; padding: 10px 12px 10px 26px;
+}
+[data-theme="dark"] .central-topbar { background: #0A0A0D; }
+.central-topbar-title {
+  font-family: var(--font-display); font-size: 22px; font-weight: 400; color: #fff;
+  white-space: nowrap; flex-shrink: 0; margin: 0;
+}
+.central-date-pill {
+  display: flex; align-items: center; gap: 8px; background: #24252C; color: #fff;
+  border-radius: 999px; padding: 9px 16px; font-size: 12.5px; font-weight: 600; white-space: nowrap; flex-shrink: 0;
+}
+.central-date-pill svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.central-content { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.central-tab { display: flex; flex-direction: column; gap: 22px; }
+.central-tab[hidden] { display: none; }
+
+.central-vazio-inline {
+  font-size: 13px; color: var(--text-muted); padding: 40px 0; text-align: center;
+}
+
+/* ===== Seções por estado (aba Hoje) ===== */
+.central-section { display: flex; flex-direction: column; gap: 10px; }
+.central-section-head { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; background: none; border: none; padding: 0; width: 100%; font-family: inherit; color: inherit; }
+.central-section-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.central-section-dot.neutro { background: var(--text-muted); }
+.central-section-dot.ambar { background: var(--warning); }
+.central-section-dot.verde { background: var(--success); }
+.central-section-title { font-size: 14.5px; font-weight: 700; }
+.central-section-count {
+  font-size: 11.5px; font-weight: 700; color: var(--text-secondary); background: var(--card-bg);
+  border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; font-variant-numeric: tabular-nums;
+}
+.central-section-caret { margin-left: auto; color: var(--text-muted); transition: transform var(--dur-fast) var(--ease-apple); display: flex; }
+.central-section-caret svg { width: 14px; height: 14px; display: block; }
+.central-section.colapsada .central-section-caret { transform: rotate(-90deg); }
+.central-section.colapsada .central-section-body { display: none; }
+.central-section-body { display: flex; flex-direction: column; gap: 8px; }
+
+/* ===== Linha de item ===== */
+.central-item {
+  display: flex; align-items: center; gap: 14px; background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 12px 14px; box-shadow: var(--shadow-card); text-align: left;
+  transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
+}
+.central-item-clicavel { cursor: pointer; }
+.central-item-clicavel:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.central-item-thumb {
+  width: 40px; height: 40px; border-radius: 10px; background: var(--page-bg); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 16px; overflow: hidden;
+}
+.central-item-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.central-item-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.central-item-cliente { font-size: 13.5px; font-weight: 700; }
+.central-item-peca { font-size: 12.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.central-item-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.central-chip {
+  font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.central-chip-neutro { background: var(--page-bg); color: var(--text-secondary); }
+.central-chip-ambar { background: var(--warning-soft); color: #9A6400; }
+.central-chip-verde { background: var(--central-sucesso-suave); color: #0F7A54; }
+.central-chip-vermelho { background: var(--danger-soft); color: #B23238; }
+[data-theme="dark"] .central-chip-ambar { color: var(--warning); }
+[data-theme="dark"] .central-chip-verde { color: var(--success); }
+[data-theme="dark"] .central-chip-vermelho { color: var(--danger); }
+
+.central-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.central-act-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: var(--page-bg);
+  display: flex; align-items: center; justify-content: center; color: var(--text-secondary);
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-act-btn svg { width: 14px; height: 14px; }
+.central-act-btn.aprovar:hover { background: var(--central-sucesso-suave); color: var(--success); border-color: transparent; }
+.central-act-btn.ajuste:hover { background: var(--warning-soft); color: #9A6400; border-color: transparent; }
+.central-act-btn.cobrar:hover { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+.central-section-empty {
+  font-size: 12.5px; color: var(--text-muted); padding: 10px 14px; background: var(--card-bg);
+  border: 1px dashed var(--border); border-radius: var(--radius-md);
+}
+
+/* ===== Aba Radar de clientes ===== */
+.central-clients-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.central-client-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px;
+  box-shadow: var(--shadow-card); display: flex; flex-direction: column; gap: 10px;
+}
+.central-client-top { display: flex; align-items: center; gap: 10px; }
+.central-client-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.central-client-dot.ok { background: var(--text-muted); }
+.central-client-dot.ambar { background: var(--warning); }
+.central-client-name { font-size: 14.5px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.central-client-stats { display: flex; gap: 14px; }
+.central-client-stat { display: flex; flex-direction: column; gap: 1px; }
+.central-client-stat b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.central-client-stat span { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.central-client-flag {
+  font-size: 11.5px; font-weight: 600; color: #9A6400; background: var(--warning-soft);
+  border-radius: 8px; padding: 6px 10px;
+}
+[data-theme="dark"] .central-client-flag { color: var(--warning); }
+
+/* ===== Aba Aprovações — 4 colunas por estado ===== */
+.central-approvals-cols { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; align-items: start; }
+.central-approvals-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.central-approvals-col-head { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+.central-approvals-col-title { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); }
+.central-approvals-col-count { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 1180px) { .central-approvals-cols { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+/* Coluna estreita: o item de fila (normalmente numa fileira larga, no feed
+   "Hoje") não cabe em linha única aqui — empilha em vez de espremer. */
+.central-approvals-col .central-item {
+  flex-direction: column; align-items: flex-start; gap: 8px;
+}
+.central-approvals-col .central-item-meta { flex-wrap: wrap; }
+.central-approvals-col .central-item-peca { white-space: normal; }
+
+/* ===== Aba Cobranças ===== */
+.central-cobranca-texto {
+  font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); background: var(--page-bg);
+  border-radius: 10px; padding: 10px 12px; margin: 8px 0 0; white-space: pre-wrap;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+.central-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }

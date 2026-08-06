@@ -26,6 +26,17 @@ function iniciarAppPosLogin() {
   if (aprovacaoNav) aprovacaoNav.hidden = !podeConferir;
   if (podeConferir && typeof atualizarBadgeAprovacao === "function") atualizarBadgeAprovacao();
 
+  // A Central do Atendimento (2026-08-06) é uma área SEPARADA do resto do
+  // Colmeia — ver o comentário grande em cima de #centralAtendimento no
+  // index.html. O ícone pra abri-la (escondido por padrão) só aparece pro
+  // Cláudio, que cobre/testa; quem tem papel "atendimento" nem precisa
+  // dele — cai direto lá embaixo, sem ver o quadro/sidebar normal.
+  const centralNav = document.getElementById("centralAtendimentoNavBtn");
+  if (centralNav) centralNav.hidden = !souClaudio();
+  if (PAPEL_LOGADO === "atendimento" && typeof abrirCentralAtendimento === "function") {
+    abrirCentralAtendimento();
+  }
+
   // Desenha na hora a última foto do quadro guardada nesse navegador (ver
   // restaurarSnapshotDoQuadro, js/pessoas-fotos.js) — assim o quadro
   // aparece instantâneo em vez de esperar o Apps Script "acordar" com a
