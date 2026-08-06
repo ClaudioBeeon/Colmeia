@@ -140,7 +140,7 @@ function centralTrocarAba(aba) {
   document.querySelectorAll(".central-nav-ic[data-central-tab]").forEach(b => {
     b.classList.toggle("active", b.dataset.centralTab === aba);
   });
-  ["hoje", "clientes", "aprovacoes", "cobrancas"].forEach(nome => {
+  ["hoje", "clientes", "aprovacoes", "cobrancas", "metricas"].forEach(nome => {
     const el = document.getElementById("centralTab" + nome.charAt(0).toUpperCase() + nome.slice(1));
     if (el) el.hidden = nome !== aba;
   });
@@ -168,6 +168,7 @@ function centralRenderTudo() {
   centralRenderClientes();
   centralRenderAprovacoes();
   centralRenderCobrancas();
+  centralRenderMetricas();
   centralAtualizarBadges();
 }
 
@@ -510,4 +511,261 @@ function centralAtualizarBadges() {
     badgeCobr.textContent = cobrancas > 99 ? "99+" : String(cobrancas);
     badgeCobr.hidden = cobrancas === 0;
   }
+}
+
+// ---------------------------------------------------------------------------
+// ABA: MINHAS MÉTRICAS — mesma composição visual de "Minhas horas" (o
+// painel do designer), reaproveitando as classes hr-* (css/04-paginas.css)
+// com dado de peças/aprovações no lugar de horas. Ver o markup em
+// index.html (#centralTabMetricas) pro porquê dos ids com prefixo `cm`.
+// Nada aqui busca nada no backend — tudo em cima de centralFilaCache/
+// centralAprovacoesCache, já filtrados por centralClienteEhDoLogado.
+// ---------------------------------------------------------------------------
+
+const CENTRAL_DIAS_CURTOS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+/** Segunda-feira da semana de hoje (mesma regra de segundaDaSemana, js/pagina-horas.js). */
+function centralSegundaDaSemana() {
+  const d = new Date();
+  const diaDaSemana = d.getDay();
+  const recuo = diaDaSemana === 0 ? 6 : diaDaSemana - 1;
+  d.setDate(d.getDate() - recuo);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** As aprovações que valem pra ESTA pessoa (mesmo filtro do resto da Central). */
+function centralMinhasAprovacoes() {
+  return centralAprovacoesCache.filter(a => centralClienteEhDoLogado(a.cliente));
+}
+
+function centralRenderMetricas() {
+  const pagina = document.getElementById("centralTabMetricas");
+  if (!pagina) return;
+
+  const titulo = document.getElementById("cmTitulo");
+  const souCoord = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+  const nomeExibido = (souCoord && centralFiltroPessoa) ? centralFiltroPessoa : (DESIGNER_LOGADO || "");
+  if (titulo) titulo.textContent = `Suas métricas${nomeExibido ? ", " + nomeExibido : ""}`;
+
+  const itens = centralMinhasAprovacoes();
+
+  centralRenderFotoMetricas(nomeExibido);
+  centralRenderMetricasTopo(itens);
+  centralRenderProgSemana(itens);
+  centralRenderAnelAprovacaoDireta(itens);
+  centralRenderSemanaMetricas(itens);
+  centralRenderAprovadasRecentes(itens);
+  centralRenderAtividadeRecente(itens);
+  centralRenderClientesEspera(itens);
+}
+
+function centralRenderFotoMetricas(nome) {
+  const img = document.getElementById("cmFotoImg");
+  const nomeEl = document.getElementById("cmFotoNome");
+  const papel = document.getElementById("cmFotoPapel");
+  const valor = document.getElementById("cmFotoValor");
+  if (!img) return;
+
+  // Mesma cadeia de foto que o resto do app já usa pro atendimento — ver
+  // avatarAtendimentoHTML, js/pessoas-fotos.js.
+  const foto = (typeof resolverFotoManual === "function" && resolverFotoManual(nome))
+    || (typeof fotoDoAtendimento === "function" && fotoDoAtendimento(nome))
+    || (typeof fotoDoDesigner === "function" && fotoDoDesigner(nome));
+  if (foto) {
+    img.style.backgroundImage = `url("${foto}")`;
+    img.classList.remove("sem-foto");
+    img.textContent = "";
+  } else {
+    img.style.backgroundImage = "";
+    img.classList.add("sem-foto");
+    img.textContent = typeof initials === "function" ? initials(nome) : "";
+  }
+  if (nomeEl) nomeEl.textContent = nome || "";
+  if (papel) {
+    const souCoord = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+    papel.textContent = souCoord ? "Coordenador" : "Atendimento";
+  }
+
+  const clientes = new Set(centralMinhasAprovacoes().map(a => normalizarParaComparar(a.cliente || "")).filter(Boolean));
+  if (valor) valor.textContent = clientes.size ? `${clientes.size} cliente${clientes.size > 1 ? "s" : ""}` : "—";
+}
+
+function centralRenderMetricasTopo(itens) {
+  const alvo = document.getElementById("cmMetricas");
+  if (!alvo) return;
+
+  const seteDiasAtras = Date.now() - 7 * 86400000;
+  const resolvidasSemana = itens.filter(a => a.status !== "pendente" && Number(a.respondidoEm) >= seteDiasAtras).length;
+  const aguardando = itens.filter(a => (a.status || "pendente") === "pendente").length;
+
+  const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+  const doMes = itens.filter(a => a.status !== "pendente" && Number(a.respondidoEm) >= inicioMes.getTime());
+  const aprovadasMes = doMes.filter(a => a.status === "aprovado").length;
+  const pctDireto = doMes.length ? Math.round((aprovadasMes / doMes.length) * 100) : null;
+
+  const icRelogio = `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+  const icCheck = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5L20 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const icAlerta = `<svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>`;
+
+  alvo.innerHTML = `
+    <div class="hr-metrica"><b>${resolvidasSemana}</b><span>${icRelogio} Resolvidas esta semana</span></div>
+    <div class="hr-metrica"><b>${pctDireto === null ? "—" : pctDireto + "%"}</b><span>${icCheck} Aprovadas sem ajuste</span></div>
+    <div class="hr-metrica"><b>${aguardando}</b><span>${icAlerta} Aguardando resposta</span></div>
+  `;
+}
+
+/** Quantas peças foram RESPONDIDAS (aprovado/ajuste) em cada dia desta semana. */
+function centralContagemPorDiaDaSemana(itens) {
+  const segunda = centralSegundaDaSemana();
+  const contagem = [0, 0, 0, 0, 0, 0, 0];
+  itens.forEach(a => {
+    if ((a.status || "pendente") === "pendente" || !a.respondidoEm) return;
+    const dias = Math.floor((Number(a.respondidoEm) - segunda.getTime()) / 86400000);
+    if (dias >= 0 && dias < 7) contagem[dias]++;
+  });
+  return contagem;
+}
+
+function centralRenderProgSemana(itens) {
+  const graf = document.getElementById("cmProgGraf");
+  const total = document.getElementById("cmProgTotal");
+  if (!graf) return;
+
+  const contagem = centralContagemPorDiaDaSemana(itens);
+  const soma = contagem.reduce((s, n) => s + n, 0);
+  if (total) total.textContent = String(soma);
+
+  const teto = Math.max(1, ...contagem);
+  const hojeIdx = (centralSegundaDaSemana().getDay() === 0) ? 6 : new Date().getDay() - 1;
+
+  graf.innerHTML = contagem.map((n, i) => {
+    const ehHoje = i === hojeIdx;
+    const altura = n === 0 ? 2 : Math.max(4, Math.round((n / teto) * 100));
+    return `
+      <span class="hr-prog-dia" title="${CENTRAL_DIAS_CURTOS[i]}: ${n}">
+        <span class="hr-prog-tip">${n}</span>
+        <span class="hr-prog-trilho"><span class="hr-prog-barra ${ehHoje ? "hoje" : ""}" style="height:${altura}%"></span></span>
+        <span class="hr-prog-rot ${ehHoje ? "hoje" : ""}">${CENTRAL_DIAS_CURTOS[i][0]}</span>
+      </span>
+    `;
+  }).join("");
+}
+
+function centralRenderAnelAprovacaoDireta(itens) {
+  const pctEl = document.getElementById("cmAnelPct");
+  const arco = document.getElementById("cmAnelArco");
+  if (!pctEl || !arco) return;
+
+  const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+  const doMes = itens.filter(a => a.status !== "pendente" && Number(a.respondidoEm) >= inicioMes.getTime());
+  const aprovadas = doMes.filter(a => a.status === "aprovado").length;
+  const pct = doMes.length ? aprovadas / doMes.length : null;
+
+  pctEl.textContent = pct === null ? "—" : Math.round(pct * 100) + "%";
+  const volta = 351.9;
+  arco.setAttribute("stroke-dashoffset", String(volta - volta * (pct || 0)));
+}
+
+function centralRenderSemanaMetricas(itens) {
+  const rots = document.getElementById("cmSemanaRots");
+  const barra = document.getElementById("cmSemanaBarra");
+  const pctEl = document.getElementById("cmSemanaPct");
+  if (!rots || !barra) return;
+
+  const hojeIdx = (centralSegundaDaSemana().getDay() === 0) ? 6 : new Date().getDay() - 1;
+  rots.innerHTML = CENTRAL_DIAS_CURTOS.map((nome, i) => `<span class="${i === hojeIdx ? "hoje" : ""}">${nome}</span>`).join("");
+
+  const contagem = centralContagemPorDiaDaSemana(itens);
+  barra.innerHTML = contagem.map((n, i) => {
+    const classe = i === hojeIdx ? "hoje" : (n > 0 ? "cheia" : "");
+    return `<span class="hr-semana-seg ${classe}">${n || "·"}</span>`;
+  }).join("");
+
+  const seteDiasAtras = Date.now() - 7 * 86400000;
+  const daSemana = itens.filter(a => a.status !== "pendente" && Number(a.respondidoEm) >= seteDiasAtras);
+  const aprovadasSemana = daSemana.filter(a => a.status === "aprovado").length;
+  if (pctEl) pctEl.textContent = daSemana.length ? Math.round((aprovadasSemana / daSemana.length) * 100) + "%" : "—";
+}
+
+function centralRenderAprovadasRecentes(itens) {
+  const alvo = document.getElementById("cmAprovadasRecentes");
+  if (!alvo) return;
+
+  const recentes = itens.filter(a => a.status === "aprovado" && a.respondidoEm)
+    .sort((a, b) => Number(b.respondidoEm) - Number(a.respondidoEm))
+    .slice(0, 8);
+
+  if (!recentes.length) {
+    alvo.innerHTML = `<p class="hr-esc-vazio">Nenhuma aprovação ainda.</p>`;
+    return;
+  }
+  alvo.innerHTML = recentes.map(a => centralMetricaItemHTML(a, true)).join("");
+}
+
+function centralRenderAtividadeRecente(itens) {
+  const alvo = document.getElementById("cmAtividadeRecente");
+  if (!alvo) return;
+
+  // De propósito só "voltou com ajuste" aqui — a lista escura ao lado já
+  // mostra as aprovadas; misturar as duas de novo seria repetir a mesma
+  // informação duas vezes na mesma tela.
+  const recentes = itens.filter(a => a.status === "ajuste" && a.respondidoEm)
+    .sort((a, b) => Number(b.respondidoEm) - Number(a.respondidoEm))
+    .slice(0, 8);
+
+  if (!recentes.length) {
+    alvo.innerHTML = `<p class="hr-vazio">Nenhum ajuste pedido recentemente.</p>`;
+    return;
+  }
+  alvo.innerHTML = recentes.map(a => centralMetricaItemHTML(a, false)).join("");
+}
+
+const CENTRAL_ICONE_AJUSTE = `<svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const CENTRAL_ICONE_APROVADO = `<svg viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5l5 5 10-11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function centralMetricaItemHTML(a, escuro) {
+  const quando = a.respondidoEm
+    ? new Date(Number(a.respondidoEm)).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+      + " · " + new Date(Number(a.respondidoEm)).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  const nomeCls = escuro ? "hr-esc-nome" : "hr-ativ-nome";
+  const subCls = escuro ? "hr-esc-sub" : "hr-ativ-sub";
+  const icCls = escuro ? "hr-esc-ic" : "hr-ativ-ic";
+  const itemCls = escuro ? "hr-esc-item" : "hr-ativ-item";
+  return `
+    <div class="${itemCls}">
+      <span class="${icCls}">${a.status === "aprovado" ? CENTRAL_ICONE_APROVADO : CENTRAL_ICONE_AJUSTE}</span>
+      <span class="${escuro ? "hr-esc-txt" : "hr-ativ-txt"}">
+        <span class="${nomeCls}">${escaparHTML(a.tituloTarefa || a.nomeArquivo || "")}</span>
+        <span class="${subCls}">${escaparHTML(a.cliente || "")}${quando ? " · " + quando : ""}</span>
+      </span>
+    </div>
+  `;
+}
+
+function centralRenderClientesEspera(itens) {
+  const alvo = document.getElementById("cmClientesEspera");
+  if (!alvo) return;
+
+  const porCliente = {};
+  itens.filter(a => (a.status || "pendente") === "pendente").forEach(a => {
+    const nome = a.cliente || "Sem cliente";
+    const dias = Math.floor((Date.now() - (Number(a.criadoEm) || 0)) / 86400000);
+    if (!porCliente[nome] || dias > porCliente[nome]) porCliente[nome] = dias;
+  });
+
+  const nomes = Object.keys(porCliente).sort((a, b) => porCliente[b] - porCliente[a]).slice(0, 5);
+  if (!nomes.length) {
+    alvo.innerHTML = `<p class="hr-vazio">Ninguém esperando resposta agora. 🎉</p>`;
+    return;
+  }
+  alvo.innerHTML = nomes.map(nome => `
+    <div class="hr-ativ-item">
+      <span class="hr-ativ-txt">
+        <span class="hr-ativ-nome">${escaparHTML(nome)}</span>
+        <span class="hr-ativ-sub">esperando há ${porCliente[nome]} dia${porCliente[nome] === 1 ? "" : "s"}</span>
+      </span>
+    </div>
+  `).join("");
 }

@@ -13,13 +13,13 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-06j">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06j">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06j">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06j">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06j">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06j">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-06j">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-06k">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06k">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06k">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06k">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06k">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06k">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-06k">
 </head>
 <body>
 
@@ -1264,6 +1264,10 @@
         </span>
         <span class="central-nav-label">Cobranças</span>
       </button>
+      <button type="button" class="central-nav-ic" data-central-tab="metricas">
+        <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10M12 20V4M20 20v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="central-nav-label">Minhas métricas</span>
+      </button>
     </nav>
     <div class="central-sidebar-profile">
       <span class="central-sidebar-avatar" id="centralAvatarIniciais"></span>
@@ -1314,6 +1318,99 @@
         <div class="central-vazio-inline">Carregando...</div>
       </section>
 
+      <!-- "Minhas métricas" (2026-08-06) — mesma composição visual de
+           "Minhas horas" (page-horas, o painel do designer: grade de 4
+           colunas, cartão de foto, gráfico de barras, anel, lista escura),
+           reaproveitando as MESMAS classes CSS (hr-*, css/04-paginas.css)
+           — só o conteúdo troca: em vez de horas trabalhadas, é peças e
+           aprovações. IDs com prefixo `cm` (Central Métricas) pra não
+           colidir com os ids de verdade de #page-horas, que convivem no
+           mesmo documento. Tudo calculado em cima do que a Central já tem
+           em cache (centralFilaCache/centralAprovacoesCache) — nenhuma
+           busca nova ao backend. Ver renderCentralMetricas, js/central-atendimento.js. -->
+      <section class="central-tab" id="centralTabMetricas" hidden>
+        <div class="hr-conteudo">
+          <div class="hr-titulo-linha">
+            <div class="hr-titulo-esq">
+              <h2 class="hr-h1" id="cmTitulo">Suas métricas</h2>
+            </div>
+            <div class="hr-metricas" id="cmMetricas"></div>
+          </div>
+
+          <div class="hr-grade">
+            <section class="hr-card hr-foto" id="cmFotoCard">
+              <div class="hr-foto-img" id="cmFotoImg"></div>
+              <div class="hr-foto-sombra"></div>
+              <div class="hr-foto-info">
+                <b id="cmFotoNome"></b>
+                <span id="cmFotoPapel"></span>
+              </div>
+              <div class="hr-foto-valor" id="cmFotoValor"></div>
+            </section>
+
+            <section class="hr-card hr-prog">
+              <div class="hr-card-cab">
+                <span class="hr-card-titulo">Resolvidas na semana</span>
+              </div>
+              <div class="hr-prog-num">
+                <b id="cmProgTotal">—</b>
+                <span>peças decididas esta semana</span>
+              </div>
+              <div class="hr-prog-graf" id="cmProgGraf"></div>
+            </section>
+
+            <section class="hr-card hr-track">
+              <div class="hr-card-cab">
+                <span class="hr-card-titulo">Aprovação direta</span>
+              </div>
+              <div class="hr-anel">
+                <svg viewBox="0 0 132 132" width="132" height="132">
+                  <circle cx="66" cy="66" r="56" fill="none" stroke="var(--border)" stroke-width="11" stroke-dasharray="1.5 5.5" stroke-linecap="round"/>
+                  <circle id="cmAnelArco" cx="66" cy="66" r="56" fill="none" stroke="var(--kanban-yellow)" stroke-width="11" stroke-linecap="round"
+                    stroke-dasharray="351.9" stroke-dashoffset="351.9" transform="rotate(-90 66 66)"/>
+                </svg>
+                <div class="hr-anel-txt">
+                  <span class="hr-anel-horas" id="cmAnelPct">—</span>
+                  <span class="hr-anel-label">Aprovada sem<br>ajuste, este mês</span>
+                </div>
+              </div>
+            </section>
+
+            <div class="hr-col4">
+              <section class="hr-card hr-semana">
+                <div class="hr-card-cab">
+                  <span class="hr-card-titulo">Semana</span>
+                  <span class="hr-semana-pct" id="cmSemanaPct">—</span>
+                </div>
+                <div class="hr-semana-rots" id="cmSemanaRots"></div>
+                <div class="hr-semana-barra" id="cmSemanaBarra"></div>
+              </section>
+
+              <section class="hr-escuro">
+                <div class="hr-esc-cab">
+                  <span class="hr-esc-titulo">Aprovadas recentemente</span>
+                </div>
+                <div class="hr-esc-lista" id="cmAprovadasRecentes"></div>
+              </section>
+            </div>
+
+            <section class="hr-card hr-lista">
+              <div class="hr-card-cab">
+                <span class="hr-card-titulo">Atividade recente</span>
+              </div>
+              <div class="hr-ativ-lista" id="cmAtividadeRecente"></div>
+            </section>
+
+            <section class="hr-card hr-cal" id="cmClientesEsperaCard">
+              <div class="hr-card-cab">
+                <span class="hr-card-titulo">Quem está esperando há mais tempo</span>
+              </div>
+              <div class="hr-ativ-lista" id="cmClientesEspera"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
     </div>
   </div>
 </div>
@@ -1321,32 +1418,32 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-06j"></script>
-<script src="js/fila-offline.js?v=2026-08-06j"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-06j"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-06j"></script>
-<script src="js/kanban-polling.js?v=2026-08-06j"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-06j"></script>
-<script src="js/regras-briefing.js?v=2026-08-06j"></script>
-<script src="js/kanban-board.js?v=2026-08-06j"></script>
-<script src="js/clientes-hub.js?v=2026-08-06j"></script>
-<script src="js/chat-comentarios.js?v=2026-08-06j"></script>
-<script src="js/detalhe-modal.js?v=2026-08-06j"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-06j"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-06j"></script>
-<script src="js/bee.js?v=2026-08-06j"></script>
-<script src="js/paginas-designers.js?v=2026-08-06j"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-06j"></script>
-<script src="js/pagina-repasse.js?v=2026-08-06j"></script>
-<script src="js/pagina-horas.js?v=2026-08-06j"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-06j"></script>
-<script src="js/paleta-comando.js?v=2026-08-06j"></script>
-<script src="js/roteador-url.js?v=2026-08-06j"></script>
-<script src="js/detalhe-historia.js?v=2026-08-06j"></script>
-<script src="js/modo-foco.js?v=2026-08-06j"></script>
-<script src="js/pagina-bee.js?v=2026-08-06j"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-06j"></script>
-<script src="js/central-atendimento.js?v=2026-08-06j"></script>
-<script src="js/login-boot.js?v=2026-08-06j"></script>
+<script src="js/config.js?v=2026-08-06k"></script>
+<script src="js/fila-offline.js?v=2026-08-06k"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-06k"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-06k"></script>
+<script src="js/kanban-polling.js?v=2026-08-06k"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-06k"></script>
+<script src="js/regras-briefing.js?v=2026-08-06k"></script>
+<script src="js/kanban-board.js?v=2026-08-06k"></script>
+<script src="js/clientes-hub.js?v=2026-08-06k"></script>
+<script src="js/chat-comentarios.js?v=2026-08-06k"></script>
+<script src="js/detalhe-modal.js?v=2026-08-06k"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-06k"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-06k"></script>
+<script src="js/bee.js?v=2026-08-06k"></script>
+<script src="js/paginas-designers.js?v=2026-08-06k"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-06k"></script>
+<script src="js/pagina-repasse.js?v=2026-08-06k"></script>
+<script src="js/pagina-horas.js?v=2026-08-06k"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-06k"></script>
+<script src="js/paleta-comando.js?v=2026-08-06k"></script>
+<script src="js/roteador-url.js?v=2026-08-06k"></script>
+<script src="js/detalhe-historia.js?v=2026-08-06k"></script>
+<script src="js/modo-foco.js?v=2026-08-06k"></script>
+<script src="js/pagina-bee.js?v=2026-08-06k"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-06k"></script>
+<script src="js/central-atendimento.js?v=2026-08-06k"></script>
+<script src="js/login-boot.js?v=2026-08-06k"></script>
 </body>
 </html>
