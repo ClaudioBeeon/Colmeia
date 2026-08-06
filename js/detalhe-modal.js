@@ -1977,7 +1977,32 @@ wireArrastarArquivoParaCard();
  */
 async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
   if (!task || !task.id) return;
-  const original = btn.textContent;
+  const original = btn.dataset.textoOriginal || btn.textContent;
+  btn.dataset.textoOriginal = original;
+  btn.disabled = true;
+  btn.textContent = "Verificando...";
+
+  // Pedido do Cláudio (2026-08-06): "tem vários teste que fiz e continuam
+  // ali, cada um com link da mesma tarefa" — antes de sair gerando outro
+  // link, checa se já existe algum pra essa tarefa e deixa a pessoa
+  // escolher (copiar o que já tem, excluir um específico, ou excluir tudo
+  // e gerar um link novo do zero).
+  const dataLinks = await chamarBackend({ acao: "listarLinksDaTarefa", taskId: task.id });
+  const linksExistentes = (dataLinks && dataLinks.ok) ? (dataLinks.links || []) : [];
+
+  btn.disabled = false;
+  btn.textContent = original;
+
+  if (linksExistentes.length) {
+    abrirLinksExistentesDeAprovacao(task, btn, linksExistentes);
+    return;
+  }
+
+  await prosseguirGerandoLinkDeAprovacao(task, btn);
+}
+
+async function prosseguirGerandoLinkDeAprovacao(task, btn) {
+  const original = btn.dataset.textoOriginal || btn.textContent;
   btn.disabled = true;
   btn.textContent = "Procurando peças...";
 
@@ -2000,6 +2025,90 @@ async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
     return;
   }
   abrirEscolhaDePeca(task, btn, pecas);
+}
+
+/**
+ * "Já existe link pra essa tarefa" — mostrado ANTES de gerar um novo (ver
+ * gerarLinkDeAprovacaoParaTarefa). Cada linha tem copiar/excluir; o botão
+ * de baixo excluiu TODOS os listados e cai no fluxo normal de gerar um
+ * link novo do zero (listarPecasDaPastaDoCard).
+ */
+function abrirLinksExistentesDeAprovacao(task, btn, links) {
+  const STATUS_TXT = { pendente: "⏳ aguardando", aprovado: "✅ aprovado", ajuste: "✏️ ajuste" };
+  document.getElementById("pecasEscolhaMenu")?.remove();
+  const rect = btn.getBoundingClientRect();
+  const menu = document.createElement("div");
+  menu.id = "pecasEscolhaMenu";
+  menu.className = "pecas-escolha-menu";
+  menu.style.top = Math.round(rect.bottom + 6) + "px";
+  menu.style.left = Math.round(Math.max(8, rect.right - 260)) + "px";
+  menu.style.minWidth = "260px";
+
+  const base = new URL(".", location.href).href;
+
+  menu.innerHTML = `
+    <div class="pecas-escolha-titulo">Já tem link${links.length > 1 ? "s" : ""} de aprovação pra essa tarefa</div>
+    ${links.map((l, i) => `
+      <div class="pecas-links-existentes-item" data-idx="${i}">
+        <span class="pecas-links-existentes-nome" title="${escaparHTML(l.nomeArquivo || "")}">${escaparHTML(l.nomeArquivo || "Peça")}</span>
+        <span class="pecas-links-existentes-status">${STATUS_TXT[l.status] || l.status}</span>
+        <button type="button" class="pecas-links-existentes-copiar" data-idx="${i}" title="Copiar link">🔗</button>
+        <button type="button" class="pecas-links-existentes-excluir" data-idx="${i}" title="Excluir este link">🗑️</button>
+      </div>
+    `).join("")}
+    <button type="button" class="pecas-escolha-confirmar" id="pecasLinkNovoOk">🔄 Excluir os antigos e gerar um novo</button>
+  `;
+  document.body.appendChild(menu);
+
+  menu.querySelectorAll(".pecas-links-existentes-copiar").forEach(b => {
+    b.addEventListener("click", async () => {
+      const url = base + "aprovar.html?codigo=" + links[Number(b.dataset.idx)].codigo;
+      try {
+        await navigator.clipboard.writeText(url);
+        mostrarToast("Link copiado.", "sucesso");
+      } catch (err) {
+        mostrarToast(`Link: ${url}`);
+      }
+    });
+  });
+
+  menu.querySelectorAll(".pecas-links-existentes-excluir").forEach(b => {
+    b.addEventListener("click", async () => {
+      if (!confirm("Excluir este link de aprovação? Não dá pra desfazer.")) return;
+      const l = links[Number(b.dataset.idx)];
+      const data = await chamarBackend({ acao: "excluirLinkDeAprovacao", codigo: l.codigo });
+      if (!data.ok) {
+        mostrarToast(data.error || "Não consegui excluir agora.", "erro");
+        return;
+      }
+      mostrarToast("Link excluído.", "sucesso");
+      menu.remove();
+      gerarLinkDeAprovacaoParaTarefa(task, btn);
+    });
+  });
+
+  menu.querySelector("#pecasLinkNovoOk").addEventListener("click", async () => {
+    menu.remove();
+    const original = btn.dataset.textoOriginal || btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Excluindo links antigos...";
+    for (const l of links) {
+      await chamarBackend({ acao: "excluirLinkDeAprovacao", codigo: l.codigo });
+    }
+    btn.disabled = false;
+    btn.textContent = original;
+    await prosseguirGerandoLinkDeAprovacao(task, btn);
+  });
+
+  setTimeout(() => {
+    const fecharSeForaDoMenu = e => {
+      if (menu.isConnected && !menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener("click", fecharSeForaDoMenu, true);
+      }
+    };
+    document.addEventListener("click", fecharSeForaDoMenu, true);
+  }, 0);
 }
 
 /**

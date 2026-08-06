@@ -1201,6 +1201,7 @@ function cardDeAprovacaoHTML(a) {
             ? `<button type="button" class="repasse-btn repasse-btn-ficar" data-acao="abrir">Abrir tarefa</button>
                <button type="button" class="repasse-btn" data-acao="copiar">🔗 novo link</button>`
             : `<button type="button" class="repasse-btn" data-acao="abrir">Abrir tarefa</button>`}
+        <button type="button" class="repasse-btn repasse-btn-icon repasse-btn-excluir" data-acao="excluir" title="Excluir este link de aprovação">🗑️</button>
       </div>
     </article>
   `;
@@ -1246,6 +1247,30 @@ function wireCardsDeAprovacao(board) {
           const titulo = card.querySelector(".repasse-card-title")?.textContent || "a peça";
           const texto = `Oi! Passando pra saber se conseguiu dar uma olhada em "${titulo}".\n\n${urlDeAprovacao(codigo)}`;
           window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+          return;
+        }
+
+        if (acao === "excluir") {
+          // Pedido do Cláudio (2026-08-06): links de teste ficavam
+          // acumulados sem jeito de tirar — este card é reaproveitado tanto
+          // na Fila de repasse (Colmeia) quanto na Central do Atendimento,
+          // então o botão vale nos dois lugares de uma vez.
+          if (!confirm("Excluir este link de aprovação? Não dá pra desfazer.")) return;
+          btn.disabled = true;
+          const data = await chamarBackend({ acao: "excluirLinkDeAprovacao", codigo });
+          if (!data.ok) {
+            mostrarToast(data.error || "Não consegui excluir agora.", "erro");
+            btn.disabled = false;
+            return;
+          }
+          mostrarToast("Link excluído.", "sucesso");
+          if (Array.isArray(aprovacoesCache)) aprovacoesCache = aprovacoesCache.filter(a => a.codigo !== codigo);
+          if (typeof centralAprovacoesCache !== "undefined" && Array.isArray(centralAprovacoesCache)) {
+            centralAprovacoesCache = centralAprovacoesCache.filter(a => a.codigo !== codigo);
+          }
+          card.remove();
+          atualizarBadgeAprovacoes();
+          if (typeof centralAtualizarBadges === "function") centralAtualizarBadges();
         }
       });
     });

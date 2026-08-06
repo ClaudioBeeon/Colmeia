@@ -869,6 +869,58 @@ function listarAprovacoesPendentes() {
   return { ok: true, aprovacoes: lista };
 }
 
+/**
+ * Exclui um link de aprovação (pedido do Cláudio, 2026-08-06: "tem vários
+ * teste que fiz e continuam ali"). Some a linha inteira da aba
+ * Aprovacoes — o código para de funcionar na hora. Não mexe no arquivo do
+ * Drive (continua liberado do jeito que já estava).
+ */
+function excluirLinkDeAprovacao(codigo) {
+  if (!codigo) return { ok: false, error: 'Código não informado.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getAprovacoesSheet();
+    var linhas = sheet.getDataRange().getValues();
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) === String(codigo)) {
+        sheet.deleteRow(i + 1);
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: 'Não encontrei esse link — pode já ter sido excluído.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Todos os links já gerados pra uma tarefa, qualquer status, mais recente
+ * primeiro. Usado por gerarLinkDeAprovacaoParaTarefa (front) pra avisar
+ * "já existe link pra essa tarefa" antes de gerar outro, oferecendo
+ * excluir os antigos e gerar de novo — em vez de só ir empilhando link
+ * a cada teste.
+ */
+function listarLinksDaTarefa(taskId) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var sheet = getAprovacoesSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var lista = [];
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][1]) !== String(taskId)) continue;
+    var obj = linhaParaObjetoDeAprovacao(linhas[i]);
+    lista.push({
+      codigo: obj.codigo,
+      nomeArquivo: obj.nomeArquivo,
+      status: obj.status || 'pendente',
+      criadoEm: obj.criadoEm,
+      quantasPecas: idsDaLinhaDeAprovacao(obj.fileId).length || 1
+    });
+  }
+  lista.sort(function (a, b) { return Number(b.criadoEm) - Number(a.criadoEm); });
+  return { ok: true, links: lista };
+}
+
 function acharLinhaDeAprovacao(codigo) {
   var sheet = getAprovacoesSheet();
   var linhas = sheet.getDataRange().getValues();

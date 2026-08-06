@@ -144,6 +144,7 @@ function renderAprovacoesDoClienteHTML(lista) {
           <span class="ch-aprov-status ${info.cls}">${info.texto}${a.quemAprovou ? ` · ${escaparHTML(a.quemAprovou)}` : ""}</span>
           <span class="ch-aprov-data">${dataTexto}</span>
           <button type="button" class="ch-aprov-copiar" data-codigo="${a.codigo}" title="Copiar link de novo">🔗</button>
+          <button type="button" class="ch-aprov-excluir" data-codigo="${a.codigo}" title="Excluir este link de aprovação">🗑️</button>
         </div>
       </div>
     `;
@@ -167,6 +168,23 @@ async function carregarAprovacoesNoHub(cliente) {
       } catch (err) {
         mostrarToast(`Link (não consegui copiar sozinho): ${url}`);
       }
+    });
+  });
+  // Excluir — pedido do Cláudio (2026-08-06): links de teste ficavam
+  // acumulados sem jeito de tirar. É definitivo (some da planilha, o
+  // código para de abrir), por isso confirma antes.
+  el.querySelectorAll(".ch-aprov-excluir").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Excluir este link de aprovação? Não dá pra desfazer.")) return;
+      btn.disabled = true;
+      const data = await chamarBackend({ acao: "excluirLinkDeAprovacao", codigo: btn.dataset.codigo });
+      if (!data.ok) {
+        mostrarToast(data.error || "Não consegui excluir agora.", "erro");
+        btn.disabled = false;
+        return;
+      }
+      mostrarToast("Link excluído.", "sucesso");
+      carregarAprovacoesNoHub(cliente);
     });
   });
 }

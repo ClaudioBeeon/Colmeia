@@ -290,6 +290,10 @@ function handleRequest(e, method) {
         output = listarPecasDaPastaDoCard(body.taskId);
       } else if (body.acao === 'gerarLinkDeAprovacao') {
         output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor, body.fileId);
+      } else if (body.acao === 'excluirLinkDeAprovacao') {
+        output = excluirLinkDeAprovacao(body.codigo);
+      } else if (body.acao === 'listarLinksDaTarefa') {
+        output = listarLinksDaTarefa(body.taskId);
       } else if (body.acao === 'pedirConferenciaInterna') {
         // Aprovação INTERNA do atendimento (AprovacaoInterna.gs) — o passo
         // ANTES de mandar pro cliente. Não confundir com as ações de
