@@ -160,7 +160,14 @@
 }
 .central-kanban-col { display: flex; flex-direction: column; min-width: 0; }
 .central-kanban-lista { display: flex; flex-direction: column; gap: 14px; }
-.central-kanban-card { width: 100%; text-align: left; cursor: pointer; }
+/* Mesmo problema do .central-stat-card logo abaixo: .task-card nasceu pra
+   um <div draggable>, não pra <button> — sem este reset, o navegador bota
+   borda/fundo/fonte próprios do botão por cima do estilo do card. */
+.central-kanban-card {
+  width: 100%; text-align: left; cursor: pointer;
+  border: none; margin: 0; font: inherit; font-family: var(--font-body); color: inherit;
+  -webkit-appearance: none; appearance: none;
+}
 
 /* Layout da aba Hoje: kanban à esquerda + cartões de número grande à
    direita (pedido do Cláudio, 2026-08-06 — "ficar tudo na vertical").
@@ -181,9 +188,17 @@
    semana" de Minhas Métricas: .hr-card > .hr-card-cab > .hr-card-titulo,
    depois .hr-prog-num (número grande + legenda), css/04-paginas.css. Só
    vira botão clicável por cima, sem CSS de tipografia própria — é pra
-   ficar indistinguível de um card de lá, não "parecido". */
+   ficar indistinguível de um card de lá, não "parecido".
+   IMPORTANTE: .hr-card sempre foi usado numa <section>, que não tem
+   estilo nativo nenhum — aqui virou um <button>, e o navegador bota
+   borda/fundo/fonte PRÓPRIOS num botão que .hr-card nunca precisou
+   anular antes. Sem esse reset explícito, sobra o stroke do botão por
+   cima do card (era o "stroke que não tem nada a ver com o Colmeia") e
+   o texto herda a fonte do sistema em vez da fonte do app. */
 .central-stat-card {
   cursor: pointer; text-align: left; width: 100%; display: block;
+  border: none; margin: 0; font: inherit; font-family: var(--font-body); color: inherit;
+  -webkit-appearance: none; appearance: none;
   transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
 }
 .central-stat-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
