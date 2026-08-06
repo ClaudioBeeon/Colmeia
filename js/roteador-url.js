@@ -74,6 +74,25 @@ const ROTEADOR_SLUGS_INVERSO = Object.fromEntries(
   Object.entries(ROTEADOR_SLUGS).map(([pagina, slug]) => [slug, pagina])
 );
 
+// Link por pessoa do atendimento (2026-08-06, pedido do Cláudio):
+// colmeia.beeon.com.br/Laura pula direto pro nome dela na tela de entrada
+// do atendimento — ainda pede o código na primeira vez nesse navegador
+// (é o que protege o link de ser usado por qualquer um), mas depois disso
+// nunca mais aparece nenhuma tela antes da Central (ver
+// chegouPorLinkDePessoaAtendimento/tentarEntrarPeloLinkDaPessoa,
+// js/login-boot.js).
+//
+// Lista PRECISA bater com RUNRUN_TOKENS_ATENDIMENTO (Código.gs) — são as
+// mesmas pessoas, só que aqui como "nome-na-url: Nome de verdade". Ao
+// adicionar alguém no time, adicionar aqui também.
+const ROTEADOR_SLUGS_PESSOA = {
+  laura: "Laura",
+  manu: "Manu",
+  giovanna: "Giovanna",
+  "joao-paulo": "João Paulo",
+  lucas: "Lucas",
+};
+
 // Ver explicação da trava no topo do arquivo.
 let roteadorReagindoAoHistorico = false;
 
@@ -147,6 +166,10 @@ function roteadorInterpretarRota() {
 
   const pagina = ROTEADOR_SLUGS_INVERSO[caminho];
   if (pagina) return { tipo: "pagina", pagina };
+
+  const pessoa = ROTEADOR_SLUGS_PESSOA[caminho.toLowerCase()];
+  if (pessoa) return { tipo: "pessoa", nome: pessoa };
+
   return { tipo: "kanban" };
 }
 

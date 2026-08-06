@@ -77,6 +77,12 @@ function fecharCentralAtendimento() {
   document.getElementById("centralAtendimento").hidden = true;
 }
 
+/** A Central está aberta na tela agora? Ver o gancho em carregarDadosPainelBeeon (js/notificacoes-uploads.js). */
+function centralAtendimentoAberta() {
+  const overlay = document.getElementById("centralAtendimento");
+  return !!overlay && !overlay.hidden;
+}
+
 let centralEventosLigados = false;
 function centralLigarEventosUmaVez() {
   if (centralEventosLigados) return;
@@ -111,6 +117,8 @@ async function centralCarregarDados() {
     (typeof carregarAprovacoesDoRepasse === "function") ? carregarAprovacoesDoRepasse() : null,
   ]);
 
+  // Guarda os dados CRUS — sem filtrar por cliente aqui (ver o porquê no
+  // comentário de centralClienteEhDoLogado, mais abaixo).
   if (!caiuARede(fila) && fila && fila.ok) centralFilaCache = fila.itens || [];
   if (aprovacoes !== null) centralAprovacoesCache = aprovacoes || [];
 
@@ -130,11 +138,42 @@ function centralRenderTudo() {
 // Helpers de dado — nada aqui busca nada, só recorta o que já está em cache.
 // ---------------------------------------------------------------------------
 
+// Cada atendimento vê só os PRÓPRIOS clientes (pedido do Cláudio,
+// 2026-08-06); o Cláudio continua vendo tudo, porque coordena todo mundo.
+// O filtro é aplicado AQUI, na LEITURA do cache (não guardado já filtrado
+// em centralFilaCache/centralAprovacoesCache) de propósito: painelBeeonData
+// (de onde vem o vínculo cliente→atendimento) busca em paralelo com a fila/
+// aprovações, e pode chegar DEPOIS. Se o filtro fosse aplicado só uma vez
+// na busca, a Central abriria mostrando tudo (sem vínculo carregado ainda)
+// e nunca corrigiria sozinha — filtrar na leitura faz o redesenho que vem
+// do gancho em carregarDadosPainelBeeon (js/notificacoes-uploads.js)
+// aplicar o filtro certo assim que o vínculo chegar.
 function centralFilaPor(status) {
-  return centralFilaCache.filter(it => it.status === status);
+  return centralFilaCache.filter(it => it.status === status && centralClienteEhDoLogado(it.cliente));
 }
 function centralAprovacoesPor(status) {
-  return centralAprovacoesCache.filter(a => (a.status || "pendente") === status);
+  return centralAprovacoesCache.filter(a => (a.status || "pendente") === status && centralClienteEhDoLogado(a.cliente));
+}
+
+/**
+ * Cláudio (coordenador) vê tudo; cada atendimento só vê os clientes dela.
+ * Reaproveita o MESMO vínculo cliente→atendimento que a página "Clientes
+ * por atendimento" já lê do painel-designers-beeon
+ * (painelBeeonData.state[designer][i].atend — ver pdTodosClientesPlano,
+ * js/paginas-designers.js) — nenhum cadastro novo.
+ *
+ * Cliente sem vínculo cadastrado lá aparece pra todo mundo: melhor mostrar
+ * a mais do que esconder trabalho de verdade por um cadastro que faltou.
+ */
+function centralClienteEhDoLogado(nomeCliente) {
+  if (typeof souClaudio === "function" && souClaudio()) return true;
+  if (typeof pdTodosClientesPlano !== "function") return true;
+
+  const alvo = normalizarParaComparar(nomeCliente || "");
+  const encontrado = pdTodosClientesPlano().find(({ c }) => c && c.cliente && normalizarParaComparar(c.cliente) === alvo);
+  const atend = encontrado && encontrado.c.atend;
+  if (!atend) return true;
+  return typeof nomesCorrespondem === "function" && nomesCorrespondem(atend, DESIGNER_LOGADO);
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +292,7 @@ function centralRenderClientes() {
   if (!el) return;
 
   const porCliente = {};
-  centralAprovacoesCache.forEach(a => {
+  centralAprovacoesCache.filter(a => centralClienteEhDoLogado(a.cliente)).forEach(a => {
     const nome = a.cliente || "Sem cliente";
     if (!porCliente[nome]) porCliente[nome] = { esperando: 0, ajustes: 0, maxDias: 0 };
     const status = a.status || "pendente";

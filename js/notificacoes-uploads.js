@@ -442,6 +442,15 @@ async function carregarDadosPainelBeeon() {
     buildAtendimentoPage();
     buildTiposPage();
     if (!document.getElementById("page-horas").hidden && typeof carregarAtividadesRecentesHoras === "function") carregarAtividadesRecentesHoras();
+    // A Central do Atendimento filtra por cliente→atendimento usando esse
+    // mesmo painelBeeonData (ver centralClienteEhDoLogado, js/central-atendimento.js)
+    // — se ela já tiver aberto e carregado ANTES desses dados chegarem
+    // (corrida normal no login, as duas buscas saem juntas), redesenha
+    // agora que o vínculo já existe, em vez de esperar a pessoa trocar de
+    // aba pra o filtro valer.
+    if (typeof centralAtendimentoAberta === "function" && centralAtendimentoAberta() && typeof centralRenderTudo === "function") {
+      centralRenderTudo();
+    }
   } catch (err) {
     console.error("Falha ao conectar com o painel-designers-beeon:", err);
   }

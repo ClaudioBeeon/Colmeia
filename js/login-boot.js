@@ -200,6 +200,31 @@ function chegouPorLinkDeConferencia() {
   return rota.tipo === "conferencia" || (rota.tipo === "pagina" && rota.pagina === "aprovacao");
 }
 
+// Link por pessoa (colmeia.beeon.com.br/Laura, ver js/roteador-url.js) —
+// guarda o nome-alvo pra, depois do código validado, pular direto pra essa
+// pessoa em vez de mostrar a lista "quem é você?" (ver o fim do handler de
+// atdCodigoForm, mais abaixo).
+let centralNomeAlvoDoLink = null;
+function chegouPorLinkDePessoa() {
+  if (typeof roteadorInterpretarRota !== "function") return null;
+  const rota = roteadorInterpretarRota();
+  return rota.tipo === "pessoa" ? rota.nome : null;
+}
+
+/** O mesmo passo de sempre (escolher quem é você) — extraído pra poder
+ *  ser chamado tanto pelo clique no nome quanto pelo link direto/pessoa. */
+function entrarComoAtendimento(nome) {
+  DESIGNER_LOGADO = nome;
+  PAPEL_LOGADO = "atendimento";
+  // O atendimento não tem quadro, então não tem id de responsável no
+  // Runrun.it — `ehMinhaTarefa` cai na comparação por nome, que é o
+  // caminho de reserva que já existe. Não faz diferença aqui: elas não
+  // têm tarefas próprias no quadro.
+  DESIGNER_ID_LOGADO = null;
+  salvarSessao(nome, "atendimento", null);
+  iniciarAppPosLogin();
+}
+
 function mostrarEntradaDoAtendimento(mostrar) {
   document.getElementById("loginForm").hidden = mostrar;
   document.getElementById("loginAtendimento").hidden = !mostrar;
@@ -234,6 +259,19 @@ document.getElementById("atdCodigoForm").addEventListener("submit", async e => {
     return;
   }
 
+  // Veio de um link por pessoa (colmeia.beeon.com.br/Laura) E o nome bate
+  // com alguém da lista de verdade? Pula a pergunta "quem é você" — é
+  // exatamente o que esse link promete. `nomesCorrespondem` (não
+  // igualdade exata) porque "joao-paulo" na URL vira "João Paulo" com
+  // acento, mas ainda assim tem que bater sem exigir digitar acento certo
+  // em lugar nenhum.
+  const alvo = centralNomeAlvoDoLink;
+  const pessoaBatendo = alvo && (data.pessoas || []).find(nome => nomesCorrespondem(nome, alvo));
+  if (pessoaBatendo) {
+    entrarComoAtendimento(pessoaBatendo);
+    return;
+  }
+
   // Passo 2: quem é você. O código sai da tela — já cumpriu o papel, e
   // deixá-lo ali sugeriria que ainda falta alguma coisa nele.
   document.getElementById("atdCodigoForm").hidden = true;
@@ -247,18 +285,7 @@ document.getElementById("atdCodigoForm").addEventListener("submit", async e => {
   quem.hidden = false;
 
   quem.querySelectorAll("[data-atd-nome]").forEach(btn2 => {
-    btn2.addEventListener("click", () => {
-      const nome = btn2.dataset.atdNome;
-      DESIGNER_LOGADO = nome;
-      PAPEL_LOGADO = "atendimento";
-      // O atendimento não tem quadro, então não tem id de responsável no
-      // Runrun.it — `ehMinhaTarefa` cai na comparação por nome, que é o
-      // caminho de reserva que já existe. Não faz diferença aqui: elas não
-      // têm tarefas próprias no quadro.
-      DESIGNER_ID_LOGADO = null;
-      salvarSessao(nome, "atendimento", null);
-      iniciarAppPosLogin();
-    });
+    btn2.addEventListener("click", () => entrarComoAtendimento(btn2.dataset.atdNome));
   });
 });
 
@@ -274,10 +301,15 @@ if (sessaoSalva && sessaoSalva.nome && sessaoSalva.papel) {
   iniciarAppPosLogin();
 } else {
   buscarFraseDoDia();
-  // Chegou por um link de conferência sem sessão salva? É quase sempre o
+  centralNomeAlvoDoLink = chegouPorLinkDePessoa();
+  // Chegou por um link de conferência, ou um link por pessoa
+  // (colmeia.beeon.com.br/Laura), sem sessão salva? É quase sempre o
   // atendimento — abre já na entrada delas, em vez da senha que elas não
-  // têm. Quem for do design troca no botão logo abaixo.
-  if (chegouPorLinkDeConferencia()) mostrarEntradaDoAtendimento(true);
+  // têm. Quem for do design troca no botão logo abaixo. O código ainda é
+  // pedido normalmente (é o que protege o link de ser usado por qualquer
+  // um) — só o passo "quem é você" depois dele é que some, direto pro
+  // nome do link (ver o fim do handler de atdCodigoForm).
+  if (chegouPorLinkDeConferencia() || centralNomeAlvoDoLink) mostrarEntradaDoAtendimento(true);
 }
 // Senão, a tela de login (já visível por padrão no HTML) fica esperando
 // o formulário ser enviado — o resto acontece no listener do submit acima.
