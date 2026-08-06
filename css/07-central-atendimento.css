@@ -121,6 +121,24 @@
 }
 .central-date-pill svg { width: 14px; height: 14px; flex-shrink: 0; }
 
+/* Seletor "ver como" — só pro coordenador (ver o comentário no index.html).
+   Mesma pílula escura do date-pill, com um <select> nativo dentro (sem
+   dropdown custom: é um controle raro de usar, não vale a complexidade). */
+.central-filtro-pessoa {
+  display: flex; align-items: center; gap: 8px; background: #24252C; color: #fff;
+  border-radius: 999px; padding: 9px 14px 9px 16px; flex-shrink: 0;
+}
+/* Bug recorrente do CLAUDE.md: sem isso, "display: flex" acima ganha do
+   [hidden] nativo do HTML e o seletor continua na tela mesmo escondido
+   pelo JS pra quem não coordena. */
+.central-filtro-pessoa[hidden] { display: none; }
+.central-filtro-pessoa svg { width: 14px; height: 14px; flex-shrink: 0; }
+.central-filtro-select {
+  background: none; border: none; color: #fff; font-family: inherit;
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.central-filtro-select option { color: #16181D; }
+
 .central-content { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
 .central-tab { display: flex; flex-direction: column; gap: 22px; }
 .central-tab[hidden] { display: none; }

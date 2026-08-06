@@ -92,6 +92,21 @@ function souClaudio() {
   return nomesCorrespondem(DESIGNER_LOGADO, "Claudio");
 }
 
+// Dentro do atendimento, João Paulo e Lucas TAMBÉM coordenam (pedido do
+// Cláudio, 2026-08-06: "são coordenadores então eles podem ter a visão
+// geral que eu tenho também") — mesmo entrando pelo código+nome como
+// qualquer atendimento (PAPEL_LOGADO fica "atendimento" pros três, não
+// tem um papel "coordenador do atendimento" separado na planilha), a
+// Central trata os três igual pra fins de "ver tudo x ver só meu": os
+// dois veem geral por padrão, com a opção de filtrar por uma pessoa
+// específica (ver centralFiltroPessoa, js/central-atendimento.js). Os
+// demais (Laura, Manu, Giovanna) continuam só com os próprios clientes.
+function souCoordenadorDoAtendimento() {
+  return souClaudio()
+    || nomesCorrespondem(DESIGNER_LOGADO, "João Paulo")
+    || nomesCorrespondem(DESIGNER_LOGADO, "Lucas");
+}
+
 // ===== Login e sessão =====
 // Guarda {nome, papel} no navegador depois de logar, pra não pedir
 // senha de novo toda vez que abrir o Colmeia nesse computador.

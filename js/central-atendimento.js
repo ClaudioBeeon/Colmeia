@@ -37,6 +37,11 @@ let centralAprovacoesCache = [];
 let centralCarregado = false;
 let centralAbaAtiva = "hoje";
 
+// "" = coordenador vendo TUDO (o padrão); um nome = coordenador vendo como
+// se fosse aquela pessoa. Só existe de verdade pra quem souCoordenadorDoAtendimento()
+// — pra Laura/Manu/Giovanna nunca muda (elas nem veem o seletor).
+let centralFiltroPessoa = "";
+
 // Ligado no carregamento do script (mesmo padrão do #sidebarLogout,
 // js/login-boot.js) — não pode esperar a Central abrir uma vez pra só
 // então funcionar, senão o Cláudio nunca conseguiria abrir a primeira vez.
@@ -59,6 +64,15 @@ function abrirCentralAtendimento() {
   // atrás pra voltar — o atendimento não tem (entrou direto aqui, nunca
   // viu o quadro), só "Sair" faz sentido pra eles.
   document.getElementById("centralVoltarBtn").hidden = !(typeof souClaudio === "function" && souClaudio());
+
+  // O seletor "ver como" é só pra quem coordena (Cláudio, João Paulo,
+  // Lucas — ver souCoordenadorDoAtendimento, js/login-boot.js).
+  const filtroWrap = document.getElementById("centralFiltroPessoaWrap");
+  const souCoord = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+  if (filtroWrap) {
+    filtroWrap.hidden = !souCoord;
+    if (souCoord) centralPopularFiltroPessoa();
+  }
 
   centralLigarEventosUmaVez();
 
@@ -95,6 +109,29 @@ function centralLigarEventosUmaVez() {
   document.getElementById("centralVoltarBtn").addEventListener("click", fecharCentralAtendimento);
   document.getElementById("centralLogoutBtn").addEventListener("click", () => {
     if (typeof sairDoColmeia === "function") sairDoColmeia();
+  });
+
+  document.getElementById("centralFiltroPessoaSelect")?.addEventListener("change", e => {
+    centralFiltroPessoa = e.target.value;
+    centralRenderTudo();
+  });
+}
+
+/** Preenche o seletor "ver como" com um nome por pessoa do atendimento — uma vez só. */
+function centralPopularFiltroPessoa() {
+  const select = document.getElementById("centralFiltroPessoaSelect");
+  if (!select || select.dataset.populado) return;
+  select.dataset.populado = "1";
+
+  // Mesma lista do link por pessoa (ROTEADOR_SLUGS_PESSOA,
+  // js/roteador-url.js) — é o mesmo roster de atendimento, só que aqui
+  // como "Nome de verdade" direto (não precisa do slug da URL).
+  const nomes = typeof ROTEADOR_SLUGS_PESSOA === "object" ? Object.values(ROTEADOR_SLUGS_PESSOA) : [];
+  nomes.forEach(nome => {
+    const opt = document.createElement("option");
+    opt.value = nome;
+    opt.textContent = nome;
+    select.appendChild(opt);
   });
 }
 
@@ -156,7 +193,12 @@ function centralAprovacoesPor(status) {
 }
 
 /**
- * Cláudio (coordenador) vê tudo; cada atendimento só vê os clientes dela.
+ * Coordenador (Cláudio, João Paulo, Lucas — ver souCoordenadorDoAtendimento,
+ * js/login-boot.js) vê TUDO por padrão, ou pode filtrar como se fosse uma
+ * pessoa só (centralFiltroPessoa, escolhido no seletor "ver como" do topo).
+ * Quem não coordena (Laura, Manu, Giovanna) só vê os PRÓPRIOS clientes,
+ * sempre — não tem seletor pra elas mudarem isso.
+ *
  * Reaproveita o MESMO vínculo cliente→atendimento que a página "Clientes
  * por atendimento" já lê do painel-designers-beeon
  * (painelBeeonData.state[designer][i].atend — ver pdTodosClientesPlano,
@@ -166,14 +208,17 @@ function centralAprovacoesPor(status) {
  * a mais do que esconder trabalho de verdade por um cadastro que faltou.
  */
 function centralClienteEhDoLogado(nomeCliente) {
-  if (typeof souClaudio === "function" && souClaudio()) return true;
+  const souCoord = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+  if (souCoord && !centralFiltroPessoa) return true; // coordenador vendo tudo (padrão)
+
+  const nomeAlvo = souCoord ? centralFiltroPessoa : DESIGNER_LOGADO;
   if (typeof pdTodosClientesPlano !== "function") return true;
 
   const alvo = normalizarParaComparar(nomeCliente || "");
   const encontrado = pdTodosClientesPlano().find(({ c }) => c && c.cliente && normalizarParaComparar(c.cliente) === alvo);
   const atend = encontrado && encontrado.c.atend;
   if (!atend) return true;
-  return typeof nomesCorrespondem === "function" && nomesCorrespondem(atend, DESIGNER_LOGADO);
+  return typeof nomesCorrespondem === "function" && nomesCorrespondem(atend, nomeAlvo);
 }
 
 // ---------------------------------------------------------------------------
