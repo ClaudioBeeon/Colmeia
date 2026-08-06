@@ -147,6 +147,22 @@
   font-size: 13px; color: var(--text-muted); padding: 40px 0; text-align: center;
 }
 
+/* ===== "Esperando você" / "Prontas pra enviar" — duas colunas de kanban
+   de verdade (pedido do Cláudio, 2026-08-06), reaproveitando
+   .column-header/.column-count/.task-card/.card-* (css/02-quadro.css, o
+   mesmo quadro principal) por baixo dos nomes `central-kanban-*`. Não usa
+   .board/.column originais porque aquelas têm `flex:1;min-height:0` pra
+   viver dentro de uma página de altura fixa com scroll por coluna — aqui
+   é o contrário, a aba inteira rola (.central-content), então as colunas
+   só crescem com o conteúdo. */
+.central-kanban-cols {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 22px;
+}
+@media (max-width: 760px) { .central-kanban-cols { grid-template-columns: 1fr; } }
+.central-kanban-col { display: flex; flex-direction: column; min-width: 0; }
+.central-kanban-lista { display: flex; flex-direction: column; gap: 14px; }
+.central-kanban-card { width: 100%; text-align: left; cursor: pointer; }
+
 /* ===== Seções por estado (aba Hoje) ===== */
 .central-section { display: flex; flex-direction: column; gap: 10px; }
 .central-section-head { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; background: none; border: none; padding: 0; width: 100%; font-family: inherit; color: inherit; }

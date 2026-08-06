@@ -236,12 +236,20 @@ function centralRenderHoje() {
   const comCliente = centralAprovacoesPor("pendente");
   const voltouAjuste = centralAprovacoesPor("ajuste");
 
-  el.innerHTML = [
-    centralSecaoHTML("Esperando você", "neutro", esperandoVoce.length, "sHoje1"),
-    centralSecaoHTML("Prontas pra enviar", "verde", prontasEnviar.length, "sHoje2"),
-    centralSecaoHTML("Com o cliente", "neutro", comCliente.length, "sHoje3"),
-    centralSecaoHTML("Voltou com ajuste", voltouAjuste.length ? "ambar" : "neutro", voltouAjuste.length, "sHoje4", voltouAjuste.length === 0),
-  ].join("");
+  // "Esperando você" / "Prontas pra enviar" — pedido do Cláudio (2026-08-06):
+  // usar abas de kanban e o estilo de card do Colmeia, não a linha simples
+  // de antes. São DUAS COLUNAS lado a lado (ver centralKanbanColunaHTML),
+  // reaproveitando .column-header/.column-count/.task-card/.card-*
+  // (css/02-quadro.css) — os mesmos cards do quadro de verdade, só com o
+  // conteúdo de uma peça de conferência no lugar de uma tarefa.
+  el.innerHTML = `
+    <div class="central-kanban-cols">
+      ${centralKanbanColunaHTML("Esperando você", "neutro", esperandoVoce.length, "sHoje1")}
+      ${centralKanbanColunaHTML("Prontas pra enviar", "verde", prontasEnviar.length, "sHoje2")}
+    </div>
+    ${centralSecaoHTML("Com o cliente", "neutro", comCliente.length, "sHoje3")}
+    ${centralSecaoHTML("Voltou com ajuste", voltouAjuste.length ? "ambar" : "neutro", voltouAjuste.length, "sHoje4", voltouAjuste.length === 0)}
+  `;
 
   centralPreencherSecaoFila("sHoje1", esperandoVoce, "pendente");
   centralPreencherSecaoFila("sHoje2", prontasEnviar, "aprovada");
@@ -249,6 +257,19 @@ function centralRenderHoje() {
   centralPreencherSecaoAprovacoes("sHoje4", voltouAjuste, "Nada voltou pedindo ajuste.");
 
   centralLigarSecoesColapsaveis(el);
+}
+
+function centralKanbanColunaHTML(titulo, cor, contagem, idCorpo) {
+  return `
+    <div class="central-kanban-col">
+      <div class="column-header">
+        <span class="central-section-dot ${cor}"></span>
+        <h2>${titulo}</h2>
+        <span class="column-count">${contagem}</span>
+      </div>
+      <div class="central-kanban-lista" id="${idCorpo}"></div>
+    </div>
+  `;
 }
 
 function centralSecaoHTML(titulo, cor, contagem, idCorpo, colapsada) {
@@ -271,7 +292,11 @@ function centralLigarSecoesColapsaveis(container) {
   });
 }
 
-/** Peças da fila de conferência interna (ainda não mandadas pro cliente). */
+/**
+ * Peças da fila de conferência interna (ainda não mandadas pro cliente) —
+ * desenhadas como CARD DE VERDADE do Colmeia (.task-card, css/02-quadro.css,
+ * o mesmo do quadro), não uma linha simples. Pedido do Cláudio (2026-08-06).
+ */
 function centralPreencherSecaoFila(idCorpo, itens, status) {
   const corpo = document.getElementById(idCorpo);
   if (!corpo) return;
@@ -282,21 +307,29 @@ function centralPreencherSecaoFila(idCorpo, itens, status) {
 
   corpo.innerHTML = itens.map((item, i) => {
     const pecas = item.pecas || [];
-    const rotulo = pecas.length > 1 ? `${pecas.length} peças (${pecas.map(p => p.nomePeca).join(", ")})` : (pecas[0] ? pecas[0].nomePeca : "");
+    const rotulo = pecas.length > 1 ? `${pecas.length} peças` : (pecas[0] ? pecas[0].nomePeca : "");
     const entrega = item.prazo ? new Date(item.prazo) : null;
     const atrasada = entrega && entrega < new Date(new Date().toDateString());
+    // O tipo da peça (foto/vídeo) sai de graça do mimeType já carregado —
+    // mesmos badges coloridos que o card de tarefa normal já usa
+    // (.badge-video/.badge-estatico), só emprestados pra dizer o formato
+    // da peça em vez do tipo de tarefa.
+    const mime = (pecas[0] && pecas[0].mimeType) || "";
+    const ehVideo = mime.indexOf("video/") === 0;
+
     return `
-      <button type="button" class="central-item central-item-clicavel" data-central-fila="${i}" data-central-fila-status="${status}">
-        <div class="central-item-thumb" data-central-thumb="${escaparHTML((pecas[0] && pecas[0].fileId) || "")}">🖼️</div>
-        <div class="central-item-body">
-          <span class="central-item-cliente">${escaparHTML(item.cliente || "Sem cliente")}</span>
-          <span class="central-item-peca">${escaparHTML(rotulo)}</span>
+      <button type="button" class="task-card central-kanban-card" data-central-fila="${i}">
+        <div class="card-top">
+          <span class="badge ${ehVideo ? "badge-video" : "badge-estatico"}">${ehVideo ? "Vídeo" : "Imagem"}</span>
+          ${pecas.length > 1 ? `<span class="card-priority-tag">${pecas.length} peças</span>` : ""}
         </div>
-        <div class="central-item-meta">
-          ${entrega ? `<span class="central-chip ${atrasada ? "central-chip-vermelho" : "central-chip-neutro"}">entrega ${apvDataCurta(item.prazo)}</span>` : ""}
+        <div class="card-title">${escaparHTML(rotulo)}</div>
+        <div class="card-client">${escaparHTML(item.cliente || "Sem cliente")}</div>
+        <div class="card-bottom">
+          <div class="assignee-wrap">${typeof avatarHTML === "function" ? avatarHTML(item.designer, "avatar-sm") : ""}</div>
           ${status === "aprovada"
-            ? `<span class="central-chip central-chip-verde">${item.aprovadoPor ? "aprovada por " + escaparHTML(item.aprovadoPor) : "aprovada"}</span>`
-            : `<span class="central-chip central-chip-neutro">${apvTempoDeEspera(item.pedidoEm)}</span>`}
+            ? `<span class="card-due-simple">✓ ${item.aprovadoPor ? escaparHTML(item.aprovadoPor) : "aprovada"}</span>`
+            : `<span class="card-due-simple ${atrasada ? "overdue" : ""}">${entrega ? "entrega " + apvDataCurta(item.prazo) : apvTempoDeEspera(item.pedidoEm)}</span>`}
         </div>
       </button>
     `;
@@ -309,9 +342,6 @@ function centralPreencherSecaoFila(idCorpo, itens, status) {
       // continuam acontecendo lá, sem duplicar nada aqui.
       if (typeof apvAbrirConferencia === "function") apvAbrirConferencia(item.taskId, item.loteId);
     });
-    const thumbEl = btn.querySelector("[data-central-thumb]");
-    const fileId = thumbEl && thumbEl.dataset.centralThumb;
-    if (fileId && typeof apvCarregarMiniatura === "function") apvCarregarMiniatura(fileId, thumbEl);
   });
 }
 
