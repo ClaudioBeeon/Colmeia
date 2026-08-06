@@ -236,27 +236,42 @@ function centralRenderHoje() {
   const comCliente = centralAprovacoesPor("pendente");
   const voltouAjuste = centralAprovacoesPor("ajuste");
 
-  // "Esperando você" / "Prontas pra enviar" — pedido do Cláudio (2026-08-06):
-  // usar abas de kanban e o estilo de card do Colmeia, não a linha simples
-  // de antes. São DUAS COLUNAS lado a lado (ver centralKanbanColunaHTML),
-  // reaproveitando .column-header/.column-count/.task-card/.card-*
-  // (css/02-quadro.css) — os mesmos cards do quadro de verdade, só com o
-  // conteúdo de uma peça de conferência no lugar de uma tarefa.
+  // Layout pedido pelo Cláudio (2026-08-06): "ficar tudo na vertical" — as
+  // colunas de kanban à esquerda (largura cheia), e do lado direito um
+  // "cartão de número grande", no mesmo estilo da aba Minhas métricas
+  // (.hr-card), em vez das listas horizontais de antes. "Com o cliente" e
+  // "Voltou com ajuste" viram só a CONTAGEM — a lista de verdade continua
+  // existindo, na aba Aprovações (ver centralAbrirAprovacoesEm), então
+  // clicar no cartão leva direto pra lá.
   el.innerHTML = `
-    <div class="central-kanban-cols">
-      ${centralKanbanColunaHTML("Esperando você", "neutro", esperandoVoce.length, "sHoje1")}
-      ${centralKanbanColunaHTML("Prontas pra enviar", "verde", prontasEnviar.length, "sHoje2")}
+    <div class="central-hoje-layout">
+      <div class="central-kanban-cols">
+        ${centralKanbanColunaHTML("Esperando você", "neutro", esperandoVoce.length, "sHoje1")}
+        ${centralKanbanColunaHTML("Prontas pra enviar", "verde", prontasEnviar.length, "sHoje2")}
+      </div>
+      <aside class="central-hoje-lateral">
+        ${centralStatCardHTML("Com o cliente", comCliente.length, "neutro", "comCliente")}
+        ${centralStatCardHTML("Voltou com ajuste", voltouAjuste.length, voltouAjuste.length ? "ambar" : "neutro", "ajuste")}
+      </aside>
     </div>
-    ${centralSecaoHTML("Com o cliente", "neutro", comCliente.length, "sHoje3")}
-    ${centralSecaoHTML("Voltou com ajuste", voltouAjuste.length ? "ambar" : "neutro", voltouAjuste.length, "sHoje4", voltouAjuste.length === 0)}
   `;
 
   centralPreencherSecaoFila("sHoje1", esperandoVoce, "pendente");
   centralPreencherSecaoFila("sHoje2", prontasEnviar, "aprovada");
-  centralPreencherSecaoAprovacoes("sHoje3", comCliente, "Nada esperando resposta do cliente agora.");
-  centralPreencherSecaoAprovacoes("sHoje4", voltouAjuste, "Nada voltou pedindo ajuste.");
 
-  centralLigarSecoesColapsaveis(el);
+  el.querySelectorAll("[data-central-stat-ir]").forEach(btn => {
+    btn.addEventListener("click", () => centralTrocarAba("aprovacoes"));
+  });
+}
+
+/** Cartão de número grande, no mesmo estilo de card da aba Minhas métricas (.hr-card). */
+function centralStatCardHTML(titulo, contagem, cor, chave) {
+  return `
+    <button type="button" class="hr-card central-stat-card" data-central-stat-ir="${chave}">
+      <span class="central-stat-numero">${contagem}</span>
+      <span class="central-stat-label"><span class="central-section-dot ${cor}"></span>${titulo}</span>
+    </button>
+  `;
 }
 
 function centralKanbanColunaHTML(titulo, cor, contagem, idCorpo) {
