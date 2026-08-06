@@ -250,8 +250,8 @@ function centralRenderHoje() {
         ${centralKanbanColunaHTML("Prontas pra enviar", "verde", prontasEnviar.length, "sHoje2")}
       </div>
       <aside class="central-hoje-lateral">
-        ${centralStatCardHTML("Com o cliente", comCliente.length, "neutro", "comCliente")}
-        ${centralStatCardHTML("Voltou com ajuste", voltouAjuste.length, voltouAjuste.length ? "ambar" : "neutro", "ajuste")}
+        ${centralStatCardHTML("Com o cliente", comCliente.length, "peça" + (comCliente.length === 1 ? "" : "s") + " esperando resposta", "neutro", "comCliente")}
+        ${centralStatCardHTML("Voltou com ajuste", voltouAjuste.length, "peça" + (voltouAjuste.length === 1 ? "" : "s") + " pra repassar", voltouAjuste.length ? "ambar" : "neutro", "ajuste")}
       </aside>
     </div>
   `;
@@ -264,12 +264,22 @@ function centralRenderHoje() {
   });
 }
 
-/** Cartão de número grande, no mesmo estilo de card da aba Minhas métricas (.hr-card). */
-function centralStatCardHTML(titulo, contagem, cor, chave) {
+/**
+ * Cartão de número grande — as MESMAS classes do card "Resolvidas na
+ * semana" de Minhas Métricas (.hr-card > .hr-card-cab > .hr-card-titulo,
+ * depois .hr-prog-num com o número grande), não um estilo parecido: é o
+ * mesmo cabeçalho, a mesma tipografia do número, o mesmo espaçamento.
+ */
+function centralStatCardHTML(titulo, contagem, descricao, cor, chave) {
   return `
     <button type="button" class="hr-card central-stat-card" data-central-stat-ir="${chave}">
-      <span class="central-stat-numero">${contagem}</span>
-      <span class="central-stat-label"><span class="central-section-dot ${cor}"></span>${titulo}</span>
+      <div class="hr-card-cab">
+        <span class="hr-card-titulo"><span class="central-section-dot ${cor}"></span>${titulo}</span>
+      </div>
+      <div class="hr-prog-num">
+        <b>${contagem}</b>
+        <span>${descricao}</span>
+      </div>
     </button>
   `;
 }
