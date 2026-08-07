@@ -784,8 +784,8 @@ function inserirThumbnailsDoComparativo(task, data) {
 }
 
 /**
- * Fala da Bee oferecendo as 3 ações da pasta do card (conferir o que
- * falta / comparar versões / link de aprovação) — disparada depois de
+ * Fala da Bee oferecendo as ações da pasta do card (conferir o que
+ * falta / comparar versões) — disparada depois de
  * um upload arrastado pro card (ver avisarBeeSobreUploadNovo,
  * js/detalhe-modal.js, e beeAvisarUploadNovo, Bee.gs). Os botões
  * chamam as MESMAS funções já usadas na aba Anexos — ver wireThreadBee.
@@ -796,7 +796,6 @@ function renderAcoesPastaHTML(m) {
     <div class="bee-pastilhas">
       <button type="button" class="bee-acao" data-acao-pasta="conferir">🐝 conferir o que falta</button>
       <button type="button" class="bee-acao" data-acao-pasta="comparar">🔍 comparar versões</button>
-      <button type="button" class="bee-acao" data-acao-pasta="aprovacao">🔗 link de aprovação</button>
     </div>
   `;
 }
@@ -820,7 +819,6 @@ function wireThreadBee(task) {
       const alvo = tasks[detailIdx] || task;
       if (btn.dataset.acaoPasta === "conferir") conferirEntregaComABee(alvo, btn);
       else if (btn.dataset.acaoPasta === "comparar") compararVersoesComABee(alvo, btn);
-      else if (btn.dataset.acaoPasta === "aprovacao") gerarLinkDeAprovacaoParaTarefa(alvo, btn);
     });
   });
 

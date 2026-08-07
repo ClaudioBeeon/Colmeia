@@ -1198,8 +1198,14 @@ function cardDeAprovacaoHTML(a) {
           ? `<button type="button" class="repasse-btn ${tempo.alerta ? "repasse-btn-ficar" : ""}" data-acao="whats">💬 Cobrar no WhatsApp</button>
              <button type="button" class="repasse-btn" data-acao="copiar">🔗 copiar link</button>`
           : status === "ajuste"
+            // "🔗 novo link" saiu daqui (2026-08-06): ele NÃO gerava link
+            // novo nenhum, só copiava o mesmo — um rótulo que mentia. Quem
+            // precisa de link novo faz isso na tela de conferência, que é
+            // onde link de cliente nasce agora (apvRenderLinksExistentes).
+            // No lugar dele entrou a cobrança do DESIGNER, que era o único
+            // conteúdo da antiga aba "Cobranças" sem lugar em nenhum card.
             ? `<button type="button" class="repasse-btn repasse-btn-ficar" data-acao="abrir">Abrir tarefa</button>
-               <button type="button" class="repasse-btn" data-acao="copiar">🔗 novo link</button>`
+               <button type="button" class="repasse-btn" data-acao="cobrar-designer">💬 Cobrar designer</button>`
             : `<button type="button" class="repasse-btn" data-acao="abrir">Abrir tarefa</button>`}
         <button type="button" class="repasse-btn repasse-btn-icon repasse-btn-excluir" data-acao="excluir" title="Excluir este link de aprovação">🗑️</button>
       </div>
@@ -1236,6 +1242,18 @@ function wireCardsDeAprovacao(board) {
           } catch (err) {
             mostrarToast(`Link (não consegui copiar sozinho): ${url}`);
           }
+          return;
+        }
+
+        if (acao === "cobrar-designer") {
+          // O texto pronto que vinha da antiga aba "Cobranças" da Central.
+          // Sem número no wa.me, igual todo o resto do app — abre o seletor
+          // de conversa pra escolher a pessoa.
+          const a = (aprovacoesCache || []).find(x => x.codigo === codigo) || {};
+          const titulo = card.querySelector(".repasse-card-title")?.textContent || "a peça";
+          const texto = `Oi! O cliente ${a.cliente || ""} pediu ajuste em "${titulo}"` +
+            (a.respostaTexto ? `: "${a.respostaTexto}"` : "") + ". Você já viu?";
+          window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
           return;
         }
 

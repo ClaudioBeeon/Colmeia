@@ -410,6 +410,10 @@ function buscarConferenciaDaTarefa(taskId, idsRelacionados) {
   var achada = null;
   for (var i = 1; i < linhas.length; i++) {
     if (!ids[String(linhas[i][0])]) continue;
+    // Descartada não conta como "já mandei pra revisão" — o botão do card
+    // tem que voltar a dizer "Enviar para revisão", senão ele apontaria pra
+    // uma conferência que não existe mais na fila (ver descartarConferencia).
+    if (String(linhas[i][11]) === 'descartada') continue;
     var atual = {
       // O id de quem REALMENTE tem a conferência — é pra ele que o link do
       // botão precisa apontar, não pro card que está aberto agora.
@@ -571,10 +575,28 @@ function aprovarInternamente(taskId, loteId, aprovadoPor) {
     linhas.forEach(function (linha) {
       sheet.getRange(linha, 12, 1, 3).setValues([['aprovada', aprovadoPor, agora]]);
     });
-    return { ok: true, aprovadoPor: aprovadoPor, aprovadoEm: agora };
   } finally {
     lock.releaseLock();
   }
+
+  // Fecha o ciclo pro DESIGNER (2026-08-06). Até aqui o fluxo era
+  // assimétrico: pedir alteração comentava na tarefa e ele ficava sabendo,
+  // mas APROVAR não escrevia em lugar nenhum — só uma linha na planilha.
+  // Ou seja, notícia ruim chegava e notícia boa não: ele mandava a peça e
+  // ficava no escuro até ela virar link ou virar alteração.
+  //
+  // Sem `autor`: cai na conta padrão de propósito, igual ao aviso de
+  // resposta do cliente (responderAprovacaoPublica, Aprovacao.gs) — o texto
+  // já diz quem conferiu, e o que importa é o recado chegar. Falhar aqui
+  // NÃO desfaz a aprovação: ela já está gravada, e travar a tela de quem
+  // confere por causa de um comentário seria pior que o comentário faltar.
+  try {
+    adicionarComentario(taskId, '✅ Conferido por ' + aprovadoPor + ' — indo pro cliente.', null);
+  } catch (e) {
+    Logger.log('Não consegui avisar a aprovação interna na tarefa: ' + e.message);
+  }
+
+  return { ok: true, aprovadoPor: aprovadoPor, aprovadoEm: agora };
 }
 
 // ---------------------------------------------------------------------
@@ -1366,6 +1388,170 @@ function marcarConferenciaDevolvida(taskId, loteId, quem, motivo, nomesPecas) {
     alvo.forEach(function (linha) {
       sheet.getRange(linha, 12, 1, 4).setValues([['devolvida', quem || '', new Date().toISOString(), motivo || '']]);
     });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------------
+// O E-MAIL DIÁRIO DA FILA (2026-08-06)
+// ---------------------------------------------------------------------
+//
+// O buraco que isso tapa: o atendimento só descobria que tinha peça
+// esperando se abrisse a Central por conta própria, ou se o designer
+// lembrasse de clicar "enviar" no comentário rascunhado (que NÃO vai
+// sozinho, de propósito). Um portão que trava a produção inteira dependia
+// de alguém lembrar de olhar uma tela que não é onde essa pessoa trabalha
+// — o atendimento vive no Runrun.it.
+//
+// Cada pessoa recebe SÓ os clientes dela (decisão do Cláudio, 2026-08-06),
+// o mesmo recorte que a Central já faz na tela. O vínculo cliente→
+// atendimento é lido do painel-designers-beeon, a MESMA fonte que
+// centralClienteEhDoLogado usa no front — nenhum cadastro novo.
+//
+// ⚠️ LIGAR DEPOIS DE CONFERIR OS E-MAILS: os endereços abaixo são um
+// palpite pelo padrão das contas que já existem no projeto
+// (claudio@/gustavo@/erick@beeon.com.br). Enquanto EMAIL_FILA_LIGADO for
+// false, nada é enviado — a função roda, monta e só registra no log, pra
+// dar pra conferir sem mandar e-mail errado pra ninguém.
+var EMAIL_FILA_LIGADO = false;
+
+// O único lugar do BACKEND que precisa saber onde o Colmeia está
+// publicado. Em todo o resto do app a base vem do front-end de propósito
+// (ver ROTA_BASE, js/roteador-url.js) justamente pra não ter endereço
+// escrito na mão — mas um e-mail é montado sem ninguém no navegador, então
+// aqui não tem de onde tirar. Se o domínio mudar, é ESTE valor que muda.
+var COLMEIA_URL_PUBLICA = 'https://colmeia.beeon.com.br/aprovacoes';
+
+var EMAILS_ATENDIMENTO = {
+  'Laura': 'laura@beeon.com.br',
+  'Manu': 'manu@beeon.com.br',
+  'Giovanna': 'giovanna@beeon.com.br',
+  'João Paulo': 'joaopaulo@beeon.com.br',
+  'Lucas': 'lucas@beeon.com.br',
+  'Cláudio': 'claudio@beeon.com.br'
+};
+
+// Coordenação vê a fila inteira, igual na Central (souCoordenadorDoAtendimento,
+// js/login-boot.js) — mesma lista, escrita aqui porque o backend não
+// enxerga o front.
+var COORDENACAO_ATENDIMENTO = ['Cláudio', 'João Paulo', 'Lucas'];
+
+/**
+ * Manda pra cada pessoa do atendimento o que está esperando conferência
+ * dos clientes dela. Roda junto do backup diário.
+ *
+ * Só manda pra quem TEM alguma coisa esperando: e-mail diário que chega
+ * dizendo "nada pra fazer" é o tipo de mensagem que se aprende a ignorar,
+ * e aí o dia em que ele importa passa batido junto.
+ */
+function enviarEmailDiarioDaFila() {
+  var fila = listarConferenciasPendentes();
+  if (!fila.ok || !fila.itens.length) return { ok: true, enviados: 0 };
+
+  var vinculos = mapaClienteParaAtendimento();
+  var enviados = 0;
+
+  for (var nome in EMAILS_ATENDIMENTO) {
+    var ehCoordenacao = COORDENACAO_ATENDIMENTO.indexOf(nome) !== -1;
+    var meus = fila.itens.filter(function (it) {
+      if (ehCoordenacao) return true;
+      var dono = vinculos[normalizarNomeParaComparar(it.cliente || '')];
+      // Cliente sem vínculo cadastrado aparece pra todo mundo — melhor
+      // avisar a mais do que esconder trabalho de verdade por um cadastro
+      // que faltou (mesma regra de centralClienteEhDoLogado).
+      if (!dono) return true;
+      return normalizarNomeParaComparar(dono) === normalizarNomeParaComparar(nome);
+    });
+    if (!meus.length) continue;
+
+    var assunto = meus.length === 1
+      ? '1 peça esperando sua conferência'
+      : meus.length + ' peças esperando sua conferência';
+
+    var linhas = meus.map(function (it) {
+      var pecas = (it.pecas || []).map(function (p) { return p.nomePeca; }).join(', ');
+      var quando = it.prazo ? ' · entrega ' + Utilities.formatDate(new Date(it.prazo), 'America/Sao_Paulo', 'dd/MM') : '';
+      return '• ' + (it.cliente || 'Sem cliente') + ' — ' + (pecas || it.tituloTarefa || '') +
+             ' (' + (it.designer || 'designer') + ')' + quando;
+    }).join('\n');
+
+    var corpo = 'Oi, ' + nome + '!\n\n' + assunto + ':\n\n' + linhas +
+      '\n\nPra conferir: ' + COLMEIA_URL_PUBLICA + '\n\n— Colmeia';
+
+    if (!EMAIL_FILA_LIGADO) {
+      Logger.log('[e-mail da fila DESLIGADO] iria pra ' + EMAILS_ATENDIMENTO[nome] + ':\n' + corpo);
+      continue;
+    }
+    try {
+      MailApp.sendEmail(EMAILS_ATENDIMENTO[nome], assunto, corpo);
+      enviados++;
+    } catch (e) {
+      Logger.log('Não consegui mandar o e-mail da fila pra ' + nome + ': ' + e.message);
+    }
+  }
+  return { ok: true, enviados: enviados };
+}
+
+/**
+ * cliente (normalizado) -> nome do atendimento, lido do
+ * painel-designers-beeon. Mesma fonte que a Central usa no front-end
+ * (pdTodosClientesPlano, js/paginas-designers.js) — o painel é indexado por
+ * designer, e cada cliente lá dentro traz o campo `atend`.
+ */
+function mapaClienteParaAtendimento() {
+  var mapa = {};
+  try {
+    // Sem "?tipo=", o painel devolve o estado completo — mesmo caminho que
+    // buscarTempoMedioDoPainel (RunrunLeitura.gs) já usa, incluindo o
+    // formato da resposta (resposta.data.state).
+    var res = UrlFetchApp.fetch(PAINEL_BEEON_API_URL, { muteHttpExceptions: true });
+    var resposta = JSON.parse(res.getContentText());
+    if (!resposta || !resposta.ok || !resposta.data) return mapa;
+    var estado = resposta.data.state || {};
+    (resposta.data.designers || Object.keys(estado)).forEach(function (designer) {
+      (estado[designer] || []).forEach(function (c) {
+        if (c && c.cliente && c.atend) mapa[normalizarNomeParaComparar(c.cliente)] = c.atend;
+      });
+    });
+  } catch (e) {
+    // Sem os vínculos, todo mundo recebe a fila inteira — chato, mas
+    // melhor do que ninguém receber nada.
+    Logger.log('Não consegui ler os vínculos de cliente do painel: ' + e.message);
+  }
+  return mapa;
+}
+
+/**
+ * Tira o lote da fila sem aprovar nem devolver (2026-08-06).
+ *
+ * POR QUE PRECISA EXISTIR: antes disso, quem confere tinha exatamente duas
+ * saídas, e as duas mexem em coisa de verdade — aprovar (que prepara o
+ * link do cliente) ou pedir alteração (que CRIA uma subtarefa no
+ * Runrun.it, aloca alguém e move pra Ajustes). Peça mandada por engano,
+ * mandada duas vezes, ou mandada antes de ficar pronta não tinha saída
+ * nenhuma: ou se criava lixo no Runrun.it, ou o item ficava encalhado pra
+ * sempre na fila (e no contador vermelho), já que o que está `pendente`
+ * nunca é podado.
+ *
+ * NÃO avisa o designer nem escreve nada no Runrun.it — decisão do Cláudio
+ * (2026-08-06). O único cuidado que sobra é `buscarConferenciaDaTarefa`
+ * ignorar as descartadas, senão o botão do card dele continuaria dizendo
+ * "Acessar página de aprovação" apontando pra uma peça que saiu da fila.
+ */
+function descartarConferencia(taskId, loteId, quem) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var sheet = getConferenciasSheet();
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var linhas = linhasDoLote(sheet.getDataRange().getValues(), taskId, loteId);
+    if (!linhas.length) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
+    var agora = new Date().toISOString();
+    linhas.forEach(function (linha) {
+      sheet.getRange(linha, 12, 1, 3).setValues([['descartada', quem || '', agora]]);
+    });
+    return { ok: true };
   } finally {
     lock.releaseLock();
   }

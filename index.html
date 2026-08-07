@@ -13,13 +13,13 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-06p">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06p">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06p">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06p">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06p">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06p">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-06p">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-06q">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06q">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06q">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06q">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06q">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06q">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-06q">
 </head>
 <body>
 
@@ -928,6 +928,21 @@
               </button>
             </div>
           </div>
+
+          <!-- A TERCEIRA SAÍDA (2026-08-06). Até aqui a conferência tinha
+               só duas, e as duas mexem em coisa de verdade: aprovar (que
+               prepara o link do cliente) ou pedir alteração (que CRIA uma
+               subtarefa no Runrun.it, aloca alguém e move pra Ajustes).
+               Peça mandada por engano, duplicada, ou mandada antes de ficar
+               pronta não tinha saída — ou virava lixo no Runrun.it, ou
+               ficava encalhada na fila pra sempre (o que está "pendente"
+               nunca é podado).
+
+               Discreto de propósito: é a saída rara, não pode competir com
+               as duas decisões de verdade. Ver apvDescartar(). -->
+          <button type="button" class="apv-descartar" id="apvBtnDescartar">
+            Tirar da fila sem conferir
+          </button>
         </div>
 
         <!-- Painel B: aprovado, preparando o envio. Some sozinho ao abrir
@@ -950,6 +965,19 @@
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span id="apvRevisaoTempoTxt">Pedida pra conferência há 2 horas</span>
             </span>
+          </div>
+
+          <!-- "Essa tarefa já tem link" (2026-08-06). Só aparece quando
+               existe link gerado antes — o caso comum (primeira vez) não vê
+               nada disso. Veio do card da tarefa, onde ficava o botão "🔗
+               link de aprovação" que foi removido: gerar link do cliente
+               agora acontece SÓ aqui, depois da conferência (ver o bloco
+               "ONDE FOI PARAR O LINK DE APROVAÇÃO", js/detalhe-modal.js).
+               Preenchido por apvRenderLinksExistentes(). -->
+          <div class="apv-bloco apv-bloco-card apv-links-antigos" id="apvLinksAntigos" hidden>
+            <p class="apv-rotulo">Essa peça já tem link</p>
+            <div id="apvLinksAntigosLista"></div>
+            <p class="apv-links-antigos-nota">Excluindo o antigo, o próximo envio gera um link novo — o velho para de abrir na hora.</p>
           </div>
 
           <!-- O envio montado como a MENSAGEM que vai pro cliente
@@ -1257,13 +1285,6 @@
         </span>
         <span class="central-nav-label">Aprovações</span>
       </button>
-      <button type="button" class="central-nav-ic" data-central-tab="cobrancas">
-        <span class="central-nav-icon-circle">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <span class="central-nav-badge" id="centralBadgeCobrancas" hidden>0</span>
-        </span>
-        <span class="central-nav-label">Cobranças</span>
-      </button>
       <button type="button" class="central-nav-ic" data-central-tab="metricas">
         <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10M12 20V4M20 20v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="central-nav-label">Minhas métricas</span>
@@ -1310,11 +1331,13 @@
         <div class="central-vazio-inline">Carregando...</div>
       </section>
 
+      <!-- Aprovações absorveu a antiga aba "Cobranças" (2026-08-06): ela
+           mostrava a MESMA lista, só recortada por "parado há 3+ dias" e
+           "pediu ajuste". Eram três abas (Hoje, Aprovações, Cobranças) em
+           cima do mesmo dado, e quem usava passeava entre elas procurando
+           o que já tinha visto. Agora é uma pílula de filtro no topo desta
+           — ver centralRenderAprovacoes(). -->
       <section class="central-tab" id="centralTabAprovacoes" hidden>
-        <div class="central-vazio-inline">Carregando...</div>
-      </section>
-
-      <section class="central-tab" id="centralTabCobrancas" hidden>
         <div class="central-vazio-inline">Carregando...</div>
       </section>
 
@@ -1418,32 +1441,32 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-06p"></script>
-<script src="js/fila-offline.js?v=2026-08-06p"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-06p"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-06p"></script>
-<script src="js/kanban-polling.js?v=2026-08-06p"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-06p"></script>
-<script src="js/regras-briefing.js?v=2026-08-06p"></script>
-<script src="js/kanban-board.js?v=2026-08-06p"></script>
-<script src="js/clientes-hub.js?v=2026-08-06p"></script>
-<script src="js/chat-comentarios.js?v=2026-08-06p"></script>
-<script src="js/detalhe-modal.js?v=2026-08-06p"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-06p"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-06p"></script>
-<script src="js/bee.js?v=2026-08-06p"></script>
-<script src="js/paginas-designers.js?v=2026-08-06p"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-06p"></script>
-<script src="js/pagina-repasse.js?v=2026-08-06p"></script>
-<script src="js/pagina-horas.js?v=2026-08-06p"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-06p"></script>
-<script src="js/paleta-comando.js?v=2026-08-06p"></script>
-<script src="js/roteador-url.js?v=2026-08-06p"></script>
-<script src="js/detalhe-historia.js?v=2026-08-06p"></script>
-<script src="js/modo-foco.js?v=2026-08-06p"></script>
-<script src="js/pagina-bee.js?v=2026-08-06p"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-06p"></script>
-<script src="js/central-atendimento.js?v=2026-08-06p"></script>
-<script src="js/login-boot.js?v=2026-08-06p"></script>
+<script src="js/config.js?v=2026-08-06q"></script>
+<script src="js/fila-offline.js?v=2026-08-06q"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-06q"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-06q"></script>
+<script src="js/kanban-polling.js?v=2026-08-06q"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-06q"></script>
+<script src="js/regras-briefing.js?v=2026-08-06q"></script>
+<script src="js/kanban-board.js?v=2026-08-06q"></script>
+<script src="js/clientes-hub.js?v=2026-08-06q"></script>
+<script src="js/chat-comentarios.js?v=2026-08-06q"></script>
+<script src="js/detalhe-modal.js?v=2026-08-06q"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-06q"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-06q"></script>
+<script src="js/bee.js?v=2026-08-06q"></script>
+<script src="js/paginas-designers.js?v=2026-08-06q"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-06q"></script>
+<script src="js/pagina-repasse.js?v=2026-08-06q"></script>
+<script src="js/pagina-horas.js?v=2026-08-06q"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-06q"></script>
+<script src="js/paleta-comando.js?v=2026-08-06q"></script>
+<script src="js/roteador-url.js?v=2026-08-06q"></script>
+<script src="js/detalhe-historia.js?v=2026-08-06q"></script>
+<script src="js/modo-foco.js?v=2026-08-06q"></script>
+<script src="js/pagina-bee.js?v=2026-08-06q"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-06q"></script>
+<script src="js/central-atendimento.js?v=2026-08-06q"></script>
+<script src="js/login-boot.js?v=2026-08-06q"></script>
 </body>
 </html>

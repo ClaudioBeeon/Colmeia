@@ -1169,3 +1169,48 @@
    ele parecia mais um pedaço do formulário — e ele não é um passo do
    preenchimento, é a última olhada antes de mandar. */
 .apv-rodape-coluna { margin-top: 22px; }
+
+/* ===================================================================
+   "Tirar da fila sem conferir" — a terceira saída da conferência
+   (2026-08-06). Discreta de propósito: é a saída rara e não pode
+   competir visualmente com aprovar / pedir alteração, que são as
+   decisões de verdade. Por isso é texto, não botão preenchido, e mora
+   depois do cartão do pedido de alteração, não dentro dele.
+   =================================================================== */
+.apv-descartar {
+  align-self: center; margin-top: 4px;
+  border: none; background: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  color: var(--text-muted); padding: 8px 10px; border-radius: 8px;
+  transition: color var(--dur-fast) var(--ease-apple), background var(--dur-fast) var(--ease-apple);
+}
+.apv-descartar:hover { color: var(--danger); background: var(--danger-soft); }
+
+/* ===================================================================
+   "Essa peça já tem link" — no painel de envio. Substituiu o botão
+   "🔗 link de aprovação" que ficava no card da tarefa (2026-08-06):
+   gerar link do cliente agora só acontece depois da conferência.
+   Só aparece quando existe link antigo, então o caminho comum
+   (primeira vez) não vê esse cartão.
+   =================================================================== */
+.apv-links-antigos .apv-rotulo { margin-bottom: 10px; }
+/* Coluna, não linha: a coluna do painel tem ~350px, e nome do arquivo +
+   dois botões lado a lado espremia o nome em duas linhas com os botões
+   colados nele. Empilhado, cada parte tem a largura inteira. */
+.apv-link-antigo {
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 10px 0; border-top: 1px solid var(--border);
+}
+.apv-link-antigo:first-child { border-top: none; padding-top: 0; }
+.apv-link-antigo-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.apv-link-antigo .apv-btn { flex: 1; }
+.apv-link-antigo-acoes { display: flex; gap: 8px; }
+.apv-link-antigo-nome {
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.apv-link-antigo-meta { font-size: 11.5px; color: var(--text-muted); }
+.apv-link-antigo-excluir:hover { color: var(--danger); border-color: var(--danger); }
+.apv-links-antigos-nota {
+  margin-top: 10px; font-size: 11.5px; color: var(--text-muted); line-height: 1.45;
+}

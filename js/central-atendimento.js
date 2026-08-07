@@ -140,7 +140,7 @@ function centralTrocarAba(aba) {
   document.querySelectorAll(".central-nav-ic[data-central-tab]").forEach(b => {
     b.classList.toggle("active", b.dataset.centralTab === aba);
   });
-  ["hoje", "clientes", "aprovacoes", "cobrancas", "metricas"].forEach(nome => {
+  ["hoje", "clientes", "aprovacoes", "metricas"].forEach(nome => {
     const el = document.getElementById("centralTab" + nome.charAt(0).toUpperCase() + nome.slice(1));
     if (el) el.hidden = nome !== aba;
   });
@@ -167,7 +167,6 @@ function centralRenderTudo() {
   centralRenderHoje();
   centralRenderClientes();
   centralRenderAprovacoes();
-  centralRenderCobrancas();
   centralRenderMetricas();
   centralAtualizarBadges();
 }
@@ -259,9 +258,32 @@ function centralRenderHoje() {
   centralPreencherSecaoFila("sHoje1", esperandoVoce, "pendente");
   centralPreencherSecaoFila("sHoje2", prontasEnviar, "aprovada");
 
+  // Leva pra COLUNA certa, não só pra aba (2026-08-06). Antes o botão
+  // guardava qual coluna no `data-central-stat-ir` e ninguém lia: a pessoa
+  // clicava em "3 peças esperando" e caía numa tela de quatro colunas,
+  // tendo que procurar de novo o que já tinha achado.
   el.querySelectorAll("[data-central-stat-ir]").forEach(btn => {
-    btn.addEventListener("click", () => centralTrocarAba("aprovacoes"));
+    btn.addEventListener("click", () => centralAbrirAprovacoesEm(btn.dataset.centralStatIr));
   });
+}
+
+/**
+ * Abre a aba Aprovações já com a coluna pedida em destaque. O realce
+ * (.destacada) some sozinho depois de um instante — é só pra guiar o olho
+ * até o lugar certo, não um estado que a pessoa precise desfazer.
+ */
+function centralAbrirAprovacoesEm(chaveColuna) {
+  // Vindo de um cartão de número, a pessoa quer ver a LISTA daquilo — o
+  // filtro "só o que precisa cobrar" esconderia parte dela.
+  centralFiltroAprovacoes = "tudo";
+  centralTrocarAba("aprovacoes");
+  centralRenderAprovacoes();
+
+  const col = document.querySelector(`#centralTabAprovacoes [data-central-col="${chaveColuna}"]`);
+  if (!col) return;
+  col.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  col.classList.add("destacada");
+  setTimeout(() => col.classList.remove("destacada"), 1600);
 }
 
 /**
@@ -436,112 +458,78 @@ function centralRenderClientes() {
 // colunas por estado em vez de feed — pra quem prefere visão de quadro.
 // ---------------------------------------------------------------------------
 
+// O filtro que substituiu a aba "Cobranças" (2026-08-06). "tudo" mostra as
+// 4 colunas; "atrasadas" mostra só o que precisa ser cobrado hoje — cliente
+// sem responder há 3+ dias e ajuste que voltou e ninguém repassou, que era
+// exatamente o recorte daquela aba.
+let centralFiltroAprovacoes = "tudo";
+
 function centralRenderAprovacoes() {
   const el = document.getElementById("centralTabAprovacoes");
   if (!el) return;
 
-  const esperandoVoce = centralFilaPor("pendente");
-  const prontasEnviar = centralFilaPor("aprovada");
-  const comCliente = centralAprovacoesPor("pendente");
+  const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
+  const soAtrasadas = centralFiltroAprovacoes === "atrasadas";
+  const paradaHaMuito = a => Math.floor((Date.now() - (Number(a.criadoEm) || 0)) / 86400000) >= limite;
+
+  // No modo "atrasadas" as duas primeiras colunas somem: uma peça esperando
+  // conferência é trabalho SEU, não cobrança de ninguém.
+  const esperandoVoce = soAtrasadas ? [] : centralFilaPor("pendente");
+  const prontasEnviar = soAtrasadas ? [] : centralFilaPor("aprovada");
+  const comCliente = soAtrasadas ? centralAprovacoesPor("pendente").filter(paradaHaMuito) : centralAprovacoesPor("pendente");
   const voltouAjuste = centralAprovacoesPor("ajuste");
 
+  const quantasAtrasadas = centralAprovacoesPor("pendente").filter(paradaHaMuito).length + voltouAjuste.length;
+
+  const coluna = (titulo, itens, id, chave) => `
+    <div class="central-approvals-col" data-central-col="${chave}">
+      <div class="central-approvals-col-head"><span class="central-approvals-col-title">${titulo}</span><span class="central-approvals-col-count">${itens.length}</span></div>
+      <div class="central-section-body" id="${id}"></div>
+    </div>`;
+
   el.innerHTML = `
+    <div class="central-filtro-linha">
+      <button type="button" class="central-filtro-pill ${soAtrasadas ? "" : "ativa"}" data-central-filtro="tudo">Tudo</button>
+      <button type="button" class="central-filtro-pill ${soAtrasadas ? "ativa" : ""}" data-central-filtro="atrasadas">
+        Só o que precisa cobrar${quantasAtrasadas ? ` <span class="central-filtro-conta">${quantasAtrasadas}</span>` : ""}
+      </button>
+    </div>
     <div class="central-approvals-cols">
-      <div class="central-approvals-col">
-        <div class="central-approvals-col-head"><span class="central-approvals-col-title">Esperando você</span><span class="central-approvals-col-count">${esperandoVoce.length}</span></div>
-        <div class="central-section-body" id="aColEsperando"></div>
-      </div>
-      <div class="central-approvals-col">
-        <div class="central-approvals-col-head"><span class="central-approvals-col-title">Prontas pra enviar</span><span class="central-approvals-col-count">${prontasEnviar.length}</span></div>
-        <div class="central-section-body" id="aColProntas"></div>
-      </div>
-      <div class="central-approvals-col">
-        <div class="central-approvals-col-head"><span class="central-approvals-col-title">Com o cliente</span><span class="central-approvals-col-count">${comCliente.length}</span></div>
-        <div class="central-section-body" id="aColCliente"></div>
-      </div>
-      <div class="central-approvals-col">
-        <div class="central-approvals-col-head"><span class="central-approvals-col-title">Voltou com ajuste</span><span class="central-approvals-col-count">${voltouAjuste.length}</span></div>
-        <div class="central-section-body" id="aColAjuste"></div>
-      </div>
+      ${soAtrasadas ? "" : coluna("Esperando você", esperandoVoce, "aColEsperando", "esperando")}
+      ${soAtrasadas ? "" : coluna("Prontas pra enviar", prontasEnviar, "aColProntas", "prontas")}
+      ${coluna(soAtrasadas ? `Cliente sem responder há ${limite}+ dias` : "Com o cliente", comCliente, "aColCliente", "comCliente")}
+      ${coluna("Voltou com ajuste", voltouAjuste, "aColAjuste", "ajuste")}
     </div>
   `;
 
-  centralPreencherSecaoFila("aColEsperando", esperandoVoce, "pendente");
-  centralPreencherSecaoFila("aColProntas", prontasEnviar, "aprovada");
-  centralPreencherSecaoAprovacoes("aColCliente", comCliente, "Nada aqui.");
-  centralPreencherSecaoAprovacoes("aColAjuste", voltouAjuste, "Nada aqui.");
-}
-
-// ---------------------------------------------------------------------------
-// ABA: COBRANÇAS — rascunhos prontos pra revisar e mandar. Sem IA por
-// enquanto (nada vai pro Runrun.it/WhatsApp sozinho de qualquer jeito):
-// um texto-modelo já identifica cliente/peça/tempo de espera, que é o que
-// mais falta na hora de cobrar. Reaproveita o MESMO link wa.me/?text= sem
-// número (abre o seletor de conversa do WhatsApp do atendimento) que a aba
-// Aprovações da Fila de repasse já usa.
-// ---------------------------------------------------------------------------
-
-function centralRenderCobrancas() {
-  const el = document.getElementById("centralTabCobrancas");
-  if (!el) return;
-
-  const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
-  const paradas = centralAprovacoesPor("pendente").filter(a => {
-    const dias = Math.floor((Date.now() - (Number(a.criadoEm) || 0)) / 86400000);
-    return dias >= limite;
-  });
-  const semRepasse = centralAprovacoesPor("ajuste");
-
-  el.innerHTML = [
-    centralSecaoHTML("Cliente sem responder", "ambar", paradas.length, "cCobranca1", paradas.length === 0),
-    centralSecaoHTML("Ajuste voltou, ainda dá pra cobrar o designer", "neutro", semRepasse.length, "cCobranca2", semRepasse.length === 0),
-  ].join("");
-
-  centralPreencherSecaoCobranca("cCobranca1", paradas, "cliente");
-  centralPreencherSecaoCobranca("cCobranca2", semRepasse, "designer");
-  centralLigarSecoesColapsaveis(el);
-
-  if (!paradas.length && !semRepasse.length) {
-    el.innerHTML = `<div class="central-vazio-inline">Nada pra cobrar agora. 🎉</div>`;
+  if (!soAtrasadas) {
+    centralPreencherSecaoFila("aColEsperando", esperandoVoce, "pendente");
+    centralPreencherSecaoFila("aColProntas", prontasEnviar, "aprovada");
   }
-}
+  centralPreencherSecaoAprovacoes("aColCliente", comCliente, soAtrasadas ? "Ninguém atrasado. 🎉" : "Nada aqui.");
+  centralPreencherSecaoAprovacoes("aColAjuste", voltouAjuste, "Nada aqui.");
 
-function centralPreencherSecaoCobranca(idCorpo, itens, tipo) {
-  const corpo = document.getElementById(idCorpo);
-  if (!corpo) return;
-  if (!itens.length) { corpo.innerHTML = ""; return; }
-
-  corpo.innerHTML = itens.map((a, i) => {
-    const dias = Math.floor((Date.now() - (Number(a.criadoEm) || 0)) / 86400000);
-    const texto = tipo === "cliente"
-      ? `Oi! Passando pra saber se você já conseguiu dar uma olhada em "${a.tituloTarefa || a.nomeArquivo || "a peça"}" — ela está esperando resposta há ${dias} dia${dias === 1 ? "" : "s"}. Qualquer coisa é só chamar 🙂`
-      : `Oi! O cliente ${escaparParaTexto(a.cliente || "")} pediu ajuste em "${a.tituloTarefa || a.nomeArquivo || "a peça"}"${a.respostaTexto ? `: "${a.respostaTexto}"` : ""}. Você já viu?`;
-    return `
-      <div class="central-item">
-        <div class="central-item-thumb">${a.ehVideo ? "🎬" : "🖼️"}</div>
-        <div class="central-item-body">
-          <span class="central-item-cliente">${escaparHTML(a.cliente || "Sem cliente")}</span>
-          <span class="central-item-peca">${escaparHTML(a.tituloTarefa || a.nomeArquivo || "")}</span>
-          <p class="central-cobranca-texto">${escaparHTML(texto)}</p>
-        </div>
-        <div class="central-item-actions">
-          <button type="button" class="central-act-btn cobrar" data-central-cobrar="${i}" title="Mandar no WhatsApp">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  corpo.querySelectorAll("[data-central-cobrar]").forEach(btn => {
-    const a = itens[Number(btn.dataset.centralCobrar)];
+  el.querySelectorAll("[data-central-filtro]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const texto = btn.closest(".central-item").querySelector(".central-cobranca-texto").textContent;
-      const link = tipo === "cliente" && a.codigo && typeof urlDeAprovacao === "function" ? "\n\n" + urlDeAprovacao(a.codigo) : "";
-      window.open("https://wa.me/?text=" + encodeURIComponent(texto + link), "_blank", "noopener");
+      centralFiltroAprovacoes = btn.dataset.centralFiltro;
+      centralRenderAprovacoes();
     });
   });
 }
+
+// A ABA "COBRANÇAS" VIROU UM FILTRO (2026-08-06)
+//
+// Ela mostrava a MESMA lista de aprovações, só recortada por "cliente sem
+// responder há 3+ dias" e "voltou com ajuste". Eram três abas (Hoje,
+// Aprovações, Cobranças) em cima do mesmo dado, e quem usava passeava
+// entre elas procurando o que já tinha visto.
+//
+// Hoje isso é a pílula "Só o que precisa cobrar" no topo de Aprovações
+// (ver centralRenderAprovacoes). Os textos de cobrança prontos não se
+// perderam: "Cobrar no WhatsApp" (cliente) já existia no card de aprovação
+// e "Cobrar designer" foi pra lá também — os dois em cardDeAprovacaoHTML/
+// wireCardsDeAprovacao (js/pagina-repasse.js), que é o card reaproveitado
+// pelas duas telas.
 
 /** Mesmo escape de HTML, só que devolvendo texto puro (pra montar dentro de outra string antes de escapar tudo junto). */
 function escaparParaTexto(t) { return String(t == null ? "" : t); }
@@ -558,14 +546,10 @@ function centralAtualizarBadges() {
     badgeAprov.hidden = precisamDeVoce === 0;
   }
 
-  const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
-  const cobrancas = centralAprovacoesPor("pendente").filter(a => Math.floor((Date.now() - (Number(a.criadoEm) || 0)) / 86400000) >= limite).length
-    + centralAprovacoesPor("ajuste").length;
-  const badgeCobr = document.getElementById("centralBadgeCobrancas");
-  if (badgeCobr) {
-    badgeCobr.textContent = cobrancas > 99 ? "99+" : String(cobrancas);
-    badgeCobr.hidden = cobrancas === 0;
-  }
+  // O que precisa ser cobrado NÃO tem mais ícone próprio na sidebar (a aba
+  // "Cobranças" virou filtro dentro de Aprovações). O número dele aparece
+  // na própria pílula do filtro, desenhada por centralRenderAprovacoes —
+  // por isso aqui não sobrou badge nenhum pra atualizar.
 }
 
 // ---------------------------------------------------------------------------

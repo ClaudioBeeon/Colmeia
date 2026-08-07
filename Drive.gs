@@ -708,6 +708,14 @@ function fazerBackupDaPlanilha() {
   } catch (err) {
     Logger.log('Erro ao limpar conferências antigas: ' + err.message);
   }
+  // O e-mail diário da fila pro atendimento (AprovacaoInterna.gs). Pega
+  // carona nesta passada diária em vez de ter gatilho próprio. Enquanto
+  // EMAIL_FILA_LIGADO for false ele só escreve no log, sem mandar nada.
+  try {
+    enviarEmailDiarioDaFila();
+  } catch (err) {
+    Logger.log('Erro ao enviar o e-mail diário da fila: ' + err.message);
+  }
   // Mesma ideia pra aba "Aprovacoes" (link que o cliente abre): linha já
   // decidida (aprovado/ajuste) vira histórico e é podada em 30 dias. O
   // que está "pendente" nunca é apagado.

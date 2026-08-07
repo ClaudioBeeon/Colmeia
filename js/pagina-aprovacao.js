@@ -273,8 +273,18 @@ function apvRenderFila(itens) {
       // com esse nome — abrir a conferência só pra mostrar esse mesmo erro
       // um segundo depois é um beco sem saída disfarçado de botão normal.
       if (item.arquivoSumiu) {
+        // Antes isso era um beco: o aviso aparecia e acabava ali, sem jeito
+        // de tirar da fila. Como o que está "pendente" nunca é podado, o
+        // item ficava no contador vermelho pra sempre. Agora o mesmo aviso
+        // vem com a saída junto (2026-08-06).
         const nomes = (item.pecas || []).map(p => p.nomePeca).join(", ");
-        mostrarToast(`"${nomes}" não está mais na pasta do card — pode ter sido movida ou renomeada. Confere com ${item.designer || "o designer"} e pede pra subir de novo com o mesmo nome.`, "erro");
+        if (confirm(
+          `"${nomes}" não está mais na pasta do card — pode ter sido movida, renomeada ou apagada.\n\n` +
+          `Confere com ${item.designer || "o designer"} e pede pra subir de novo com o mesmo nome.\n\n` +
+          `Quer tirar isso da fila agora?`
+        )) {
+          apvDescartarDaFila(item);
+        }
         return;
       }
       apvAbrirConferencia(item.taskId, item.loteId);
@@ -1153,10 +1163,17 @@ async function apvConfirmarAprovacao() {
 /**
  * O clique único do botão da pílula: o que ele faz depende de já ter
  * aprovado ou não — nunca da posição visual do rótulo.
+ *
+ * Depois de aprovado ele abre o WHATSAPP, não copia (2026-08-06). Antes
+ * fazia exatamente a mesma coisa que o botão "Copiar link" logo abaixo —
+ * dois botões com nomes diferentes pro mesmo gesto, e um deles prometendo
+ * mais do que entregava: quem clicava em "Enviar para o cliente" via
+ * "Link copiado" e ficava sem saber se o cliente tinha recebido. O
+ * WhatsApp é o canal que a agência usa de verdade.
  */
 function apvClickAcao() {
   if (!apvAprovado) { apvAprovar(); return; }
-  apvCopiarLinkCliente();
+  apvEnviarPara("whatsapp");
 }
 
 /**
@@ -1300,15 +1317,16 @@ async function apvEnviarPara(canal) {
       mostrarToast("Não consegui copiar sozinho — o link é: " + link, "erro");
       return;
     }
-    mostrarToast("Link copiado.", "sucesso");
+    // COPIAR NÃO MARCA COMO ENVIADA (2026-08-06). Copiar o link pra dar
+    // uma olhada, ou pra guardar, tinha o mesmo efeito de ter mandado pro
+    // cliente: a peça saía da fila e ninguém cobrava mais. WhatsApp e
+    // e-mail abrem um canal de verdade e continuam marcando; copiar não
+    // prova que a mensagem saiu de lugar nenhum.
+    mostrarToast("Link copiado — a peça continua na fila até você mandar.", "sucesso");
+    return;
   }
 
   apvMarcarComoEnviado();
-}
-
-/** Compatibilidade: o botão "Enviar para o cliente" da pílula chama isto. */
-function apvCopiarLinkCliente() {
-  return apvEnviarPara("link");
 }
 
 /**
@@ -1411,6 +1429,92 @@ function apvRenderEnvio(peca, aprovacao) {
 
   document.getElementById("apvPreviewNota").textContent =
     "Dá uma olhada antes de mandar — é a última chance de pegar algo errado.";
+
+  apvRenderLinksExistentes(peca.taskId);
+}
+
+/**
+ * "Essa peça já tem link" — o bloco que substituiu o botão "🔗 link de
+ * aprovação" que ficava no card da tarefa (removido em 2026-08-06, ver o
+ * comentário em js/detalhe-modal.js).
+ *
+ * POR QUE PRECISA EXISTIR AQUI: `gravarLinhaDeAprovacao` (Aprovacao.gs)
+ * REAPROVEITA o código quando já existe um link pendente com o mesmo
+ * conjunto de peças — o que é certo (evita dois cartões pra mesma peça),
+ * mas significa que "quero um link novo" não acontece só clicando em
+ * mandar de novo. O caminho é: excluir o antigo, e aí o próximo envio
+ * gera um do zero. Este bloco é o único lugar onde isso é possível.
+ *
+ * Só aparece quando existe link — no caso comum (primeira conferência da
+ * peça) a pessoa nunca vê esse cartão.
+ */
+async function apvRenderLinksExistentes(taskId) {
+  const bloco = document.getElementById("apvLinksAntigos");
+  if (!bloco) return;
+  bloco.hidden = true;
+
+  const data = await chamarBackend({ acao: "listarLinksDaTarefa", taskId });
+  // Sem rede, ou trocou de peça enquanto vinha: não mostra nada em vez de
+  // afirmar "não tem link" (a mesma distinção de sempre entre "não tem" e
+  // "não sei", ver caiuARede em js/config.js).
+  if (caiuARede(data) || !data || !data.ok) return;
+  if (!apvPecaAberta || String(apvPecaAberta.taskId) !== String(taskId)) return;
+
+  const links = data.links || [];
+  if (!links.length) return;
+
+  const STATUS = { pendente: "aguardando o cliente", aprovado: "já aprovado", ajuste: "pediu ajuste" };
+  const blocoAgora = document.getElementById("apvLinksAntigos");
+  if (!blocoAgora) return;
+
+  document.getElementById("apvLinksAntigosLista").innerHTML = links.map((l, i) => `
+    <div class="apv-link-antigo" data-apv-link="${i}">
+      <div class="apv-link-antigo-info">
+        <span class="apv-link-antigo-nome">${escaparHTML(String(l.nomeArquivo || "").split("|").join(", ") || "Peça")}</span>
+        <span class="apv-link-antigo-meta">${STATUS[l.status] || l.status} · ${apvDataCurta(Number(l.criadoEm))}</span>
+      </div>
+      <div class="apv-link-antigo-acoes">
+        <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" data-apv-link-copiar="${i}">Copiar</button>
+        <button type="button" class="apv-btn apv-btn-neutro apv-btn-p apv-link-antigo-excluir" data-apv-link-excluir="${i}">Excluir</button>
+      </div>
+    </div>
+  `).join("");
+  blocoAgora.hidden = false;
+
+  const base = new URL(".", location.href).href;
+
+  blocoAgora.querySelectorAll("[data-apv-link-copiar]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const url = base + "aprovar.html?codigo=" + links[Number(btn.dataset.apvLinkCopiar)].codigo;
+      try {
+        await navigator.clipboard.writeText(url);
+        mostrarToast("Link copiado.", "sucesso");
+      } catch (err) {
+        mostrarToast("Não consegui copiar sozinho — o link é: " + url, "erro");
+      }
+    });
+  });
+
+  blocoAgora.querySelectorAll("[data-apv-link-excluir]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const l = links[Number(btn.dataset.apvLinkExcluir)];
+      if (!confirm("Excluir esse link? Ele para de abrir na hora, e não dá pra desfazer.")) return;
+      btn.disabled = true;
+      const resp = await chamarBackend({ acao: "excluirLinkDeAprovacao", codigo: l.codigo });
+      if (!resp || !resp.ok) {
+        mostrarToast((resp && resp.error) || "Não consegui excluir agora.", "erro");
+        btn.disabled = false;
+        return;
+      }
+      mostrarToast("Link excluído — o próximo envio gera um novo.", "sucesso");
+      // O link guardado nesta sessão pode ser justamente o que acabou de
+      // ser excluído; zerar força apvGarantirLink a gerar outro em vez de
+      // reusar um código que não existe mais.
+      apvLinkGerado = "";
+      apvEnviado = false;
+      apvRenderLinksExistentes(taskId);
+    });
+  });
 }
 
 /** Os arquivos marcados pra ir no link. */
@@ -1801,6 +1905,72 @@ async function apvExecutarDevolucao(chave, pendente, payload) {
 }
 
 /**
+ * Descarta direto da FILA, sem abrir a conferência — usado pelo card cujo
+ * arquivo sumiu da pasta (abrir a conferência dele só mostraria o mesmo
+ * erro de novo). Mesma ação de backend do botão de dentro da conferência.
+ */
+async function apvDescartarDaFila(item) {
+  apvFila = apvFila.filter(i => !(String(i.taskId) === String(item.taskId) && i.loteId === item.loteId));
+  apvRenderFila(apvFila);
+  atualizarBadgeAprovacao();
+
+  const data = await chamarBackend({
+    acao: "descartarConferencia", taskId: item.taskId, loteId: item.loteId, quem: DESIGNER_LOGADO,
+  });
+  if (data && data.ok) {
+    mostrarToast("Tirado da fila.", "sucesso");
+    return;
+  }
+  apvFila.push(item);
+  apvRenderFila(apvFila);
+  atualizarBadgeAprovacao();
+  mostrarToast((data && data.error) || "Não consegui tirar da fila agora — tenta de novo.", "erro");
+}
+
+/**
+ * Tira o lote da fila sem aprovar nem devolver.
+ *
+ * A saída que faltava: peça mandada por engano, duplicada, ou mandada
+ * antes de ficar pronta. Não escreve nada no Runrun.it e não avisa o
+ * designer (decisão do Cláudio, 2026-08-06) — o único efeito colateral é
+ * que o botão do card dele volta a dizer "Enviar para revisão", porque
+ * `buscarConferenciaDaTarefa` ignora as descartadas (AprovacaoInterna.gs).
+ *
+ * Confirma antes porque some da fila de quem pediu, sem deixar rastro
+ * visível pra ele — não é um clique pra dar sem querer.
+ */
+async function apvDescartar() {
+  if (!apvPecaAberta) return;
+  const quantas = (apvPecaAberta.pecas || []).length;
+  if (!confirm(
+    quantas > 1
+      ? `Tirar as ${quantas} peças deste lote da fila? O designer não é avisado, e nada muda no Runrun.it.`
+      : "Tirar essa peça da fila? O designer não é avisado, e nada muda no Runrun.it."
+  )) return;
+
+  const taskId = apvPecaAberta.taskId;
+  const loteId = apvPecaAberta.loteId;
+
+  // Otimista, igual ao aprovar: some da fila e fecha na hora; se o backend
+  // recusar, volta o item e conta o que houve.
+  const itemOtimista = apvFila.find(i => String(i.taskId) === String(taskId) && i.loteId === loteId);
+  apvFila = apvFila.filter(i => !(String(i.taskId) === String(taskId) && i.loteId === loteId));
+  apvRenderFila(apvFila);
+  atualizarBadgeAprovacao();
+  apvFecharConferencia();
+
+  const data = await chamarBackend({ acao: "descartarConferencia", taskId, loteId, quem: DESIGNER_LOGADO });
+  if (data && data.ok) {
+    mostrarToast("Tirado da fila.", "sucesso");
+    return;
+  }
+  if (itemOtimista) apvFila.push(itemOtimista);
+  apvRenderFila(apvFila);
+  atualizarBadgeAprovacao();
+  mostrarToast((data && data.error) || "Não consegui tirar da fila agora — tenta de novo.", "erro");
+}
+
+/**
  * Liga/desliga o modo "clicar na peça marca um ponto" — clique é DIRETO em
  * cima da peça de verdade (o palco da coluna da direita), nada de tela ou
  * cópia da imagem à parte.
@@ -1918,6 +2088,7 @@ function apvLigarEventos() {
 
   liga("apvBtnAprovar", "click", apvClickAcao);
   liga("apvBtnDevolver", "click", apvConfirmarDevolucao);
+  liga("apvBtnDescartar", "click", apvDescartar);
   liga("apvMarcarBtn", "click", apvAlternarMarcacao);
   liga("apvPalco", "click", apvCliqueNoPalcoParaMarcar);
 

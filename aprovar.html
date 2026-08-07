@@ -478,7 +478,7 @@
             <button type="button" class="btn btn-ajuste btn-bloco" id="btnPedirAjuste">✏️ Pedir ajuste</button>
           </div>
           <div class="form-ajuste" id="formAjuste">
-            <textarea id="textoAjuste" placeholder="O que precisa mudar? (opcional)"></textarea>
+            <textarea id="textoAjuste" placeholder="O que precisa mudar?"></textarea>
             <button type="button" class="btn btn-ajuste btn-bloco" id="btnConfirmarAjuste">Enviar pedido de ajuste</button>
             <button type="button" class="btn btn-texto btn-bloco" id="btnCancelarAjuste">Cancelar</button>
           </div>
@@ -699,6 +699,35 @@
     document.getElementById("btnTentarDeNovo").onclick = function () { location.reload(); };
     document.getElementById("btnErroWhatsapp").onclick = function () {
       var texto = "Oi! Tentei abrir o link de aprovação da peça e apareceu que o sistema está fora do ar.\n\n" + location.href;
+      window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank");
+    };
+  }
+
+  /**
+   * O link venceu (30 dias, ver APROVACAO_LINK_VALIDADE_DIAS em
+   * Aprovacao.gs). A tela dizia "pede um link novo pra agência" e parava
+   * aí — sem oferecer NENHUM jeito de pedir, porque o botão de WhatsApp
+   * só aparecia quando o problema era servidor fora do ar. O cliente lia
+   * "pede pra agência" e fechava a aba (2026-08-06).
+   *
+   * "Tentar de novo" não aparece aqui de propósito: recarregar um link
+   * vencido dá vencido de novo, e um botão que não resolve nada só faz a
+   * pessoa tentar duas vezes antes de desistir.
+   */
+  function mostrarLinkVencido() {
+    document.getElementById("telaErroIcone").textContent = "⏳";
+    document.getElementById("telaErroTitulo").textContent = "Esse link venceu";
+    // Texto próprio, não o do backend: aquele já dizia "pede um link novo
+    // pra agência", que agora é o BOTÃO logo abaixo — repetir por escrito o
+    // que o botão faz só empurra o botão pra baixo.
+    document.getElementById("telaErroTexto").textContent =
+      "Links de aprovação valem 30 dias. Chama a gente que mandamos um novo na hora.";
+    document.getElementById("telaErroAcoes").hidden = false;
+    document.getElementById("btnTentarDeNovo").hidden = true;
+
+    document.getElementById("btnErroWhatsapp").textContent = "📱 Pedir um link novo";
+    document.getElementById("btnErroWhatsapp").onclick = function () {
+      var texto = "Oi! O link de aprovação que vocês mandaram venceu. Pode mandar um novo?\n\n" + location.href;
       window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank");
     };
   }
@@ -1077,6 +1106,8 @@
         // o problema é nosso só faz ele achar que errou alguma coisa.
         if (!data || data.semRede) {
           mostrarErroDeServidor();
+        } else if (data.expirado) {
+          mostrarLinkVencido();
         } else {
           document.getElementById("telaErroTexto").textContent = data.error || "Link inválido.";
         }
@@ -1148,8 +1179,41 @@
       });
       document.getElementById("btnConfirmarAjuste").addEventListener("click", function () {
         var texto = document.getElementById("textoAjuste").value.trim();
+
+        // Ajuste em branco não sai daqui (2026-08-06). Antes o campo era
+        // "(opcional)" e dava pra devolver a peça sem escrever nada e sem
+        // marcar nada: o designer recebia "✏️ Pediu ajuste" e mais nada, e
+        // alguém tinha que ligar pro cliente pra descobrir o quê.
+        //
+        // Era a assimetria mais estranha do fluxo: o ATENDIMENTO é obrigado
+        // a escrever motivo (ver apvConfirmarDevolucao), mas o CLIENTE — que
+        // é quem sabe o que incomodou — não era.
+        //
+        // Ponto marcado com texto vale como explicação: quem marcou "trocar
+        // o logo" em cima da arte já disse o que precisa. O que não vale é
+        // não dizer nada de jeito nenhum.
+        var pinsDaPeca = respondePorPeca()
+          ? pins.filter(function (p) { return p.peca === pecaAtual; })
+          : pins;
+        var temPonto = pinsDaPeca.some(function (p) { return String(p.texto || "").trim(); });
+        if (!texto && !temPonto) {
+          var erro = document.getElementById("erroEnvio");
+          erro.textContent = aceitaPins(pecas[pecaAtual])
+            ? "Escreve o que precisa mudar, ou marca um ponto na peça — sem isso o time não sabe o que ajustar."
+            : "Escreve o que precisa mudar — sem isso o time não sabe o que ajustar.";
+          erro.style.display = "block";
+          document.getElementById("textoAjuste").focus();
+          return;
+        }
+
         if (respondePorPeca()) enviarRespostaPeca(false, texto, "");
         else enviarResposta(false, texto);
+      });
+
+      // O aviso some assim que a pessoa começa a escrever — cobrar de novo
+      // o que ela já está corrigindo é ruído (mesma regra do apvMotivo).
+      document.getElementById("textoAjuste").addEventListener("input", function () {
+        document.getElementById("erroEnvio").style.display = "none";
       });
     });
   }

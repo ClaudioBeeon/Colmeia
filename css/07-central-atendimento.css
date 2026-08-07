@@ -313,3 +313,40 @@
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 .central-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+/* ===================================================================
+   Filtro de Aprovações — substituiu a aba "Cobranças" (2026-08-06),
+   que mostrava a mesma lista só recortada. Mesmo vocabulário das
+   pílulas cinzas do painel de comentários (.chat-subpills).
+   =================================================================== */
+.central-filtro-linha { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.central-filtro-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--border); background: var(--card-bg);
+  color: var(--text-secondary); cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  padding: 7px 14px; border-radius: 999px;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple), border-color var(--dur-fast) var(--ease-apple);
+}
+.central-filtro-pill:hover { color: var(--text-primary); }
+.central-filtro-pill.ativa {
+  background: var(--kanban-yellow); border-color: var(--kanban-yellow); color: #16181D;
+}
+.central-filtro-conta {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 700;
+}
+.central-filtro-pill.ativa .central-filtro-conta { background: #16181D; color: #fff; }
+
+/* O realce de "vim de um cartão de número, é esta coluna aqui". Some
+   sozinho depois de 1,6s (ver centralAbrirAprovacoesEm) — é só pra
+   guiar o olho, não um estado pra pessoa desfazer. */
+.central-approvals-col.destacada {
+  animation: centralColDestaque 1.6s var(--ease-apple);
+  border-radius: 14px;
+}
+@keyframes centralColDestaque {
+  0%, 60% { background: var(--accent-soft); }
+  100%    { background: transparent; }
+}

@@ -307,6 +307,8 @@ function handleRequest(e, method) {
         output = listarVersoesDasPecas(body.taskId);
       } else if (body.acao === 'aprovarInternamente') {
         output = aprovarInternamente(body.taskId, body.loteId, body.aprovadoPor);
+      } else if (body.acao === 'descartarConferencia') {
+        output = descartarConferencia(body.taskId, body.loteId, body.quem);
       } else if (body.acao === 'marcarConferenciaEnviada') {
         output = marcarConferenciaEnviada(body.taskId, body.loteId);
       } else if (body.acao === 'devolverParaDesigner') {

@@ -784,7 +784,6 @@ function renderDetail() {
                   <div class="pill-row">
                     <button type="button" class="acao-pill" id="beeConferirBtn" title="A Bee compara o que foi pedido com o que você subiu no Drive">🐝 conferir o que falta</button>
                     <button type="button" class="acao-pill" id="beeCompararVersoesBtn" title="A Bee compara as duas versões mais recentes (arquivos '- v1', '- v2'...) da pasta do card">🔍 comparar versões</button>
-                    <button type="button" class="acao-pill" id="gerarLinkAprovacaoBtn" title="Gera um link sem login pro cliente aprovar (ou pedir ajuste) na peça mais recente da pasta do card">🔗 link de aprovação</button>
                   </div>
                 </div>
                 <div class="anexos-secao">
@@ -1607,9 +1606,6 @@ function renderDetail() {
   const beeCompararVersoesBtn = document.getElementById("beeCompararVersoesBtn");
   if (beeCompararVersoesBtn) beeCompararVersoesBtn.addEventListener("click", () => compararVersoesComABee(tasks[detailIdx] || task, beeCompararVersoesBtn));
 
-  const gerarLinkAprovacaoBtn = document.getElementById("gerarLinkAprovacaoBtn");
-  if (gerarLinkAprovacaoBtn) gerarLinkAprovacaoBtn.addEventListener("click", () => gerarLinkDeAprovacaoParaTarefa(tasks[detailIdx] || task, gerarLinkAprovacaoBtn));
-
   // Um botão só, que vai e volta: nos comentários ele leva pra Bee, e
   // dentro da Bee ele traz de volta pros comentários.
   const chatIconeBee = document.getElementById("chatIconeBee");
@@ -1921,8 +1917,8 @@ function registrarFalaDaBeeSobrePasta(taskId, dataBee) {
 }
 
 /**
- * A oferta das 3 ações ("conferir o que falta"/"comparar versões"/"link
- * de aprovação") aparecendo DIRETO no chat de Comentários — não troca de
+ * A oferta das ações da pasta ("conferir o que falta"/"comparar versões")
+ * aparecendo DIRETO no chat de Comentários — não troca de
  * aba, não mexe na conversa da Bee que está na tela. Reaproveita
  * bolhaDaBee/renderAcoesPastaHTML (js/bee.js, carregado depois — daí o
  * typeof-guard) só pro VISUAL da bolha; os botões chamam as mesmas ações
@@ -1940,7 +1936,6 @@ function mostrarAvisoAcoesPastaInline(task, texto) {
       const alvo = tasks[detailIdx] || task;
       if (btn.dataset.acaoPasta === "conferir") conferirEntregaComABee(alvo, btn);
       else if (btn.dataset.acaoPasta === "comparar") compararVersoesComABee(alvo, btn);
-      else if (btn.dataset.acaoPasta === "aprovacao") gerarLinkDeAprovacaoParaTarefa(alvo, btn);
       wrap.remove();
     });
   });
@@ -1949,191 +1944,44 @@ function mostrarAvisoAcoesPastaInline(task, texto) {
 wireArrastarArquivoParaCard();
 
 /**
- * "Link de aprovação": gera um link sem login pro cliente aprovar (ou
- * pedir ajuste) na peça mais recente da pasta do card do Drive (ver
- * gerarLinkDeAprovacao, Aprovacao.gs) e já copia pro clipboard, pronto
- * pra colar no WhatsApp/e-mail do cliente.
+ * ONDE FOI PARAR O "LINK DE APROVAÇÃO" (2026-08-06)
  *
- * A URL completa é montada AQUI, não no backend: só o navegador sabe o
- * endereço de onde o Colmeia está publicado agora (mesma técnica do
- * ROTA_BASE em js/roteador-url.js) — assim não quebra quando o domínio
- * mudar pra colmeia.beeon.com.br.
+ * Este arquivo tinha o botão que gerava o link do cliente direto do card
+ * (`gerarLinkDeAprovacaoParaTarefa`, `abrirLinksExistentesDeAprovacao`,
+ * `gerarECopiarLinkDeAprovacao`, `mostrarLinkDeAprovacaoDaBee`). Ele foi
+ * REMOVIDO de propósito, a pedido do Cláudio.
  *
- * O comentário automático (quando o cliente responder) sempre sai pela
- * conta do coordenador, com um cabeçalho fixo "Alterações do cliente"
- * deixando claro que é o cliente falando, relayed — não a conta de
- * quem gerou o link (ver responderAprovacaoPublica, Aprovacao.gs).
+ * O motivo é de produto, não de código: enquanto ele existisse, todo o
+ * portão da conferência do atendimento era opcional — dava pra mandar uma
+ * peça pro cliente sem ninguém conferir, que é exatamente o erro que
+ * aquelas telas foram feitas pra evitar. Dois caminhos pro mesmo destino,
+ * e o errado era o mais curto.
+ *
+ * Hoje o link do cliente NASCE SÓ na tela de conferência (apvGarantirLink,
+ * js/pagina-aprovacao.js), e o "já existe um link / excluir / gerar outro"
+ * mora lá também (apvRenderLinksExistentes). O que sobrou aqui é
+ * `abrirEscolhaDePeca`, que continua sendo usado pra escolher QUAIS peças
+ * vão pra revisão (escolherPecasParaRevisao, js/pagina-aprovacao.js).
  */
-/**
- * Pedido do Cláudio (2026-08-04): "quando sobe duas versões, stories e
- * feed, já aparece no mesmo link quando tem mais de uma opção?". Não
- * aparecia — o backend escolhia uma peça sozinho, meio no sorteio.
- * Agora primeiro CONTA quantas peças distintas tem na pasta
- * (listarPecasDaPastaDoCard, Aprovacao.gs — agrupa "Feed - v1"/"Feed -
- * v2" como a mesma peça, mas "Feed" e "Stories" como peças diferentes):
- * com uma peça só, gera o link direto (sem perguntar nada, igual
- * sempre foi); com mais de uma, abre uma escolha (abrirEscolhaDePeca)
- * pra decidir qual delas vai nesse link.
- */
-async function gerarLinkDeAprovacaoParaTarefa(task, btn) {
-  if (!task || !task.id) return;
-  const original = btn.dataset.textoOriginal || btn.textContent;
-  btn.dataset.textoOriginal = original;
-  btn.disabled = true;
-  btn.textContent = "Verificando...";
-
-  // Pedido do Cláudio (2026-08-06): "tem vários teste que fiz e continuam
-  // ali, cada um com link da mesma tarefa" — antes de sair gerando outro
-  // link, checa se já existe algum pra essa tarefa e deixa a pessoa
-  // escolher (copiar o que já tem, excluir um específico, ou excluir tudo
-  // e gerar um link novo do zero).
-  const dataLinks = await chamarBackend({ acao: "listarLinksDaTarefa", taskId: task.id });
-  const linksExistentes = (dataLinks && dataLinks.ok) ? (dataLinks.links || []) : [];
-
-  btn.disabled = false;
-  btn.textContent = original;
-
-  if (linksExistentes.length) {
-    abrirLinksExistentesDeAprovacao(task, btn, linksExistentes);
-    return;
-  }
-
-  await prosseguirGerandoLinkDeAprovacao(task, btn);
-}
-
-async function prosseguirGerandoLinkDeAprovacao(task, btn) {
-  const original = btn.dataset.textoOriginal || btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Procurando peças...";
-
-  const dataPecas = await chamarBackend({ acao: "listarPecasDaPastaDoCard", taskId: task.id });
-
-  btn.disabled = false;
-  btn.textContent = original;
-
-  if (!dataPecas || !dataPecas.ok) {
-    mostrarToast((dataPecas && dataPecas.error) || "Não consegui procurar a pasta do card agora.", "erro");
-    return;
-  }
-  const pecas = dataPecas.pecas || [];
-  if (pecas.length === 0) {
-    mostrarToast("Não encontrei nenhuma imagem ou vídeo na pasta do card pra gerar o link.", "erro");
-    return;
-  }
-  if (pecas.length === 1) {
-    await gerarECopiarLinkDeAprovacao(task, btn, pecas[0].fileId, pecas[0].nome);
-    return;
-  }
-  abrirEscolhaDePeca(task, btn, pecas);
-}
 
 /**
- * "Já existe link pra essa tarefa" — mostrado ANTES de gerar um novo (ver
- * gerarLinkDeAprovacaoParaTarefa). Cada linha tem copiar/excluir; o botão
- * de baixo excluiu TODOS os listados e cai no fluxo normal de gerar um
- * link novo do zero (listarPecasDaPastaDoCard).
- */
-function abrirLinksExistentesDeAprovacao(task, btn, links) {
-  const STATUS_TXT = { pendente: "⏳ aguardando", aprovado: "✅ aprovado", ajuste: "✏️ ajuste" };
-  document.getElementById("pecasEscolhaMenu")?.remove();
-  const rect = btn.getBoundingClientRect();
-  const menu = document.createElement("div");
-  menu.id = "pecasEscolhaMenu";
-  menu.className = "pecas-escolha-menu";
-  menu.style.top = Math.round(rect.bottom + 6) + "px";
-  menu.style.left = Math.round(Math.max(8, rect.right - 260)) + "px";
-  menu.style.minWidth = "260px";
-
-  const base = new URL(".", location.href).href;
-
-  menu.innerHTML = `
-    <div class="pecas-escolha-titulo">Já tem link${links.length > 1 ? "s" : ""} de aprovação pra essa tarefa</div>
-    ${links.map((l, i) => `
-      <div class="pecas-links-existentes-item" data-idx="${i}">
-        <span class="pecas-links-existentes-nome" title="${escaparHTML(l.nomeArquivo || "")}">${escaparHTML(l.nomeArquivo || "Peça")}</span>
-        <span class="pecas-links-existentes-status">${STATUS_TXT[l.status] || l.status}</span>
-        <button type="button" class="pecas-links-existentes-copiar" data-idx="${i}" title="Copiar link">🔗</button>
-        <button type="button" class="pecas-links-existentes-excluir" data-idx="${i}" title="Excluir este link">🗑️</button>
-      </div>
-    `).join("")}
-    <button type="button" class="pecas-escolha-confirmar" id="pecasLinkNovoOk">🔄 Excluir os antigos e gerar um novo</button>
-  `;
-  document.body.appendChild(menu);
-
-  menu.querySelectorAll(".pecas-links-existentes-copiar").forEach(b => {
-    b.addEventListener("click", async () => {
-      const url = base + "aprovar.html?codigo=" + links[Number(b.dataset.idx)].codigo;
-      try {
-        await navigator.clipboard.writeText(url);
-        mostrarToast("Link copiado.", "sucesso");
-      } catch (err) {
-        mostrarToast(`Link: ${url}`);
-      }
-    });
-  });
-
-  menu.querySelectorAll(".pecas-links-existentes-excluir").forEach(b => {
-    b.addEventListener("click", async () => {
-      if (!confirm("Excluir este link de aprovação? Não dá pra desfazer.")) return;
-      const l = links[Number(b.dataset.idx)];
-      const data = await chamarBackend({ acao: "excluirLinkDeAprovacao", codigo: l.codigo });
-      if (!data.ok) {
-        mostrarToast(data.error || "Não consegui excluir agora.", "erro");
-        return;
-      }
-      mostrarToast("Link excluído.", "sucesso");
-      menu.remove();
-      gerarLinkDeAprovacaoParaTarefa(task, btn);
-    });
-  });
-
-  menu.querySelector("#pecasLinkNovoOk").addEventListener("click", async () => {
-    menu.remove();
-    const original = btn.dataset.textoOriginal || btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Excluindo links antigos...";
-    for (const l of links) {
-      await chamarBackend({ acao: "excluirLinkDeAprovacao", codigo: l.codigo });
-    }
-    btn.disabled = false;
-    btn.textContent = original;
-    await prosseguirGerandoLinkDeAprovacao(task, btn);
-  });
-
-  setTimeout(() => {
-    const fecharSeForaDoMenu = e => {
-      if (menu.isConnected && !menu.contains(e.target)) {
-        menu.remove();
-        document.removeEventListener("click", fecharSeForaDoMenu, true);
-      }
-    };
-    document.addEventListener("click", fecharSeForaDoMenu, true);
-  }, 0);
-}
-
-/**
- * Popup simples, criado na hora (não é fixo no HTML porque o botão que
- * chama isso existe em 3 lugares diferentes — side-block do card, aviso
- * inline da Bee no chat de Comentários, e a conversa da Bee — mais fácil
- * criar do zero encostado no botão certo do que ter 3 cópias do menu no
- * index.html). `position:fixed` porque `getBoundingClientRect()` já é
- * relativo à tela, do mesmo jeito.
+ * Popup simples, criado na hora, encostado no botão que chamou —
+ * `position:fixed` porque `getBoundingClientRect()` já é relativo à tela,
+ * do mesmo jeito.
  *
- * Serve pros DOIS momentos em que a pessoa precisa dizer quais peças da
- * pasta ela quer: gerar o link do cliente e mandar pra revisão interna.
- * `opcoes` (título, rótulo do botão e o que fazer com a escolha) é o que
- * muda entre os dois — o resto é idêntico, e ter duas cópias disso seria
- * o começo de elas divergirem sem ninguém perceber.
+ * Hoje serve a UM momento: escolher quais peças da pasta vão pra revisão
+ * interna (escolherPecasParaRevisao, js/pagina-aprovacao.js). Servia
+ * também pra escolher as peças do link do cliente, mas esse botão saiu do
+ * card em 2026-08-06 (ver o bloco acima) — por isso `aoConfirmar` agora é
+ * obrigatório em vez de ter um padrão: sem ele, o menu não teria o que
+ * fazer com a escolha.
  */
 function abrirEscolhaDePeca(task, btn, pecas, opcoes) {
   opcoes = opcoes || {};
-  const titulo = opcoes.titulo || "Quais peças vão nesse link?";
-  const rotuloBotao = opcoes.rotuloBotao || "Gerar link";
-  const aoConfirmar = opcoes.aoConfirmar || ((escolhidas) => gerarECopiarLinkDeAprovacao(
-    task, btn,
-    escolhidas.map(p => p.fileId),
-    escolhidas.map(p => p.nome).join(", ")
-  ));
+  const titulo = opcoes.titulo || "Quais peças?";
+  const rotuloBotao = opcoes.rotuloBotao || "Confirmar";
+  const aoConfirmar = opcoes.aoConfirmar;
+  if (typeof aoConfirmar !== "function") return;
   document.getElementById("pecasEscolhaMenu")?.remove();
   const rect = btn.getBoundingClientRect();
   const menu = document.createElement("div");
@@ -2182,85 +2030,6 @@ function abrirEscolhaDePeca(task, btn, pecas, opcoes) {
     };
     document.addEventListener("click", fecharSeForaDoMenu, true);
   }, 0);
-}
-
-async function gerarECopiarLinkDeAprovacao(task, btn, fileId, nomeArquivo) {
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Gerando link...";
-
-  const data = await chamarBackend({
-    acao: "gerarLinkDeAprovacao",
-    taskId: task.id,
-    cliente: task.client,
-    tituloTarefa: task.title,
-    fileId: fileId || null,
-  });
-
-  btn.disabled = false;
-  btn.textContent = original;
-
-  if (!data.ok) {
-    mostrarToast(data.error || "Não consegui gerar o link de aprovação agora.", "erro");
-    return;
-  }
-
-  const base = new URL(".", location.href).href;
-  const url = base + "aprovar.html?codigo=" + data.codigo;
-
-  // O link vira uma FALA DA BEE que fica na tela — antes ele só existia
-  // dentro de um toast que sumia em segundos (e quando o navegador
-  // recusava a cópia automática, o link ia embora junto com o aviso, sem
-  // ninguém conseguir ler). Copiar continua acontecendo; agora é um
-  // extra, não o único caminho pro link.
-  mostrarLinkDeAprovacaoDaBee(task, url, data.nomeArquivo || nomeArquivo || "");
-
-  try {
-    await navigator.clipboard.writeText(url);
-    mostrarToast("Link de aprovação copiado.", "sucesso");
-  } catch (err) {
-    // Sem toast de erro aqui de propósito: o link já está na tela, na
-    // fala da Bee, com um botão de copiar do lado.
-  }
-}
-
-/**
- * A fala da Bee com o link pronto pra mandar pro cliente. Mora no mesmo
- * #beeInlineAvisos das outras falas dela (ver mostrarAvisoAcoesPastaInline
- * acima), então fica visível no chat de Comentários sem trocar de aba e
- * sem ser apagada quando a lista de comentários é redesenhada sozinha.
- */
-function mostrarLinkDeAprovacaoDaBee(task, url, nomeArquivo) {
-  const avisos = document.getElementById("beeInlineAvisos");
-  if (!avisos || typeof bolhaDaBee !== "function") {
-    // Card fechado (a ação pode ter saído da paleta//da conversa da Bee):
-    // sem lugar pra bolha, o toast com o link inteiro é o plano B.
-    mostrarToast(`Link de aprovação: ${url}`, "sucesso");
-    return;
-  }
-  document.getElementById("beeLinkAprovacaoAviso")?.remove();
-
-  const quais = nomeArquivo ? ` de <b>${escaparHTML(nomeArquivo)}</b>` : "";
-  const corpo = `
-    <p>Link pra aprovação${quais}:</p>
-    <p class="bee-link-aprovacao"><a href="${url}" target="_blank" rel="noopener">${escaparHTML(url)}</a></p>
-    <div class="bee-pastilhas">
-      <button type="button" class="bee-acao" data-copiar-link="1">📋 copiar link</button>
-    </div>
-  `;
-  avisos.insertAdjacentHTML("beforeend", `<div id="beeLinkAprovacaoAviso">${bolhaDaBee(corpo, -1)}</div>`);
-
-  const wrap = document.getElementById("beeLinkAprovacaoAviso");
-  wrap.querySelector("[data-copiar-link]")?.addEventListener("click", async ev => {
-    try {
-      await navigator.clipboard.writeText(url);
-      mostrarToast("Link copiado.", "sucesso");
-    } catch (err) {
-      // Navegador recusou a cópia — o link continua ali pra selecionar
-      // e copiar na mão, que é o motivo de ele estar escrito por extenso.
-      mostrarToast("Seu navegador não deixou copiar sozinho — seleciona o link e copia na mão.", "erro");
-    }
-  });
 }
 
 function updateNowPlaying() {
