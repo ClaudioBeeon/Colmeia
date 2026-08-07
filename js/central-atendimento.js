@@ -226,6 +226,22 @@ function centralClienteEhDoLogado(nomeCliente) {
 // direta ("o que eu faço primeiro?"). Ver o mesmo padrão em apvRenderFila.
 // ---------------------------------------------------------------------------
 
+// Pra saber se "Voltou com ajuste" SUBIU desde a última vez que esta aba foi
+// desenhada nesta mesma sessão (dispara o selo "novo") — comparação em
+// memória, não em localStorage: é "chegou agora enquanto eu tava de olho
+// (ou desde a última vez que abri a Central)", não um "lido/não lido"
+// persistente por dispositivo.
+let centralHojeUltimaContagemAjuste = null;
+
+/**
+ * ABA HOJE (2026-08-07) — mosaico no mesmo espírito de "Minhas métricas"
+ * (protótipo aprovado pelo Cláudio, artifact "Central do Atendimento — 3
+ * protótipos de tela inicial"): foto + cartões, cada cartão também
+ * funcionando como atalho pra abrir aquele assunto, e um card preto de
+ * ALTURA TOTAL — a Timeline — com os eventos mais recentes (ver
+ * centralConstruirTimeline). Substitui o layout anterior (kanban +
+ * cartões de número na lateral, pedido em 2026-08-06).
+ */
 function centralRenderHoje() {
   const el = document.getElementById("centralTabHoje");
   if (!el) return;
@@ -235,28 +251,65 @@ function centralRenderHoje() {
   const comCliente = centralAprovacoesPor("pendente");
   const voltouAjuste = centralAprovacoesPor("ajuste");
 
-  // Layout pedido pelo Cláudio (2026-08-06): "ficar tudo na vertical" — as
-  // colunas de kanban à esquerda (largura cheia), e do lado direito um
-  // "cartão de número grande", no mesmo estilo da aba Minhas métricas
-  // (.hr-card), em vez das listas horizontais de antes. "Com o cliente" e
-  // "Voltou com ajuste" viram só a CONTAGEM — a lista de verdade continua
-  // existindo, na aba Aprovações (ver centralAbrirAprovacoesEm), então
-  // clicar no cartão leva direto pra lá.
+  const souCoord = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+  const nomeExibido = (souCoord && centralFiltroPessoa) ? centralFiltroPessoa : (DESIGNER_LOGADO || "");
+
+  const { nomes: nomesRadar, porCliente: radarPorCliente } = centralAgruparClientesPorAlerta();
+  const limiteAlerta = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
+
+  const ajusteSubiu = centralHojeUltimaContagemAjuste !== null && voltouAjuste.length > centralHojeUltimaContagemAjuste;
+  centralHojeUltimaContagemAjuste = voltouAjuste.length;
+
   el.innerHTML = `
-    <div class="central-hoje-layout">
-      <div class="central-kanban-cols">
-        ${centralKanbanColunaHTML("Esperando você", "neutro", esperandoVoce.length, "sHoje1")}
-        ${centralKanbanColunaHTML("Prontas pra enviar", "verde", prontasEnviar.length, "sHoje2")}
+    <div class="central-hoje-grid">
+      <div class="hr-card central-hoje-tile central-hoje-foto">
+        <div class="central-hoje-foto-img" id="chFotoImg"></div>
+        <div class="central-hoje-foto-scrim"></div>
+        <div class="central-hoje-foto-info"><b id="chFotoNome"></b><span id="chFotoPapel"></span></div>
       </div>
-      <aside class="central-hoje-lateral">
-        ${centralStatCardHTML("Com o cliente", comCliente.length, "peça" + (comCliente.length === 1 ? "" : "s") + " esperando resposta", "neutro", "comCliente")}
-        ${centralStatCardHTML("Voltou com ajuste", voltouAjuste.length, "peça" + (voltouAjuste.length === 1 ? "" : "s") + " pra repassar", voltouAjuste.length ? "ambar" : "neutro", "ajuste")}
-      </aside>
+
+      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat" data-central-stat-ir="esperando">
+        <b>${esperandoVoce.length}</b><span>Esperando você</span>
+      </button>
+      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat verde" data-central-stat-ir="prontas">
+        <b>${prontasEnviar.length}</b><span>Prontas pra enviar</span>
+      </button>
+
+      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat" data-central-stat-ir="comCliente">
+        <b>${comCliente.length}</b><span>Com o cliente</span>
+      </button>
+      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat ${voltouAjuste.length ? "ambar" : ""}" data-central-stat-ir="ajuste">
+        ${ajusteSubiu ? `<span class="central-hoje-badge">novo</span>` : ""}
+        <b>${voltouAjuste.length}</b><span>Voltou com ajuste</span>
+      </button>
+
+      <div class="hr-card central-hoje-tile central-hoje-timeline">
+        <div class="central-hoje-timeline-head"><span class="central-hoje-timeline-livedot"></span>Timeline</div>
+        <div class="central-hoje-timeline-list" id="chTimelineList"></div>
+      </div>
+
+      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-wide" id="chRadarBtn">
+        <div class="central-hoje-wide-head"><span class="central-section-dot ambar"></span>Radar de clientes</div>
+        <div class="central-hoje-wide-rows">
+          ${nomesRadar.length ? nomesRadar.slice(0, 2).map(nome => {
+            const c = radarPorCliente[nome];
+            const alerta = c.maxDias >= limiteAlerta;
+            return `
+              <div class="central-hoje-wide-row">
+                <span>${escaparHTML(nome)}</span>
+                ${alerta
+                  ? `<span class="central-hoje-flag">parado há ${c.maxDias} dia${c.maxDias === 1 ? "" : "s"}</span>`
+                  : `<span class="central-hoje-muted">${c.esperando} esperando</span>`}
+              </div>
+            `;
+          }).join("") : `<div class="central-hoje-wide-vazio">Nada esperando cliente agora. 🎉</div>`}
+        </div>
+      </button>
     </div>
   `;
 
-  centralPreencherSecaoFila("sHoje1", esperandoVoce, "pendente");
-  centralPreencherSecaoFila("sHoje2", prontasEnviar, "aprovada");
+  centralPreencherFotoAtendimento("ch", nomeExibido, false);
+  centralRenderTimelineHoje();
 
   // Leva pra COLUNA certa, não só pra aba (2026-08-06). Antes o botão
   // guardava qual coluna no `data-central-stat-ir` e ninguém lia: a pessoa
@@ -265,6 +318,109 @@ function centralRenderHoje() {
   el.querySelectorAll("[data-central-stat-ir]").forEach(btn => {
     btn.addEventListener("click", () => centralAbrirAprovacoesEm(btn.dataset.centralStatIr));
   });
+  document.getElementById("chRadarBtn")?.addEventListener("click", () => centralTrocarAba("clientes"));
+}
+
+/**
+ * Junta os eventos mais recentes de DUAS fontes que a Central já busca —
+ * peça nova pedindo conferência (fila, `pedidoEm`) e cliente respondendo
+ * (aprovações, `respondidoEm`, ajuste ou aprovado) — ordenados por hora,
+ * mais recente primeiro. NENHUMA busca nova ao backend: é só reler o que
+ * já está em cache.
+ *
+ * De propósito NÃO tem "comentário" aqui: isso viveria num registro de
+ * eventos do atendimento que ainda não existe (o FeedEventos de hoje é só
+ * pra designer — comentário/prioridade/tarefa recebida, ver Planilha.gs).
+ * Dá pra somar depois; por enquanto a Timeline é honesta sobre o que
+ * consegue mostrar com o que já é buscado.
+ */
+function centralConstruirTimeline() {
+  const eventos = [];
+
+  centralFilaPor("pendente").forEach(item => {
+    const quando = Date.parse(item.pedidoEm) || 0;
+    if (!quando) return;
+    const pecas = item.pecas || [];
+    const primeira = pecas[0] || {};
+    const rotulo = pecas.length > 1 ? `${pecas.length} peças` : (primeira.nomePeca || item.tituloTarefa || "uma peça");
+    eventos.push({
+      tipo: "novo",
+      quando,
+      inicial: typeof initials === "function" ? initials(item.designer || "?") : "?",
+      texto: `<b>${escaparHTML(item.designer || "Alguém")}</b> mandou ${escaparHTML(rotulo)} pra conferência`,
+      // Vídeo não ganha miniatura (mesma regra do resto do app — ver
+      // ehImagemPreviewable, js/notificacoes-uploads.js).
+      fileId: (primeira.fileId && String(primeira.mimeType || "").indexOf("video/") !== 0) ? primeira.fileId : null,
+    });
+  });
+
+  centralMinhasAprovacoes().forEach(a => {
+    const status = a.status || "pendente";
+    if (status !== "ajuste" && status !== "aprovado") return;
+    const quando = Number(a.respondidoEm) || 0;
+    if (!quando) return;
+    const peca = a.tituloTarefa || a.nomeArquivo || "uma peça";
+    eventos.push({
+      tipo: status,
+      quando,
+      inicial: typeof initials === "function" ? initials(a.cliente || "?") : "?",
+      texto: status === "ajuste"
+        ? `<b>${escaparHTML(a.cliente || "Cliente")}</b> pediu ajuste em ${escaparHTML(peca)}`
+        : `<b>${escaparHTML(a.cliente || "Cliente")}</b> aprovou ${escaparHTML(peca)}`,
+      fileId: a.ehVideo ? null : (a.fileId || null),
+    });
+  });
+
+  return eventos.sort((a, b) => b.quando - a.quando).slice(0, 20);
+}
+
+function centralRenderTimelineHoje() {
+  const lista = document.getElementById("chTimelineList");
+  if (!lista) return;
+
+  const eventos = centralConstruirTimeline();
+  if (!eventos.length) {
+    lista.innerHTML = `<div class="central-hoje-timeline-vazio">Nada novo por aqui ainda.</div>`;
+    return;
+  }
+
+  lista.innerHTML = eventos.map(ev => `
+    <div class="central-tl-item">
+      <span class="central-tl-avatar ${ev.tipo}">${escaparHTML(ev.inicial)}</span>
+      <div class="central-tl-body">
+        <span class="central-tl-txt">${ev.texto}</span>
+        ${ev.fileId ? `<span class="central-tl-thumb" data-central-tl-thumb="${escaparHTML(ev.fileId)}"></span>` : ""}
+        <span class="central-tl-time">${centralTempoRelativo(ev.quando)}</span>
+      </div>
+    </div>
+  `).join("");
+
+  // Miniaturas entram depois, uma a uma — cada uma é uma ida ao Drive, e
+  // segurar a Timeline inteira esperando por elas atrasaria a única coisa
+  // que importa mais rápido (mesmo padrão de apvCarregarMiniatura,
+  // js/pagina-aprovacao.js).
+  lista.querySelectorAll("[data-central-tl-thumb]").forEach(el => {
+    const fileId = el.dataset.centralTlThumb;
+    if (fileId) centralCarregarMiniaturaTimeline(fileId, el);
+  });
+}
+
+async function centralCarregarMiniaturaTimeline(fileId, el) {
+  const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
+  if (!data || !data.ok || !data.base64) { el.remove(); return; }
+  if (!el.isConnected) return; // saiu da tela (redesenhou) enquanto a miniatura vinha
+  el.style.backgroundImage = `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")`;
+}
+
+/** "agora", "4 min atrás", "2 h atrás", "3 dias atrás" — pro texto da Timeline. */
+function centralTempoRelativo(quandoMs) {
+  const min = Math.max(0, Math.round((Date.now() - quandoMs) / 60000));
+  if (min < 1) return "agora";
+  if (min < 60) return `${min} min atrás`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} h atrás`;
+  const d = Math.round(h / 24);
+  return `${d} dia${d === 1 ? "" : "s"} atrás`;
 }
 
 /**
@@ -294,33 +450,6 @@ function centralAbrirAprovacoesEm(chaveColuna) {
  * depois .hr-prog-num com o número grande), não um estilo parecido: é o
  * mesmo cabeçalho, a mesma tipografia do número, o mesmo espaçamento.
  */
-function centralStatCardHTML(titulo, contagem, descricao, cor, chave) {
-  return `
-    <button type="button" class="hr-card central-stat-card" data-central-stat-ir="${chave}">
-      <div class="hr-card-cab">
-        <span class="hr-card-titulo"><span class="central-section-dot ${cor}"></span>${titulo}</span>
-      </div>
-      <div class="hr-prog-num">
-        <b>${contagem}</b>
-        <span>${descricao}</span>
-      </div>
-    </button>
-  `;
-}
-
-function centralKanbanColunaHTML(titulo, cor, contagem, idCorpo) {
-  return `
-    <div class="central-kanban-col">
-      <div class="column-header">
-        <span class="central-section-dot ${cor}"></span>
-        <h2>${titulo}</h2>
-        <span class="column-count">${contagem}</span>
-      </div>
-      <div class="central-kanban-lista" id="${idCorpo}"></div>
-    </div>
-  `;
-}
-
 function centralSecaoHTML(titulo, cor, contagem, idCorpo, colapsada) {
   return `
     <div class="central-section ${colapsada ? "colapsada" : ""}" data-central-section>
@@ -412,10 +541,13 @@ function centralPreencherSecaoAprovacoes(idCorpo, itens, textoVazio) {
 // Cálculo 100% no navegador, em cima do que já veio — nenhuma busca nova.
 // ---------------------------------------------------------------------------
 
-function centralRenderClientes() {
-  const el = document.getElementById("centralTabClientes");
-  if (!el) return;
-
+/**
+ * Agrupa as aprovações em aberto por cliente (esperando/ajustes/maxDias),
+ * ordenado por quem está parado há mais tempo primeiro. Reaproveitado pela
+ * aba Radar de clientes inteira E pelo cartão "Radar de clientes" resumido
+ * da aba Hoje (que só mostra os 2 primeiros).
+ */
+function centralAgruparClientesPorAlerta() {
   const porCliente = {};
   centralAprovacoesCache.filter(a => centralClienteEhDoLogado(a.cliente)).forEach(a => {
     const nome = a.cliente || "Sem cliente";
@@ -428,8 +560,15 @@ function centralRenderClientes() {
       porCliente[nome].maxDias = Math.max(porCliente[nome].maxDias, dias);
     }
   });
-
   const nomes = Object.keys(porCliente).sort((a, b) => porCliente[b].maxDias - porCliente[a].maxDias);
+  return { porCliente, nomes };
+}
+
+function centralRenderClientes() {
+  const el = document.getElementById("centralTabClientes");
+  if (!el) return;
+
+  const { porCliente, nomes } = centralAgruparClientesPorAlerta();
   if (!nomes.length) {
     el.innerHTML = `<div class="central-vazio-inline">Nenhum cliente com aprovação em aberto agora.</div>`;
     return;
@@ -628,11 +767,16 @@ function centralRenderMetricas() {
   centralRenderClientesEspera(itens);
 }
 
-function centralRenderFotoMetricas(nome) {
-  const img = document.getElementById("cmFotoImg");
-  const nomeEl = document.getElementById("cmFotoNome");
-  const papel = document.getElementById("cmFotoPapel");
-  const valor = document.getElementById("cmFotoValor");
+/**
+ * Preenche o cartão de foto (foto/iniciais + nome + papel) — reaproveitado
+ * pelas abas Hoje e Minhas métricas, só o prefixo dos ids muda (`ch` na
+ * Hoje, `cm` em Métricas). Só Métricas mostra o pill de "N clientes"
+ * embaixo (o protótipo aprovado da Hoje não tinha isso).
+ */
+function centralPreencherFotoAtendimento(prefixo, nome, comValor) {
+  const img = document.getElementById(prefixo + "FotoImg");
+  const nomeEl = document.getElementById(prefixo + "FotoNome");
+  const papel = document.getElementById(prefixo + "FotoPapel");
   if (!img) return;
 
   // Mesma cadeia de foto que o resto do app já usa pro atendimento — ver
@@ -655,8 +799,17 @@ function centralRenderFotoMetricas(nome) {
     papel.textContent = souCoord ? "Coordenador" : "Atendimento";
   }
 
-  const clientes = new Set(centralMinhasAprovacoes().map(a => normalizarParaComparar(a.cliente || "")).filter(Boolean));
-  if (valor) valor.textContent = clientes.size ? `${clientes.size} cliente${clientes.size > 1 ? "s" : ""}` : "—";
+  if (comValor) {
+    const valor = document.getElementById(prefixo + "FotoValor");
+    if (valor) {
+      const clientes = new Set(centralMinhasAprovacoes().map(a => normalizarParaComparar(a.cliente || "")).filter(Boolean));
+      valor.textContent = clientes.size ? `${clientes.size} cliente${clientes.size > 1 ? "s" : ""}` : "—";
+    }
+  }
+}
+
+function centralRenderFotoMetricas(nome) {
+  centralPreencherFotoAtendimento("cm", nome, true);
 }
 
 function centralRenderMetricasTopo(itens) {

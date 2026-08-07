@@ -147,62 +147,156 @@
   font-size: 13px; color: var(--text-muted); padding: 40px 0; text-align: center;
 }
 
-/* ===== "Esperando você" / "Prontas pra enviar" — duas colunas de kanban
-   de verdade (pedido do Cláudio, 2026-08-06), reaproveitando
-   .column-header/.column-count/.task-card/.card-* (css/02-quadro.css, o
-   mesmo quadro principal) por baixo dos nomes `central-kanban-*`. Não usa
-   .board/.column originais porque aquelas têm `flex:1;min-height:0` pra
-   viver dentro de uma página de altura fixa com scroll por coluna — aqui
-   é o contrário, a aba inteira rola (.central-content), então as colunas
-   só crescem com o conteúdo. */
-.central-kanban-cols {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; min-width: 0;
+/* ===================================================================
+   ABA HOJE — mosaico (2026-08-07, protótipo aprovado pelo Cláudio depois
+   do artifact "Central do Atendimento — 3 protótipos de tela inicial").
+   Mesma composição de "Minhas métricas" logo abaixo neste arquivo (foto +
+   cartões, reaproveitando .hr-card de css/04-paginas.css) — só que aqui
+   cada cartão também é um ATALHO clicável pro assunto dele, e o card preto
+   vira uma TIMELINE de altura total em vez de repetir um número.
+   =================================================================== */
+.central-hoje-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: 1.15fr 1fr 1fr 1.15fr;
+  grid-template-rows: 128px 128px 96px;
+  grid-template-areas:
+    "foto esperando prontas timeline"
+    "foto comcliente ajuste timeline"
+    "radar radar radar timeline";
 }
-.central-kanban-col { display: flex; flex-direction: column; min-width: 0; }
-.central-kanban-lista { display: flex; flex-direction: column; gap: 14px; }
-/* Mesmo problema do .central-stat-card logo abaixo: .task-card nasceu pra
-   um <div draggable>, não pra <button> — sem este reset, o navegador bota
-   borda/fundo/fonte próprios do botão por cima do estilo do card. */
+.central-hoje-tile {
+  display: flex; flex-direction: column; position: relative;
+  transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
+}
+/* .hr-card sempre foi usado numa <section> (sem estilo nativo); aqui uns
+   viram <button> — sem este reset o navegador bota borda/fundo/fonte
+   próprios do botão por cima do cartão (mesmo cuidado de .central-stat-card,
+   que essa aba substituiu). */
+.central-hoje-tile.clicavel {
+  cursor: pointer; text-align: left; width: 100%;
+  border: none; margin: 0; font: inherit; font-family: var(--font-body); color: inherit;
+  -webkit-appearance: none; appearance: none;
+}
+.central-hoje-tile.clicavel:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+
+.central-hoje-foto { grid-area: foto; padding: 0; justify-content: flex-end; }
+.central-hoje-foto-img {
+  position: absolute; inset: 0; background-size: cover; background-position: center top;
+}
+.central-hoje-foto-img.sem-foto {
+  display: flex; align-items: center; justify-content: center; background: var(--page-bg);
+  font-family: var(--font-display); font-size: 34px; font-weight: 600; color: var(--text-muted);
+}
+.central-hoje-foto-scrim {
+  position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%);
+}
+.central-hoje-foto-info { position: relative; padding: 16px; color: #fff; margin-top: auto; }
+.central-hoje-foto-info b { display: block; font-size: 17px; font-weight: 600; }
+.central-hoje-foto-info span { font-size: 12px; opacity: .85; }
+
+.central-hoje-stat { justify-content: center; gap: 4px; }
+.central-hoje-stat b {
+  font-family: var(--font-display); font-size: 30px; font-weight: 500;
+  letter-spacing: -.02em; color: var(--text-primary);
+}
+.central-hoje-stat span { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+.central-hoje-stat.verde b { color: var(--success); }
+.central-hoje-stat.ambar b { color: var(--warning); }
+.central-hoje-badge {
+  position: absolute; top: 14px; right: 14px; background: var(--danger); color: #fff;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
+  border-radius: 999px; padding: 3px 8px;
+}
+
+.central-hoje-wide { grid-area: radar; gap: 8px; justify-content: center; }
+.central-hoje-wide-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.central-hoje-wide-rows { display: flex; gap: 24px; flex-wrap: wrap; }
+.central-hoje-wide-row { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; font-weight: 600; }
+.central-hoje-flag {
+  font-size: 11px; font-weight: 700; color: #9A6400; background: var(--warning-soft);
+  border-radius: 7px; padding: 3px 8px;
+}
+[data-theme="dark"] .central-hoje-flag { color: var(--warning); }
+.central-hoje-muted { font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
+.central-hoje-wide-vazio { font-size: 12px; color: var(--text-muted); }
+
+/* Timeline — o card preto de altura TOTAL. Tudo que chega de novo (peça
+   pra conferência, ajuste pedido, aprovação) aparece aqui, mais recente
+   primeiro (ver centralConstruirTimeline, js/central-atendimento.js). De
+   propósito sem `.clicavel`: é uma lista pra ler/rolar, não um atalho —
+   cada evento dela é que pode levar a algum lugar no futuro, o card
+   inteiro não. */
+.central-hoje-timeline { grid-area: timeline; background: #16181D; color: #fff; padding: 14px 14px 6px; }
+.central-hoje-timeline-head {
+  display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700;
+  padding: 0 2px 10px; flex-shrink: 0;
+}
+.central-hoje-timeline-livedot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--success);
+  animation: centralTlPulse 1.8s ease-out infinite;
+}
+@keyframes centralTlPulse {
+  0% { box-shadow: 0 0 0 0 rgba(95,224,174,.5); }
+  70% { box-shadow: 0 0 0 8px rgba(95,224,174,0); }
+  100% { box-shadow: 0 0 0 0 rgba(95,224,174,0); }
+}
+@media (prefers-reduced-motion: reduce) { .central-hoje-timeline-livedot { animation: none; } }
+.central-hoje-timeline-list {
+  display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; min-height: 0;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent;
+}
+.central-hoje-timeline-list::-webkit-scrollbar { width: 4px; }
+.central-hoje-timeline-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 999px; }
+.central-hoje-timeline-vazio { font-size: 12px; color: rgba(255,255,255,.4); padding: 10px 2px; }
+
+.central-tl-item {
+  display: flex; align-items: flex-start; gap: 9px; padding: 8px 8px 9px;
+  border-radius: 12px; background: rgba(255,255,255,.045);
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.central-tl-item:hover { background: rgba(255,255,255,.085); }
+.central-tl-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 800; color: #16181D;
+}
+.central-tl-avatar.ajuste { background: var(--warning); }
+.central-tl-avatar.novo { background: var(--kanban-yellow); }
+.central-tl-avatar.aprovado { background: var(--success); }
+.central-tl-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.central-tl-txt { font-size: 12px; line-height: 1.4; color: rgba(255,255,255,.92); }
+.central-tl-txt b { font-weight: 700; }
+.central-tl-time { font-size: 10.5px; color: rgba(255,255,255,.4); font-weight: 500; }
+/* A miniatura fica ABAIXO do texto, esticando quase a largura toda do
+   cartão — mas BAIXA de propósito (uma faixa, não um quadrado grande),
+   pedido do Cláudio no protótipo: dá pra reconhecer a arte sem a
+   miniatura virar o cartão inteiro. */
+.central-tl-thumb {
+  width: 100%; height: 46px; border-radius: 8px;
+  background-size: cover; background-position: center; background-color: rgba(255,255,255,.06);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.1);
+}
+
+@media (max-width: 900px) {
+  .central-hoje-grid {
+    grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto);
+    grid-template-areas: "foto foto" "esperando prontas" "comcliente ajuste" "timeline timeline" "radar radar";
+  }
+  .central-hoje-foto { min-height: 120px; }
+  .central-hoje-timeline { min-height: 220px; }
+}
+
+/* ===== Cartão de fila (Aprovações), reaproveitando .task-card/.card-*
+   (css/02-quadro.css, o mesmo quadro principal) por baixo do nome
+   `central-kanban-card` — ver centralPreencherSecaoFila. */
+/* .task-card nasceu pra um <div draggable>, não pra <button> — sem este
+   reset, o navegador bota borda/fundo/fonte próprios do botão por cima
+   do estilo do card. */
 .central-kanban-card {
   width: 100%; text-align: left; cursor: pointer;
   border: none; margin: 0; font: inherit; font-family: var(--font-body); color: inherit;
   -webkit-appearance: none; appearance: none;
 }
-
-/* Layout da aba Hoje: kanban à esquerda + cartões de número grande à
-   direita (pedido do Cláudio, 2026-08-06 — "ficar tudo na vertical").
-   `align-items: flex-start` é o que deixa a lateral não esticar pra
-   acompanhar a altura do kanban quando ele cresce mais. */
-.central-hoje-layout { display: flex; gap: 20px; align-items: flex-start; }
-.central-hoje-lateral {
-  display: flex; flex-direction: column; gap: 16px;
-  width: 220px; flex-shrink: 0;
-}
-@media (max-width: 900px) {
-  .central-hoje-layout { flex-direction: column; }
-  .central-hoje-lateral { width: 100%; flex-direction: row; }
-  .central-kanban-cols { grid-template-columns: 1fr; }
-}
-
-/* Cartão de número grande — EXATAMENTE a composição do card "Resolvidas na
-   semana" de Minhas Métricas: .hr-card > .hr-card-cab > .hr-card-titulo,
-   depois .hr-prog-num (número grande + legenda), css/04-paginas.css. Só
-   vira botão clicável por cima, sem CSS de tipografia própria — é pra
-   ficar indistinguível de um card de lá, não "parecido".
-   IMPORTANTE: .hr-card sempre foi usado numa <section>, que não tem
-   estilo nativo nenhum — aqui virou um <button>, e o navegador bota
-   borda/fundo/fonte PRÓPRIOS num botão que .hr-card nunca precisou
-   anular antes. Sem esse reset explícito, sobra o stroke do botão por
-   cima do card (era o "stroke que não tem nada a ver com o Colmeia") e
-   o texto herda a fonte do sistema em vez da fonte do app. */
-.central-stat-card {
-  cursor: pointer; text-align: left; width: 100%; display: block;
-  border: none; margin: 0; font: inherit; font-family: var(--font-body); color: inherit;
-  -webkit-appearance: none; appearance: none;
-  transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
-}
-.central-stat-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
-.central-stat-card .hr-card-titulo { display: inline-flex; align-items: center; gap: 7px; }
 
 /* ===== Seções por estado (aba Hoje) ===== */
 .central-section { display: flex; flex-direction: column; gap: 10px; }

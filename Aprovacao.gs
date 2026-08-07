@@ -918,6 +918,10 @@ function listarAprovacoesPendentes() {
       // gravarLinhaDeAprovacao) — o front mostra "2 peças · nome, nome".
       nomeArquivo: obj.nomeArquivo,
       quantasPecas: idsDaLinhaDeAprovacao(obj.fileId).length || 1,
+      // Só o PRIMEIRO id (sem o "|" de várias peças) — é só pra Central do
+      // Atendimento buscar uma miniatura ilustrativa na Timeline (ver
+      // buscarThumbnailDrive), não pra abrir a peça de verdade.
+      fileId: idsDaLinhaDeAprovacao(obj.fileId)[0] || null,
       ehVideo: String(obj.mimeType || '').indexOf('video/') !== -1,
       status: status,
       criadoEm: obj.criadoEm,
