@@ -642,6 +642,14 @@ painel do devolver, conteúdo diferente).
   alguém**, de propósito: é exatamente o erro que essas telas existem pra evitar, e interromper só
   ali é o que faz a interrupção continuar significando algo. Não acrescentar confirmação em mais
   nada sem uma razão do mesmo peso.
+- **A barra de envio (2026-08-06, protótipo B aprovado pelo Cláudio).** O rodapé branco
+  (`.apv-rodape-coluna`) com o botão preto gigante saiu, e a fileira de botões dentro do cartão de
+  mensagem também: hoje é UMA barra preta arredondada só (`.apv-barra-envio`), no mesmo vocabulário
+  da `.topbar-dark` do topo do quadro — conferir de apoio (cinza, à esquerda) e mandar em destaque
+  (amarelo, à direita), com WhatsApp/copiar/e-mail no menu do "Mandar". Ela gruda no FIM da coluna
+  com `margin-top: auto` no wrapper `.apv-envio-rodape` (não na barra: senão a notinha ficava presa
+  lá em cima). **Ao mexer nela, lembrar que o `padding-bottom` da `.apv-coluna-pedido` voltou a
+  existir** — era zero enquanto o rodapé branco trazia o próprio.
 - **"Ver como o cliente vê" convida, não trava.** Existiu brevemente a ideia de deixar os botões de
   envio apagados até esse botão ser usado uma vez (classe `.apv-envio-travado`), mas isso nunca
   chegou a valer no código — e em 2026-08-06 o Cláudio decidiu que fica assim mesmo: forçar o

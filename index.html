@@ -13,13 +13,13 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-06r">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06r">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06r">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06r">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06r">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06r">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-06r">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-06s">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06s">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06s">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06s">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06s">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06s">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-06s">
 </head>
 <body>
 
@@ -1003,24 +1003,48 @@
             </div>
 
             <textarea class="apv-campo apv-envio-corpo" id="apvMsgCliente" placeholder="Oi! Segue a arte pra sua aprovação. Qualquer ajuste é só marcar direto na imagem."></textarea>
-
-            <div class="apv-envio-acoes" id="apvEnvioBotoes">
-              <button type="button" class="apv-btn apv-btn-whats" data-apv-envio="whatsapp">Mandar no WhatsApp</button>
-              <button type="button" class="apv-envio-secundario" data-apv-envio="link">Copiar link</button>
-              <button type="button" class="apv-envio-secundario" data-apv-envio="email">E-mail</button>
-            </div>
           </div>
 
-          <!-- Rodapé fixo — não rola com o resto do painel, pedido do
-               Cláudio (ver .apv-rodape-coluna, css/06-aprovacao.css).
-               Maior botão do painel de propósito: o convite pra olhar
-               antes de mandar. Ver apvAoVerPreview(). -->
-          <div class="apv-rodape-coluna">
-            <button type="button" class="apv-preview" id="apvBtnPreview">
-              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
-              Ver como o cliente vê
+          <!-- A BARRA DE ENVIO (2026-08-06, protótipo B aprovado pelo Cláudio).
+               Antes eram DUAS coisas brigando: a fileira de botões
+               (WhatsApp/copiar/e-mail) dentro do cartão, e um cartão branco
+               à parte embaixo com o "Ver como o cliente vê" preto e enorme.
+               Num painel de fundo cinza, aquele cartão branco lia como um
+               pedaço solto — e o botão preto, sendo o maior da tela, puxava
+               o olho pra longe da ação de verdade.
+
+               Agora é UM objeto só, com o vocabulário que o Colmeia já usa
+               na barra preta do topo do quadro (.topbar-dark): conferir de
+               apoio (cinza, à esquerda) e mandar em destaque (amarelo, à
+               direita). Copiar link e e-mail viraram o menu do "Mandar".
+
+               `margin-top: auto` gruda ela no FIM da coluna (pedido do
+               Cláudio) — sem isso, com painel curto ela ficava boiando no
+               meio da tela. Ver .apv-barra-envio, css/06-aprovacao.css. -->
+          <div class="apv-envio-rodape">
+          <p class="apv-preview-nota" id="apvPreviewNota">Dá uma olhada antes de mandar.</p>
+          <div class="apv-barra-envio">
+            <button type="button" class="apv-barra-ver" id="apvBtnPreview">
+              <span class="apv-barra-ver-ic" id="apvBtnPreviewIc">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+              </span>
+              <span id="apvBtnPreviewTxt">Ver como o cliente vê</span>
             </button>
-            <p class="apv-preview-nota" id="apvPreviewNota">Dá uma olhada antes de mandar — é a última chance de pegar algo errado.</p>
+            <div class="apv-barra-mandar-wrap">
+              <button type="button" class="apv-barra-mandar" id="apvBtnMandar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6L4 12z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                Mandar
+              </button>
+              <!-- Cada canal escrito por extenso: quem usa esta tela não
+                   conhece os ícones do app (ver o topo de
+                   js/pagina-aprovacao.js). -->
+              <div class="apv-envio-menu" id="apvEnvioMenu" hidden>
+                <button type="button" data-apv-envio="whatsapp">Mandar no WhatsApp</button>
+                <button type="button" data-apv-envio="link">Copiar link</button>
+                <button type="button" data-apv-envio="email">Mandar por e-mail</button>
+              </div>
+            </div>
+          </div>
           </div>
         </div>
 
@@ -1441,32 +1465,32 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-06r"></script>
-<script src="js/fila-offline.js?v=2026-08-06r"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-06r"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-06r"></script>
-<script src="js/kanban-polling.js?v=2026-08-06r"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-06r"></script>
-<script src="js/regras-briefing.js?v=2026-08-06r"></script>
-<script src="js/kanban-board.js?v=2026-08-06r"></script>
-<script src="js/clientes-hub.js?v=2026-08-06r"></script>
-<script src="js/chat-comentarios.js?v=2026-08-06r"></script>
-<script src="js/detalhe-modal.js?v=2026-08-06r"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-06r"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-06r"></script>
-<script src="js/bee.js?v=2026-08-06r"></script>
-<script src="js/paginas-designers.js?v=2026-08-06r"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-06r"></script>
-<script src="js/pagina-repasse.js?v=2026-08-06r"></script>
-<script src="js/pagina-horas.js?v=2026-08-06r"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-06r"></script>
-<script src="js/paleta-comando.js?v=2026-08-06r"></script>
-<script src="js/roteador-url.js?v=2026-08-06r"></script>
-<script src="js/detalhe-historia.js?v=2026-08-06r"></script>
-<script src="js/modo-foco.js?v=2026-08-06r"></script>
-<script src="js/pagina-bee.js?v=2026-08-06r"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-06r"></script>
-<script src="js/central-atendimento.js?v=2026-08-06r"></script>
-<script src="js/login-boot.js?v=2026-08-06r"></script>
+<script src="js/config.js?v=2026-08-06s"></script>
+<script src="js/fila-offline.js?v=2026-08-06s"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-06s"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-06s"></script>
+<script src="js/kanban-polling.js?v=2026-08-06s"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-06s"></script>
+<script src="js/regras-briefing.js?v=2026-08-06s"></script>
+<script src="js/kanban-board.js?v=2026-08-06s"></script>
+<script src="js/clientes-hub.js?v=2026-08-06s"></script>
+<script src="js/chat-comentarios.js?v=2026-08-06s"></script>
+<script src="js/detalhe-modal.js?v=2026-08-06s"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-06s"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-06s"></script>
+<script src="js/bee.js?v=2026-08-06s"></script>
+<script src="js/paginas-designers.js?v=2026-08-06s"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-06s"></script>
+<script src="js/pagina-repasse.js?v=2026-08-06s"></script>
+<script src="js/pagina-horas.js?v=2026-08-06s"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-06s"></script>
+<script src="js/paleta-comando.js?v=2026-08-06s"></script>
+<script src="js/roteador-url.js?v=2026-08-06s"></script>
+<script src="js/detalhe-historia.js?v=2026-08-06s"></script>
+<script src="js/modo-foco.js?v=2026-08-06s"></script>
+<script src="js/pagina-bee.js?v=2026-08-06s"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-06s"></script>
+<script src="js/central-atendimento.js?v=2026-08-06s"></script>
+<script src="js/login-boot.js?v=2026-08-06s"></script>
 </body>
 </html>

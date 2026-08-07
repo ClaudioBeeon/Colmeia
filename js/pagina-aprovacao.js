@@ -466,6 +466,11 @@ async function apvAbrirConferencia(taskId, loteId) {
   document.getElementById("apvPainelEnvio").hidden = true;
   document.getElementById("apvPainelStatus").hidden = true;
   document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
+  // Peça nova, barra nova: o "✓ Você já viu" da peça anterior não pode
+  // ficar aceso dizendo que esta aqui já foi conferida.
+  apvMarcarPreviewVisto(false);
+  const menuEnvio = document.getElementById("apvEnvioMenu");
+  if (menuEnvio) menuEnvio.hidden = true;
   document.getElementById("apvContextoId").hidden = true;
   document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
   // O texto que ficava aqui era o EXEMPLO estático do protótipo ("Post de
@@ -1446,6 +1451,9 @@ function apvRenderEnvio(peca, aprovacao) {
       // mandar outro seria exatamente o erro que essa tela existe pra
       // evitar, então gera um novo na próxima vez que precisar.
       apvLinkGerado = "";
+      // A seleção mudou: o "✓ Você já viu" deixa de valer, porque o que
+      // vai no link não é mais o que foi conferido. Volta pro convite.
+      apvMarcarPreviewVisto(false);
       document.getElementById("apvPreviewNota").textContent =
         "A seleção mudou — dá uma olhada de novo antes de mandar.";
     });
@@ -1454,8 +1462,11 @@ function apvRenderEnvio(peca, aprovacao) {
     if (el.dataset.apvThumb) apvCarregarMiniatura(el.dataset.apvThumb, el);
   });
 
-  document.getElementById("apvPreviewNota").textContent =
-    "Dá uma olhada antes de mandar — é a última chance de pegar algo errado.";
+  // Copy mais curta (2026-08-06): "é a última chance de pegar algo errado"
+  // põe medo em quem já está sendo cuidadoso, e quem confere 15 peças por
+  // dia lia isso 15 vezes. O convite basta; a barra logo acima já mostra
+  // onde clicar.
+  document.getElementById("apvPreviewNota").textContent = "Dá uma olhada antes de mandar.";
 
   apvRenderLinksExistentes(peca.taskId);
 }
@@ -1567,12 +1578,35 @@ function apvArquivosEscolhidos() {
     .filter(Boolean);
 }
 
-/** Gera o link de verdade e abre a página do cliente numa aba nova. */
+/**
+ * Gera o link de verdade e abre a página do cliente numa aba nova.
+ *
+ * O botão vira "✓ Você já viu" em verde, no MESMO lugar da barra — não
+ * trava nem bloqueia nada (isso é decisão registrada no CLAUDE.md, não
+ * pendência); só deixa o estado visível pra quem volta de outra aba e
+ * não lembra se já olhou esta peça.
+ */
 async function apvAoVerPreview() {
   const link = await apvGarantirLink();
   if (!link) return;
-  document.getElementById("apvPreviewNota").textContent = "Você já viu como o cliente vê.";
+  apvMarcarPreviewVisto();
   window.open(link, "_blank", "noopener");
+}
+
+const APV_ICONE_CHECK = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const APV_ICONE_OLHO = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>`;
+
+function apvMarcarPreviewVisto(visto) {
+  const btn = document.getElementById("apvBtnPreview");
+  const txt = document.getElementById("apvBtnPreviewTxt");
+  const ic = document.getElementById("apvBtnPreviewIc");
+  const nota = document.getElementById("apvPreviewNota");
+  if (!btn || !txt || !ic) return;
+  const marcar = visto !== false;
+  btn.classList.toggle("ja-visto", marcar);
+  txt.textContent = marcar ? "Você já viu" : "Ver como o cliente vê";
+  ic.innerHTML = marcar ? APV_ICONE_CHECK : APV_ICONE_OLHO;
+  if (nota) nota.textContent = marcar ? "" : "Dá uma olhada antes de mandar.";
 }
 
 /**
@@ -1589,10 +1623,14 @@ async function apvGarantirLink() {
     return "";
   }
 
+  // O progresso vai no TEXTO do botão da barra, não no innerHTML dele —
+  // ele tem um ícone dentro que precisa sobreviver (ver .apv-barra-ver,
+  // css/06-aprovacao.css).
   const btn = document.getElementById("apvBtnPreview");
-  const original = btn.innerHTML;
+  const txt = document.getElementById("apvBtnPreviewTxt");
+  const original = txt ? txt.textContent : "";
   btn.disabled = true;
-  btn.textContent = "Preparando o link...";
+  if (txt) txt.textContent = "Preparando o link...";
 
   const data = await chamarBackend({
     acao: "gerarLinkDeAprovacao",
@@ -1603,7 +1641,7 @@ async function apvGarantirLink() {
   });
 
   btn.disabled = false;
-  btn.innerHTML = original;
+  if (txt) txt.textContent = original;
 
   if (!data || !data.ok) {
     mostrarToast((data && data.error) || "Não consegui gerar o link agora.", "erro");
@@ -2167,12 +2205,34 @@ function apvLigarEventos() {
 
   liga("apvBtnPreview", "click", apvAoVerPreview);
 
-  // Os três jeitos de mandar o link — WhatsApp, copiar, e-mail — dentro do
-  // cartão "Anexos" do painel de envio. Ligados uma vez só: este bloco é
-  // markup estático do index.html, nunca recriado (mesmo padrão do resto
-  // desta função).
-  document.querySelectorAll("#apvEnvioBotoes [data-apv-envio]").forEach(btn => {
-    btn.addEventListener("click", () => apvEnviarPara(btn.dataset.apvEnvio));
+  // Os três jeitos de mandar o link — WhatsApp, copiar, e-mail. Desde a
+  // barra de envio (2026-08-06) eles moram num menu que abre no "Mandar",
+  // em vez de uma fileira fixa dentro do cartão. Ligados uma vez só: este
+  // bloco é markup estático do index.html, nunca recriado.
+  liga("apvBtnMandar", "click", (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById("apvEnvioMenu");
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    if (menu.hidden) return;
+    // Clicar fora fecha — mesma técnica do resto do app, adiada um tique
+    // pra não fechar sozinho com o MESMO clique que abriu.
+    setTimeout(() => {
+      const fechar = ev => {
+        if (menu.isConnected && !menu.hidden && !menu.contains(ev.target)) {
+          menu.hidden = true;
+          document.removeEventListener("click", fechar, true);
+        }
+      };
+      document.addEventListener("click", fechar, true);
+    }, 0);
+  });
+
+  document.querySelectorAll("#apvEnvioMenu [data-apv-envio]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.getElementById("apvEnvioMenu").hidden = true;
+      apvEnviarPara(btn.dataset.apvEnvio);
+    });
   });
 
   // O erro do motivo some assim que a pessoa começa a digitar, não só quando

@@ -305,11 +305,12 @@
 
 /* Briefing: rola por dentro dele mesmo. Texto longo é normal ali, e
    rolar TEXTO não faz ninguém aprovar a versão errada. O padding de baixo
-   fica ZERO de propósito — quem cuida do respiro final é o rodapé fixo
-   (.apv-rodape-coluna), que precisa "grudar" na borda de baixo sem sobrar
-   vão embaixo dele. */
+   era ZERO enquanto quem cuidava do respiro final era o rodapé branco
+   (que trazia o próprio padding). Ele saiu em 2026-08-06 e a barra de
+   envio não tem padding nenhum, então o respiro voltou pra cá — mesmo
+   valor de cima, pra barra não encostar na borda da tela. */
 .apv-coluna-pedido {
-  overflow-y: auto; padding: 22px 24px 0;
+  overflow-y: auto; padding: 22px 24px;
   background: var(--page-bg); border-right: 1px solid var(--border);
   /* Vira um contêiner flex (coluna) pra o painel visível poder crescer até
      o fim de verdade (ver `.apv-blocos-coluna` "flex: 1 0 auto" abaixo) —
@@ -402,20 +403,9 @@
   color: var(--kanban-yellow-text);
 }
 
-/* ----- Rodapé fixo da coluna esquerda -----
-   "Pedir alteração" e "Ver como o cliente vê" ficam GRUDADOS embaixo,
-   fora do fluxo que rola — pedido do Cláudio: quem confere não deveria
-   ter que rolar até o fim pra achar o botão de ação. `position: sticky`
-   com fundo sólido (pra cobrir o texto que passa por baixo ao rolar) e
-   uma linha fina em cima, separando do conteúdo. */
-.apv-rodape-coluna {
-  position: sticky; bottom: 0;
-  background: var(--card-bg);
-  margin: 0 -24px 0; padding: 14px 24px 22px;
-  border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 10px;
-}
-[data-theme="dark"] .apv-rodape-coluna { background: rgba(255, 255, 255, 0.02); }
+/* O rodapé branco (.apv-rodape-coluna) foi removido em 2026-08-06 —
+   ver o bloco ".apv-barra-envio" mais abaixo pro que entrou no lugar e
+   por quê. */
 
 /* Duas pílulas segmentadas — "Conferência" / "Aprovação do cliente" — no
    TOPO da coluna esquerda, junto dos blocos (pedido do Cláudio; moravam na
@@ -669,29 +659,100 @@
 .apv-campo:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .apv-campo.invalido { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
 
-/* "Ver como o cliente vê" é o maior botão do painel DE PROPÓSITO — o
-   convite pra olhar antes de mandar, sem travar o botão de enviar até
-   isso acontecer (testado com trava e incomodava: parecia quebrado). */
-.apv-preview {
-  width: 100%; padding: 20px; cursor: pointer;
-  border: none; border-radius: var(--radius-lg);
-  background: var(--text-primary); color: var(--page-bg);
-  font-family: var(--font-body); font-size: 16.5px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center; gap: 11px;
+/* ===================================================================
+   A BARRA DE ENVIO — protótipo B, aprovado pelo Cláudio (2026-08-06).
+
+   O QUE ELA SUBSTITUIU: um cartão branco solto (`.apv-rodape-coluna`)
+   com um botão preto enorme dentro ("Ver como o cliente vê"), mais uma
+   fileira separada de botões (WhatsApp/copiar/e-mail) dentro do cartão
+   de mensagem. Três problemas de uma vez: o cartão branco boiava sobre o
+   cinza da coluna, o botão preto era o maior da tela e puxava o olho pra
+   longe da ação de verdade, e os dois grupos competiam.
+
+   O QUE ELA É: o MESMO desenho da barra preta do topo do quadro
+   (.topbar-dark, css/01-base.css) — não um componente novo. Conferir é
+   apoio (cinza, à esquerda, ocupa o que sobra); mandar é a ação
+   (amarelo, à direita, do tamanho do próprio texto).
+   =================================================================== */
+/* Gruda no FIM da coluna: `.apv-blocos-coluna` é flex-column com
+   `flex: 1 0 auto`, então o `auto` aqui come todo o espaço que sobra
+   acima. Sem isso a barra boiava no meio da tela quando o painel era
+   curto (pedido do Cláudio, 2026-08-06). É o WRAPPER que desce, não a
+   barra sozinha — senão a notinha ficaria pra trás, presa lá em cima. */
+.apv-envio-rodape { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+
+.apv-barra-envio {
+  background: #16181D; border-radius: 999px; padding: 6px;
+  display: flex; align-items: center; gap: 6px;
   box-shadow: var(--shadow-hover);
-  transition: transform var(--dur-fast) var(--ease-apple), filter var(--dur-fast) var(--ease-apple);
 }
-.apv-preview:hover { filter: brightness(1.12); }
-.apv-preview:active { transform: scale(0.985); }
-.apv-preview.ja-visto {
-  background: var(--card-bg); color: var(--text-secondary);
-  border: 1px solid var(--apv-borda-forte); box-shadow: none;
-  font-size: 14px; padding: 13px;
+[data-theme="dark"] .apv-barra-envio { background: #0C0B12; border: 1px solid var(--border); }
+
+.apv-barra-ver {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; background: none; cursor: pointer; border-radius: 999px; padding: 11px 8px;
+  /* 13px e padding curto porque a coluna tem ~390px: com 13.5px e 12px de
+     padding, "Ver como o cliente vê" batia no limite e virava
+     "Ver como o cliente …" — justo o rótulo que não pode encolher. */
+  font-family: var(--apv-fonte-texto); font-size: 13px; font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
 }
+.apv-barra-ver:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
+.apv-barra-ver span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apv-barra-ver-ic { display: flex; flex-shrink: 0; }
+/* Depois de conferir vira "✓ Você já viu", em verde, no MESMO lugar.
+   Não trava nem bloqueia nada (ver o CLAUDE.md sobre isso ser decisão,
+   não pendência) — só deixa o estado visível pra quem volta de outra aba
+   e não lembra se já olhou. */
+.apv-barra-ver.ja-visto { color: var(--success); }
+.apv-barra-ver.ja-visto:hover { background: var(--apv-sucesso-suave); color: var(--success); }
+
+.apv-barra-mandar-wrap { position: relative; flex-shrink: 0; }
+.apv-barra-mandar {
+  display: flex; align-items: center; gap: 8px;
+  border: none; cursor: pointer; border-radius: 999px; padding: 11px 16px;
+  background: var(--kanban-yellow); color: #16181D;
+  font-family: var(--apv-fonte-texto); font-size: 13px; font-weight: 700;
+  transition: filter var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
+}
+.apv-barra-mandar:hover { filter: brightness(0.94); }
+.apv-barra-mandar:active { transform: scale(0.97); }
+
+/* Os três canais, escritos por extenso. Abre pra CIMA porque a barra
+   mora no fim da coluna — um menu pra baixo sairia da tela. Mesma
+   família de animação do resto do app (chatHdrMenuPop). */
+.apv-envio-menu {
+  position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 30;
+  padding: 6px; border-radius: 14px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  box-shadow: var(--shadow-hover);
+  display: flex; flex-direction: column; gap: 2px;
+  animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
+}
+.apv-envio-menu[hidden] { display: none; }
+.apv-envio-menu button {
+  border: none; background: none; text-align: left; cursor: pointer;
+  font-family: var(--apv-fonte-texto); font-size: 13px; font-weight: 600;
+  color: var(--text-primary); padding: 10px 14px; border-radius: 9px;
+  /* Sem quebra: "Mandar no WhatsApp" virava duas linhas e o menu ficava
+     parecendo um parágrafo em vez de uma lista de escolhas. É o menu que
+     se alarga pro nome caber, não o nome que encolhe. */
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.apv-envio-menu button:hover { background: var(--page-bg); }
+[data-theme="dark"] .apv-envio-menu button:hover { background: rgba(255, 255, 255, 0.07); }
+
+/* Fica ACIMA da barra, não abaixo: embaixo ela caía na borda da coluna e
+   era cortada. E ela é uma chamada PRA barra ("dá uma olhada"), então ler
+   antes do botão é a ordem certa de qualquer jeito. */
 .apv-preview-nota {
-  font-family: var(--apv-fonte-texto); font-size: 12.5px;
-  color: var(--text-secondary); text-align: center;
+  font-family: var(--apv-fonte-texto); font-size: 12px;
+  color: var(--text-muted); text-align: center; margin: 0;
 }
+.apv-preview-nota:empty { display: none; }
 .apv-preview-nota.ok { color: var(--success); }
 
 /* ===== Pedir alteração — inline na coluna do briefing =================
@@ -1149,26 +1210,14 @@
 /* Rodapé do cartão: um caminho principal (WhatsApp, que é como a agência
    manda) e dois discretos ao lado. Três botões do mesmo peso faziam a
    pessoa ter que escolher onde não havia escolha a fazer. */
-.apv-envio-acoes {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin: 2px -18px -18px; padding: 12px 18px;
-  background: var(--apv-superficie-2); border-top: 1px solid var(--border);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-}
-.apv-envio-acoes .apv-btn-whats { flex: 1; min-width: 0; padding: 10px 14px; font-size: 13px; }
-.apv-envio-secundario {
-  border: none; background: none; cursor: pointer; padding: 8px 6px;
-  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
-  color: var(--text-secondary);
-  transition: color var(--dur-fast) var(--ease-apple);
-}
-.apv-envio-secundario:hover { color: var(--text-primary); text-decoration: underline; }
+/* (`.apv-envio-acoes` / `.apv-envio-secundario` saíram em 2026-08-06:
+   era a fileira de botões dentro do cartão de mensagem, que virou o menu
+   do "Mandar" na barra de envio. Ver .apv-barra-envio acima.) */
 
-/* O "Ver como o cliente vê" fica FIXO embaixo, e com respiro claro do
-   cartão de cima (pedido do Cláudio): colado logo depois do último bloco,
-   ele parecia mais um pedaço do formulário — e ele não é um passo do
-   preenchimento, é a última olhada antes de mandar. */
-.apv-rodape-coluna { margin-top: 22px; }
+/* (Aqui morava um `margin-top: 22px` no rodapé branco, pra afastá-lo do
+   cartão de cima. O rodapé não existe mais — hoje quem separa é o
+   `margin-top: auto` da .apv-barra-envio, que joga ela pro fim da coluna
+   em vez de deixar um respiro fixo.) */
 
 /* ===================================================================
    "Tirar da fila sem conferir" — a terceira saída da conferência
