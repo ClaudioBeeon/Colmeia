@@ -13,13 +13,13 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-07g">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-07g">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-07g">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-07g">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-07g">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-07g">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-07g">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-07h">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-07h">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-07h">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-07h">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-07h">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-07h">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-07h">
 </head>
 <body>
 
@@ -888,6 +888,16 @@
                 <div class="apv-specs" id="apvBriefSpecs"></div>
               </div>
             </div>
+
+            <!-- "Peça com alteração pedida" — fica FORA do `.apv-info-corpo`
+                 de propósito (2026-08-07, protótipo aprovado pelo Cláudio):
+                 grudada no pé do bloco, ela continua visível por mais longo
+                 que o briefing seja. Dentro do corpo que rola, ela sumia lá
+                 pra baixo justamente quando havia mais o que ler — e essa é
+                 a informação mais importante da tela quando existe, porque
+                 significa que a peça já voltou uma vez.
+                 Preenchida por apvRenderAlteracaoDoBriefing(). -->
+            <div class="apv-info-rodape" id="apvBriefAlteracao" hidden></div>
           </div>
 
           <!-- O pedido do CLIENTE (2026-08-07) — só aparece quando a
@@ -930,9 +940,23 @@
                empurrados pro fim dele via `margin-top: auto`, sempre perto
                do final, com respiro, em vez de um rodapé grudado separado. -->
           <div class="apv-bloco-card apv-bloco-motivo">
-            <label class="apv-campo-rotulo" for="apvMotivo">
-              O que precisa mudar? <span class="apv-obrigatorio">obrigatório</span>
-            </label>
+            <!-- O rótulo e o botão de expandir dividem a mesma linha: o
+                 botão é uma opção DESTE campo, não uma ação da tela. -->
+            <div class="apv-motivo-topo">
+              <label class="apv-campo-rotulo" for="apvMotivo">
+                O que precisa mudar? <span class="apv-obrigatorio">obrigatório</span>
+              </label>
+              <!-- Expandir (2026-08-07, pedido do Cláudio): esconde o CORPO
+                   do bloco de briefing acima (as pílulas e o aviso de
+                   alteração continuam visíveis) e o campo herda o espaço.
+                   Pedido de alteração longo cabia em 3 linhas rolando, o que
+                   fazia quem escreve perder de vista o que já tinha escrito. -->
+              <button type="button" class="apv-expandir-btn" id="apvExpandirMotivo" aria-pressed="false"
+                      title="Dá mais espaço pra escrever, escondendo o briefing acima">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span id="apvExpandirMotivoTxt">Expandir</span>
+              </button>
+            </div>
             <textarea class="apv-campo" id="apvMotivo" placeholder="Escreva a alteração aqui."></textarea>
             <div class="apv-erro" id="apvErroMotivo" hidden>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v5.5M12 16v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
@@ -1508,32 +1532,32 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-07g"></script>
-<script src="js/fila-offline.js?v=2026-08-07g"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-07g"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-07g"></script>
-<script src="js/kanban-polling.js?v=2026-08-07g"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-07g"></script>
-<script src="js/regras-briefing.js?v=2026-08-07g"></script>
-<script src="js/kanban-board.js?v=2026-08-07g"></script>
-<script src="js/clientes-hub.js?v=2026-08-07g"></script>
-<script src="js/chat-comentarios.js?v=2026-08-07g"></script>
-<script src="js/detalhe-modal.js?v=2026-08-07g"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-07g"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-07g"></script>
-<script src="js/bee.js?v=2026-08-07g"></script>
-<script src="js/paginas-designers.js?v=2026-08-07g"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-07g"></script>
-<script src="js/pagina-repasse.js?v=2026-08-07g"></script>
-<script src="js/pagina-horas.js?v=2026-08-07g"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-07g"></script>
-<script src="js/paleta-comando.js?v=2026-08-07g"></script>
-<script src="js/roteador-url.js?v=2026-08-07g"></script>
-<script src="js/detalhe-historia.js?v=2026-08-07g"></script>
-<script src="js/modo-foco.js?v=2026-08-07g"></script>
-<script src="js/pagina-bee.js?v=2026-08-07g"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-07g"></script>
-<script src="js/central-atendimento.js?v=2026-08-07g"></script>
-<script src="js/login-boot.js?v=2026-08-07g"></script>
+<script src="js/config.js?v=2026-08-07h"></script>
+<script src="js/fila-offline.js?v=2026-08-07h"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-07h"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-07h"></script>
+<script src="js/kanban-polling.js?v=2026-08-07h"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-07h"></script>
+<script src="js/regras-briefing.js?v=2026-08-07h"></script>
+<script src="js/kanban-board.js?v=2026-08-07h"></script>
+<script src="js/clientes-hub.js?v=2026-08-07h"></script>
+<script src="js/chat-comentarios.js?v=2026-08-07h"></script>
+<script src="js/detalhe-modal.js?v=2026-08-07h"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-07h"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-07h"></script>
+<script src="js/bee.js?v=2026-08-07h"></script>
+<script src="js/paginas-designers.js?v=2026-08-07h"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-07h"></script>
+<script src="js/pagina-repasse.js?v=2026-08-07h"></script>
+<script src="js/pagina-horas.js?v=2026-08-07h"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-07h"></script>
+<script src="js/paleta-comando.js?v=2026-08-07h"></script>
+<script src="js/roteador-url.js?v=2026-08-07h"></script>
+<script src="js/detalhe-historia.js?v=2026-08-07h"></script>
+<script src="js/modo-foco.js?v=2026-08-07h"></script>
+<script src="js/pagina-bee.js?v=2026-08-07h"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-07h"></script>
+<script src="js/central-atendimento.js?v=2026-08-07h"></script>
+<script src="js/login-boot.js?v=2026-08-07h"></script>
 </body>
 </html>

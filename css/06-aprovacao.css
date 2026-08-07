@@ -1124,34 +1124,12 @@
 .apv-spec-link svg { flex-shrink: 0; opacity: 0.6; }
 
 /* ----- O briefing da Bee, juntando card mãe + tarefa -----
-   Três grupos separados porque são três perguntas diferentes na cabeça de
-   quem confere: "é do tamanho certo?", "o texto bate?", "atende o que foi
-   pedido?". Numa lista só, o tamanho e a copy se perdiam no meio do resto
-   — e são justamente os dois erros mais caros de deixar passar. */
-.apv-brief-grupo { margin-bottom: 16px; }
-.apv-brief-grupo:last-of-type { margin-bottom: 8px; }
-.apv-brief-grupo-rot {
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--text-muted); margin: 0 0 7px;
-}
-.apv-brief-formato {
-  margin: 0; font-family: var(--apv-fonte-texto);
-  font-size: 14.5px; font-weight: 600; color: var(--text-primary);
-}
-.apv-brief-lista {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 8px;
-  font-family: var(--apv-fonte-texto); font-size: 13.5px; line-height: 1.5;
-}
-.apv-brief-lista li { display: flex; align-items: flex-start; gap: 7px; flex-wrap: wrap; }
-.apv-brief-lista li::before {
-  content: ""; width: 5px; height: 5px; border-radius: 50%; margin-top: 8px;
-  background: var(--text-muted); flex-shrink: 0;
-}
-/* A copy é pra ser comparada palavra por palavra com a arte — por isso ela
-   aparece entre aspas e num tom mais forte que o resto. */
-.apv-brief-lista.copy li { font-weight: 600; }
-.apv-brief-lista.copy li::before { background: var(--accent); }
+   As três listas de bullet que viviam aqui (`.apv-brief-grupo`,
+   `.apv-brief-lista`, `.apv-brief-formato`, `.apv-brief-rodape`) foram
+   removidas em 2026-08-07: o resumo virou uma FICHA (chip de formato,
+   citação da copy, etiquetas do resto) e a alteração saiu daqui pro rodapé
+   do bloco. As regras novas ficam no fim deste arquivo, junto do rebrand.
+   Só a etiqueta de origem sobreviveu — ela é usada pelos dois desenhos. */
 
 /* A etiqueta de ORIGEM em cada item é o que resolve a confusão de "às
    vezes o pedido está num card, às vezes no outro": sem ela, tudo vira uma
@@ -1162,19 +1140,6 @@
 }
 .apv-origem.mae { background: var(--apv-amarelo-suave); color: var(--kanban-yellow-text); }
 .apv-origem.tarefa { background: var(--apv-superficie-2); color: var(--text-secondary); border: 1px solid var(--border); }
-
-/* O pedido de alteração vem em primeiro e destacado: numa peça que voltou,
-   ele é a instrução principal — o pedido original já foi atendido. */
-.apv-brief-grupo.alteracao {
-  background: var(--apv-amarelo-suave); border-radius: var(--radius-md);
-  padding: 13px 15px; margin-bottom: 18px;
-}
-.apv-brief-grupo.alteracao .apv-brief-grupo-rot { color: var(--kanban-yellow-text); }
-
-.apv-brief-rodape {
-  margin: 0; font-family: var(--apv-fonte-texto);
-  font-size: 11.5px; font-style: italic; color: var(--text-muted);
-}
 
 /* ----- Painel de envio no formato "mensagem" (versão 2, 05/08) ---------
    As peças são ANEXOS numa fileira de etiquetas, a mensagem é o corpo e
@@ -1426,4 +1391,183 @@
   .apv-coluna-pedido { order: 0; border-left: none; border-bottom: 1px solid var(--border); }
   .apv-peca-card { padding: 10px; }
   .apv-info-p { font-size: 12.5px; padding: 8px 13px; }
+}
+
+/* =====================================================================
+   O RESUMO DA BEE EM FICHA — protótipo 3, aprovado pelo Cláudio
+   (2026-08-07).
+
+   O PROBLEMA: o resumo vinha como três listas de bullet empilhadas
+   (formato, copy, o resto) e ficava enorme. Numa coluna de ~390px, um
+   briefing normal já passava de uma tela — e o aviso de "peça com
+   alteração pedida", que é a informação MAIS importante quando existe,
+   ficava lá no fim, fora da vista.
+
+   O QUE MUDA, e por quê:
+   - Formato vira um CHIP preto, quase um título. É a primeira pergunta de
+     quem confere ("é do tamanho certo?") e agora se responde num relance,
+     sem ler lista nenhuma.
+   - Copy vira um bloco de CITAÇÃO. Ela é pra ser comparada palavra por
+     palavra com a arte ao lado; tratar como citação é o que sinaliza
+     "isto aqui é texto literal, não é descrição".
+   - O resto vira ETIQUETAS soltas, não bullets. Cada detalhe de arte é
+     uma checagem independente e curta — em lista vertical elas ocupavam
+     uma linha inteira cada, por três palavras.
+   - A alteração sai do corpo e vira um rodapé fixo do bloco (ver
+     `.apv-info-rodape`), fechado por padrão.
+   ===================================================================== */
+
+/* O bloco não pode passar disso: o corpo rola por dentro e o rodapé de
+   alteração continua colado no pé. Sem um teto, `.apv-blocos-coluna` tem
+   `flex: 1 0 auto` (não encolhe), então o bloco crescia com o conteúdo e
+   quem rolava era a COLUNA inteira — levando o rodapé pra fora da tela,
+   que é exatamente o que ele não pode fazer. O `min-height` evita o outro
+   extremo: numa tela baixa, um bloco de 3 linhas com scroll interno é
+   pior que não ter teto nenhum. */
+.apv-info-bloco { max-height: 46vh; min-height: 190px; }
+
+/* Formato: o chip preto. Mesmo vocabulário da `.topbar-dark` do quadro e
+   da barra da conferência — preto arredondado, sem borda. */
+.apv-brief-formato-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--text-primary); color: var(--card-bg);
+  font-family: var(--apv-fonte-texto); font-size: 13px; font-weight: 700;
+  padding: 7px 14px 7px 11px; border-radius: 999px; margin-bottom: 12px;
+}
+.apv-brief-formato-chip svg { flex-shrink: 0; opacity: 0.75; }
+
+/* Copy: bloco de citação. A aspa grande é decorativa (aria-hidden no HTML)
+   e fica no espaço do padding-left, sem empurrar o texto. */
+.apv-brief-copy {
+  position: relative; background: var(--apv-superficie-2);
+  border-radius: var(--radius-md); padding: 13px 15px 13px 32px; margin-bottom: 12px;
+}
+.apv-brief-copy-aspa {
+  position: absolute; left: 10px; top: 6px; line-height: 1;
+  font-family: Georgia, "Times New Roman", serif; font-size: 26px; font-weight: 900;
+  color: var(--accent-soft); user-select: none;
+}
+[data-theme="dark"] .apv-brief-copy-aspa { color: var(--accent); opacity: 0.45; }
+.apv-brief-copy-item {
+  font-family: var(--apv-fonte-texto); font-size: 13.5px; line-height: 1.55;
+  color: var(--text-primary); font-weight: 600; margin-bottom: 8px;
+}
+.apv-brief-copy-item:last-child { margin-bottom: 0; }
+
+/* O resto: etiquetas. Sem bullet, sem uma linha por item. */
+.apv-brief-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.apv-brief-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card-bg); border: 1px solid var(--apv-borda-forte);
+  border-radius: 999px; padding: 5px 11px;
+  font-family: var(--apv-fonte-texto); font-size: 12.5px; line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+/* A etiqueta de origem encolhe dentro da citação e das tags — ali ela é
+   nota de rodapé, não rótulo. */
+.apv-brief-copy-item .apv-origem,
+.apv-brief-tag .apv-origem { font-size: 9.5px; padding: 1px 6px; }
+
+/* ----- O rodapé de alteração do bloco ------------------------------- */
+/* Irmão de `.apv-info-corpo`, não filho: é isso que o mantém visível por
+   mais longo que seja o briefing. `flex-shrink: 0` porque ele é a última
+   coisa que pode encolher — some do bloco antes de virar uma faixa de
+   meia altura. */
+.apv-info-rodape {
+  flex-shrink: 0; margin: 0 -18px -18px; /* sangra até a borda do cartão */
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg); overflow: hidden;
+}
+.apv-info-rodape[hidden] { display: none; }
+.apv-alt-faixa {
+  width: 100%; display: flex; align-items: center; gap: 9px; cursor: pointer;
+  border: none; background: var(--apv-amarelo-suave); color: var(--kanban-yellow-text);
+  font-family: var(--apv-fonte-texto); font-size: 13px; font-weight: 700;
+  padding: 12px 18px; text-align: left;
+  transition: filter var(--dur-fast) var(--ease-apple);
+}
+.apv-alt-faixa:hover { filter: brightness(0.97); }
+.apv-alt-faixa-txt { flex: 1; min-width: 0; }
+.apv-alt-conta {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--kanban-yellow-text); color: var(--apv-amarelo-suave);
+  font-size: 11px; font-weight: 700;
+}
+[data-theme="dark"] .apv-alt-conta { background: var(--kanban-yellow); color: #16181D; }
+.apv-alt-faixa .apv-alt-chevron {
+  flex-shrink: 0; transition: transform var(--dur-base) var(--ease-apple);
+}
+.apv-alt-faixa[aria-expanded="true"] .apv-alt-chevron { transform: rotate(180deg); }
+
+/* Aberta, ela cresce por CIMA do espaço do corpo (que encolhe e rola mais)
+   em vez de esticar o bloco — a altura total do cartão não muda, então
+   nada mais na coluna pula de lugar. O `max-height` animado é o mesmo
+   truque das seções que abrem no resto do app. */
+.apv-alt-corpo {
+  max-height: 0; overflow-y: auto; background: var(--apv-superficie-2);
+  transition: max-height var(--dur-slow) var(--ease-apple);
+}
+.apv-alt-corpo.aberta { max-height: 200px; }
+.apv-alt-lista { display: flex; flex-direction: column; gap: 6px; padding: 11px 18px 14px; }
+.apv-alt-item {
+  display: flex; align-items: flex-start; gap: 9px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 11px;
+  font-family: var(--apv-fonte-texto); font-size: 13px; line-height: 1.5; color: var(--text-primary);
+}
+.apv-alt-item-n {
+  flex-shrink: 0; margin-top: 1px; width: 17px; height: 17px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--apv-amarelo-suave); color: var(--kanban-yellow-text);
+  font-size: 10.5px; font-weight: 700;
+}
+
+/* =====================================================================
+   EXPANDIR O CAMPO "O QUE PRECISA MUDAR?" (2026-08-07, pedido do Cláudio)
+
+   Escrever um pedido de alteração num campo de 3 linhas, rolando, faz
+   quem escreve perder de vista o que já escreveu — e um pedido mal escrito
+   é uma peça refeita errada. O botão troca o espaço do BRIEFING pelo
+   espaço do CAMPO: a informação de cima é de leitura (já foi lida quando
+   se decidiu pedir alteração), a de baixo é de escrita.
+
+   O que NÃO some ao expandir: a fileira de pílulas e o rodapé de
+   alteração. As pílulas continuam clicáveis (clicar numa delas desfaz o
+   expandir — ver apvTrocarInfoPane), então ninguém fica preso sem
+   conseguir reler o briefing.
+   ===================================================================== */
+.apv-motivo-topo {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 6px;
+}
+.apv-motivo-topo .apv-campo-rotulo { margin-bottom: 0; }
+.apv-expandir-btn {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; cursor: pointer;
+  background: var(--card-bg); border: 1px solid var(--apv-borda-forte); border-radius: 999px;
+  color: var(--text-secondary); padding: 6px 11px;
+  font-family: var(--apv-fonte-texto); font-size: 12px; font-weight: 600;
+  transition: background var(--dur-fast) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple);
+}
+.apv-expandir-btn:hover { border-color: var(--accent); color: var(--accent); }
+.apv-expandir-btn svg { flex-shrink: 0; transition: transform var(--dur-base) var(--ease-apple); }
+.apv-expandir-btn[aria-pressed="true"] {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+}
+.apv-expandir-btn[aria-pressed="true"] svg { transform: rotate(180deg); }
+
+/* O corpo do briefing some; pílulas e rodapé de alteração ficam. O bloco
+   encolhe pro tamanho do que sobrou (`min-height: 0` derruba o piso de
+   190px do estado normal, senão ele reservaria espaço vazio). */
+.apv-conferencia.apv-motivo-expandido .apv-info-corpo { display: none; }
+.apv-conferencia.apv-motivo-expandido .apv-info-bloco { min-height: 0; max-height: none; }
+/* Com o bloco de cima encolhido, o cartão do motivo (`flex: 1 1 auto`) já
+   ganha o espaço sozinho; o campo só precisa deixar de ter teto pra
+   ocupá-lo. `flex: 1 1 auto` + `min-height` alto é o que faz ele esticar
+   de verdade em vez de ficar nos 82px de sempre. */
+.apv-conferencia.apv-motivo-expandido .apv-bloco-motivo .apv-campo {
+  flex: 1 1 auto; min-height: 240px;
 }

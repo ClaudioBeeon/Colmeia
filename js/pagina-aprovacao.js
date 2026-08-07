@@ -502,6 +502,10 @@ async function apvAbrirConferencia(taskId, loteId) {
     </div>
   `;
   document.getElementById("apvBriefSpecs").innerHTML = "";
+  // A faixa de alteração da peça ANTERIOR não pode sobrar em cima da nova:
+  // ela diz "esta peça já voltou uma vez", e ficar acesa numa peça que
+  // nunca voltou é o tipo de mentira que faz devolver por engano.
+  apvRenderAlteracaoDoBriefing([]);
   apvIniciarMensagensCarregando();
   document.getElementById("apvContextoCliente").textContent = "";
   document.getElementById("apvContextoPeca").textContent = "Carregando...";
@@ -944,6 +948,30 @@ function apvTrocarInfoPane(nome) {
   document.querySelectorAll(".apv-info-pane").forEach(p => {
     p.classList.toggle("ativa", p.dataset.apvPane === nome);
   });
+  // Clicar numa pílula é pedir pra LER de novo — então desfaz o expandir do
+  // campo de alteração, que é justamente o que esconde o corpo do bloco.
+  // Sem isso, clicar numa pílula não mostrava nada e parecia quebrado.
+  apvExpandirMotivo(false);
+}
+
+/**
+ * Liga/desliga o modo "campo grande" do "O que precisa mudar?"
+ * (2026-08-07, pedido do Cláudio).
+ *
+ * Uma classe só, no overlay inteiro: o CSS esconde o corpo do bloco de
+ * briefing e solta o teto do campo. Fazer isso por classe (e não mexendo
+ * em `style.height` na mão) é o que deixa a transição existir e o estado
+ * ser reversível sem guardar altura nenhuma em variável.
+ */
+function apvExpandirMotivo(ligar) {
+  const overlay = document.getElementById("apvConferencia");
+  const btn = document.getElementById("apvExpandirMotivo");
+  const txt = document.getElementById("apvExpandirMotivoTxt");
+  if (!overlay || !btn) return;
+
+  overlay.classList.toggle("apv-motivo-expandido", !!ligar);
+  btn.setAttribute("aria-pressed", ligar ? "true" : "false");
+  if (txt) txt.textContent = ligar ? "Recolher" : "Expandir";
 }
 
 /**
@@ -989,6 +1017,7 @@ async function carregarBriefingDaBee(peca) {
 
   if (peca._briefingConf !== undefined) {
     el.innerHTML = peca._briefingConf;
+    apvRenderAlteracaoDoBriefing(peca._briefingAlt);
     return;
   }
 
@@ -1010,7 +1039,63 @@ async function carregarBriefingDaBee(peca) {
 
   const html = montarBriefingHTML(data);
   apvPecaAberta._briefingConf = html;
+  apvPecaAberta._briefingAlt = data.briefing ? (data.briefing.alteracao || []) : [];
   elAgora.innerHTML = html;
+  apvRenderAlteracaoDoBriefing(apvPecaAberta._briefingAlt);
+}
+
+/**
+ * A faixa "Peça com alteração pedida", no pé do bloco de informações.
+ *
+ * POR QUE ELA NÃO MORA DENTRO DO BRIEFING: numa peça que já voltou uma
+ * vez, o que precisa mudar é a instrução principal — não é contexto. Junto
+ * do resto, ela ficava lá embaixo, depois do briefing inteiro, e sumia da
+ * vista justamente nas peças com mais coisa escrita. Agora é um rodapé
+ * fixo do bloco (`.apv-info-rodape`, irmão do corpo que rola).
+ *
+ * FECHADA POR PADRÃO, de propósito: quem confere precisa SABER que existe
+ * alteração antes de olhar a arte, mas ler o quê só interessa depois. A
+ * faixa com o contador dá o aviso em uma linha; o texto vem no clique.
+ */
+function apvRenderAlteracaoDoBriefing(itens) {
+  const el = document.getElementById("apvBriefAlteracao");
+  if (!el) return;
+
+  if (!itens || !itens.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+
+  el.hidden = false;
+  el.innerHTML = `
+    <button type="button" class="apv-alt-faixa" id="apvAltFaixa" aria-expanded="false" aria-controls="apvAltCorpo">
+      <span aria-hidden="true">🔺</span>
+      <span class="apv-alt-faixa-txt">Peça com alteração pedida</span>
+      <span class="apv-alt-conta">${itens.length}</span>
+      <svg class="apv-alt-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="apv-alt-corpo" id="apvAltCorpo">
+      <div class="apv-alt-lista">
+        ${itens.map((it, i) => `
+          <div class="apv-alt-item">
+            <span class="apv-alt-item-n">${i + 1}</span>
+            <span>${escaparHTML(it.texto)}</span>
+          </div>`).join("")}
+      </div>
+    </div>
+  `;
+
+  // Ligado aqui, e não em apvLigarEventos(), porque o botão é recriado a
+  // cada peça — um listener registrado uma vez no elemento antigo morreria
+  // com ele.
+  const faixa = document.getElementById("apvAltFaixa");
+  const corpo = document.getElementById("apvAltCorpo");
+  faixa.addEventListener("click", () => {
+    const aberta = faixa.getAttribute("aria-expanded") === "true";
+    faixa.setAttribute("aria-expanded", String(!aberta));
+    corpo.classList.toggle("aberta", !aberta);
+  });
 }
 
 function montarBriefingHTML(data) {
@@ -1022,6 +1107,12 @@ function montarBriefingHTML(data) {
   if (nada) {
     return `<p class="apv-vazio-inline">Não achei nada escrito sobre essa peça — nem na tarefa, nem no card mãe. Vale conferir com quem pediu antes de aprovar.</p>`;
   }
+  // Só alteração, sem pedido original escrito: o corpo ficaria em branco e
+  // pareceria erro de carregamento. A faixa de alteração no rodapé já
+  // mostra o que existe — aqui só se explica por que o resto está vazio.
+  if (!b.formato && !(b.copy || []).length && !(b.itens || []).length) {
+    return `<p class="apv-vazio-inline">Do pedido original não achei nada escrito. O que precisa mudar está aí embaixo.</p>`;
+  }
 
   // A etiqueta de origem em cada item (card mãe / tarefa) é o que evita a
   // confusão que o Cláudio descreveu: às vezes o pedido está num, às vezes
@@ -1031,36 +1122,34 @@ function montarBriefingHTML(data) {
   // backend marca cada mensagem com "descricao"/"aqui"/"card mãe" — isso
   // é vocabulário de código, e estava vazando pra tela como "descricao".
   const deOndeVeio = onde => (onde === "card mãe" ? "card mãe" : "tarefa");
-  const lista = itens => itens.map(it => {
+  const etiqueta = it => {
     const origem = deOndeVeio(it.onde);
-    return `
-      <li>
-        ${escaparHTML(it.texto)}
-        <span class="apv-origem ${origem === "card mãe" ? "mae" : "tarefa"}">${escaparHTML(origem)}</span>
-      </li>`;
-  }).join("");
+    return `<span class="apv-origem ${origem === "card mãe" ? "mae" : "tarefa"}">${escaparHTML(origem)}</span>`;
+  };
 
+  // O desenho em ficha (protótipo 3, 2026-08-07): chip / citação /
+  // etiquetas, em vez das três listas de bullet que faziam o resumo ficar
+  // enorme. Ver o comentário longo no fim de css/06-aprovacao.css.
+  //
+  // A ALTERAÇÃO NÃO ENTRA AQUI: ela virou o rodapé fixo do bloco
+  // (apvRenderAlteracaoDoBriefing). Este HTML é só o corpo que rola.
   return `
-    ${(b.alteracao || []).length ? `
-      <div class="apv-brief-grupo alteracao">
-        <p class="apv-brief-grupo-rot">O que precisa mudar</p>
-        <ul class="apv-brief-lista">${lista(b.alteracao)}</ul>
-      </div>` : ""}
     ${b.formato ? `
-      <div class="apv-brief-grupo">
-        <p class="apv-brief-grupo-rot">Formato</p>
-        <p class="apv-brief-formato">${escaparHTML(b.formato)}</p>
-      </div>` : ""}
+      <span class="apv-brief-formato-chip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/></svg>
+        ${escaparHTML(b.formato)}
+      </span>` : ""}
     ${(b.copy || []).length ? `
-      <div class="apv-brief-grupo">
-        <p class="apv-brief-grupo-rot">Copy que tem que estar na peça</p>
-        <ul class="apv-brief-lista copy">${lista(b.copy)}</ul>
+      <div class="apv-brief-copy">
+        <span class="apv-brief-copy-aspa" aria-hidden="true">&ldquo;</span>
+        ${b.copy.map(it => `
+          <p class="apv-brief-copy-item">${escaparHTML(it.texto)}${etiqueta(it)}</p>`).join("")}
       </div>` : ""}
     ${(b.itens || []).length ? `
-      <div class="apv-brief-grupo">
-        <ul class="apv-brief-lista">${lista(b.itens)}</ul>
+      <div class="apv-brief-tags">
+        ${b.itens.map(it => `
+          <span class="apv-brief-tag">${escaparHTML(it.texto)}${etiqueta(it)}</span>`).join("")}
       </div>` : ""}
-    <p class="apv-brief-rodape">Resumo da Bee, juntando o card mãe e a tarefa do designer.</p>
   `;
 }
 
@@ -2456,6 +2545,14 @@ function apvLigarEventos() {
   // index.html, nunca recriado — daí ligar uma vez só, como o resto daqui.
   document.querySelectorAll(".apv-info-p").forEach(btn => {
     btn.addEventListener("click", () => apvTrocarInfoPane(btn.dataset.apvPane));
+  });
+  // Expandir/recolher o campo de alteração. Lê o estado do próprio botão
+  // (aria-pressed) em vez de guardar um booleano à parte — assim não existe
+  // como a marcação e a variável discordarem.
+  liga("apvExpandirMotivo", "click", () => {
+    const btn = document.getElementById("apvExpandirMotivo");
+    apvExpandirMotivo(btn.getAttribute("aria-pressed") !== "true");
+    if (btn.getAttribute("aria-pressed") === "true") document.getElementById("apvMotivo").focus();
   });
   liga("apvMarcarBtn", "click", apvAlternarMarcacao);
   liga("apvPalco", "click", apvCliqueNoPalcoParaMarcar);

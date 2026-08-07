@@ -671,6 +671,63 @@ painel do devolver, conteúdo diferente).
   continua sendo o maior do painel, que é o convite; o texto embaixo dele muda pra "Você já viu
   como o cliente vê" depois de usado. **Se alguém for reintroduzir a trava, é uma decisão nova —
   não é "consertar" nada que ficou pela metade.**
+
+### O resumo da Bee virou uma FICHA, e a alteração saiu do meio dele (2026-08-07)
+
+O resumo vinha como três listas de bullet empilhadas (formato / copy / o resto) e ficava enorme
+numa coluna de ~390px — pior, o aviso de "peça com alteração pedida", que é a informação mais
+importante quando existe, ficava lá no fim, fora da vista. Protótipo 3 aprovado pelo Cláudio:
+
+- **Formato vira um CHIP preto** (`.apv-brief-formato-chip`), quase um título — é a primeira
+  pergunta de quem confere ("é do tamanho certo?") e agora se responde num relance.
+- **Copy vira um bloco de CITAÇÃO** (`.apv-brief-copy`). Ela é pra ser comparada palavra por
+  palavra com a arte ao lado; tratar como citação sinaliza "isto é texto literal".
+- **O resto vira ETIQUETAS soltas** (`.apv-brief-tag`), não bullets — cada detalhe de arte é uma
+  checagem curta e independente, que não merecia uma linha inteira.
+- **A alteração saiu do corpo e virou o rodapé fixo do bloco** (`.apv-info-rodape`, irmão do
+  `.apv-info-corpo` que rola, desenhado por `apvRenderAlteracaoDoBriefing`). **Fechada por padrão
+  de propósito:** quem confere precisa SABER que existe alteração antes de olhar a arte, mas ler o
+  quê só interessa depois — a faixa com o contador dá o aviso em uma linha, o texto vem no clique.
+- **`.apv-info-bloco` ganhou `max-height: 46vh`.** Sem teto, `.apv-blocos-coluna` tem `flex: 1 0
+  auto` (não encolhe), então o bloco crescia com o conteúdo e quem rolava era a COLUNA inteira —
+  levando o rodapé de alteração pra fora da tela, que é exatamente o que ele não pode fazer.
+
+### "Expandir" o campo "O que precisa mudar?" (2026-08-07)
+
+Botão `#apvExpandirMotivo` ao lado do rótulo: liga a classe `.apv-motivo-expandido` no overlay
+inteiro, que **esconde só o `.apv-info-corpo`** (as pílulas e o rodapé de alteração continuam
+visíveis) e solta o teto do campo. Escrever um pedido de alteração num campo de 3 linhas, rolando,
+faz quem escreve perder de vista o que já escreveu — e pedido mal escrito é peça refeita errada.
+Uma classe só, sem mexer em `style.height` na mão: é o que deixa a transição existir e o estado ser
+reversível sem guardar altura em variável nenhuma. **Clicar numa das três pílulas desfaz o
+expandir** (`apvTrocarInfoPane` chama `apvExpandirMotivo(false)`) — sem isso, clicar numa pílula
+não mostrava nada e parecia quebrado.
+
+### O prompt da Bee da conferência, v2 (2026-08-07)
+
+`BRIEFING_CONFERENCIA_VERSAO` foi pra `conf-v2` — **ela entra no hash do cache, então mudar
+qualquer regra do prompt sem subir a versão faz os resumos velhos continuarem sendo servidos.**
+Três erros relatados pelo Cláudio, todos por o prompt não saber como um briefing da Beeon é escrito
+de verdade:
+
+1. **Briefing com caixas pra marcar.** Muito card mãe traz os formatos possíveis em caixinhas
+   (`[ ] Feed  [x] Stories`) e o atendimento marca só a que vale — a Bee devolvia TODAS, e o
+   atendimento conferia um Stories procurando um Feed que ninguém pediu. O prompt agora explica o
+   que é caixa marcada (`[x]`, `☑`, `✅`, `(x)`) e manda ignorar as vazias; se nada parece marcado,
+   não escolhe por conta própria.
+2. **Legenda entrando como copy.** Legenda é o texto do POST (vai no Instagram na hora de
+   publicar), não o texto da ARTE — ela não existe na peça que está na tela, então listá-la só
+   fazia quem confere procurar na arte um texto que nunca ia estar lá. Hashtags, @, link da bio e
+   roteiro de vídeo saem pelo mesmo motivo.
+3. **Copy virando outra coisa.** Estava sendo entendido como "o texto do pedido" em vez de "as
+   palavras que aparecem na peça". O prompt agora define copy pelo teste que importa: **dá pra LER
+   isso olhando a arte?** Se não dá, não é copy.
+
+`itens` também apertou: só detalhes de ARTE que dá pra conferir OLHANDO (cor, logo, foto, fonte,
+elemento que tem ou não tem que aparecer) — prazo, quem faz e combinado de processo ficam fora. O
+teto de 5 itens está escrito no prompt **e** aplicado com `.slice(0, 5)` no código: o prompt é um
+pedido, o slice é a garantia.
+
 ## A página "Bee" (2026-08-04)
 
 `js/pagina-bee.js` + o bloco no fim de `css/04-paginas.css`. Uma aba própria na barra lateral

@@ -684,7 +684,7 @@ function aprovarInternamente(taskId, loteId, aprovadoPor) {
 // O briefing da conferência: o que foi pedido, juntando os dois cards
 // ---------------------------------------------------------------------
 
-var BRIEFING_CONFERENCIA_VERSAO = 'conf-v1';
+var BRIEFING_CONFERENCIA_VERSAO = 'conf-v2';
 
 /**
  * O "o que foi pedido" da tela de conferência.
@@ -701,9 +701,9 @@ var BRIEFING_CONFERENCIA_VERSAO = 'conf-v1';
  *
  *   - FORMATO/TAMANHO: é o erro mais barato de pegar e o mais caro de
  *     deixar passar (peça no tamanho errado volta inteira).
- *   - COPY: os textos que têm que aparecer na peça, pra bater com o que
- *     está na arte, palavra por palavra.
- *   - O RESTO do que foi pedido.
+ *   - COPY: os textos que têm que aparecer NA ARTE, pra bater com o que
+ *     está na tela, palavra por palavra.
+ *   - O RESTO do que foi pedido — só o que dá pra CONFERIR OLHANDO a arte.
  *
  * E quando a peça é uma ALTERAÇÃO, o que mudar entra em separado — não
  * misturado com o pedido original, porque são coisas diferentes: o pedido
@@ -712,6 +712,29 @@ var BRIEFING_CONFERENCIA_VERSAO = 'conf-v1';
  * Mesma disciplina do resto da Bee: cada item aponta a mensagem de onde
  * saiu, e item sem fonte válida é descartado — é o sintoma de a IA ter
  * inventado o item junto com a fonte.
+ *
+ * OS TRÊS ERROS QUE A v2 CORRIGE (relatados pelo Cláudio, 2026-08-07) —
+ * todos vinham de o prompt não saber como um briefing da Beeon é escrito
+ * de verdade:
+ *
+ *   1. BRIEFING COM CAIXAS PRA MARCAR. Muito card mãe traz uma lista de
+ *      formatos possíveis em caixinhas ("[ ] Feed  [x] Stories  [ ] Reels")
+ *      e o atendimento marca só a que vale. A Bee lia a lista inteira e
+ *      devolvia TODAS como se fossem o pedido — o atendimento então
+ *      conferia um Stories procurando um Feed que ninguém pediu. Agora o
+ *      prompt explica o que é uma caixa marcada e manda ignorar as vazias.
+ *   2. LEGENDA ENTRANDO COMO COPY. Legenda é o texto do POST (vai no
+ *      Instagram, escrito na hora de publicar), não o texto da ARTE. Ela
+ *      não existe na peça que está na tela, então listá-la só fazia quem
+ *      confere procurar na arte um texto que nunca ia estar lá.
+ *   3. COPY VIRANDO OUTRA COISA. "Copy" estava sendo entendido como
+ *      "o texto do pedido" em vez de "as palavras que aparecem na peça".
+ *      O prompt agora define copy pelo teste que importa: dá pra LER isso
+ *      na arte? Se não dá, não é copy.
+ *
+ * Mudar qualquer regra daqui exige subir `BRIEFING_CONFERENCIA_VERSAO` —
+ * ela entra no hash do cache, então sem isso os resumos velhos (feitos com
+ * o prompt antigo) continuariam sendo servidos como se nada tivesse mudado.
  */
 function briefingDaConferencia(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
@@ -749,13 +772,37 @@ function briefingDaConferencia(taskId) {
     '- Só diga o que está escrito. Nunca complete, nunca deduza, nunca sugira.\n' +
     '- Cada item traz o NÚMERO da mensagem de onde saiu. Sem conseguir apontar, não escreva o item.\n' +
     '- Nada escrito sobre algo? Devolva vazio. É melhor que inventar.\n' +
+    '- Seja CURTO. Isto é uma ficha de conferência, não um resumo do card. ' +
+    'No máximo 5 itens em "itens". Se estiver na dúvida se algo entra, não entra.\n' +
     '- Português do Brasil, frases curtas, tom de colega. Sem "olá", sem emoji.\n\n' +
+    // ---- Caixinhas de marcar: o erro nº 1 da v1 --------------------------
+    'CAIXAS PRA MARCAR — LEIA COM ATENÇÃO:\n' +
+    'Muito briefing daqui vem como uma LISTA DE OPÇÕES com caixinhas, e o atendimento marca ' +
+    'só as que valem pra esta peça. Marcada é "[x]", "[X]", "☑", "✅", "(x)", ou a linha ' +
+    'com um "x"/"sim" do lado. Vazia é "[ ]", "☐", "[]", "( )" ou nada.\n' +
+    'A REGRA: só o que está MARCADO foi pedido. O que está desmarcado é opção que NÃO vale — ' +
+    'não escreva, não cite, nem como observação. Se a lista existe mas nada parece marcado, ' +
+    'não escolha por conta própria: deixe de fora e não invente.\n\n' +
+    // ---- O que é copy, e o que não é ------------------------------------
+    'O QUE É "COPY" (e o que não é):\n' +
+    'Copy = as palavras que vão APARECER ESCRITAS DENTRO DA ARTE, pra quem confere ler na tela ' +
+    'e comparar letra por letra: título, chamada, oferta, preço, condição, telefone, CTA.\n' +
+    'O teste: "dá pra LER isso olhando a peça?" Se não dá, NÃO é copy.\n' +
+    'NÃO é copy, e não deve entrar em lugar nenhum da resposta:\n' +
+    '  - LEGENDA / caption / texto do post — é o que vai escrito no Instagram na hora de publicar, ' +
+    'fora da arte. Mesmo quando o briefing traz a legenda inteira, ela NÃO entra.\n' +
+    '  - hashtags, @arrobas, link da bio, roteiro de vídeo, sugestão de horário de publicação;\n' +
+    '  - o pedido em si ("fazer um post sobre o combo"), que é descrição de tarefa, não texto da peça.\n\n' +
     'SEPARE EM TRÊS COISAS:\n' +
-    '- "formato": tamanho, dimensões, proporção ou onde a peça vai ser publicada ' +
-    '(ex: "1080x1350, feed", "Reels 9:16 até 20s"). "" se não estiver escrito.\n' +
-    '- "copy": os TEXTOS que têm que aparecer na peça (chamada, oferta, telefone, ' +
-    'condição). Copie a palavra exata quando estiver escrita. Lista vazia se não houver.\n' +
-    '- "itens": o resto do que foi pedido.\n' +
+    '- "formato": só o que foi pedido DE VERDADE (respeitando as caixas marcadas) — tamanho, ' +
+    'dimensões, proporção ou onde vai ser publicado (ex: "Stories 1080x1920"). Vários formatos ' +
+    'marcados viram um texto só, separados por vírgula. "" se não estiver escrito.\n' +
+    '- "copy": os textos que aparecem na arte, pela definição acima. Copie a palavra EXATA como ' +
+    'está escrita, sem reescrever nem resumir. Lista vazia se não houver.\n' +
+    '- "itens": só os detalhes de ARTE que dá pra conferir OLHANDO a peça — cor, logo, foto, ' +
+    'fonte, elemento que tem que aparecer ou não pode aparecer. Um item por detalhe, curto. ' +
+    'Prazo, quem faz, status, combinado de processo e qualquer coisa que não se vê na arte ' +
+    'ficam DE FORA.\n' +
     (ehAlteracao
       ? '- "alteracao": esta peça JÁ FOI FEITA e voltou pra mudança. Aqui vai o que precisa MUDAR ' +
         'agora, separado do pedido original.\n'
@@ -790,10 +837,14 @@ function briefingDaConferencia(taskId) {
     });
   }
 
+  // O teto de 5 itens é repetido AQUI, além de estar escrito no prompt: o
+  // prompt é um pedido, isto é uma garantia. A tela de conferência foi
+  // desenhada pra uma ficha curta — uma lista de 20 linhas rolando dentro
+  // do bloco é exatamente o "resumo gigante" que a v2 veio corrigir.
   var briefing = {
     formato: String(dados.formato || ''),
     copy: limpar(dados.copy, true),
-    itens: limpar(dados.itens, true),
+    itens: limpar(dados.itens, true).slice(0, 5),
     alteracao: limpar(dados.alteracao, false)
   };
   salvarBriefingCacheado(chaveCache, hash, briefing);
