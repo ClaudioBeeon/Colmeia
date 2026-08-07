@@ -289,6 +289,10 @@
   transition: background var(--dur-fast) var(--ease-apple);
 }
 .central-tl-item:hover { background: rgba(255,255,255,.085); }
+/* Só "pediu ajuste" é clicável (ver centralRenderTimelineHoje) — abre a
+   conferência já no modo do pedido do cliente. */
+.central-tl-item.clicavel { cursor: pointer; }
+.central-tl-item.clicavel:hover { background: rgba(255,199,0,.12); }
 .central-tl-avatar {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
   display: flex; align-items: center; justify-content: center;

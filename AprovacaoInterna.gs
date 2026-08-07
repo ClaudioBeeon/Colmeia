@@ -535,8 +535,16 @@ function dadosDaConferencia(taskId, loteId) {
     pecasEscolhidas = lista.pecas.filter(function (p) { return nomesPedidos.indexOf(p.nomePeca) !== -1; });
     pecasEscolhidas.sort(function (a, b) { return nomesPedidos.indexOf(a.nomePeca) - nomesPedidos.indexOf(b.nomePeca); });
   } else if (loteId) {
-    // Compat com link antigo: `loteId` era o nome da peça.
-    pecasEscolhidas = lista.pecas.filter(function (p) { return p.nomePeca === loteId; });
+    // Compat com link antigo: `loteId` era o nome da peça (nomePeca, o
+    // nome "base" sem sufixo de versão). Também aceita o NOME DO ARQUIVO
+    // de uma versão específica (ex: "Feed_v2.jpg") — é o que a aba
+    // Aprovações guarda (gravarLinhaDeAprovacao salva o arquivo, não a
+    // peça "base"), e é assim que a conferência abre a partir de um
+    // "voltou com ajuste" do cliente (ver apvAbrirParaAlteracaoDoCliente,
+    // js/pagina-aprovacao.js) sem precisar de um lote novo na planilha.
+    pecasEscolhidas = lista.pecas.filter(function (p) {
+      return p.nomePeca === loteId || p.versoes.some(function (v) { return v.nome === loteId; });
+    });
   } else {
     pecasEscolhidas = lista.pecas.length ? [lista.pecas[0]] : [];
   }

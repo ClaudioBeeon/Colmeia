@@ -456,6 +456,15 @@ async function apvAbrirConferencia(taskId, loteId) {
   apvAprovado = false;
   apvEnviado = false;
   apvAbaAtiva = "conferencia";
+  // Peça da fila normal — nunca no modo "pedido do cliente" (ver
+  // apvAbrirParaAlteracaoDoCliente). Sem isso, abrir uma conferência
+  // normal logo depois de fechar uma dessas herdava o card do pedido e o
+  // "Tirar da fila" continuava escondido.
+  apvModoAlteracaoCliente = false;
+  const blocoClienteReset = document.getElementById("apvBlocoClientePediu");
+  if (blocoClienteReset) blocoClienteReset.hidden = true;
+  const btnDescartarReset = document.getElementById("apvBtnDescartar");
+  if (btnDescartarReset) btnDescartarReset.hidden = false;
 
   // Volta pra pílula "Conferência" e pro painel "o que foi pedido" — a tela
   // pode ter ficado noutro estado da peça anterior. O botão de ação volta
@@ -589,7 +598,171 @@ function apvFecharConferencia() {
   apvPecaAberta = null;
   clearInterval(apvVersaoNovaIntervalId);
   apvVersaoNovaIntervalId = null;
+  // Limpa o modo "pedido do cliente" — sem isso, abrir uma conferência
+  // NORMAL logo depois herdava a pílula amarela e o card do pedido da
+  // peça anterior.
+  apvModoAlteracaoCliente = false;
+  const blocoCliente = document.getElementById("apvBlocoClientePediu");
+  if (blocoCliente) blocoCliente.hidden = true;
+  const btnDescartar = document.getElementById("apvBtnDescartar");
+  if (btnDescartar) btnDescartar.hidden = false;
   if (typeof roteadorAoFecharConferencia === "function") roteadorAoFecharConferencia();
+}
+
+// Estado do modo "abriu a partir do pedido de alteração do CLIENTE" (não
+// da devolução interna do atendimento) — muda a pílula (cor amarela +
+// rótulo "Alteração do cliente", sem "Aprovar" disponível: não faz
+// sentido aprovar de novo uma peça que o cliente acabou de reprovar) e
+// mostra o card com o texto de resposta dele, acima de "O que precisa
+// mudar". Tudo o mais (Briefing, marcar pontos, escolher designer, mandar
+// a alteração) é exatamente o mesmo caminho já usado na devolução
+// interna — só a entrada na tela e esses dois detalhes visuais mudam.
+let apvModoAlteracaoCliente = false;
+
+/**
+ * Abre a MESMA tela de conferência, mas a partir de uma peça que já foi
+ * mandada pro cliente e voltou com "pediu ajuste" (aba Aprovações da Fila
+ * de repasse / Central do Atendimento) — não da fila de conferência
+ * interna. `aprovacao` é o objeto que essas telas já têm (ver
+ * listarAprovacoesPendentes, Aprovacao.gs): taskId, cliente, tituloTarefa,
+ * nomeArquivo, respostaTexto, pins.
+ *
+ * Reaproveita quase tudo do fluxo de sempre: `dadosDaConferencia` aceita o
+ * NOME DO ARQUIVO como `loteId` (ver o comentário dela em
+ * AprovacaoInterna.gs — foi estendida pra isso), a marcação de pontos, e o
+ * "Pedir alteração" que já existe (apvConfirmarDevolucao →
+ * apvAbrirEscolhaDeDesigner → apvDevolverPara → devolverParaDesigner) sem
+ * nenhuma mudança. Só a entrada na tela, a pílula e o card do pedido do
+ * cliente são novos.
+ */
+async function apvAbrirParaAlteracaoDoCliente(aprovacao) {
+  const overlay = document.getElementById("apvConferencia");
+  if (!overlay || !aprovacao || !aprovacao.taskId) return;
+
+  const fundo = document.getElementById("apvConferenciaFundo");
+  if (fundo) {
+    fundo.classList.add("visible");
+    requestAnimationFrame(() => fundo.classList.add("open"));
+  }
+
+  apvPecaAberta = null;
+  apvVersaoNaTela = null;
+  apvLinkGerado = "";
+  apvIndicePeca = 0;
+  apvPinsPorPeca = {};
+  apvPinsDevolucao = [];
+  apvMarcando = false;
+  apvPedidoEmAtual = null;
+  apvCardMaeMovido = false;
+  apvAprovado = false;
+  apvEnviado = false;
+  apvAbaAtiva = "conferencia";
+  apvModoAlteracaoCliente = true;
+
+  document.getElementById("apvTabConferencia").classList.add("ativa");
+  document.getElementById("apvTabCliente").classList.remove("ativa");
+  document.getElementById("apvPainelBriefing").hidden = false;
+  document.getElementById("apvPainelEnvio").hidden = true;
+  document.getElementById("apvPainelStatus").hidden = true;
+  document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
+  apvMarcarPreviewVisto(false);
+  apvTrocarInfoPane("brief");
+  const menuEnvio = document.getElementById("apvEnvioMenu");
+  if (menuEnvio) menuEnvio.hidden = true;
+  document.getElementById("apvContextoId").hidden = true;
+  document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
+  document.getElementById("apvBriefTexto").innerHTML = `
+    <div class="board-loading apv-brief-loading">
+      <div class="board-loading-glass"></div>
+      <div class="board-loading-content">
+        <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="board-loading-bee" alt="Colmeia">
+        <p class="board-loading-text" id="apvLoadingMsg">${mensagensCarregando[0]}</p>
+      </div>
+    </div>
+  `;
+  document.getElementById("apvBriefSpecs").innerHTML = "";
+  apvIniciarMensagensCarregando();
+  document.getElementById("apvContextoCliente").textContent = aprovacao.cliente || "";
+  document.getElementById("apvContextoPeca").textContent = aprovacao.tituloTarefa || "";
+  document.getElementById("apvContextoRestam").textContent = "";
+
+  document.getElementById("apvMotivo").value = "";
+  document.getElementById("apvErroMotivo").hidden = true;
+  document.getElementById("apvMotivo").classList.remove("invalido");
+  document.getElementById("apvPalco").classList.remove("marcando");
+  document.getElementById("apvMarcarBtn").classList.remove("ativo");
+
+  // A pílula fica amarela DE CARA, com o rótulo próprio pra esse caso, e o
+  // botão dela não faz nada (mesma regra do "Em alteração": quem decide o
+  // que fazer é a caixa "O que precisa mudar" logo abaixo, não a pílula).
+  apvDeslizarAcao(3);
+  apvPintarBarra("alteracao");
+  apvMostrarEtapaDoCardMae(false);
+
+  // "Tirar da fila sem conferir" só faz sentido pra peça que está NA fila
+  // de conferência interna — aqui não tem fila nenhuma pra tirar dela.
+  const btnDescartar = document.getElementById("apvBtnDescartar");
+  if (btnDescartar) btnDescartar.hidden = true;
+
+  // O card com o texto do cliente — a razão de esta tela estar aberta
+  // neste modo, por isso fica ACIMA de "O que precisa mudar" (ver o
+  // comentário dele no index.html).
+  const blocoCliente = document.getElementById("apvBlocoClientePediu");
+  if (blocoCliente) {
+    blocoCliente.hidden = false;
+    document.getElementById("apvClienteRespostaTexto").textContent =
+      aprovacao.respostaTexto || "(o cliente pediu ajuste sem escrever um motivo)";
+  }
+
+  overlay.classList.add("visible");
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  // O nome do ARQUIVO que foi mandado — dadosDaConferencia aceita ele como
+  // loteId (ver o comentário dela em AprovacaoInterna.gs). Lote com mais
+  // de uma peça: usa só a primeira (a tela mostra essa; as outras
+  // continuam na pasta, acessíveis pela pílula "Opções de arte").
+  const primeiroNome = String(aprovacao.nomeArquivo || "").split("|")[0];
+  const data = await chamarBackend({ acao: "dadosDaConferencia", taskId: aprovacao.taskId, loteId: primeiroNome });
+
+  // Fechou a tela (ou abriu outra peça) enquanto isso ia e voltava — quem
+  // está olhando já não está mais aqui, não escreve por cima do que ela
+  // vê agora.
+  if (!apvModoAlteracaoCliente) return;
+
+  if (caiuARede(data) || !data.ok) {
+    document.getElementById("apvPalcoSlot").innerHTML = `
+      <div class="apv-vazio">${escaparHTML(
+        caiuARede(data)
+          ? "Não consegui falar com o servidor agora. Tenta de novo em instantes."
+          : (data.error || "Não consegui carregar essa peça.")
+      )}</div>`;
+    return;
+  }
+
+  apvPecaAberta = data;
+  apvIndicePeca = 0;
+  apvPecaAberta.peca = apvPecaAberta.pecas[0];
+  apvVersaoNaTela = apvPecaAberta.peca.versoes.length; // a mais recente
+
+  // Os pontos que o CLIENTE marcou já entram desenhados na imagem, prontos
+  // pra seguir junto no pedido pro designer se o atendimento não mexer
+  // neles — mesmo formato de sempre (x/y em %, texto), sem precisar
+  // converter nada (ver o comentário em listarAprovacoesPendentes,
+  // Aprovacao.gs).
+  apvPinsDevolucao = apvPinsPorPeca[0] = (aprovacao.pins || []).slice();
+
+  document.getElementById("apvContextoCliente").textContent = data.cliente || aprovacao.cliente || "";
+  document.getElementById("apvContextoPeca").textContent = data.pecas.length > 1
+    ? `${data.pecas.length} peças`
+    : (data.peca.nomePeca || data.titulo || "");
+
+  apvRenderBriefing(data);
+  apvRenderPeca(data);
+  apvRenderCarrosselPecas();
+  apvRenderPinsDevolucao();
+
+  clearInterval(apvVersaoNovaIntervalId);
+  apvVersaoNovaIntervalId = setInterval(apvChecarVersaoNovaPeriodicamente, 30000);
 }
 
 /**
@@ -1399,6 +1572,10 @@ function apvPintarBarra(estado) {
  * aprovado — pedido do Cláudio.
  */
 function apvVoltarParaConferencia() {
+  // No modo "pedido do cliente" (ver apvAbrirParaAlteracaoDoCliente) não
+  // existe um estado de "conferência normal" pra voltar — essa peça não
+  // está numa fila esperando. "Voltar" aqui significa fechar a tela.
+  if (apvModoAlteracaoCliente) { apvFecharConferencia(); return; }
   apvAprovado = false;
   apvDeslizarAcao(0);
   apvPintarBarra("neutro");

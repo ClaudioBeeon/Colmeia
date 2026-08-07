@@ -355,6 +355,16 @@
   box-shadow: var(--shadow-card); padding: 18px;
 }
 
+/* Pedido do cliente (2026-08-07) — mesmo cartão branco de sempre, com uma
+   faixa amarela à esquerda: é o motivo de a tela estar aberta neste modo,
+   precisa se destacar sem virar um cartão colorido inteiro (isso
+   competiria com o amarelo de verdade, que é o estado da pílula). */
+.apv-bloco-cliente-pediu { border-left: 3px solid var(--kanban-yellow); }
+.apv-cliente-resposta {
+  font-family: var(--apv-fonte-texto); font-size: 14px; line-height: 1.6;
+  color: var(--text-primary); font-style: italic; margin: 0; white-space: pre-wrap;
+}
+
 /* O cartão "O que precisa mudar?" é o único com `flex: 1 1 auto` — ocupa
    todo o resto vertical da coluna (pedido do Cláudio), com o motivo e os
    pontos marcados no topo e os botões de ação SEMPRE perto do final,

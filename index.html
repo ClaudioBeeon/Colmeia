@@ -13,13 +13,13 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-07f">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-07f">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-07f">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-07f">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-07f">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-07f">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-07f">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-07g">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-07g">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-07g">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-07g">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-07g">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-07g">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-07g">
 </head>
 <body>
 
@@ -817,6 +817,16 @@
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14l-5-5 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h11a5 5 0 015 5v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Em alteração
           </span>
+          <!-- Quarto rótulo (2026-08-07): a conferência abrindo a partir de
+               um "voltou com ajuste" DO CLIENTE, não de uma devolução
+               interna — é outra informação (quem pediu foi o cliente, não
+               o atendimento), então merece um texto próprio, mesma cor
+               amarela e mesmo botão desligado (.apv-estado-alteracao). Ver
+               apvAbrirParaAlteracaoDoCliente, js/pagina-aprovacao.js. -->
+          <span class="apv-acao-item">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20l1.2-4.4L16 4.8a2 2 0 012.8 0l.4.4a2 2 0 010 2.8L8.4 18.8 4 20z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Alteração do cliente
+          </span>
         </span>
       </button>
       <!-- A saída do estado "em alteração". Só aparece quando a pílula
@@ -878,6 +888,19 @@
                 <div class="apv-specs" id="apvBriefSpecs"></div>
               </div>
             </div>
+          </div>
+
+          <!-- O pedido do CLIENTE (2026-08-07) — só aparece quando a
+               conferência foi aberta a partir de um "voltou com ajuste"
+               (ver apvAbrirParaAlteracaoDoCliente, js/pagina-aprovacao.js),
+               nunca no fluxo normal de conferir antes de mandar. Fica ACIMA
+               de "O que precisa mudar": é o que o atendimento precisa ler
+               PRIMEIRO nesse caso — o motivo de o cliente ter pedido, antes
+               de escrever a instrução pro designer (que pode ser parecida
+               ou diferente do que o cliente escreveu). -->
+          <div class="apv-bloco-card apv-bloco-cliente-pediu" id="apvBlocoClientePediu" hidden>
+            <label class="apv-campo-rotulo">O cliente pediu ajuste</label>
+            <p class="apv-cliente-resposta" id="apvClienteRespostaTexto"></p>
           </div>
 
           <!-- Só quando o projeto do mês já foi fechado no Runrun.it —
@@ -1485,32 +1508,32 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-07f"></script>
-<script src="js/fila-offline.js?v=2026-08-07f"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-07f"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-07f"></script>
-<script src="js/kanban-polling.js?v=2026-08-07f"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-07f"></script>
-<script src="js/regras-briefing.js?v=2026-08-07f"></script>
-<script src="js/kanban-board.js?v=2026-08-07f"></script>
-<script src="js/clientes-hub.js?v=2026-08-07f"></script>
-<script src="js/chat-comentarios.js?v=2026-08-07f"></script>
-<script src="js/detalhe-modal.js?v=2026-08-07f"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-07f"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-07f"></script>
-<script src="js/bee.js?v=2026-08-07f"></script>
-<script src="js/paginas-designers.js?v=2026-08-07f"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-07f"></script>
-<script src="js/pagina-repasse.js?v=2026-08-07f"></script>
-<script src="js/pagina-horas.js?v=2026-08-07f"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-07f"></script>
-<script src="js/paleta-comando.js?v=2026-08-07f"></script>
-<script src="js/roteador-url.js?v=2026-08-07f"></script>
-<script src="js/detalhe-historia.js?v=2026-08-07f"></script>
-<script src="js/modo-foco.js?v=2026-08-07f"></script>
-<script src="js/pagina-bee.js?v=2026-08-07f"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-07f"></script>
-<script src="js/central-atendimento.js?v=2026-08-07f"></script>
-<script src="js/login-boot.js?v=2026-08-07f"></script>
+<script src="js/config.js?v=2026-08-07g"></script>
+<script src="js/fila-offline.js?v=2026-08-07g"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-07g"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-07g"></script>
+<script src="js/kanban-polling.js?v=2026-08-07g"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-07g"></script>
+<script src="js/regras-briefing.js?v=2026-08-07g"></script>
+<script src="js/kanban-board.js?v=2026-08-07g"></script>
+<script src="js/clientes-hub.js?v=2026-08-07g"></script>
+<script src="js/chat-comentarios.js?v=2026-08-07g"></script>
+<script src="js/detalhe-modal.js?v=2026-08-07g"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-07g"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-07g"></script>
+<script src="js/bee.js?v=2026-08-07g"></script>
+<script src="js/paginas-designers.js?v=2026-08-07g"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-07g"></script>
+<script src="js/pagina-repasse.js?v=2026-08-07g"></script>
+<script src="js/pagina-horas.js?v=2026-08-07g"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-07g"></script>
+<script src="js/paleta-comando.js?v=2026-08-07g"></script>
+<script src="js/roteador-url.js?v=2026-08-07g"></script>
+<script src="js/detalhe-historia.js?v=2026-08-07g"></script>
+<script src="js/modo-foco.js?v=2026-08-07g"></script>
+<script src="js/pagina-bee.js?v=2026-08-07g"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-07g"></script>
+<script src="js/central-atendimento.js?v=2026-08-07g"></script>
+<script src="js/login-boot.js?v=2026-08-07g"></script>
 </body>
 </html>

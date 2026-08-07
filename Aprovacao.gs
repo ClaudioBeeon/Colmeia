@@ -929,6 +929,13 @@ function listarAprovacoesPendentes() {
       respostaTexto: obj.respostaTexto,
       quemAprovou: obj.quemAprovou,
       quantosPins: parsearPins(obj.pins).length,
+      // Os pontos de verdade (x/y em % + texto), não só a contagem — é o
+      // que dá pra abrir a conferência a partir de um "voltou com ajuste"
+      // já mostrando onde o cliente marcou (ver
+      // apvAbrirParaAlteracaoDoCliente, js/pagina-aprovacao.js). Mesmo
+      // formato de sempre (CLAUDE.md: "[{x,y,texto}]"), então entra direto
+      // em apvPinsPorPeca sem converter nada.
+      pins: parsearPins(obj.pins),
       // O cliente avisou que ia consultar antes de responder (ver
       // avisarQueVaiConsultar) — muda o que a tela diz sobre a espera,
       // não o status.

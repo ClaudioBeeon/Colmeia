@@ -1207,13 +1207,22 @@ function cardDeAprovacaoHTML(a) {
           ? `<button type="button" class="repasse-btn ${tempo.alerta ? "repasse-btn-ficar" : ""}" data-acao="whats">💬 Cobrar no WhatsApp</button>
              <button type="button" class="repasse-btn" data-acao="copiar">🔗 copiar link</button>`
           : status === "ajuste"
+            // "Conferir" (2026-08-07) substituiu "Abrir tarefa": abre a
+            // MESMA tela de conferência interna, já no modo "pedido do
+            // cliente" — pílula amarela, o texto que ele escreveu, os
+            // pontos que ele marcou, e a caixa "O que precisa mudar" pra
+            // mandar pro designer dali mesmo (ver
+            // apvAbrirParaAlteracaoDoCliente, js/pagina-aprovacao.js).
+            // "Abrir tarefa" só levava pro Runrun.it cru, sem esse
+            // contexto — "Conferir" chega com tudo isso pronto.
+            //
             // "🔗 novo link" saiu daqui (2026-08-06): ele NÃO gerava link
             // novo nenhum, só copiava o mesmo — um rótulo que mentia. Quem
             // precisa de link novo faz isso na tela de conferência, que é
             // onde link de cliente nasce agora (apvRenderLinksExistentes).
             // No lugar dele entrou a cobrança do DESIGNER, que era o único
             // conteúdo da antiga aba "Cobranças" sem lugar em nenhum card.
-            ? `<button type="button" class="repasse-btn repasse-btn-ficar" data-acao="abrir">Abrir tarefa</button>
+            ? `<button type="button" class="repasse-btn repasse-btn-ficar" data-acao="conferir">Conferir</button>
                <button type="button" class="repasse-btn" data-acao="cobrar-designer">💬 Cobrar designer</button>`
             : `<button type="button" class="repasse-btn" data-acao="abrir">Abrir tarefa</button>`}
         <button type="button" class="repasse-btn repasse-btn-icon repasse-btn-excluir" data-acao="excluir" title="Excluir este link de aprovação">🗑️</button>
@@ -1240,6 +1249,15 @@ function wireCardsDeAprovacao(board) {
 
         if (acao === "abrir") {
           if (taskId) abrirTarefaPorId(Number(taskId));
+          return;
+        }
+
+        if (acao === "conferir") {
+          // Abre a MESMA tela de conferência interna, já no modo "pedido
+          // do cliente" — ver o comentário grande em
+          // apvAbrirParaAlteracaoDoCliente, js/pagina-aprovacao.js.
+          const a = (aprovacoesCache || []).find(x => x.codigo === codigo);
+          if (a && typeof apvAbrirParaAlteracaoDoCliente === "function") apvAbrirParaAlteracaoDoCliente(a);
           return;
         }
 

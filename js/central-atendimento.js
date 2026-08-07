@@ -368,6 +368,10 @@ function centralConstruirTimeline() {
         ? `<b>${escaparHTML(a.cliente || "Cliente")}</b> pediu ajuste em ${escaparHTML(peca)}`
         : `<b>${escaparHTML(a.cliente || "Cliente")}</b> aprovou ${escaparHTML(peca)}`,
       fileId: a.ehVideo ? null : (a.fileId || null),
+      // Só o "pediu ajuste" é clicável — abre a conferência já no modo do
+      // pedido do cliente (ver o wiring em centralRenderTimelineHoje). O
+      // "aprovou" é só informativo, não tem nada a fazer com ele aqui.
+      codigo: status === "ajuste" ? a.codigo : null,
     });
   });
 
@@ -385,7 +389,7 @@ function centralRenderTimelineHoje() {
   }
 
   lista.innerHTML = eventos.map(ev => `
-    <div class="central-tl-item">
+    <div class="central-tl-item ${ev.codigo ? "clicavel" : ""}" ${ev.codigo ? `data-central-tl-abrir="${escaparHTML(ev.codigo)}"` : ""}>
       <span class="central-tl-avatar ${ev.tipo}">${escaparHTML(ev.inicial)}</span>
       <div class="central-tl-body">
         <span class="central-tl-txt">${ev.texto}</span>
@@ -402,6 +406,18 @@ function centralRenderTimelineHoje() {
   lista.querySelectorAll("[data-central-tl-thumb]").forEach(el => {
     const fileId = el.dataset.centralTlThumb;
     if (fileId) centralCarregarMiniaturaTimeline(fileId, el);
+  });
+
+  // "Pediu ajuste" abre a MESMA tela de conferência, já no modo do pedido
+  // do cliente (pílula amarela, texto dele, pontos marcados) — ver
+  // apvAbrirParaAlteracaoDoCliente, js/pagina-aprovacao.js. Pedido do
+  // Cláudio (2026-08-07): "poder clicar e ver ali mesmo".
+  lista.querySelectorAll("[data-central-tl-abrir]").forEach(el => {
+    el.addEventListener("click", () => {
+      const codigo = el.dataset.centralTlAbrir;
+      const a = centralAprovacoesCache.find(x => x.codigo === codigo);
+      if (a && typeof apvAbrirParaAlteracaoDoCliente === "function") apvAbrirParaAlteracaoDoCliente(a);
+    });
   });
 }
 
