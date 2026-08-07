@@ -249,6 +249,12 @@
   padding-right: 14px; margin-right: -4px;
   border-right: 1px solid var(--border);
 }
+/* Duas versões do logo, uma colorida (texto escuro) e uma branca — troca
+   por `display`, nunca por filtro: um filtro `invert()` na colorida vira
+   a abelha AMARELA em azul junto com o texto, que é exatamente o bug que
+   isso corrige. A branca é a mesma já usada no login/sidebar pra fundo
+   escuro (mantém a abelha amarela, só o texto vira branco). */
+.apv-contexto-logo-branco { display: none; }
 .apv-contexto-id {
   font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
   color: var(--text-muted); text-decoration: none; font-variant-numeric: tabular-nums;
@@ -1296,8 +1302,10 @@
   color: rgba(255, 255, 255, .58);
 }
 .apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-id { color: rgba(255, 255, 255, .45); }
-/* O logo é escuro; sobre preto ele some. Invertido só no estado neutro. */
-.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-logo { filter: invert(1) brightness(1.6); }
+/* O logo colorido é escuro; sobre preto ele some — troca pra versão
+   branca só no estado neutro (ver .apv-contexto-logo-branco acima). */
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-logo-cor { display: none; }
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-logo-branco { display: block; }
 /* O botão de ação vira branco pra saltar do preto (mesma regra que os
    estados verde/amarelo já seguem: o botão contrasta COM a barra). */
 .apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-acao-btn { background: #fff; }
