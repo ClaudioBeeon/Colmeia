@@ -163,6 +163,13 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+// Ícone genérico (mesma linha visual dos outros ícones de config.js) pra
+// preencher o quadradinho do mosaico enquanto a miniatura de verdade não
+// chegou, e pra ficar como está em arquivo que não é imagem (PSD, MP4...)
+// — nesses casos não existe miniatura pra buscar, então o ícone fica
+// sozinho ali de propósito, em vez de a célula ficar vazia.
+const iconeArquivoGenerico = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6" fill="currentColor" stroke="none"/><path d="M21 15l-5.5-5.5L6 19" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 async function renderNotificacoesUpload(task) {
   const avisos = document.getElementById("beeInlineAvisos");
   if (!avisos || !task.id) return;
@@ -219,36 +226,46 @@ async function renderNotificacoesUpload(task) {
   if (jaMostrando && jaMostrando.dataset.chave === chaveConjunto) return;
 
   const qtd = arquivosRelevantes.length;
-  // Nomes dos arquivos, um embaixo do outro, com há quanto tempo cada um
-  // subiu — sem isso a notificação dizia só "você adicionou 2 arquivos" e
-  // não dava pra saber SE eram os certos sem abrir o Drive. Quando o
-  // arquivo é uma imagem (PNG/JPG), entra também um preview pequeno —
-  // clicar nele abre a imagem cheia quase em tela cheia (ver
-  // abrirImagemAmpliadaDoDrive, js/config.js).
-  //
-  // Com muitos arquivos de uma vez (subida em lote), mostrar TODOS com
-  // preview estourava a altura da fala e escondia a caixa de comentar
-  // embaixo, sem scroll pra compensar. Agora só os 2 mais recentes ganham
-  // preview; o resto vira uma linha só, textual — "+ N arquivos" — pra
-  // fala nunca crescer demais.
+  // Miniaturas em mosaico (tipo álbum de foto do WhatsApp) em vez da lista
+  // vertical de antes — com upload em lote (4, 5, 9 arquivos de uma vez),
+  // a lista esticava a fala e escondia a caixa de comentar embaixo, sem
+  // scroll pra compensar. O mosaico tem altura FIXA sempre: até 4
+  // miniaturas cabem nele; da 5ª em diante, a última célula vira um "+N"
+  // por cima (protótipo aprovado pelo Cláudio em 2026-08-07). Clicar numa
+  // miniatura de verdade abre ela ampliada (abrirImagemAmpliadaDoDrive,
+  // js/config.js); clicar na célula "+N" abre a pasta inteira no Drive —
+  // ela já não representa um arquivo só, então zoom nela não faria sentido.
   const ordenados = arquivosRelevantes.slice().sort((a, b) => (b.quando || 0) - (a.quando || 0));
-  const LIMITE_PREVIEW = 2;
-  const comPreview = ordenados.slice(0, LIMITE_PREVIEW);
-  const resto = ordenados.slice(LIMITE_PREVIEW);
-  const listaArquivos = comPreview.map(u => `
-      <li>
-        <span class="upload-notif-nome">${escaparHTML(u.arquivo)}</span>
-        <span class="upload-notif-idade" data-quando="${u.quando}">${idadeDoUpload(u.quando)}</span>
-        ${u.id && ehImagemPreviewable(u.mimeType) ? `
-          <img class="upload-notif-thumb" data-file-id="${escaparHTML(u.id)}" data-nome="${escaparHTML(u.arquivo)}" alt="Preview de ${escaparHTML(u.arquivo)}">
-        ` : ""}
-      </li>
-    `).join("")
-    + (resto.length ? `
-      <li class="upload-notif-mais" title="${escaparHTML(resto.map(u => u.arquivo).join(", "))}">
-        <span class="upload-notif-nome">+ ${resto.length} arquivo${resto.length > 1 ? "s" : ""}</span>
-      </li>
-    ` : "");
+  const LIMITE_MOSAICO = 4;
+  const emMosaico = ordenados.slice(0, LIMITE_MOSAICO);
+  const temMais = ordenados.length > LIMITE_MOSAICO;
+  // Quando sobra gente de fora, é a partir do 4º arquivo que a célula vira
+  // "+N" (os 3 primeiros continuam com miniatura de verdade) — por isso
+  // N conta a partir do 3º, não do 4º.
+  const escondidos = temMais ? ordenados.length - 3 : 0;
+  const classeMosaico = ordenados.length === 1 ? "n1" : ordenados.length === 2 ? "n2" : ordenados.length === 3 ? "n3" : "n4plus";
+  const mosaico = `
+    <div class="upload-notif-mosaico ${classeMosaico}">
+      ${emMosaico.map((u, i) => {
+        const ehCelulaDoMais = temMais && i === emMosaico.length - 1;
+        return `
+          <div class="upload-notif-tile">
+            <span class="upload-notif-tile-ic" aria-hidden="true">${iconeArquivoGenerico}</span>
+            ${!ehCelulaDoMais && u.id && ehImagemPreviewable(u.mimeType) ? `
+              <img class="upload-notif-thumb" data-file-id="${escaparHTML(u.id)}" data-nome="${escaparHTML(u.arquivo)}" alt="Preview de ${escaparHTML(u.arquivo)}">
+            ` : ""}
+            ${ehCelulaDoMais ? `<span class="upload-notif-tile-mais">+${escondidos}</span>` : ""}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+  // Um "há quanto tempo" só, do arquivo mais recente do grupo — enquanto
+  // ele não passar da janela de 30min, ainda existe pelo menos um arquivo
+  // válido aqui, então a fala continua fazendo sentido (ver
+  // iniciarRelogioDasIdadesDeUpload, que remove a fala inteira quando essa
+  // etiqueta expira).
+  const maisRecente = ordenados[0].quando;
   // Nome de verdade da pasta (normalmente o título da tarefa) — o
   // backend não manda mais o texto fixo "pasta do card"; se por algum
   // motivo vier vazio, cai no título da própria tarefa como último recurso.
@@ -262,8 +279,8 @@ async function renderNotificacoesUpload(task) {
   // pra menção em comentário e tarefa recebida, ver pedido do Cláudio em
   // 2026-07-29 na memória "barra_amarela_dynamic_island".
   const corpo = `
-    <p>Você adicionou ${qtd} arquivo${qtd > 1 ? "s" : ""} em <strong>${escaparHTML(nomeDaPasta)}</strong>${task.client ? ` <span class="upload-notif-cliente">(${escaparHTML(task.client)})</span>` : ""}</p>
-    <ul class="upload-notif-arquivos">${listaArquivos}</ul>
+    <p>Você adicionou ${qtd} arquivo${qtd > 1 ? "s" : ""} em <strong>${escaparHTML(nomeDaPasta)}</strong>${task.client ? ` <span class="upload-notif-cliente">(${escaparHTML(task.client)})</span>` : ""} <span class="upload-notif-idade" data-quando="${maisRecente}">${idadeDoUpload(maisRecente)}</span></p>
+    ${mosaico}
     <div class="bee-pastilhas">
       <button type="button" class="bee-acao principal" data-upload-acao="aprovacao">Enviar para revisão</button>
       <button type="button" class="bee-acao" data-upload-acao="copiar">Adicionar ao comentário</button>
@@ -310,6 +327,14 @@ async function renderNotificacoesUpload(task) {
     carregarThumbnailDoUpload(fileId, img);
     img.addEventListener("click", () => abrirImagemAmpliadaDoDrive(fileId, img.dataset.nome));
   });
+  // A célula "+N" abre a pasta inteira (ela representa vários arquivos,
+  // não um só — não tem imagem individual pra ampliar).
+  const tileMais = wrap.querySelector(".upload-notif-tile-mais");
+  if (tileMais) {
+    const tile = tileMais.closest(".upload-notif-tile");
+    tile.classList.add("clicavel");
+    tile.addEventListener("click", () => window.open(link, "_blank", "noopener"));
+  }
   iniciarRelogioDasIdadesDeUpload();
 }
 

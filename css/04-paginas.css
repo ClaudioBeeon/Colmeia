@@ -1105,31 +1105,15 @@ body.card-aberto .quick-access-panel { display: none; }
 
 /* ===== Aviso de upload (Drive) e prompt de repetir comentário no card
    mãe agora são falas da própria Bee dentro da conversa (ver bolhaDaBee
-   em js/bee.js, chamada de js/notificacoes-uploads.js) — só essa
-   etiqueta do nome do cliente continua usada ali dentro. */
+   em js/bee.js, chamada de js/notificacoes-uploads.js) — só essas duas
+   etiquetas continuam usadas ali dentro (as miniaturas viraram o mosaico
+   em css/05-componentes.css, perto do resto do preview de imagem do Drive). */
 .upload-notif-cliente { font-weight: 600; opacity: 0.8; }
-
-/* Nomes dos arquivos que acabaram de subir, um embaixo do outro, com há
-   quanto tempo cada um entrou na pasta (10s, 20s... 1min, 2min...). */
-.upload-notif-arquivos {
-  list-style: none; margin: 6px 0 2px; padding: 0;
-  display: flex; flex-direction: column; gap: 3px;
-}
-.upload-notif-arquivos li {
-  display: flex; align-items: baseline; gap: 8px;
-  font-size: 12.5px; line-height: 1.35;
-}
-.upload-notif-nome {
-  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* "Há quanto tempo" do arquivo mais recente do grupo (10s, 20s... 1min...). */
 .upload-notif-idade {
-  flex-shrink: 0; font-size: 11px; font-weight: 500; opacity: 0.6;
+  font-size: 11px; font-weight: 500; opacity: 0.6;
   font-variant-numeric: tabular-nums;
 }
-/* Linha final "+ N arquivos" quando a subida em lote tem mais do que os
-   2 primeiros com preview — sem thumbnail, só o texto, pra fala não
-   estourar de altura e esconder a caixa de comentar embaixo. */
-.upload-notif-mais .upload-notif-nome { opacity: 0.7; font-weight: 500; cursor: default; }
 
 /* ===== Reações de emoji nos comentários ===== */
 .comment-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

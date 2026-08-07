@@ -1362,6 +1362,45 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 .upload-notif-thumb.carregado { opacity: 1; }
 .upload-notif-thumb:hover { box-shadow: 0 0 0 2px var(--kanban-yellow); }
 
+/* Mosaico de arquivos novos na fala da Bee — tipo álbum de foto do
+   WhatsApp: altura FIXA sempre (não estica com upload em lote), até 4
+   miniaturas cabem, da 5ª em diante a última célula vira "+N" por cima
+   (ver renderNotificacoesUpload, js/notificacoes-uploads.js). Molde
+   diferente conforme a quantidade — com 3 ou menos, aproveita o espaço
+   melhor que uma grade 2x2 sempre igual. */
+.upload-notif-mosaico {
+  margin-top: 8px; display: grid; gap: 3px;
+  width: 100%; max-width: 240px; height: 148px;
+  border-radius: 10px; overflow: hidden;
+}
+.upload-notif-mosaico.n1 { grid-template-columns: 1fr; }
+.upload-notif-mosaico.n2 { grid-template-columns: 1fr 1fr; }
+.upload-notif-mosaico.n3 { grid-template-columns: 1.3fr 1fr; grid-template-rows: 1fr 1fr; }
+.upload-notif-mosaico.n3 .upload-notif-tile:first-child { grid-row: 1 / 3; }
+.upload-notif-mosaico.n4plus { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+.upload-notif-tile {
+  position: relative; overflow: hidden; background: var(--page-bg);
+  display: flex; align-items: center; justify-content: center;
+}
+/* Ícone genérico atrás de tudo — fica visível sozinho quando o arquivo
+   não é imagem, ou enquanto/se a miniatura de verdade não chega. */
+.upload-notif-tile-ic { width: 26%; color: var(--text-muted); }
+.upload-notif-tile-ic svg { width: 100%; height: auto; display: block; }
+/* Dentro da célula a miniatura preenche tudo (sem as regras de tamanho
+   fixo/borda da .upload-notif-thumb "solta", pensada pra ficar sozinha
+   na fala) — object-fit/opacity/transição de fade continuam as mesmas. */
+.upload-notif-mosaico .upload-notif-thumb {
+  position: absolute; inset: 0; width: 100%; height: 100%; max-width: none;
+  aspect-ratio: auto; margin: 0; border: none; border-radius: 0;
+}
+.upload-notif-tile-mais {
+  position: absolute; inset: 0; background: rgba(10,10,16,0.55); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 700;
+}
+.upload-notif-tile.clicavel { cursor: pointer; }
+
 /* Diff visual entre versões (comparar v1/v2 com a Bee) */
 .bee-comparativo-thumbs { display: flex; gap: 10px; margin-top: 8px; }
 .bee-comparativo-item { flex: 1; min-width: 0; }
