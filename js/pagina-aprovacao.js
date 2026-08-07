@@ -973,6 +973,17 @@ function apvIrParaVersao(versao) {
   palco.classList.add("trocou");
 }
 
+/** `atob()` sozinho lê o base64 byte a byte (Latin-1) — um HTML com acento
+ *  (UTF-8, 2+ bytes por letra) sairia corrompido ("é" virando "Ã©").
+ *  Reconverte pelos bytes de verdade. Mesma função existe em aprovar.html
+ *  (arquivo HTML solto, sem como compartilhar código com o app). */
+function base64ParaTextoUtf8(base64) {
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
 /**
  * Coloca a peça no palco.
  *
@@ -986,6 +997,9 @@ function apvIrParaVersao(versao) {
  * ainda pode ser devolvida, e liberar antes da aprovação seria expor uma coisa
  * que talvez nunca vá pro cliente. Quem confere abre logado na conta da
  * agência, que já tem acesso à pasta.
+ *
+ * HTML (ex: e-mail marketing) vai pra um iframe com `srcdoc`, sandbox sem
+ * `allow-scripts`/`allow-same-origin` — só pra VER, não rodar nada.
  *
  * Sem width/height fixos no elemento de propósito — é o que deixa a regra de
  * `object-fit: contain` do CSS caber a peça inteira sem cortar.
@@ -1006,10 +1020,15 @@ async function apvMostrarNoPalco(peca, versao) {
     return;
   }
 
+  // HTML (ex: e-mail marketing, entrou 2026-08-07): sem zoom (não é
+  // imagem pra ampliar) e sem pins (marcar ponto num HTML não diz nada).
+  const ehHtml = (arquivo.mimeType || "") === "text/html";
   if (zoomBtn) {
-    zoomBtn.hidden = false;
-    zoomBtn.dataset.fileId = arquivo.fileId;
-    zoomBtn.dataset.nome = arquivo.nome;
+    zoomBtn.hidden = ehHtml;
+    if (!ehHtml) {
+      zoomBtn.dataset.fileId = arquivo.fileId;
+      zoomBtn.dataset.nome = arquivo.nome;
+    }
   }
 
   slot.innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
@@ -1029,6 +1048,16 @@ async function apvMostrarNoPalco(peca, versao) {
         <br><br>
         <a class="apv-palco-drive" href="https://drive.google.com/file/d/${encodeURIComponent(arquivo.fileId)}/view" target="_blank" rel="noopener">Abrir no Drive</a>
       </div>`;
+    return;
+  }
+
+  if (ehHtml) {
+    // `srcdoc`, não `src="data:...`: mesmo caminho do aprovar.html — sandbox
+    // sem `allow-scripts`/`allow-same-origin` porque isso aqui é só pra VER
+    // o e-mail, não rodar o que tem dentro dele.
+    slotAgora.innerHTML = `<iframe class="apv-palco-html" sandbox="" title="${escaparHTML(arquivo.nome)}"></iframe>`;
+    const frameHtml = slotAgora.querySelector(".apv-palco-html");
+    if (frameHtml) frameHtml.srcdoc = base64ParaTextoUtf8(data.base64);
     return;
   }
   slotAgora.innerHTML = `<img class="apv-palco-img" src="data:${data.mimeType || arquivo.mimeType};base64,${data.base64}" alt="${escaparHTML(arquivo.nome)}">`;
@@ -2138,6 +2167,10 @@ function apvAlternarMarcacao() {
   const arquivo = apvPecaAberta.peca.versoes[apvVersaoNaTela - 1];
   if ((arquivo.mimeType || "").indexOf("video/") === 0) {
     mostrarToast("Essa peça é um vídeo — dá pra escrever o minuto no texto acima, mas não dá pra marcar ponto nela.", "erro");
+    return;
+  }
+  if ((arquivo.mimeType || "") === "text/html") {
+    mostrarToast("Essa peça é um HTML — descreve a alteração no texto acima, não dá pra marcar ponto nela.", "erro");
     return;
   }
 

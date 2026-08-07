@@ -134,7 +134,7 @@ function listarVersoesDasPecas(taskId) {
   while (arquivos.hasNext()) {
     var arq = arquivos.next();
     var tipo = arq.getMimeType();
-    if (tipo.indexOf('image/') !== 0 && tipo.indexOf('video/') !== 0) continue;
+    if (!ehTipoDePecaAceito(tipo)) continue;
     var nome = arq.getName();
     var base = nomeBaseDaPeca(nome);
     if (!grupos[base]) grupos[base] = [];

@@ -760,11 +760,28 @@
 
   // ===== O visor: uma peça de cada vez, sempre inteira na tela =====
 
+  /** Essa peça é HTML (ex: e-mail marketing)? Mostrada num iframe, nunca
+   *  como imagem. */
+  function ehHtml(peca) {
+    return !!peca && peca.mimeType === "text/html";
+  }
+
+  /** `atob()` sozinho lê o base64 byte a byte (Latin-1) — um HTML com
+   *  acento (UTF-8, 2+ bytes por letra) sairia corrompido ("é" virando
+   *  "Ã©"). Reconverte pelos bytes de verdade. */
+  function base64ParaTextoUtf8(base64) {
+    var binario = atob(base64);
+    var bytes = new Uint8Array(binario.length);
+    for (var i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
   /** Essa peça aceita ponto marcado? Só imagem embutida aceita — no
    *  player do Drive (vídeo) o clique é do player, não nosso, e não dá
-   *  pra saber onde ele caiu. */
+   *  pra saber onde ele caiu; HTML tem texto/links dentro, marcar um
+   *  ponto em cima não diria nada útil. */
   function aceitaPins(peca) {
-    return !!peca && !peca.erro && !peca.previewUrl && !peca.ehVideo;
+    return !!peca && !peca.erro && !peca.previewUrl && !peca.ehVideo && !ehHtml(peca);
   }
 
   /** Peça já respondida (M5, link com várias) não aceita mais ponto novo —
@@ -791,6 +808,18 @@
       frame.setAttribute("allow", "autoplay");
       frame.setAttribute("allowfullscreen", "");
       slot.appendChild(frame);
+    } else if (ehHtml(peca)) {
+      // HTML (ex: e-mail marketing) via `srcdoc`, não `src` com data: URI —
+      // dá o mesmo resultado visual mas sem o limite de tamanho de URL que
+      // um `data:` gigante podia estourar em navegador mais antigo. Sandbox
+      // sem `allow-same-origin`/`allow-scripts`: é só pra VER o e-mail, o
+      // HTML de terceiro não precisa rodar nada nem acessar a página por
+      // trás dele.
+      var frameHtml = document.createElement("iframe");
+      frameHtml.className = "visor-html";
+      frameHtml.setAttribute("sandbox", "");
+      frameHtml.srcdoc = base64ParaTextoUtf8(peca.base64);
+      slot.appendChild(frameHtml);
     } else {
       var fonte = "data:" + peca.mimeType + ";base64," + peca.base64;
       var el = document.createElement(peca.ehVideo ? "video" : "img");
@@ -851,6 +880,7 @@
       var miolo;
       if (p.erro) miolo = '<span class="filme-mini-icone">⚠️</span>';
       else if (p.previewUrl || p.ehVideo) miolo = '<span class="filme-mini-icone">▶️</span>';
+      else if (ehHtml(p)) miolo = '<span class="filme-mini-icone">🌐</span>';
       else miolo = '<img alt="" src="data:' + p.mimeType + ";base64," + p.base64 + '">';
       return '<button type="button" class="filme-item" data-peca="' + i + '">' +
         '<span class="filme-mini">' + miolo + '<span class="filme-marca" data-marca="' + i + '" hidden></span></span>' +

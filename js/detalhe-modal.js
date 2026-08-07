@@ -1999,7 +1999,7 @@ function abrirEscolhaDePeca(task, btn, pecas, opcoes) {
     ${pecas.map((p, i) => `
       <label class="pecas-escolha-item">
         <input type="checkbox" data-idx="${i}" checked>
-        <span>${p.mimeType.indexOf("video/") === 0 ? "🎬" : "🖼️"}</span>
+        <span>${p.mimeType.indexOf("video/") === 0 ? "🎬" : p.mimeType === "text/html" ? "🌐" : "🖼️"}</span>
         <span>${escaparHTML(p.nome)}</span>
       </label>
     `).join("")}

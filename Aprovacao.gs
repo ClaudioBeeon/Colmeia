@@ -76,6 +76,20 @@ function parsearRespostasPecas(json, quantasPecas) {
 }
 
 /**
+ * Um arquivo da pasta do card "conta como peça"? Imagem e vídeo sempre
+ * contaram; HTML entrou em 2026-08-07 (pedido do Cláudio: e-mail marketing
+ * é entregue em HTML, e até então esses arquivos eram ignorados na pasta —
+ * nem apareciam pra escolher, nem entravam no link de aprovação). Função
+ * única porque o mesmo filtro se repete nos dois arquivos (aqui e em
+ * AprovacaoInterna.gs) — mesmo espírito de nomeBaseDaPeca/versaoDoArquivo
+ * logo abaixo.
+ */
+function ehTipoDePecaAceito(mimeType) {
+  var tipo = String(mimeType || '');
+  return tipo.indexOf('image/') === 0 || tipo.indexOf('video/') === 0 || tipo === 'text/html';
+}
+
+/**
  * Agrupa as imagens/vídeos da pasta do card em PEÇAS distintas — pedido
  * do Cláudio (2026-08-04): "quando sobe duas versões, stories e feed?
  * já aparece no mesmo link quando tem mais de uma opção?". Não aparecia:
@@ -111,7 +125,7 @@ function listarPecasDaPastaDoCard(taskId) {
   while (arquivos.hasNext()) {
     var arq = arquivos.next();
     var tipo = arq.getMimeType();
-    if (tipo.indexOf('image/') !== 0 && tipo.indexOf('video/') !== 0) continue;
+    if (!ehTipoDePecaAceito(tipo)) continue;
     var nome = arq.getName();
     var m = nome.match(re);
     var chave = m ? nome.slice(0, m.index) : nome;
@@ -168,8 +182,8 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
         return { ok: false, error: 'Não consegui acessar um dos arquivos escolhidos no Drive.' };
       }
       var tipoMulti = arqEscolhido.getMimeType();
-      if (tipoMulti.indexOf('image/') !== 0 && tipoMulti.indexOf('video/') !== 0) {
-        return { ok: false, error: 'Um dos arquivos escolhidos não é imagem nem vídeo.' };
+      if (!ehTipoDePecaAceito(tipoMulti)) {
+        return { ok: false, error: 'Um dos arquivos escolhidos não é imagem, vídeo nem HTML.' };
       }
       liberarArquivoParaAprovacao(arqEscolhido);
       arquivos.push(arqEscolhido);
@@ -184,8 +198,8 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
       return { ok: false, error: 'Não consegui acessar esse arquivo no Drive.' };
     }
     var tipoEscolhido = escolhido.getMimeType();
-    if (tipoEscolhido.indexOf('image/') !== 0 && tipoEscolhido.indexOf('video/') !== 0) {
-      return { ok: false, error: 'Esse arquivo não é imagem nem vídeo.' };
+    if (!ehTipoDePecaAceito(tipoEscolhido)) {
+      return { ok: false, error: 'Esse arquivo não é imagem, vídeo nem HTML.' };
     }
   } else {
     var pastaInfo = buscarPastaSalvaDoCard(taskId);
@@ -207,10 +221,11 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
     while (arquivos.hasNext()) {
       var arq = arquivos.next();
       var tipo = arq.getMimeType();
-      // Aceita imagem OU vídeo — antes só imagem, e um card com Stories
-      // em vídeo dava "não encontrei nenhuma imagem" mesmo tendo arquivo
-      // novo na pasta (pedido do Cláudio, 2026-08-04).
-      if (tipo.indexOf('image/') !== 0 && tipo.indexOf('video/') !== 0) continue;
+      // Aceita imagem, vídeo OU HTML — antes só imagem, e um card com
+      // Stories em vídeo dava "não encontrei nenhuma imagem" mesmo tendo
+      // arquivo novo na pasta (pedido do Cláudio, 2026-08-04; HTML entrou
+      // em 2026-08-07, pro caso de e-mail marketing).
+      if (!ehTipoDePecaAceito(tipo)) continue;
       var m = arq.getName().match(re);
       if (m) comPadrao.push({ versao: parseInt(m[1], 10), arquivo: arq });
       else semPadrao.push({ atualizadoEm: arq.getLastUpdated().getTime(), arquivo: arq });
