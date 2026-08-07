@@ -275,6 +275,19 @@
   }
   .cartao-texto { font-size: 13.5px; line-height: 1.55; color: var(--text-2); margin: 0; }
   .acoes-coluna { display: flex; flex-direction: column; gap: 10px; }
+  /* O × que dispensa a oferta de WhatsApp — canto de cima, discreto:
+     ele não é um passo do fluxo, é uma saída pra quem não quer o extra. */
+  .acoes-whats-wrap { position: relative; padding-top: 4px; }
+  .btn-dispensar {
+    position: absolute; top: -10px; right: -4px;
+    width: 28px; height: 28px; border: none; background: none; cursor: pointer;
+    color: var(--text-3); font-size: 20px; line-height: 1; border-radius: 50%;
+  }
+  .btn-dispensar:hover { background: var(--superficie-2); color: var(--text); }
+  /* O terceiro caminho: menor e sem cor, pra não competir com Aprovar /
+     Pedir ajuste — é uma saída, não uma decisão sobre a peça. */
+  .btn-consultar { font-size: 13px; color: var(--text-2); padding: 10px; }
+  .btn-consultar-feito { color: var(--verde); cursor: default; }
 
   /* ===== Pontos marcados na peça =====
      Clica na imagem, solta um pino numerado, escreve o que muda ali.
@@ -476,6 +489,13 @@
           <div class="acoes-coluna" id="acoesPrincipais">
             <button type="button" class="btn btn-aprovar btn-bloco" id="btnAprovar">✅ Aprovar</button>
             <button type="button" class="btn btn-ajuste btn-bloco" id="btnPedirAjuste">✏️ Pedir ajuste</button>
+            <!-- O terceiro caminho (2026-08-06). Só existiam aprovar e
+                 pedir ajuste, mas na vida real o cliente muitas vezes
+                 precisa mostrar pro chefe antes — e aí ele fechava a aba,
+                 o que do nosso lado é igualzinho a quem nunca abriu o
+                 link. Discreto de propósito: é uma saída, não uma das
+                 duas decisões. Ver btnConsultar. -->
+            <button type="button" class="btn btn-texto btn-bloco btn-consultar" id="btnConsultar">Preciso consultar antes — aviso vocês</button>
           </div>
           <div class="form-ajuste" id="formAjuste">
             <textarea id="textoAjuste" placeholder="O que precisa mudar?"></textarea>
@@ -517,8 +537,14 @@
                como opção, só que depois, pra quem quiser avisar por fora
                também — a gravação na planilha já aconteceu no momento de
                Aprovar/Pedir ajuste, isso não muda com a ordem dos botões. -->
-          <div class="acoes-coluna" id="acoesWhatsapp" hidden style="margin-top:14px;">
-            <button type="button" class="btn btn-neutro btn-bloco" id="btnConcluir">Concluir</button>
+          <!-- O "Concluir" que ficava aqui saiu (2026-08-06): ele não
+               concluía nada — só escondia este bloco. E ficava do mesmo
+               tamanho do botão do lado, sugerindo que os dois tinham o
+               mesmo peso, quando um deles não fazia nada. Agora quem quiser
+               dispensar a oferta tem o × do canto, que é o que ela é: um
+               extra opcional, não um passo do fluxo. -->
+          <div class="acoes-coluna acoes-whats-wrap" id="acoesWhatsapp" hidden style="margin-top:14px;">
+            <button type="button" class="btn-dispensar" id="btnConcluir" aria-label="Dispensar">×</button>
             <button type="button" class="btn btn-whats btn-bloco" id="btnWhatsapp">📱 Enviar no WhatsApp também</button>
           </div>
         </div>
@@ -1093,6 +1119,34 @@
 
   document.getElementById("btnConcluir").addEventListener("click", function () {
     document.getElementById("acoesWhatsapp").hidden = true;
+  });
+
+  /**
+   * "Preciso consultar antes" — registra que o cliente está andando com
+   * isso, sem decidir nada. O link continua valendo e ele pode voltar e
+   * responder na hora que quiser: por isso NÃO entra em modo leitura nem
+   * esconde os botões, só troca este por uma confirmação.
+   */
+  document.getElementById("btnConsultar").addEventListener("click", function () {
+    var btn = document.getElementById("btnConsultar");
+    btn.disabled = true;
+    btn.textContent = "Avisando...";
+    chamar({ acao: "avisarQueVaiConsultar", codigo: codigo }).then(function (data) {
+      if (!data || !data.ok) {
+        btn.disabled = false;
+        btn.textContent = "Preciso consultar antes — aviso vocês";
+        var erro = document.getElementById("erroEnvio");
+        erro.textContent = "Não consegui avisar agora. Tenta de novo em alguns segundos.";
+        erro.style.display = "block";
+        return;
+      }
+      // Vira texto, não some: sumir daria a impressão de que nada
+      // aconteceu, e a pessoa clicaria de novo.
+      btn.classList.add("btn-consultar-feito");
+      btn.textContent = data.avisoChegou
+        ? "✓ Avisamos o time — pode responder quando quiser"
+        : "✓ Anotado — pode responder quando quiser";
+    });
   });
 
   // ===== Carregamento =====

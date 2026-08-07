@@ -350,3 +350,26 @@
   0%, 60% { background: var(--accent-soft); }
   100%    { background: transparent; }
 }
+
+/* Pílula do filtro por cliente (veio do Radar de clientes) — mesma pílula
+   do filtro de atraso, só com o × de tirar. */
+.central-filtro-cliente { gap: 6px; }
+.central-filtro-x { font-size: 15px; line-height: 1; opacity: .65; }
+.central-filtro-cliente:hover .central-filtro-x { opacity: 1; }
+
+/* Card do Radar virou <button> (2026-08-06, ficou clicável) — precisa dos
+   mesmos resets de sempre, senão o navegador desenha chrome de formulário
+   por cima (fonte, cor, aparência). Mesmo cuidado de .central-kanban-card.
+   A BORDA não entra nos resets: ela já é definida lá em cima de propósito
+   (é o desenho do card), e como esta regra vem depois, um `border: none`
+   aqui apagaria justamente aquela. */
+.central-client-card {
+  width: 100%; text-align: left; cursor: pointer;
+  margin: 0; font: inherit; font-family: var(--font-body); color: inherit;
+  -webkit-appearance: none; appearance: none;
+  transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
+}
+.central-client-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+
+/* "Mais tempo parado com você" passando de 1 dia: o portão virou gargalo. */
+.cm-metrica-alerta b { color: var(--danger); }

@@ -272,9 +272,17 @@ function acharLinhaDaConferencia(linhas, taskId, nomePeca) {
  */
 function listarConferenciasPendentes() {
   var sheet = getConferenciasSheet();
-  var linhas = sheet.getDataRange().getValues();
   var cachePastas = {};
   var cacheTarefas = {};
+
+  // O ciclo se fecha sozinho (2026-08-06): peça devolvida ao designer que
+  // ganhou versão nova volta pra fila. Antes ele consertava e tinha que
+  // LEMBRAR de mandar pra revisão do zero — o pedido de alteração saía
+  // daqui e nunca mais voltava por conta própria, então "conferir se o
+  // ajuste ficou bom" dependia de alguém não esquecer.
+  reabrirDevolvidasComVersaoNova(sheet, cachePastas);
+
+  var linhas = sheet.getDataRange().getValues();
 
   // Agrupa por LOTE: cada linha é uma peça, mas o item da fila é o lote
   // inteiro — é o que faz 13 peças mandadas juntas aparecerem como UMA
@@ -379,6 +387,71 @@ function listarConferenciasPendentes() {
     return String(a.pedidoEm).localeCompare(String(b.pedidoEm));
   });
   return { ok: true, itens: itens };
+}
+
+/**
+ * Peça devolvida pro designer que já ganhou versão nova volta pra fila,
+ * sozinha (2026-08-06).
+ *
+ * A regra é a mesma que a tela já usa pra acender "versão nova chegou":
+ * compara a versão que estava valendo quando a peça foi vista com a que
+ * está na pasta agora. Se subiu, o designer entregou o ajuste — e isso é
+ * exatamente o que precisa ser conferido de novo.
+ *
+ * A `versaoPedida` é reescrita junto: sem isso a linha voltaria pra fila
+ * já com o aviso amarelo de "versão nova" aceso, apontando pra versão que
+ * ela mesma acabou de aceitar.
+ *
+ * SÓ olha devolvidas dos últimos 30 dias (as mais velhas são podadas de
+ * qualquer jeito, ver limparConferenciasAntigas) — cada uma custa uma
+ * varredura da pasta do Drive, e isso roda em TODA abertura da fila.
+ */
+function reabrirDevolvidasComVersaoNova(sheet, cachePastas) {
+  var linhas = sheet.getDataRange().getValues();
+  var limite = Date.now() - CONFERENCIA_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+  var reabrir = [];
+
+  for (var i = 1; i < linhas.length; i++) {
+    var l = linhas[i];
+    if (String(l[11]) !== 'devolvida') continue;
+    var quando = Date.parse(l[13] || l[10]);
+    if (!quando || quando < limite) continue;
+
+    var taskId = String(l[0]);
+    var nomePeca = String(l[3]);
+    var versaoPedida = Number(l[9]) || 0;
+    // Sem saber qual versão estava valendo, não dá pra afirmar que subiu
+    // outra — mesma cautela do `temVersaoNova` mais abaixo.
+    if (!versaoPedida) continue;
+
+    if (!cachePastas[taskId]) cachePastas[taskId] = listarVersoesDasPecas(taskId);
+    var lista = cachePastas[taskId];
+    if (!lista.ok) continue;
+
+    for (var p = 0; p < lista.pecas.length; p++) {
+      if (lista.pecas[p].nomePeca !== nomePeca) continue;
+      var ultima = lista.pecas[p].ultima;
+      if (!ultima) break;
+      var versaoAtual = ultima.versao === null ? ultima.ordem : ultima.versao;
+      if (versaoAtual > versaoPedida) reabrir.push({ linha: i + 1, versao: versaoAtual });
+      break;
+    }
+  }
+
+  if (!reabrir.length) return;
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var agora = new Date().toISOString();
+    reabrir.forEach(function (r) {
+      sheet.getRange(r.linha, 10).setValue(r.versao);        // versão que está valendo agora
+      sheet.getRange(r.linha, 11).setValue(agora);           // "pedida" de novo agora
+      sheet.getRange(r.linha, 12, 1, 3).setValues([['pendente', '', '']]);
+    });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -1558,8 +1631,35 @@ function descartarConferencia(taskId, loteId, quem) {
 }
 
 /**
- * Poda as linhas já decididas com mais de 30 dias. Roda junto do backup
- * diário, mesmo lugar de `limparFeedEventosAntigos`.
+ * O REGISTRO QUE NÃO EVAPORA (2026-08-06).
+ *
+ * A aba de trabalho (`ConferenciaInterna`) é podada em 30 dias — o que é
+ * certo: ela guarda peça, versão, fila, coisas que só importam enquanto o
+ * trabalho está acontecendo. Mas junto ia embora a única resposta pra
+ * "quem aprovou aquela peça?", que é justamente a pergunta que aparece
+ * quando dá problema com o cliente — e quase sempre DEPOIS dos 30 dias.
+ *
+ * Este arquivo guarda só a DECISÃO (cliente, peça, quem, quando, o quê),
+ * sem nada pesado, e nunca é podado. Uma linha por peça decidida, escrita
+ * no momento da poda — assim existe um lugar só fazendo isso, e não tem
+ * risco de gravar duas vezes a mesma decisão.
+ */
+function getHistoricoConferenciasSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('HistoricoConferencias');
+  if (!sheet) {
+    sheet = ss.insertSheet('HistoricoConferencias');
+    sheet.getRange('A1:G1').setValues([[
+      'taskId', 'cliente', 'tituloTarefa', 'nomePeca', 'decisao', 'quem', 'quando'
+    ]]);
+  }
+  return sheet;
+}
+
+/**
+ * Poda as linhas já decididas com mais de 30 dias — arquivando a decisão
+ * de cada uma antes de apagar. Roda junto do backup diário, mesmo lugar de
+ * `limparFeedEventosAntigos`.
  */
 function limparConferenciasAntigas() {
   var sheet = getConferenciasSheet();
@@ -1569,14 +1669,51 @@ function limparConferenciasAntigas() {
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
+    var paraArquivar = [];
     for (var i = linhas.length - 1; i >= 1; i--) {
       if (String(linhas[i][11]) === 'pendente') continue;
       var quando = Date.parse(linhas[i][13] || linhas[i][10]);
-      if (quando && quando < limite) sheet.deleteRow(i + 1);
+      if (!quando || quando >= limite) continue;
+
+      var l = linhas[i];
+      // Descartada não vira histórico: ela não é uma decisão sobre a peça,
+      // é "isso não era pra estar na fila" (ver descartarConferencia).
+      if (String(l[11]) !== 'descartada') {
+        paraArquivar.push([l[0], l[1], l[2], l[3], l[11], l[12] || '', l[13] || l[10] || '']);
+      }
+      sheet.deleteRow(i + 1);
+    }
+    if (paraArquivar.length) {
+      var hist = getHistoricoConferenciasSheet();
+      // Uma escrita só pro bloco inteiro, em vez de appendRow por linha —
+      // a poda pode pegar dezenas de linhas de uma vez.
+      hist.getRange(hist.getLastRow() + 1, 1, paraArquivar.length, 7).setValues(paraArquivar);
     }
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Busca no histórico de decisões — "quem aprovou a peça X do cliente Y?".
+ * Sem tela por enquanto: é consulta rara, feita quando dá problema, e
+ * rodar à mão no editor do Apps Script resolve. Aceita parte do nome do
+ * cliente ou da peça.
+ */
+function buscarNoHistoricoDeConferencias(termo) {
+  var alvo = normalizarNomeParaComparar(termo || '');
+  var linhas = getHistoricoConferenciasSheet().getDataRange().getValues();
+  var achados = [];
+  for (var i = 1; i < linhas.length; i++) {
+    var l = linhas[i];
+    var tudo = normalizarNomeParaComparar([l[1], l[2], l[3]].join(' '));
+    if (alvo && tudo.indexOf(alvo) === -1) continue;
+    achados.push({
+      taskId: l[0], cliente: l[1], tituloTarefa: l[2], nomePeca: l[3],
+      decisao: l[4], quem: l[5], quando: l[6]
+    });
+  }
+  return { ok: true, itens: achados };
 }
 
 /**

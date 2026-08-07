@@ -338,6 +338,9 @@ function handleRequest(e, method) {
         // M5 (2026-08-05): resposta POR PEÇA, usada quando o link tem mais
         // de uma (ver Aprovacao.gs) — também PÚBLICA, mesmo código protege.
         output = responderPecaAprovacaoPublica(body.codigo, body.indicePeca, body.aprovado, body.respostaTexto, body.pins, body.quemRespondeu);
+      } else if (body.acao === 'avisarQueVaiConsultar') {
+        // PÚBLICA — chamada por aprovar.html, mesmo modelo das de cima.
+        output = avisarQueVaiConsultar(body.codigo);
       } else if (body.acao === 'listarAprovacoesDoCliente') {
         output = listarAprovacoesDoCliente(body.cliente);
       } else if (body.acao === 'beeGerarImagem') {

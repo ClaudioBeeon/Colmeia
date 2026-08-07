@@ -258,7 +258,13 @@ function apvRenderFila(itens) {
         </div>
       </div>
       <div class="apv-card-acao">
-        <button type="button" class="apv-btn ${item.arquivoSumiu ? "apv-btn-neutro" : "apv-btn-primario"}" data-apv-conferir="${i}">${item.arquivoSumiu ? "Arquivo sumiu" : (item.status === "aprovada" ? "Continuar envio" : "Conferir")}</button>
+        ${item.arquivoSumiu
+          // Arquivo fora da pasta não tem o que conferir — abrir a tela só
+          // mostraria o mesmo erro. Em vez de um botão que vira aviso, as
+          // duas coisas que dá pra fazer de verdade (2026-08-06).
+          ? `<button type="button" class="apv-btn apv-btn-neutro apv-btn-p" data-apv-avisar="${i}">Avisar ${escaparHTML((item.designer || "designer").split(" ")[0])}</button>
+             <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" data-apv-sumiu-descartar="${i}">Tirar da fila</button>`
+          : `<button type="button" class="apv-btn apv-btn-primario" data-apv-conferir="${i}">${item.status === "aprovada" ? "Continuar envio" : "Conferir"}</button>`}
       </div>
     </article>
   `;
@@ -267,27 +273,35 @@ function apvRenderFila(itens) {
   lista.querySelectorAll("[data-apv-conferir]").forEach(btn => {
     btn.addEventListener("click", () => {
       const item = apvFila[Number(btn.dataset.apvConferir)];
+      if (item) apvAbrirConferencia(item.taskId, item.loteId);
+    });
+  });
+
+  // Arquivo sumiu da pasta: avisar quem subiu, ou tirar da fila. Antes o
+  // card tinha um botão só ("Arquivo sumiu") que virava um aviso e acabava
+  // ali — e como o que está pendente nunca é podado, o item ficava no
+  // contador vermelho pra sempre.
+  lista.querySelectorAll("[data-apv-avisar]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const item = apvFila[Number(btn.dataset.apvAvisar)];
       if (!item) return;
-      // "Conferir" mentia aqui: o backend já sabe (via arquivoSumiu, ver
-      // listarConferenciasPendentes) que o arquivo não está mais na pasta
-      // com esse nome — abrir a conferência só pra mostrar esse mesmo erro
-      // um segundo depois é um beco sem saída disfarçado de botão normal.
-      if (item.arquivoSumiu) {
-        // Antes isso era um beco: o aviso aparecia e acabava ali, sem jeito
-        // de tirar da fila. Como o que está "pendente" nunca é podado, o
-        // item ficava no contador vermelho pra sempre. Agora o mesmo aviso
-        // vem com a saída junto (2026-08-06).
-        const nomes = (item.pecas || []).map(p => p.nomePeca).join(", ");
-        if (confirm(
-          `"${nomes}" não está mais na pasta do card — pode ter sido movida, renomeada ou apagada.\n\n` +
-          `Confere com ${item.designer || "o designer"} e pede pra subir de novo com o mesmo nome.\n\n` +
-          `Quer tirar isso da fila agora?`
-        )) {
-          apvDescartarDaFila(item);
-        }
-        return;
-      }
-      apvAbrirConferencia(item.taskId, item.loteId);
+      const nomes = (item.pecas || []).map(p => p.nomePeca).join(", ");
+      // WhatsApp sem número (wa.me/?text=), o mesmo caminho de toda cobrança
+      // do app: abre o seletor de conversa pra escolher a pessoa, em vez de
+      // o Colmeia decidir um número. Comentar na tarefa exigiria abrir o
+      // Runrun.it, e quem confere está justamente tentando não sair daqui.
+      const texto = `Oi! Mandei conferir "${nomes}" (${item.cliente || ""}) mas o arquivo não está mais na pasta do card — ` +
+        `pode ter sido movido, renomeado ou apagado. Consegue subir de novo com o mesmo nome?`;
+      window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+    });
+  });
+
+  lista.querySelectorAll("[data-apv-sumiu-descartar]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const item = apvFila[Number(btn.dataset.apvSumiuDescartar)];
+      if (!item) return;
+      if (!confirm("Tirar isso da fila? O designer não é avisado, e nada muda no Runrun.it.")) return;
+      apvDescartarDaFila(item);
     });
   });
 
@@ -1087,11 +1101,24 @@ function apvAprovar() {
     document.getElementById("apvConfirmaTxt").textContent =
       `O designer subiu versão nova de ${outrasDesatualizadas.length === 1 ? "uma peça" : outrasDesatualizadas.length + " peças"} ` +
       `deste lote depois do pedido: ${outrasDesatualizadas.join(", ")}. Vale conferir no carrossel antes de aprovar tudo junto.`;
+    // Guarda PRA QUAL PEÇA o botão "Ver a mais nova" tem que ir (2026-08-06).
+    // Sem isso ele levava pra última versão da peça que já estava na tela —
+    // que neste caminho já é a mais nova. Ou seja: o botão principal da
+    // confirmação era clicado e não acontecia nada visível, bem no único
+    // ponto do fluxo que interrompe alguém de propósito.
+    apvConfirmaAlvoPeca = (apvPecaAberta.pecas || [])
+      .findIndex(p => p.nomePeca === outrasDesatualizadas[0]);
     document.getElementById("apvConfirmaFundo").hidden = false;
     return;
   }
+  apvConfirmaAlvoPeca = null;
   apvConfirmarAprovacao();
 }
+
+// Índice da peça pra onde o "Ver a mais nova" deve pular, quando o aviso
+// é sobre OUTRA peça do lote (ver apvAprovar). null = o caso comum, em que
+// o aviso é sobre a peça que já está na tela.
+let apvConfirmaAlvoPeca = null;
 
 /**
  * Registra a aprovação e troca o painel da coluna ESQUERDA (briefing → envio).
@@ -2125,7 +2152,16 @@ function apvLigarEventos() {
 
   liga("apvConfirmaVer", "click", () => {
     document.getElementById("apvConfirmaFundo").hidden = true;
-    apvIrParaVersao(apvPecaAberta ? apvPecaAberta.peca.versoes.length : 1);
+    if (!apvPecaAberta) return;
+    // Aviso sobre OUTRA peça do lote: troca de peça primeiro. apvIrParaPeca
+    // já abre ela na versão mais recente, então não precisa mexer na versão
+    // depois — é justamente o que a pessoa precisa ver.
+    if (apvConfirmaAlvoPeca !== null && apvConfirmaAlvoPeca >= 0) {
+      apvIrParaPeca(apvConfirmaAlvoPeca);
+      apvConfirmaAlvoPeca = null;
+      return;
+    }
+    apvIrParaVersao(apvPecaAberta.peca.versoes.length);
   });
   liga("apvConfirmaSegue", "click", apvConfirmarAprovacao);
 

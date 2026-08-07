@@ -1172,6 +1172,14 @@ function tempoDeEsperaDaAprovacao(a) {
   return { texto: `${prefixo} há ${dias} dias`, alerta: false };
 }
 
+/** "hoje" / "ontem" / "há 3 dias" — pro carimbo de "vai consultar". */
+function tempoRelativoCurto(quando) {
+  const dias = Math.floor((Date.now() - (Number(quando) || 0)) / 86400000);
+  if (dias <= 0) return "hoje";
+  if (dias === 1) return "ontem";
+  return `há ${dias} dias`;
+}
+
 function cardDeAprovacaoHTML(a) {
   const tempo = tempoDeEsperaDaAprovacao(a);
   const status = a.status || "pendente";
@@ -1189,6 +1197,7 @@ function cardDeAprovacaoHTML(a) {
       <div class="repasse-card-title">${escaparHTML(a.tituloTarefa || "Peça pra aprovação")}</div>
       ${legendaPecas ? `<div class="aprov-peca">${escaparHTML(legendaPecas)}</div>` : ""}
       <div class="repasse-card-tempo ${tempo.alerta ? "aprov-alerta" : ""}">${tempo.texto}</div>
+      ${a.consultandoEm ? `<div class="aprov-consultando">🕒 O cliente avisou que ia consultar antes de responder (${tempoRelativoCurto(a.consultandoEm)})</div>` : ""}
       ${a.avisoPendente ? `<div class="aprov-preso">⚠️ O cliente já respondeu, mas o Runrun.it estava fora do ar e o aviso ainda não entrou na tarefa. O Colmeia reenvia sozinho assim que eles voltarem.</div>` : ""}
       ${status === "aprovado" && a.quemAprovou ? `<div class="aprov-quem">✓ Aprovado por <b>${escaparHTML(a.quemAprovou)}</b></div>` : ""}
       ${a.respostaTexto ? `<div class="aprov-resposta">“${escaparHTML(a.respostaTexto)}”</div>` : ""}

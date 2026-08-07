@@ -642,9 +642,13 @@ painel do devolver, conteúdo diferente).
   alguém**, de propósito: é exatamente o erro que essas telas existem pra evitar, e interromper só
   ali é o que faz a interrupção continuar significando algo. Não acrescentar confirmação em mais
   nada sem uma razão do mesmo peso.
-- **Os botões de envio nascem apagados até "Ver como o cliente vê" ser usado uma vez.** Botão
-  grande sozinho é sugestão, não proteção. É fácil de tirar se incomodar (parar de pôr a classe
-  `.apv-envio-travado`) — foi combinado assim com o Cláudio, pra reavaliar depois de uso real.
+- **"Ver como o cliente vê" convida, não trava.** Existiu brevemente a ideia de deixar os botões de
+  envio apagados até esse botão ser usado uma vez (classe `.apv-envio-travado`), mas isso nunca
+  chegou a valer no código — e em 2026-08-06 o Cláudio decidiu que fica assim mesmo: forçar o
+  clique todo dia vira gesto automático, que protege menos do que não ter trava nenhuma. O botão
+  continua sendo o maior do painel, que é o convite; o texto embaixo dele muda pra "Você já viu
+  como o cliente vê" depois de usado. **Se alguém for reintroduzir a trava, é uma decisão nova —
+  não é "consertar" nada que ficou pela metade.**
 ## A página "Bee" (2026-08-04)
 
 `js/pagina-bee.js` + o bloco no fim de `css/04-paginas.css`. Uma aba própria na barra lateral

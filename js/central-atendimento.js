@@ -273,9 +273,11 @@ function centralRenderHoje() {
  * até o lugar certo, não um estado que a pessoa precise desfazer.
  */
 function centralAbrirAprovacoesEm(chaveColuna) {
-  // Vindo de um cartão de número, a pessoa quer ver a LISTA daquilo — o
-  // filtro "só o que precisa cobrar" esconderia parte dela.
+  // Vindo de um cartão de número, a pessoa quer ver a LISTA daquilo — os
+  // filtros (o de atraso e o de cliente) esconderiam parte dela, e o
+  // número do cartão deixaria de bater com o que aparece na coluna.
   centralFiltroAprovacoes = "tudo";
+  centralFiltroCliente = "";
   centralTrocarAba("aprovacoes");
   centralRenderAprovacoes();
 
@@ -434,11 +436,14 @@ function centralRenderClientes() {
   }
 
   const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
+  // Clicável (2026-08-06): era a única aba da Central onde dava pra olhar
+  // mas não agir — cada card mostrava números e acabava ali. Agora leva pra
+  // Aprovações já filtrada naquele cliente.
   el.innerHTML = `<div class="central-clients-grid">${nomes.map(nome => {
     const c = porCliente[nome];
     const alerta = c.maxDias >= limite;
     return `
-      <div class="central-client-card">
+      <button type="button" class="central-client-card" data-central-cliente="${escaparHTML(nome)}">
         <div class="central-client-top">
           <span class="central-client-dot ${alerta ? "ambar" : "ok"}"></span>
           <span class="central-client-name">${escaparHTML(nome)}</span>
@@ -448,9 +453,18 @@ function centralRenderClientes() {
           <div class="central-client-stat"><b>${c.ajustes}</b><span>ajustes</span></div>
         </div>
         ${alerta ? `<span class="central-client-flag">Parado há ${c.maxDias} dia${c.maxDias === 1 ? "" : "s"}</span>` : ""}
-      </div>
+      </button>
     `;
   }).join("")}</div>`;
+
+  el.querySelectorAll("[data-central-cliente]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      centralFiltroCliente = btn.dataset.centralCliente;
+      centralFiltroAprovacoes = "tudo";
+      centralTrocarAba("aprovacoes");
+      centralRenderAprovacoes();
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -464,6 +478,10 @@ function centralRenderClientes() {
 // exatamente o recorte daquela aba.
 let centralFiltroAprovacoes = "tudo";
 
+// "" = todos os clientes. Vem de clicar num card do Radar de clientes, e
+// aparece como uma pílula com × pra tirar — nunca é um estado escondido.
+let centralFiltroCliente = "";
+
 function centralRenderAprovacoes() {
   const el = document.getElementById("centralTabAprovacoes");
   if (!el) return;
@@ -471,13 +489,15 @@ function centralRenderAprovacoes() {
   const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
   const soAtrasadas = centralFiltroAprovacoes === "atrasadas";
   const paradaHaMuito = a => Math.floor((Date.now() - (Number(a.criadoEm) || 0)) / 86400000) >= limite;
+  const doCliente = x => !centralFiltroCliente
+    || normalizarParaComparar(x.cliente || "") === normalizarParaComparar(centralFiltroCliente);
 
   // No modo "atrasadas" as duas primeiras colunas somem: uma peça esperando
   // conferência é trabalho SEU, não cobrança de ninguém.
-  const esperandoVoce = soAtrasadas ? [] : centralFilaPor("pendente");
-  const prontasEnviar = soAtrasadas ? [] : centralFilaPor("aprovada");
-  const comCliente = soAtrasadas ? centralAprovacoesPor("pendente").filter(paradaHaMuito) : centralAprovacoesPor("pendente");
-  const voltouAjuste = centralAprovacoesPor("ajuste");
+  const esperandoVoce = soAtrasadas ? [] : centralFilaPor("pendente").filter(doCliente);
+  const prontasEnviar = soAtrasadas ? [] : centralFilaPor("aprovada").filter(doCliente);
+  const comCliente = (soAtrasadas ? centralAprovacoesPor("pendente").filter(paradaHaMuito) : centralAprovacoesPor("pendente")).filter(doCliente);
+  const voltouAjuste = centralAprovacoesPor("ajuste").filter(doCliente);
 
   const quantasAtrasadas = centralAprovacoesPor("pendente").filter(paradaHaMuito).length + voltouAjuste.length;
 
@@ -493,6 +513,10 @@ function centralRenderAprovacoes() {
       <button type="button" class="central-filtro-pill ${soAtrasadas ? "ativa" : ""}" data-central-filtro="atrasadas">
         Só o que precisa cobrar${quantasAtrasadas ? ` <span class="central-filtro-conta">${quantasAtrasadas}</span>` : ""}
       </button>
+      ${centralFiltroCliente ? `
+        <button type="button" class="central-filtro-pill ativa central-filtro-cliente" id="centralTirarFiltroCliente">
+          ${escaparHTML(centralFiltroCliente)} <span class="central-filtro-x" aria-hidden="true">×</span>
+        </button>` : ""}
     </div>
     <div class="central-approvals-cols">
       ${soAtrasadas ? "" : coluna("Esperando você", esperandoVoce, "aColEsperando", "esperando")}
@@ -514,6 +538,11 @@ function centralRenderAprovacoes() {
       centralFiltroAprovacoes = btn.dataset.centralFiltro;
       centralRenderAprovacoes();
     });
+  });
+
+  document.getElementById("centralTirarFiltroCliente")?.addEventListener("click", () => {
+    centralFiltroCliente = "";
+    centralRenderAprovacoes();
   });
 }
 
@@ -647,10 +676,30 @@ function centralRenderMetricasTopo(itens) {
   const icCheck = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5L20 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const icAlerta = `<svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>`;
 
+  // A MÉTRICA DE GARGALO (2026-08-06). As três de cima medem VOLUME — o
+  // que passou, o que foi aprovado de primeira. Nenhuma media a única coisa
+  // que a conferência realmente controla: quanto tempo uma peça fica
+  // parada esperando VOCÊ olhar. Se o portão que criamos virar o gargalo
+  // da produção, é aqui que isso tem que aparecer, não numa reclamação.
+  //
+  // Sai da fila que já está carregada (pedidoEm de cada lote pendente),
+  // sem nada novo no backend: é o tempo de espera de AGORA, não uma média
+  // histórica — e é justamente o de agora que dá pra resolver hoje.
+  const esperando = centralFilaPor("pendente")
+    .map(it => Date.now() - (Date.parse(it.pedidoEm) || Date.now()))
+    .filter(ms => ms >= 0);
+  const piorEspera = esperando.length ? Math.max(...esperando) : 0;
+  const horasPior = piorEspera / 3600000;
+  const textoPior = !esperando.length ? "—"
+    : horasPior < 1 ? Math.max(1, Math.round(piorEspera / 60000)) + "min"
+    : horasPior < 24 ? Math.round(horasPior) + "h"
+    : Math.round(horasPior / 24) + "d";
+
   alvo.innerHTML = `
     <div class="hr-metrica"><b>${resolvidasSemana}</b><span>${icRelogio} Resolvidas esta semana</span></div>
     <div class="hr-metrica"><b>${pctDireto === null ? "—" : pctDireto + "%"}</b><span>${icCheck} Aprovadas sem ajuste</span></div>
     <div class="hr-metrica"><b>${aguardando}</b><span>${icAlerta} Aguardando resposta</span></div>
+    <div class="hr-metrica ${horasPior >= 24 ? "cm-metrica-alerta" : ""}"><b>${textoPior}</b><span>${icRelogio} Mais tempo parado com você</span></div>
   `;
 }
 

@@ -214,6 +214,14 @@
 }
 [data-theme="dark"] .aprov-preso { color: var(--warning); }
 
+/* "O cliente avisou que ia consultar antes de responder" (2026-08-06).
+   Neutro, não amarelo: não é um problema — é a diferença entre "sumiu" e
+   "está andando", que antes era invisível. Ver avisarQueVaiConsultar. */
+.aprov-consultando {
+  background: var(--page-bg); color: var(--text-secondary); border-radius: 10px;
+  padding: 8px 11px; font-size: 11.5px; line-height: 1.45; margin-bottom: 11px;
+}
+
 /* Fileira de fotinhos (Sequência de responsáveis) dentro do card de
    repasse — mesmo conceito visual do pop-up de detalhe da tarefa
    (wf-dot/wf-line/wf-check, reaproveitados como estão), só que com

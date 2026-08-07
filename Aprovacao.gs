@@ -55,6 +55,12 @@ function getAprovacoesSheet() {
   // é o que a aba "Aprovações" da Fila de repasse (que só olha o
   // agregado) continua enxergando sem precisar saber que isso existe.
   if (sheet.getLastColumn() < 16) sheet.getRange(1, 16).setValue('respostas_pecas');
+  // Coluna Q: quando o cliente disse "vou consultar e te falo"
+  // (2026-08-06). NÃO é um status — o link continua `pendente`, porque não
+  // houve decisão nenhuma. É só a diferença entre "o cliente sumiu" e "o
+  // cliente falou que está andando", que era invisível: ele fechava a aba e
+  // do nosso lado parecia silêncio igual a quem nem abriu.
+  if (sheet.getLastColumn() < 17) sheet.getRange(1, 17).setValue('consultando_em');
   return sheet;
 }
 
@@ -734,8 +740,58 @@ function linhaParaObjetoDeAprovacao(linha) {
     codigo: linha[0], taskId: linha[1], cliente: linha[2], tituloTarefa: linha[3],
     fileId: linha[4], nomeArquivo: linha[5], mimeType: linha[6], criadoEm: linha[7],
     status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11],
-    pins: linha[12] || '', quemAprovou: linha[14] || '', respostasPecas: linha[15] || ''
+    pins: linha[12] || '', quemAprovou: linha[14] || '', respostasPecas: linha[15] || '',
+    consultandoEm: linha[16] || ''
   };
+}
+
+/**
+ * "Vou consultar e te falo" — o terceiro caminho da página do cliente
+ * (2026-08-06). Só existiam aprovar e pedir ajuste, e na vida real o
+ * cliente frequentemente precisa mostrar pro chefe antes: ele fechava a
+ * aba, e do nosso lado isso era indistinguível de quem nunca abriu o link.
+ *
+ * NÃO mexe no status de propósito: `pendente` continua sendo a verdade
+ * (ninguém decidiu nada), e mudar isso quebraria as colunas da aba
+ * "Aprovações" da Fila de repasse, que leem status. É só um carimbo à
+ * parte, que a tela usa pra dizer "está andando" em vez de "sumiu".
+ *
+ * O aviso na tarefa sai pelo mesmo caminho de sempre, e falhar nele não
+ * desfaz o carimbo — igual em responderAprovacaoPublica.
+ */
+function avisarQueVaiConsultar(codigo) {
+  if (!codigo) return { ok: false, error: 'Link inválido.' };
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  var linha = null;
+  try {
+    var sheet = getAprovacoesSheet();
+    var linhas = sheet.getDataRange().getValues();
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) !== String(codigo)) continue;
+      linha = linhaParaObjetoDeAprovacao(linhas[i]);
+      if (linha.status !== 'pendente') { lock.releaseLock(); return { ok: true, jaRespondido: true }; }
+      sheet.getRange(i + 1, 17).setValue(new Date().getTime());
+      break;
+    }
+    if (!linha) { lock.releaseLock(); return { ok: false, error: 'Não encontrei essa aprovação.' }; }
+  } finally {
+    lock.releaseLock();
+  }
+
+  var avisoChegou = false;
+  try {
+    var envio = adicionarComentario(linha.taskId,
+      'Alterações do cliente (via link de aprovação):\n' +
+      '🕒 O cliente avisou que vai consultar internamente antes de responder "' + linha.nomeArquivo + '".',
+      null);
+    avisoChegou = !!(envio && envio.ok);
+  } catch (e) {
+    avisoChegou = false;
+  }
+
+  return { ok: true, avisoChegou: avisoChegou };
 }
 
 var APROVACOES_RETENCAO_DIAS = 30;
@@ -854,6 +910,10 @@ function listarAprovacoesPendentes() {
       respostaTexto: obj.respostaTexto,
       quemAprovou: obj.quemAprovou,
       quantosPins: parsearPins(obj.pins).length,
+      // O cliente avisou que ia consultar antes de responder (ver
+      // avisarQueVaiConsultar) — muda o que a tela diz sobre a espera,
+      // não o status.
+      consultandoEm: obj.consultandoEm || null,
       // O cliente respondeu, mas o aviso ainda não chegou na tarefa (o
       // Runrun.it estava fora) — a aba mostra isso pra você não achar
       // que ninguém respondeu.
