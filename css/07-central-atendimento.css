@@ -139,7 +139,13 @@
 }
 .central-filtro-select option { color: #16181D; }
 
-.central-content { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
+/* `display:flex` aqui (era block) é o que deixa a aba Hoje esticar até o
+   fim de verdade — ver #centralTabHoje logo abaixo. Não muda nada pras
+   outras abas (Clientes/Aprovações/Métricas): elas não pedem `flex`
+   próprio, então continuam do tamanho do conteúdo, e se isso passar da
+   altura disponível, é este `overflow-y:auto` que rola (do jeito que
+   sempre foi). */
+.central-content { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; display: flex; flex-direction: column; }
 .central-tab { display: flex; flex-direction: column; gap: 22px; }
 .central-tab[hidden] { display: none; }
 
@@ -155,17 +161,43 @@
    cada cartão também é um ATALHO clicável pro assunto dele, e o card preto
    vira uma TIMELINE de altura total em vez de repetir um número.
    =================================================================== */
+/* A aba inteira estica pra ocupar a altura disponível (2026-08-07, pedido
+   do Cláudio: "não ficar vazio, sempre se adaptar à tela") — antes o
+   mosaico tinha altura FIXA em pixel (128/128/96) e sobrava espaço em
+   branco embaixo dele em telas maiores.
+   `flex: 1; min-height: 0` (não `min-height: 100%`) é o que faz de
+   verdade: `min-height` sozinho só põe um PISO, nunca um TETO — o card
+   crescia com o conteúdo em vez de ficar do tamanho da tela e deixar só
+   a Timeline rolar por dentro. `flex:1` deixa a aba (agora que
+   `.central-content` é flex, ver ali em cima) ocupar exatamente o espaço
+   que sobra, nem mais nem menos; `min-height:0` é o que permite ela
+   ENCOLHER de volta a esse tamanho mesmo com conteúdo mais alto por
+   dentro — o mesmo motivo de `.central-hoje-tile` ter `min-height:0`
+   logo abaixo. */
+#centralTabHoje { flex: 1; min-height: 0; }
 .central-hoje-grid {
   display: grid; gap: 14px;
   grid-template-columns: 1.15fr 1fr 1fr 1.15fr;
-  grid-template-rows: 128px 128px 96px;
+  /* Proporção 4:4:3 é a MESMA razão que 128px:128px:96px tinha — só que
+     agora relativa à altura disponível, em vez de fixa. Continua tendo
+     um piso (min-height) pra não espremer demais numa janela baixa; se
+     nem o piso couber, `.central-content` rola a página inteira como
+     rede de segurança, mas isso só acontece em telas bem pequenas. */
+  grid-template-rows: 4fr 4fr 3fr;
   grid-template-areas:
     "foto esperando prontas timeline"
     "foto comcliente ajuste timeline"
     "radar radar radar timeline";
+  flex: 1; min-height: 460px;
 }
 .central-hoje-tile {
   display: flex; flex-direction: column; position: relative;
+  /* min-height:0 é o que permite o card ENCOLHER de volta pro tamanho da
+     linha do grid, mesmo quando o conteúdo de dentro (a lista da
+     Timeline) é mais alto — sem isso, um grid item nunca fica menor que
+     o próprio conteúdo por padrão, e o card preto cresceria pra caber
+     TODOS os eventos em vez de deixar só a lista rolar por dentro. */
+  min-height: 0;
   transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
 }
 /* .hr-card sempre foi usado numa <section> (sem estilo nativo); aqui uns
@@ -242,8 +274,10 @@
 }
 @media (prefers-reduced-motion: reduce) { .central-hoje-timeline-livedot { animation: none; } }
 .central-hoje-timeline-list {
-  display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; min-height: 0;
-  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent;
+  /* gap 10px (era 2px): os cartões estavam grudados um no outro — pedido
+     do Cláudio pra dar respiro entre eles. */
+  display: flex; flex-direction: column; gap: 10px; overflow-y: auto; flex: 1; min-height: 0;
+  padding: 2px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent;
 }
 .central-hoje-timeline-list::-webkit-scrollbar { width: 4px; }
 .central-hoje-timeline-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 999px; }
