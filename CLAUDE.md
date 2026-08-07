@@ -642,6 +642,20 @@ painel do devolver, conteúdo diferente).
   alguém**, de propósito: é exatamente o erro que essas telas existem pra evitar, e interromper só
   ali é o que faz a interrupção continuar significando algo. Não acrescentar confirmação em mais
   nada sem uma razão do mesmo peso.
+- **O rebrand da conferência (2026-08-07, protótipo 1 aprovado pelo Cláudio).** Quatro mudanças que
+  andam juntas: (1) a pílula de cima ficou PRETA, como a `.topbar-dark` do quadro — mas só no estado
+  neutro, porque verde (aprovado) e amarelo (em alteração) continuam mandando na cor, já que a cor da
+  barra É o estado da peça; (2) as colunas trocaram de lado por `order` no CSS, **sem mexer no HTML** —
+  a peça foi pra esquerda, e `.apv-coluna-pedido`/`.apv-coluna-feito` continuam significando a mesma
+  coisa em todo o resto do código; (3) briefing, peças da pasta e specs deixaram de ser cartões soltos
+  e viraram UM bloco com três pílulas (`.apv-info-bloco`: Briefing / Opções de arte / Infos) — o corpo
+  rola por dentro dele mesmo pra a altura não mudar ao trocar de aba; (4) a peça ganhou um cartão
+  branco (`.apv-peca-card`) com o seletor de versão no rodapé dele. **A pílula "Opções de arte" é
+  informação nova na tela**: lista as peças da pasta do card, inclusive as que NÃO vieram pra
+  conferência (`outrasPecas`, que antes só apareciam lá no painel de envio) — era assim que uma peça
+  era esquecida. Ela só LISTA; quem troca de peça é o carrossel embaixo do palco.
+  ⚠️ As regras do rebrand ficam no FIM do 06-aprovacao.css, depois do media query de celular — por
+  isso o media query precisa ser repetido lá embaixo, senão o desktop ganha por ordem de escrita.
 - **A barra de envio (2026-08-06, protótipo B aprovado pelo Cláudio).** O rodapé branco
   (`.apv-rodape-coluna`) com o botão preto gigante saiu, e a fileira de botões dentro do cartão de
   mensagem também: hoje é UMA barra preta arredondada só (`.apv-barra-envio`), no mesmo vocabulário

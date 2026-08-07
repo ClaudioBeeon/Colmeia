@@ -1263,3 +1263,149 @@
 .apv-links-antigos-nota {
   margin-top: 10px; font-size: 11.5px; color: var(--text-muted); line-height: 1.45;
 }
+
+/* ===================================================================
+   REBRAND DA CONFERÊNCIA (2026-08-07, protótipo 1 aprovado pelo Cláudio)
+
+   O que muda em relação ao desenho anterior:
+     1. a pílula de cima vira a BARRA PRETA do Colmeia (.topbar-dark);
+     2. as colunas trocam de lado — a PEÇA passa pra esquerda, que é
+        onde o olho começa, e os blocos de leitura vão pra direita;
+     3. briefing, peças da pasta e infos deixam de ser cartões soltos e
+        viram UM bloco com três pílulas (.apv-info-bloco);
+     4. a peça ganha um cartão branco flutuando, com o seletor de versão
+        e o nome do arquivo no rodapé dele.
+   =================================================================== */
+
+/* --- 1. A barra preta -------------------------------------------- */
+/* Só o estado NEUTRO fica preto: aprovado (verde) e alteração (amarelo)
+   continuam mandando, porque a cor da barra é o estado da peça — a
+   decisão mais forte da tela (ver os blocos .apv-estado-* acima). */
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) {
+  background: #16181D;
+  box-shadow: 0 6px 20px rgba(16, 18, 28, .22);
+}
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-cliente,
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-peca,
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-id,
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-restam {
+  color: #fff;
+}
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-peca,
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-restam {
+  color: rgba(255, 255, 255, .58);
+}
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-id { color: rgba(255, 255, 255, .45); }
+/* O logo é escuro; sobre preto ele some. Invertido só no estado neutro. */
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-contexto-logo { filter: invert(1) brightness(1.6); }
+/* O botão de ação vira branco pra saltar do preto (mesma regra que os
+   estados verde/amarelo já seguem: o botão contrasta COM a barra). */
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-acao-btn { background: #fff; }
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-acao-btn:hover { background: #EDEFF2; }
+.apv-contexto:not(.apv-estado-aprovado):not(.apv-estado-alteracao) .apv-acao-item { color: #16181D; }
+
+/* --- 2. A peça à esquerda ---------------------------------------- */
+/* Trocado por `order`, não mexendo no HTML: a coluna de leitura continua
+   sendo `.apv-coluna-pedido` (que rola) e a da peça `.apv-coluna-feito`
+   (que nunca rola) em todo o CSS e o JS. Inverter no DOM obrigaria a
+   revisar as duas dezenas de regras que dependem desses nomes. */
+.apv-coluna-feito { order: 1; }
+.apv-coluna-pedido { order: 2; border-right: none; border-left: 1px solid var(--border); }
+.apv-colunas { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
+
+/* --- 3. O bloco de informações com as três pílulas --------------- */
+.apv-info-bloco { flex: 1 1 auto; min-height: 0; gap: 14px; display: flex; flex-direction: column; }
+.apv-info-pills {
+  display: flex; gap: 3px; background: var(--page-bg);
+  border-radius: 999px; padding: 3px; flex-shrink: 0;
+}
+[data-theme="dark"] .apv-info-pills { background: rgba(255, 255, 255, .05); }
+.apv-info-p {
+  /* Largura pelo CONTEÚDO, não fatias iguais: com `flex:1` as três
+     dividiam a barra em partes iguais e "Opções de arte" — a mais longa —
+     virava "Opções de ...". Pílula com reticências é pior que pílula de
+     tamanho desigual, ainda mais numa tela usada por quem não conhece o
+     app e depende do rótulo escrito por extenso. */
+  flex: 0 1 auto; min-width: 0; border: none; background: none; cursor: pointer;
+  font-family: var(--apv-fonte-texto); font-size: 12px; font-weight: 600;
+  color: var(--text-muted); padding: 7px 12px; border-radius: 999px;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.apv-info-p:hover { color: var(--text-primary); }
+.apv-info-p.ativa {
+  background: var(--card-bg); color: var(--text-primary); font-weight: 700;
+  box-shadow: 0 1px 3px rgba(16, 18, 28, .1);
+}
+[data-theme="dark"] .apv-info-p.ativa { background: rgba(255, 255, 255, .1); }
+/* O corpo rola por dentro dele mesmo: assim a ALTURA do bloco não muda ao
+   trocar de pílula, e nada pula na tela — que é o motivo de as três
+   dividirem um cartão só em vez de virarem três cartões empilhados. */
+.apv-info-corpo { flex: 1; min-height: 0; overflow-y: auto; }
+.apv-info-corpo::-webkit-scrollbar { width: 5px; }
+.apv-info-corpo::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+.apv-info-pane { display: none; }
+.apv-info-pane.ativa { display: block; }
+
+/* "Opções de arte" — as peças da pasta do card. A que está sendo
+   conferida fica marcada em amarelo; as outras são só informação. */
+.apv-arte-l {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px; border-radius: 12px; margin-bottom: 4px;
+  width: 100%; text-align: left; border: none; background: none;
+  font-family: var(--apv-fonte-texto); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.apv-arte-l:hover { background: var(--page-bg); }
+.apv-arte-l.ativa { background: var(--apv-amarelo-suave); }
+.apv-arte-l.ativa:hover { background: var(--apv-amarelo-suave); }
+.apv-arte-mini {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  background: var(--apv-palco) center/cover no-repeat;
+}
+.apv-arte-t { flex: 1; min-width: 0; }
+.apv-arte-t b {
+  display: block; font-size: 13px; font-weight: 700; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.apv-arte-t span { font-size: 11.5px; color: var(--text-muted); }
+.apv-arte-selo {
+  flex-shrink: 0; background: var(--kanban-yellow); color: #16181D;
+  font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+}
+.apv-info-nota {
+  font-size: 11.5px; color: var(--text-muted); font-style: italic;
+  margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--border);
+}
+
+/* --- 4. A peça num cartão branco flutuante ----------------------- */
+.apv-coluna-feito { padding: 22px; gap: 0; }
+.apv-peca-card {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px;
+  background: var(--card-bg); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card); padding: 14px;
+}
+[data-theme="dark"] .apv-peca-card { background: rgba(255, 255, 255, .04); }
+/* A barra de versão sai do topo e vira o RODAPÉ do cartão da peça —
+   junto do nome do arquivo, que é a única informação da tela que não
+   mente sobre qual arquivo vai pro cliente. */
+.apv-peca-card .apv-versao-barra {
+  order: 3; flex-shrink: 0; padding: 0; border: none; background: none;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.apv-peca-card .apv-palco { order: 2; background: transparent; border-radius: 12px; }
+.apv-peca-card .apv-aviso-nova { order: 1; }
+.apv-peca-card .apv-carrossel-pecas, .apv-peca-card .apv-carrossel-legenda { order: 4; }
+
+/* No celular volta a ser uma coluna só. Isso já estava no media query lá
+   em cima, mas as regras do rebrand vêm DEPOIS dele no arquivo e ganhavam
+   por ordem de escrita — então precisam ser repetidas aqui embaixo.
+   `order` também é zerado: empilhado, a peça vem primeiro naturalmente,
+   e a inversão do desktop não tem o que inverter. */
+@media (max-width: 900px) {
+  .apv-colunas { grid-template-columns: 1fr; }
+  .apv-coluna-feito { order: 0; padding: 16px; }
+  .apv-coluna-pedido { order: 0; border-left: none; border-bottom: 1px solid var(--border); }
+  .apv-peca-card { padding: 10px; }
+  .apv-info-p { font-size: 12.5px; padding: 8px 13px; }
+}

@@ -469,6 +469,10 @@ async function apvAbrirConferencia(taskId, loteId) {
   // Peça nova, barra nova: o "✓ Você já viu" da peça anterior não pode
   // ficar aceso dizendo que esta aqui já foi conferida.
   apvMarcarPreviewVisto(false);
+  // Peça nova volta pro Briefing: é o que se lê primeiro. Se a pessoa
+  // tivesse deixado em "Infos" na peça anterior, a próxima abriria já num
+  // lugar que não é o começo da conferência.
+  apvTrocarInfoPane("brief");
   const menuEnvio = document.getElementById("apvEnvioMenu");
   if (menuEnvio) menuEnvio.hidden = true;
   document.getElementById("apvContextoId").hidden = true;
@@ -666,6 +670,16 @@ function apvRenderBriefing(peca) {
       <span class="apv-spec-rotulo">Entrega desejada</span>
       <span class="apv-spec-valor ${atrasada ? "atencao" : ""}">${entrega ? apvDataCurta(peca.prazo) : "sem data"}</span>
     </div>
+    ${peca.designer ? `
+      <div class="apv-spec">
+        <span class="apv-spec-rotulo">Designer</span>
+        <span class="apv-spec-valor">${escaparHTML(peca.designer)}</span>
+      </div>` : ""}
+    ${apvPedidoEmAtual ? `
+      <div class="apv-spec">
+        <span class="apv-spec-rotulo">Pedida pra conferência</span>
+        <span class="apv-spec-valor">há ${apvTempoDeEspera(apvPedidoEmAtual).replace(" esperando", "")}</span>
+      </div>` : ""}
     <div class="apv-spec">
       <span class="apv-spec-rotulo">Tarefa</span>
       <a class="apv-spec-valor apv-spec-link" href="${escaparHTML(linkRunrun)}" target="_blank" rel="noopener">
@@ -683,7 +697,80 @@ function apvRenderBriefing(peca) {
       </div>` : ""}
   `;
 
+  apvRenderOpcoesDeArte(peca);
   apvPrepararPedirAlteracao(peca);
+}
+
+/**
+ * A pílula "Opções de arte" — as peças que estão na pasta do card no
+ * Drive (2026-08-07, rebrand aprovado pelo Cláudio).
+ *
+ * POR QUE ISSO PASSOU A EXISTIR: `dadosDaConferencia` já devolvia
+ * `outrasPecas` (as peças da pasta que NÃO vieram pra conferência), mas
+ * essa informação só aparecia lá no fim, no painel de envio, como
+ * caixinhas pra marcar. Quem estava conferindo não tinha como saber que
+ * existia um Stories na mesma pasta esperando — e é exatamente o tipo de
+ * coisa que faz uma peça ser esquecida.
+ *
+ * Só LISTA, não deixa trocar de peça: quem troca é o carrossel embaixo
+ * do palco, que já existe e só aparece pro lote de verdade. Duas formas
+ * de fazer a mesma coisa é como elas começam a divergir.
+ */
+function apvRenderOpcoesDeArte(peca) {
+  const el = document.getElementById("apvPaneArte");
+  if (!el) return;
+
+  const doLote = (peca.pecas || []).map(p => ({
+    nome: p.nomePeca,
+    versoes: (p.versoes || []).length,
+    fileId: p.ultima && p.ultima.fileId,
+    conferindo: true,
+  }));
+  const fora = (peca.outrasPecas || []).map(p => ({
+    nome: p.nomePeca,
+    versoes: (p.versoes || []).length || 1,
+    fileId: p.ultima && p.ultima.fileId,
+    conferindo: false,
+  }));
+  const todas = doLote.concat(fora);
+
+  if (!todas.length) {
+    el.innerHTML = `<p class="apv-vazio-inline">Não achei nenhuma peça na pasta do card.</p>`;
+    return;
+  }
+
+  el.innerHTML = todas.map((p, i) => `
+    <div class="apv-arte-l ${p.conferindo ? "ativa" : ""}">
+      <span class="apv-arte-mini" data-apv-thumb="${escaparHTML(p.fileId || "")}"></span>
+      <span class="apv-arte-t">
+        <b>${escaparHTML(p.nome || "Peça")}</b>
+        <span>${p.versoes} ${p.versoes === 1 ? "versão" : "versões"}${p.conferindo ? "" : " · não veio pra conferência"}</span>
+      </span>
+      ${p.conferindo ? `<span class="apv-arte-selo">conferindo</span>` : ""}
+    </div>
+  `).join("") + `<p class="apv-info-nota">As peças que estão na pasta do card no Drive.</p>`;
+
+  // As miniaturas entram depois, uma ida ao Drive cada — mesmo padrão da
+  // fila e do carrossel (apvCarregarMiniatura).
+  el.querySelectorAll("[data-apv-thumb]").forEach(mini => {
+    if (mini.dataset.apvThumb) apvCarregarMiniatura(mini.dataset.apvThumb, mini);
+  });
+}
+
+/**
+ * Troca qual das três pílulas está acesa (Briefing / Opções de arte /
+ * Infos). O corpo do bloco rola por dentro dele mesmo, então a ALTURA do
+ * cartão não muda ao trocar — nada pula na tela.
+ */
+function apvTrocarInfoPane(nome) {
+  document.querySelectorAll(".apv-info-p").forEach(b => {
+    const ativa = b.dataset.apvPane === nome;
+    b.classList.toggle("ativa", ativa);
+    b.setAttribute("aria-selected", ativa ? "true" : "false");
+  });
+  document.querySelectorAll(".apv-info-pane").forEach(p => {
+    p.classList.toggle("ativa", p.dataset.apvPane === nome);
+  });
 }
 
 /**
@@ -2154,6 +2241,12 @@ function apvLigarEventos() {
   liga("apvBtnAprovar", "click", apvClickAcao);
   liga("apvBtnDevolver", "click", apvConfirmarDevolucao);
   liga("apvBtnDescartar", "click", apvDescartar);
+
+  // As três pílulas do bloco de informações. Markup estático do
+  // index.html, nunca recriado — daí ligar uma vez só, como o resto daqui.
+  document.querySelectorAll(".apv-info-p").forEach(btn => {
+    btn.addEventListener("click", () => apvTrocarInfoPane(btn.dataset.apvPane));
+  });
   liga("apvMarcarBtn", "click", apvAlternarMarcacao);
   liga("apvPalco", "click", apvCliqueNoPalcoParaMarcar);
 

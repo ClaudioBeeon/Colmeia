@@ -13,13 +13,13 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-06s">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-06s">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-06s">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-06s">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-06s">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-06s">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-06s">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-07a">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-07a">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-07a">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-07a">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-07a">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-07a">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-07a">
 </head>
 <body>
 
@@ -850,22 +850,33 @@
              espaçamento (gap) entre os cartões; quem monta a "cara" de
              cartão é `.apv-bloco-card`. -->
         <div id="apvPainelBriefing" class="apv-blocos-coluna">
-          <div class="apv-bloco-card">
-            <p class="apv-rotulo">O que foi pedido</p>
-            <div class="apv-brief-texto" id="apvBriefTexto">
-              <!-- EXEMPLO — trocar pelo que apvRenderBriefing() desenhar -->
-              <p>Post de feed anunciando o combo de verão (café gelado + cookie) com <b>15% de desconto</b> pra pedidos feitos pelo app.</p>
-              <ul>
-                <li>Usar a paleta do verão definida em julho (tons de laranja e areia)</li>
-                <li>Logo na versão horizontal, no rodapé</li>
-                <li>Chamada principal legível no feed, sem dar zoom</li>
-              </ul>
+          <!-- UM bloco só, com três pílulas no topo (2026-08-07, protótipo
+               escolhido pelo Cláudio). Antes eram dois cartões soltos — um
+               do briefing e um dos "specs" — e as outras peças da pasta não
+               tinham lugar nenhum. Agora as três coisas dividem o mesmo
+               cartão e a altura não muda ao trocar de aba, então nada pula
+               na tela. Ver apvTrocarInfoPane(), js/pagina-aprovacao.js. -->
+          <div class="apv-bloco-card apv-info-bloco">
+            <div class="apv-info-pills" role="tablist" aria-label="O que mostrar">
+              <button type="button" class="apv-info-p ativa" data-apv-pane="brief" role="tab" aria-selected="true">Briefing</button>
+              <button type="button" class="apv-info-p" data-apv-pane="arte" role="tab" aria-selected="false">Opções de arte</button>
+              <button type="button" class="apv-info-p" data-apv-pane="infos" role="tab" aria-selected="false">Infos</button>
             </div>
-          </div>
 
-          <div class="apv-bloco-card apv-specs" id="apvBriefSpecs">
-            <!-- EXEMPLO -->
-            <div class="apv-spec"><span class="apv-spec-rotulo">Entrega desejada</span><span class="apv-spec-valor atencao">hoje, 18h</span></div>
+            <div class="apv-info-corpo">
+              <div class="apv-info-pane ativa" data-apv-pane="brief">
+                <div class="apv-brief-texto" id="apvBriefTexto"></div>
+              </div>
+
+              <!-- As peças que estão na pasta do card: as que vieram pra
+                   conferência e as que ficaram de fora. Preenchido por
+                   apvRenderOpcoesDeArte(). -->
+              <div class="apv-info-pane" data-apv-pane="arte" id="apvPaneArte"></div>
+
+              <div class="apv-info-pane" data-apv-pane="infos">
+                <div class="apv-specs" id="apvBriefSpecs"></div>
+              </div>
+            </div>
           </div>
 
           <!-- Só quando o projeto do mês já foi fechado no Runrun.it —
@@ -1069,6 +1080,13 @@
 
       <!-- ---------- DIREITA: a peça — sempre visível, nos dois painéis ---------- -->
       <div class="apv-coluna apv-coluna-feito">
+        <!-- A peça mora num cartão branco flutuante (2026-08-07), igual aos
+             blocos da outra coluna — antes ela ficava solta sobre o cinza.
+             A ORDEM visual de dentro é dada por `order` no CSS: aviso de
+             versão nova, palco, e a barra de versão como RODAPÉ do cartão.
+             No HTML a barra continua vindo primeiro porque o JS que a
+             desenha (apvRenderSeletorDeVersao) não sabe nada de ordem. -->
+        <div class="apv-peca-card">
         <div class="apv-versao-barra">
           <div class="apv-versao-switch" id="apvVersaoSwitch">
             <!-- EXEMPLO — trocar pelo que apvRenderSeletorDeVersao() desenhar -->
@@ -1110,6 +1128,7 @@
              apvRenderCarrosselPecas, js/pagina-aprovacao.js) -->
         <span class="apv-carrossel-legenda" id="apvCarrosselLegenda" hidden></span>
         <div class="apv-carrossel-pecas" id="apvCarrosselPecas" hidden></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1465,32 +1484,32 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-06s"></script>
-<script src="js/fila-offline.js?v=2026-08-06s"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-06s"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-06s"></script>
-<script src="js/kanban-polling.js?v=2026-08-06s"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-06s"></script>
-<script src="js/regras-briefing.js?v=2026-08-06s"></script>
-<script src="js/kanban-board.js?v=2026-08-06s"></script>
-<script src="js/clientes-hub.js?v=2026-08-06s"></script>
-<script src="js/chat-comentarios.js?v=2026-08-06s"></script>
-<script src="js/detalhe-modal.js?v=2026-08-06s"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-06s"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-06s"></script>
-<script src="js/bee.js?v=2026-08-06s"></script>
-<script src="js/paginas-designers.js?v=2026-08-06s"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-06s"></script>
-<script src="js/pagina-repasse.js?v=2026-08-06s"></script>
-<script src="js/pagina-horas.js?v=2026-08-06s"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-06s"></script>
-<script src="js/paleta-comando.js?v=2026-08-06s"></script>
-<script src="js/roteador-url.js?v=2026-08-06s"></script>
-<script src="js/detalhe-historia.js?v=2026-08-06s"></script>
-<script src="js/modo-foco.js?v=2026-08-06s"></script>
-<script src="js/pagina-bee.js?v=2026-08-06s"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-06s"></script>
-<script src="js/central-atendimento.js?v=2026-08-06s"></script>
-<script src="js/login-boot.js?v=2026-08-06s"></script>
+<script src="js/config.js?v=2026-08-07a"></script>
+<script src="js/fila-offline.js?v=2026-08-07a"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-07a"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-07a"></script>
+<script src="js/kanban-polling.js?v=2026-08-07a"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-07a"></script>
+<script src="js/regras-briefing.js?v=2026-08-07a"></script>
+<script src="js/kanban-board.js?v=2026-08-07a"></script>
+<script src="js/clientes-hub.js?v=2026-08-07a"></script>
+<script src="js/chat-comentarios.js?v=2026-08-07a"></script>
+<script src="js/detalhe-modal.js?v=2026-08-07a"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-07a"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-07a"></script>
+<script src="js/bee.js?v=2026-08-07a"></script>
+<script src="js/paginas-designers.js?v=2026-08-07a"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-07a"></script>
+<script src="js/pagina-repasse.js?v=2026-08-07a"></script>
+<script src="js/pagina-horas.js?v=2026-08-07a"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-07a"></script>
+<script src="js/paleta-comando.js?v=2026-08-07a"></script>
+<script src="js/roteador-url.js?v=2026-08-07a"></script>
+<script src="js/detalhe-historia.js?v=2026-08-07a"></script>
+<script src="js/modo-foco.js?v=2026-08-07a"></script>
+<script src="js/pagina-bee.js?v=2026-08-07a"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-07a"></script>
+<script src="js/central-atendimento.js?v=2026-08-07a"></script>
+<script src="js/login-boot.js?v=2026-08-07a"></script>
 </body>
 </html>
