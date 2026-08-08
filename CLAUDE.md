@@ -831,11 +831,15 @@ cheio" aprovado pelo Cláudio): avatar de 34px, quem em destaque, hora abaixo do
 status à direita, e a peça **quase quadrada** (`aspect-ratio: 5/4`, a proporção da referência que o
 Cláudio mandou) com o nome do cliente e o "CONFERIR" por cima.
 
-- **A arte usa `aspect-ratio`, nunca altura fixa.** A coluna da Timeline é `1.15fr` de um grid de 4,
-  então a largura dela muda com a janela — com altura fixa a arte virava uma faixa larga na tela
-  grande e um quadrado na pequena. O `max-height: 300px` é só o teto pra num monitor largo um post
-  não ocupar a tela inteira sozinho (a partir de ~1920px). ⚠️ `.sem-imagem` precisa zerar o
-  `aspect-ratio` junto com a altura, senão a proporção ganha e a faixa não encolhe.
+- **A coluna tem largura de CELULAR, não uma fração da tela.** Era `1.15fr`: num ultrawide ela
+  passava de 500px e as artes viravam imagens enormes — feed de rede social não estica pros lados,
+  tem uma coluna e ponto. Hoje é `minmax(320px, 400px)`, e o espaço que sobra vai pros outros cards,
+  que ganham em ser largos. **Entre 900px e 1200px ela volta a ser fração** (media query própria):
+  reservar 320px ali deixaria os cartões de número com ~90px. E no empilhado (≤900px) ela leva
+  `max-width: 440px` + `justify-self: center`, senão num tablet ocuparia 620px e esticaria de novo.
+- **A arte usa `aspect-ratio: 5/4`, nunca altura fixa** — a proporção da referência do Cláudio.
+  Com altura fixa ela virava faixa larga na tela grande e quadrado na pequena. ⚠️ `.sem-imagem`
+  precisa zerar o `aspect-ratio` junto com a altura, senão a proporção ganha e a faixa não encolhe.
 
 - ⚠️ **Foto SÓ no evento "mandou pra conferência"** (decisão do Cláudio). Ajuste e aprovação falam
   de uma peça que já passou por aqui — a arte não é informação nova neles, e sem foto esses eventos

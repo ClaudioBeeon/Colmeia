@@ -177,7 +177,16 @@
 #centralTabHoje { flex: 1; min-height: 0; }
 .central-hoje-grid {
   display: grid; gap: 14px;
-  grid-template-columns: 1.15fr 1fr 1fr 1.15fr;
+  /* A Timeline tem LARGURA DE CELULAR, não uma fração da tela
+     (pedido do Cláudio, 2026-08-08). Ela era `1.15fr`, então num monitor
+     ultrawide a coluna passava de 500px e as artes dos posts viravam
+     imagens enormes — um feed de rede social não estica pros lados, ele
+     tem uma coluna e ponto. `minmax(320px, 400px)` mantém o formato de
+     celular em qualquer tela: os 400px são a largura de um aparelho de
+     verdade, e o espaço que sobra vai pros outros cards, que ganham em
+     ser largos. O `320px` de piso é pra ela não espremer antes de o
+     layout virar uma coluna só (media query no fim do arquivo). */
+  grid-template-columns: 1.15fr 1fr 1fr minmax(320px, 400px);
   /* Proporção 4:4:3 é a MESMA razão que 128px:128px:96px tinha — só que
      agora relativa à altura disponível, em vez de fixa. Continua tendo
      um piso (min-height) pra não espremer demais numa janela baixa; se
@@ -398,16 +407,27 @@
   text-transform: uppercase; color: rgba(255,255,255,.38); margin-bottom: 4px;
 }
 
+/* Entre 900px e 1200px reservar 320px pra Timeline sobraria pouco pros
+   três cartões da esquerda (os de número ficavam com ~90px, ilegíveis).
+   Nessa faixa ela volta a ser uma fração — o problema que o tamanho fixo
+   resolve (esticar demais) só existe do outro lado da régua. */
+@media (max-width: 1200px) {
+  .central-hoje-grid { grid-template-columns: 1.15fr 1fr 1fr minmax(0, 1.3fr); }
+}
+
 @media (max-width: 900px) {
   .central-hoje-grid {
     grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto);
     grid-template-areas: "foto foto" "esperando prontas" "comcliente ajuste" "timeline timeline" "radar radar";
   }
   .central-hoje-foto { min-height: 120px; }
-  /* 440px, não 220: empilhada no celular a coluna fica larga, e com a
-     arte em 5:4 um post sozinho já passa de 380px — a Timeline abria
-     cortando o primeiro deles ao meio. */
-  .central-hoje-timeline { min-height: 440px; }
+  /* Empilhada, ela ocupa as duas colunas — num tablet de 900px isso são
+     ~620px de largura e a arte voltaria a esticar. O mesmo teto de
+     celular vale aqui, centralizado. Num telefone de verdade a coluna já
+     é menor que isso, então não muda nada.
+     E 440px de piso, não 220: com a arte em 5:4 um post sozinho já passa
+     de 380px, e a Timeline abria cortando o primeiro deles ao meio. */
+  .central-hoje-timeline { min-height: 440px; max-width: 440px; justify-self: center; width: 100%; }
 }
 
 /* ===== Cartão de fila (Aprovações), reaproveitando .task-card/.card-*
