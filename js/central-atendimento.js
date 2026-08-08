@@ -241,6 +241,14 @@ let centralHojeUltimaContagemAjuste = null;
  * ALTURA TOTAL — a Timeline — com os eventos mais recentes (ver
  * centralConstruirTimeline). Substitui o layout anterior (kanban +
  * cartões de número na lateral, pedido em 2026-08-06).
+ *
+ * 2026-08-08 — os quatro cartões de número viraram "blocos cheios" (amarelo,
+ * preto e dois brancos com gráfico dentro) e ganharam uma FAIXA DE NÚMEROS
+ * acima deles, entre a barra preta e o mosaico. Os dois protótipos foram
+ * aprovados pelo Cláudio (artifacts "3 jeitos de mostrar os números" e "3
+ * jeitos pros números do topo", este último na referência de dashboard que
+ * ele mandou). A Timeline NÃO foi tocada nessa mudança — ver o pedido dele:
+ * "ela já foi ajustada, tamanho e tudo, não alterar nada nela".
  */
 function centralRenderHoje() {
   const el = document.getElementById("centralTabHoje");
@@ -261,6 +269,8 @@ function centralRenderHoje() {
   centralHojeUltimaContagemAjuste = voltouAjuste.length;
 
   el.innerHTML = `
+    ${centralHojeFaixaDeNumerosHTML(nomeExibido, esperandoVoce, prontasEnviar, comCliente, voltouAjuste, limiteAlerta)}
+
     <div class="central-hoje-grid">
       <div class="hr-card central-hoje-tile central-hoje-foto">
         <div class="central-hoje-foto-img" id="chFotoImg"></div>
@@ -268,20 +278,10 @@ function centralRenderHoje() {
         <div class="central-hoje-foto-info"><b id="chFotoNome"></b><span id="chFotoPapel"></span></div>
       </div>
 
-      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat" data-central-stat-ir="esperando">
-        <b>${esperandoVoce.length}</b><span>Esperando você</span>
-      </button>
-      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat verde" data-central-stat-ir="prontas">
-        <b>${prontasEnviar.length}</b><span>Prontas pra enviar</span>
-      </button>
-
-      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat" data-central-stat-ir="comCliente">
-        <b>${comCliente.length}</b><span>Com o cliente</span>
-      </button>
-      <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat ${voltouAjuste.length ? "ambar" : ""}" data-central-stat-ir="ajuste">
-        ${ajusteSubiu ? `<span class="central-hoje-badge">novo</span>` : ""}
-        <b>${voltouAjuste.length}</b><span>Voltou com ajuste</span>
-      </button>
+      ${centralHojeCartaoEsperando(esperandoVoce)}
+      ${centralHojeCartaoProntas(prontasEnviar)}
+      ${centralHojeCartaoComCliente(comCliente, limiteAlerta)}
+      ${centralHojeCartaoAjuste(voltouAjuste, ajusteSubiu)}
 
       <div class="hr-card central-hoje-tile central-hoje-timeline">
         <div class="central-hoje-timeline-head"><span class="central-hoje-timeline-livedot"></span>Timeline</div>
@@ -319,6 +319,203 @@ function centralRenderHoje() {
     btn.addEventListener("click", () => centralAbrirAprovacoesEm(btn.dataset.centralStatIr));
   });
   document.getElementById("chRadarBtn")?.addEventListener("click", () => centralTrocarAba("clientes"));
+
+  // Os números do topo levam pra ABA que responde aquele número (não pra
+  // uma coluna, como os cartões de baixo): "no fluxo" é a lista inteira de
+  // Aprovações, "aprovadas na semana" é a tela de Métricas e "peça mais
+  // parada" é o Radar de clientes, que já vem ordenado por quem está
+  // esperando há mais tempo. A setinha redonda só existe onde há pra onde ir.
+  el.querySelectorAll("[data-central-topo-ir]").forEach(btn => {
+    btn.addEventListener("click", () => centralTrocarAba(btn.dataset.centralTopoIr));
+  });
+}
+
+/**
+ * A FAIXA DE NÚMEROS do topo (2026-08-08) — protótipo "sem cartão nenhum",
+ * aprovado pelo Cláudio a partir da referência de dashboard que ele mandou:
+ * número grande, legenda miudinha embaixo e a setinha redonda, soltos no
+ * fundo, sem moldura nem sombra.
+ *
+ * Os três números são de OUTRAS contas, de propósito — repetir aqui os
+ * mesmos quatro números dos cartões logo abaixo seria dizer duas vezes a
+ * mesma coisa. Tudo sai do que já está em cache: nenhuma busca nova.
+ */
+function centralHojeFaixaDeNumerosHTML(nomeExibido, esperando, prontas, comCliente, ajuste, limiteAlerta) {
+  const noFluxo = esperando.length + prontas.length + comCliente.length + ajuste.length;
+
+  const seteDiasAtras = Date.now() - 7 * 86400000;
+  const aprovadasSemana = centralAprovacoesPor("aprovado")
+    .filter(a => Number(a.respondidoEm) >= seteDiasAtras).length;
+
+  // "Peça mais parada" = a que está esperando resposta do cliente há mais
+  // tempo (mesma conta do Radar de clientes, que é pra onde ela leva).
+  const diasParada = Math.max(0, ...comCliente.map(a => centralDiasDesde(Number(a.criadoEm))));
+  const alerta = diasParada >= limiteAlerta;
+
+  const primeiroNome = String(nomeExibido || "").trim().split(/\s+/)[0] || "";
+  const hora = new Date().getHours();
+  // Sem nome (sessão antiga, coordenador sem "ver como"), a vírgula ficaria
+  // pendurada no nada — nesse caso a saudação vira o título sozinha.
+  const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
+
+  const seta = `<span class="central-hoje-seta"><svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+  const numero = (valor, rotulo, destino, classe = "") => `
+    <button type="button" class="central-hoje-n ${classe}" data-central-topo-ir="${destino}">
+      <span class="central-hoje-n-linha"><b>${valor}</b>${seta}</span>
+      <em>${rotulo}</em>
+    </button>`;
+
+  return `
+    <div class="central-hoje-topo">
+      <div class="central-hoje-saud">
+        ${primeiroNome
+          ? `<span>${saudacao},</span><b>${escaparHTML(primeiroNome)}</b>`
+          : `<b>${saudacao}</b>`}
+      </div>
+      <div class="central-hoje-nums">
+        ${numero(noFluxo, "peças no fluxo", "aprovacoes")}
+        ${numero(aprovadasSemana, "aprovadas na semana", "metricas")}
+        ${numero(diasParada, `dia${diasParada === 1 ? "" : "s"} na peça mais parada`, "clientes", alerta ? "alerta" : "")}
+      </div>
+    </div>`;
+}
+
+/** Quantos dias inteiros já se passaram desde `quandoMs` (0 = hoje). */
+function centralDiasDesde(quandoMs) {
+  if (!quandoMs) return 0;
+  return Math.max(0, Math.floor((Date.now() - quandoMs) / 86400000));
+}
+
+/** "40min" / "6h" / "3d" — o tempo curtinho que cabe no rodapé de um cartão. */
+function centralIdadeCurta(ms) {
+  const horas = ms / 3600000;
+  if (horas < 1) return Math.max(1, Math.round(ms / 60000)) + "min";
+  if (horas < 24) return Math.round(horas) + "h";
+  return Math.round(horas / 24) + "d";
+}
+
+/**
+ * Uma barrinha por peça esperando, altura = há quanto tempo ela espera
+ * (as mais antigas primeiro, no máximo 8).
+ *
+ * NÃO é um gráfico de "chegadas por dia": `listarConferenciasPendentes`
+ * (AprovacaoInterna.gs) só devolve o que ainda está em aberto — o que já
+ * foi conferido não vem, então uma série histórica aqui seria inventada.
+ * Isto mostra o que existe de verdade: o tamanho e a IDADE da fila de agora.
+ * Barra escura = passou de um dia esperando.
+ */
+function centralHojeBarrasDeEspera(itens) {
+  if (!itens.length) return "";
+
+  const agora = Date.now();
+  const idades = itens
+    .map(it => ({ ms: agora - (Date.parse(it.pedidoEm) || agora), cliente: it.cliente || "" }))
+    .filter(x => x.ms >= 0)
+    .sort((a, b) => b.ms - a.ms)
+    .slice(0, 8);
+  if (!idades.length) return "";
+
+  // Teto de 24h no mínimo: com a fila toda nova, uma peça de 20 minutos
+  // encostaria no topo da barra e pareceria urgente sem ser.
+  const teto = Math.max(86400000, ...idades.map(x => x.ms));
+  // Raiz quadrada em vez de proporção direta: com uma peça de 3 dias ao lado
+  // de outra de 2 horas, a proporção crua deixaria a segunda como um risco
+  // de 3% — invisível, como se ela não estivesse ali. A raiz aproxima as
+  // pequenas do meio da altura sem nunca inverter a ordem (a mais velha
+  // continua sendo sempre a mais alta).
+  return `
+    <div class="central-hoje-barras" aria-hidden="true">
+      ${idades.map(x => `
+        <i class="${x.ms >= 86400000 ? "velha" : ""}" style="height:${Math.max(16, Math.round(Math.sqrt(x.ms / teto) * 100))}%"
+           title="${escaparHTML(x.cliente)} · esperando há ${centralIdadeCurta(x.ms)}"></i>
+      `).join("")}
+    </div>`;
+}
+
+/** Cartão amarelo cheio: o que está esperando a conferência do atendimento. */
+function centralHojeCartaoEsperando(itens) {
+  const agora = Date.now();
+  const inicioDeHoje = new Date(); inicioDeHoje.setHours(0, 0, 0, 0);
+  const chegaramHoje = itens.filter(it => (Date.parse(it.pedidoEm) || 0) >= inicioDeHoje.getTime()).length;
+  const maisVelha = itens.length ? Math.max(...itens.map(it => agora - (Date.parse(it.pedidoEm) || agora))) : 0;
+
+  const pe = !itens.length ? "fila vazia 🎉"
+    : chegaramHoje ? `${chegaramHoje} ${chegaramHoje === 1 ? "chegou" : "chegaram"} hoje`
+    : `a mais velha: ${centralIdadeCurta(maisVelha)}`;
+
+  return `
+    <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat cheio-amarelo" data-central-stat-ir="esperando">
+      <span class="central-hoje-rot">Esperando você</span>
+      <b>${itens.length}</b>
+      ${centralHojeBarrasDeEspera(itens)}
+      <span class="central-hoje-pe">${pe}</span>
+    </button>`;
+}
+
+/** Cartão preto cheio: já conferido, falta só mandar pro cliente. */
+function centralHojeCartaoProntas(itens) {
+  const agora = Date.now();
+  const maisVelha = itens.length ? Math.max(...itens.map(it => agora - (Date.parse(it.pedidoEm) || agora))) : 0;
+  const pe = !itens.length ? "nada esperando envio" : `a mais velha: ${centralIdadeCurta(maisVelha)}`;
+
+  return `
+    <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat cheio-preto" data-central-stat-ir="prontas">
+      <span class="central-hoje-rot">Prontas pra enviar</span>
+      <b>${itens.length}</b>
+      ${centralHojeBarrasDeEspera(itens)}
+      <span class="central-hoje-pe">${pe}</span>
+    </button>`;
+}
+
+/**
+ * Cartão branco: o que está com o cliente. A barrinha divide as peças pela
+ * IDADE (até o limite de alerta × passou dele) — é o que separa "mandei
+ * ontem" de "esse cliente sumiu", que o número sozinho não conta.
+ */
+function centralHojeCartaoComCliente(itens, limiteAlerta) {
+  const velhas = itens.filter(a => centralDiasDesde(Number(a.criadoEm)) >= limiteAlerta).length;
+  const novas = itens.length - velhas;
+  const pctNovas = itens.length ? (novas / itens.length) * 100 : 0;
+
+  const barra = itens.length
+    ? `<div class="central-hoje-idade" role="img" aria-label="${novas} com até ${limiteAlerta - 1} dias, ${velhas} com ${limiteAlerta} dias ou mais">
+         ${novas ? `<span style="width:${pctNovas}%;background:var(--kanban-yellow)"></span>` : ""}
+         ${velhas ? `<span style="width:${100 - pctNovas}%;background:var(--warning)"></span>` : ""}
+       </div>
+       <div class="central-hoje-idade-leg">
+         <span>${novas} · até ${limiteAlerta - 1} dia${limiteAlerta - 1 === 1 ? "" : "s"}</span>
+         <span>${velhas} · ${limiteAlerta} dias ou +</span>
+       </div>`
+    : `<span class="central-hoje-pe">ninguém esperando resposta</span>`;
+
+  return `
+    <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat" data-central-stat-ir="comCliente">
+      <span class="central-hoje-rot">Com o cliente</span>
+      <b>${itens.length}</b>
+      ${barra}
+    </button>`;
+}
+
+/** Cartão branco: o que o cliente devolveu pedindo mudança. Zero vira um selo. */
+function centralHojeCartaoAjuste(itens, ajusteSubiu) {
+  const maisVelho = itens.length
+    ? Math.max(...itens.map(a => centralDiasDesde(Number(a.respondidoEm))))
+    : 0;
+  const pe = !itens.length
+    ? "nada pendente"
+    : (maisVelho === 0 ? "voltou hoje" : `o mais antigo: há ${maisVelho} dia${maisVelho === 1 ? "" : "s"}`);
+
+  const check = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5L20 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  return `
+    <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-stat ${itens.length ? "ambar" : ""}" data-central-stat-ir="ajuste">
+      ${ajusteSubiu ? `<span class="central-hoje-badge">novo</span>` : ""}
+      <span class="central-hoje-rot">Voltou com ajuste</span>
+      ${itens.length
+        ? `<b>${itens.length}</b>`
+        : `<span class="central-hoje-zero"><span class="central-hoje-ok">${check}</span><b>0</b></span>`}
+      <span class="central-hoje-pe">${pe}</span>
+    </button>`;
 }
 
 /**

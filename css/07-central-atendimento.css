@@ -174,7 +174,58 @@
    ENCOLHER de volta a esse tamanho mesmo com conteúdo mais alto por
    dentro — o mesmo motivo de `.central-hoje-tile` ter `min-height:0`
    logo abaixo. */
-#centralTabHoje { flex: 1; min-height: 0; }
+/* gap menor que o das outras abas (22px): aqui em cima mora a faixa de
+   números, que é do MESMO assunto dos cartões logo abaixo — o respiro
+   grande faria ela parecer outra seção. */
+#centralTabHoje { flex: 1; min-height: 0; gap: 14px; }
+
+/* ===================================================================
+   A FAIXA DE NÚMEROS DO TOPO (2026-08-08) — protótipo "sem cartão
+   nenhum", aprovado pelo Cláudio a partir da referência de dashboard
+   que ele mandou. Número grande, legenda miudinha embaixo e a setinha
+   redonda, SOLTOS no fundo: sem moldura, sem sombra, sem fundo.
+
+   É de propósito o jeito mais barato em altura de mostrar número —
+   a tela toda é dos cartões e da Timeline, e uma faixa com cartão
+   próprio aqui empurraria os dois pra baixo por um resumo.
+   =================================================================== */
+.central-hoje-topo { display: flex; align-items: flex-end; gap: 26px; padding: 2px 6px 0; flex: 0 0 auto; }
+.central-hoje-saud { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.central-hoje-saud span { font-size: 12.5px; color: var(--text-secondary); }
+.central-hoje-saud b {
+  font-family: var(--font-display); font-size: 26px; font-weight: 400; line-height: 1.15;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-hoje-nums { display: flex; align-items: flex-end; flex-shrink: 0; }
+/* Cada número é um <button> (leva pra aba que responde por ele) — daí os
+   mesmos resets de sempre, senão o navegador desenha chrome de formulário
+   por cima. Mesmo cuidado de .central-hoje-tile.clicavel. */
+.central-hoje-n {
+  display: flex; flex-direction: column; gap: 1px; padding: 0 22px;
+  border: none; border-left: 1px solid var(--border); background: none; margin: 0;
+  font: inherit; font-family: var(--font-body); color: inherit; text-align: left;
+  cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.central-hoje-n:first-child { border-left: none; }
+.central-hoje-n:last-child { padding-right: 4px; }
+.central-hoje-n-linha { display: flex; align-items: center; gap: 9px; }
+.central-hoje-n b {
+  font-family: var(--font-display); font-size: 34px; font-weight: 500; line-height: 1;
+  letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--text-primary);
+}
+.central-hoje-n em { font-style: normal; font-size: 11.5px; color: var(--text-secondary); }
+.central-hoje-n.alerta b { color: var(--warning); }
+.central-hoje-n:hover em { color: var(--text-primary); }
+.central-hoje-seta {
+  width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted);
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple);
+}
+.central-hoje-seta svg { width: 11px; height: 11px; display: block; }
+.central-hoje-n:hover .central-hoje-seta { background: var(--kanban-yellow); border-color: var(--kanban-yellow); color: #16181D; }
+.central-hoje-n.alerta .central-hoje-seta { background: var(--warning); border-color: var(--warning); color: #16181D; }
+
 .central-hoje-grid {
   display: grid; gap: 14px;
   grid-template-columns: 1.15fr 1fr 1fr 1.15fr;
@@ -226,14 +277,62 @@
 .central-hoje-foto-info b { display: block; font-size: 17px; font-weight: 600; }
 .central-hoje-foto-info span { font-size: 12px; opacity: .85; }
 
-.central-hoje-stat { justify-content: center; gap: 4px; }
+/* Os quatro cartões viraram BLOCOS CHEIOS (2026-08-08, protótipo aprovado
+   pelo Cláudio): rótulo em cima, número grande no meio, gráfico e uma linha
+   de contexto embaixo — em vez de um número solto e centralizado, que não
+   dizia nada além do próprio número. Os dois primeiros ganham cor de verdade
+   (amarelo e preto) e viram o segundo ponto mais forte da tela, depois da
+   Timeline; os dois de baixo ficam brancos de propósito, senão a tela inteira
+   grita ao mesmo tempo e nada se destaca. */
+.central-hoje-stat { justify-content: space-between; gap: 10px; padding: 18px 20px; }
+.central-hoje-rot { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .central-hoje-stat b {
-  font-family: var(--font-display); font-size: 30px; font-weight: 500;
-  letter-spacing: -.02em; color: var(--text-primary);
+  font-family: var(--font-display); font-size: 40px; font-weight: 500; line-height: .95;
+  letter-spacing: -.02em; color: var(--text-primary); font-variant-numeric: tabular-nums;
 }
-.central-hoje-stat span { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
-.central-hoje-stat.verde b { color: var(--success); }
+.central-hoje-pe { font-size: 11.5px; color: var(--text-secondary); font-weight: 500; }
 .central-hoje-stat.ambar b { color: var(--warning); }
+
+.central-hoje-stat.cheio-amarelo { background: var(--kanban-yellow); }
+.central-hoje-stat.cheio-amarelo b { color: #16181D; }
+.central-hoje-stat.cheio-amarelo .central-hoje-rot,
+.central-hoje-stat.cheio-amarelo .central-hoje-pe { color: rgba(22, 24, 29, .72); }
+
+/* O contorno branco por dentro (inset) é o que impede o cartão preto de
+   sumir dentro do fundo escuro no tema escuro — no claro ele é só um
+   fiozinho de acabamento. */
+.central-hoje-stat.cheio-preto {
+  background: #16181D; color: #fff;
+  box-shadow: var(--shadow-card), inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+.central-hoje-stat.cheio-preto b { color: var(--kanban-yellow); }
+.central-hoje-stat.cheio-preto .central-hoje-rot,
+.central-hoje-stat.cheio-preto .central-hoje-pe { color: rgba(255, 255, 255, .6); }
+
+/* Barrinhas de espera: uma por peça da fila, altura = há quanto tempo ela
+   espera (ver centralHojeBarrasDeEspera). A barra "velha" (mais de um dia)
+   é a que muda de cor — é o único jeito de o cartão contar que tem coisa
+   parada sem depender de ninguém ler o rodapé. */
+/* max-width nas barras: com duas ou três peças na fila, `flex:1` sozinho
+   faria cada uma virar um bloco largo — parece outra coisa, não um
+   gráfico. Com teto de largura elas ficam alinhadas à esquerda e o
+   desenho é o mesmo com 2 ou com 8 peças. */
+.central-hoje-barras { display: flex; align-items: flex-end; gap: 5px; height: 36px; }
+.central-hoje-barras i { flex: 1; max-width: 30px; border-radius: 3px; display: block; min-height: 3px; background: rgba(22, 24, 29, .22); }
+.central-hoje-barras i.velha { background: #16181D; }
+.cheio-preto .central-hoje-barras i { background: rgba(255, 255, 255, .2); }
+.cheio-preto .central-hoje-barras i.velha { background: var(--kanban-yellow); }
+
+.central-hoje-idade { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--border); gap: 2px; }
+.central-hoje-idade span { display: block; }
+.central-hoje-idade-leg { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--text-secondary); }
+
+.central-hoje-zero { display: flex; align-items: center; gap: 12px; }
+.central-hoje-ok {
+  width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--kanban-yellow); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: var(--kanban-yellow-text);
+}
+.central-hoje-ok svg { width: 17px; height: 17px; display: block; }
 .central-hoje-badge {
   position: absolute; top: 14px; right: 14px; background: var(--danger); color: #fff;
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
@@ -316,6 +415,11 @@
 }
 
 @media (max-width: 900px) {
+  /* Numa tela estreita a faixa vira duas linhas: saudação em cima, números
+     embaixo, com a divisória entre eles trocada por um respiro. */
+  .central-hoje-topo { flex-direction: column; align-items: stretch; gap: 12px; }
+  .central-hoje-nums { flex-wrap: wrap; gap: 14px 0; }
+  .central-hoje-n:first-child { padding-left: 0; }
   .central-hoje-grid {
     grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto);
     grid-template-areas: "foto foto" "esperando prontas" "comcliente ajuste" "timeline timeline" "radar radar";
