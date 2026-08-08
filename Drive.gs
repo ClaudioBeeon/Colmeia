@@ -215,6 +215,12 @@ function subirArquivoNoCard(dados) {
     var bytes = Utilities.base64Decode(dados.base64Dados);
     var blob = Utilities.newBlob(bytes, dados.mimeType || 'application/octet-stream', nomeFinal);
     var arquivo = pastaCard.createFile(blob);
+    // O cache de 15s de `buscarUploadsRecentesDoCard` foi feito pro
+    // POLLING de 8s, não pra este momento: sem limpar, a fala da Bee sobre
+    // o arquivo novo podia demorar até 15 segundos pra aparecer depois de
+    // um upload que acabou de acontecer aqui dentro. Quem escreve na
+    // pasta é quem sabe que o que estava guardado ficou velho.
+    invalidarCacheDeUploadsDoCard(dados.taskId);
     return { ok: true, url: arquivo.getUrl(), nomeFinal: nomeFinal, pastaUrl: pastaInfo.url };
   } catch (err) {
     return { ok: false, error: 'Erro ao subir o arquivo: ' + err.message };
@@ -273,6 +279,23 @@ var JANELA_UPLOAD_RECENTE_MS = 3 * 60 * 60 * 1000; // 3 horas
  * (não o Drive inteiro, ao contrário do painel-designers-beeon, que é
  * lento porque varre tudo).
  */
+function chaveDoCacheDeUploads(taskId) {
+  return 'uploadsCard_' + taskId;
+}
+
+/**
+ * Joga fora o que está guardado sobre os uploads desta tarefa. Chamada
+ * por quem ACABOU de mexer na pasta (ver subirArquivoNoCard) — o cache
+ * existe pro polling de 8s não varrer o Drive toda hora, e não deve
+ * atrasar a fala da Bee sobre um arquivo que o próprio Colmeia subiu.
+ */
+function invalidarCacheDeUploadsDoCard(taskId) {
+  if (!taskId) return;
+  try {
+    CacheService.getScriptCache().remove(chaveDoCacheDeUploads(taskId));
+  } catch (e) { /* cache indisponível: a próxima varredura resolve sozinha */ }
+}
+
 function buscarUploadsRecentesDoCard(taskId, cliente) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
 
@@ -281,7 +304,7 @@ function buscarUploadsRecentesDoCard(taskId, cliente) {
   // enquanto o card fica aberto — isso que estava deixando a notificação
   // de upload lenta. Com o cache, só 1 em cada ~2 checagens bate no Drive
   // de verdade; as outras usam o resultado recém-calculado.
-  var chaveCache = 'uploadsCard_' + taskId;
+  var chaveCache = chaveDoCacheDeUploads(taskId);
   var cache = CacheService.getScriptCache();
   var cacheado = cache.get(chaveCache);
   if (cacheado) {

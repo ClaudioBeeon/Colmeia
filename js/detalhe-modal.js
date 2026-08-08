@@ -1866,6 +1866,14 @@ async function subirArquivoArrastadoParaCard(task, arquivo) {
       "avisar sobre o arquivo novo"
     );
     avisarBeeSobreUploadNovo(idAoSoltar, data.nomeFinal);
+    // Puxa a fala do arquivo novo AGORA, sem esperar a varredura de 8s
+    // (pedido do Cláudio, 2026-08-08: ela é que traz "Enviar para
+    // revisão", e chegava bem depois da outra). O backend acabou de
+    // limpar o cache de 15s dessa tarefa em subirArquivoNoCard, então
+    // esta chamada já enxerga o arquivo que acabou de subir.
+    if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(idAoSoltar)) {
+      renderNotificacoesUpload(tasks[detailIdx]);
+    }
   } catch (err) {
     console.error("Falha ao subir arquivo arrastado:", err);
     mostrarToast(`Falha de conexão ao subir "${arquivo.name}".`, "erro");
@@ -1880,7 +1888,7 @@ async function subirArquivoArrastadoParaCard(task, arquivo) {
  * são de js/bee.js, carregado DEPOIS deste arquivo — daí o typeof-guard.
  */
 async function avisarBeeSobreUploadNovo(taskId, nomeArquivo) {
-  registrarFalaDaBeeSobrePasta(taskId, await chamarBackend({ acao: "beeAvisarUploadNovo", taskId, nomeArquivo }));
+  registrarFalaDaBeeSobrePasta(taskId, await chamarBackend({ acao: "beeAvisarUploadNovo", taskId, nomeArquivo }), "upload");
 }
 
 /**
@@ -1890,10 +1898,15 @@ async function avisarBeeSobreUploadNovo(taskId, nomeArquivo) {
  * enviarParaAlvo, acima.
  */
 async function avisarBeeSobreLinkDriveNoComentario(taskId) {
-  registrarFalaDaBeeSobrePasta(taskId, await chamarBackend({ acao: "beeAvisarLinkDriveNoComentario", taskId }));
+  registrarFalaDaBeeSobrePasta(taskId, await chamarBackend({ acao: "beeAvisarLinkDriveNoComentario", taskId }), "link");
 }
 
-function registrarFalaDaBeeSobrePasta(taskId, dataBee) {
+/**
+ * `origem` diz de onde veio a fala — "upload" (arquivo arrastado pro card)
+ * ou "link" (link do Drive colado num comentário). Só o segundo desenha a
+ * bolha automática aqui; ver o comentário longo lá embaixo.
+ */
+function registrarFalaDaBeeSobrePasta(taskId, dataBee, origem) {
   if (!dataBee || !dataBee.ok) return;
   if (typeof beeConversas === "undefined") return;
   beeConversas.set(taskId, dataBee.conversa);
@@ -1912,6 +1925,26 @@ function registrarFalaDaBeeSobrePasta(taskId, dataBee) {
     desenharThreadBee(tasks[detailIdx]);
     return;
   }
+
+  // DUAS FALAS PRO MESMO ARQUIVO, e o Cláudio pediu pra ficar uma só
+  // (2026-08-08). Quem sobe um arquivo arrastando via UPLOAD DO COLMEIA
+  // recebia esta bolha ("Subiu X na pasta do card. Quer que eu faça algo
+  // com isso?", com conferir/comparar) e, alguns segundos depois, a de
+  // renderNotificacoesUpload (js/notificacoes-uploads.js) — a que tem o
+  // mosaico de miniaturas E o "Enviar para revisão", que é a ação que
+  // importa. Duas bolhas sobre o mesmo arquivo, uma sem a ação principal.
+  //
+  // A fala continua sendo GRAVADA na conversa da Bee (beeConversas acima):
+  // quem abrir a aba dela depois vê o histórico completo, como sempre. O
+  // que saiu foi só a bolha automática aqui no chat de Comentários.
+  //
+  // ⚠️ O caminho do LINK DO DRIVE COLADO num comentário
+  // (avisarBeeSobreLinkDriveNoComentario) continua mostrando ela, e tem
+  // que continuar: ali não subiu arquivo nenhum pela pasta, então
+  // renderNotificacoesUpload não tem o que encontrar — sem esta bolha, a
+  // Bee ficaria muda naquele caso.
+  if (origem === "upload") return;
+
   const ultimaFala = (dataBee.conversa || [])[dataBee.conversa.length - 1];
   mostrarAvisoAcoesPastaInline(tasks[detailIdx], (ultimaFala && ultimaFala.texto) || "Quer que eu faça algo com isso?");
 }

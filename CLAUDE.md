@@ -243,6 +243,25 @@ pro `404.html`, que calcula a base do mesmo jeito.
   link direto pra uma tarefa que já estava carregada caía sempre no caminho lento de buscar de novo.
 - Carregado logo depois da paleta de comando (mesmo motivo: usa função de quase todo mundo).
 
+## Uma fala só quando um arquivo sobe pelo Colmeia (2026-08-08)
+
+Arrastar um arquivo pro card gerava DUAS bolhas da Bee sobre o mesmo arquivo: a de
+`registrarFalaDaBeeSobrePasta` ("Subiu X na pasta do card. Quer que eu faça algo com isso?", com
+conferir/comparar), instantânea, e a de `renderNotificacoesUpload` (js/notificacoes-uploads.js), com
+o mosaico de miniaturas e o **"Enviar para revisão"** — a ação que importa — que só chegava na
+varredura seguinte. Duas falas, e a útil vinha por último e devagar.
+
+- **A primeira bolha some no caminho do upload**, e SÓ nele: `registrarFalaDaBeeSobrePasta` agora
+  recebe `origem` ("upload" ou "link"). ⚠️ No caminho do **link do Drive colado num comentário** ela
+  continua aparecendo, e tem que continuar — ali não subiu arquivo pela pasta, então
+  `renderNotificacoesUpload` não acharia nada e a Bee ficaria muda.
+- **A fala continua GRAVADA na conversa da Bee** (`beeConversas`), como sempre. O que saiu foi só a
+  exibição automática no chat de Comentários.
+- **A segunda vem na hora:** `subirArquivoArrastadoParaCard` chama `renderNotificacoesUpload`
+  direto ao terminar, e `subirArquivoNoCard` (Drive.gs) chama `invalidarCacheDeUploadsDoCard` —
+  sem isso o cache de 15s de `buscarUploadsRecentesDoCard` (feito pro polling de 8s) podia devolver
+  a lista velha, sem o arquivo que acabou de subir.
+
 ## Preview de imagem do Drive (2026-08-03)
 
 Mostrar uma imagem que mora no Drive DENTRO do Colmeia (preview pequeno, clique amplia quase em tela
