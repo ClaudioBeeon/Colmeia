@@ -961,6 +961,31 @@ preta troca entre os quatro grupos sem fechar nada**, com os contadores sempre �
   tela de conferência de sempre. Duplicar a decisão em dois lugares seria a chance de alguém
   resolver uma peça sem ter olhado a arte direito.
 
+### O que preenche o espaço quando há poucas peças
+
+Com três cards o pop-up era um cabeçalho e um vazio enorme. Duas peças ocupam esse espaço **com
+trabalho**, e nenhuma delas custa uma busca nova — tudo sai do cache que a Central já lê.
+
+- **Pílulas de cliente** (`centralRenderFiltrosDeCliente`). Só aparecem com **mais de um** cliente
+  no grupo; com um só seria um botão que não filtra nada. Clicar no cliente que já está ligado
+  desliga — sem isso, voltar pra "todos" exigiria achar a pílula "Todos" no começo da fila.
+  ⚠️ O filtro corta a GRADE, **nunca os contadores da pílula preta**: eles são o tamanho do grupo, e
+  mudar com o filtro faria parecer que peça sumiu.
+- **Coluna de contexto** (`centralRenderLadoDoGrupo`), que tem dois estados:
+  - sem cliente escolhido → **"esperando há mais tempo"** (`centralEsperandoMaisHTML`): uma barra
+    por cliente, proporcional ao mais antigo do grupo, âmbar ao passar de `APROVACAO_DIAS_ALERTA`.
+    O piso de 6% na largura existe pra "hoje" ainda desenhar uma barrinha — largura zero parece
+    dado faltando, não dado pequeno.
+  - com cliente escolhido → **a timeline dele** (`centralTimelineDoClienteHTML`, pedido do Cláudio):
+    as MESMAS fontes do feed da aba Hoje (`centralConstruirTimeline`), só filtradas. Funciona sem
+    busca nova porque os eventos já carregam `cliente` desde que o feed foi feito.
+  - ⚠️ Ela **some no celular** (media query): numa tela estreita roubaria a largura dos cards, que
+    são o assunto. O filtro por cliente fica — ali ele ajuda ainda mais.
+- **Dois cuidados de texto na timeline:** `ev.quem` é o DESIGNER num "mandou pra conferência" e o
+  CLIENTE nos dois de resposta — numa coluna que já é de um cliente só, repetir o nome dele em cada
+  linha é ruído, então nesses casos o nome sai. E `ev.texto` foi escrito pro feed, onde o nome fica
+  numa linha acima ("Mandou X pra conferência"); inline, depois do nome, ele começa minúsculo.
+
 ## A Timeline da Central virou um feed (2026-08-08)
 
 `centralRenderTimelineHoje` (js/central-atendimento.js) + o bloco `.central-tl-*` em

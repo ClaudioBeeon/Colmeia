@@ -876,7 +876,97 @@
 .central-gc:hover .central-gc-seta { background: #16181D; color: #fff; }
 [data-theme="dark"] .central-gc:hover .central-gc-seta { background: #fff; color: #16181D; }
 
+/* ----- Filtro por cliente + coluna de contexto (2026-08-08) -----
+   O pop-up com três cards era um cabeçalho e um vazio enorme. Estas duas
+   peças ocupam o espaço com trabalho: as pílulas cortam a lista por
+   cliente, e a coluna da direita responde "quem está esperando mais" —
+   ou, quando um cliente está escolhido, a TIMELINE dele. */
+.central-grupo-corpo { flex-direction: row; }
+.central-grupo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.central-grupo-filtros {
+  flex: 0 0 auto; display: flex; gap: 6px; align-items: center;
+  overflow-x: auto; scrollbar-width: none; padding: 1px 3px;
+}
+.central-grupo-filtros::-webkit-scrollbar { display: none; }
+.central-grupo-filtros[hidden] { display: none; }
+.central-grupo-fc {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  border: none; background: var(--card-bg); color: var(--text-secondary);
+  font-family: var(--font-body); font-size: 11.5px; font-weight: 600;
+  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(18, 18, 30, .05), 0 5px 14px rgba(18, 18, 30, .055);
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-fc:hover { color: var(--text-primary); }
+.central-grupo-fc .q { font-size: 9.5px; font-weight: 800; opacity: .6; }
+.central-grupo-fc.ativa { background: #16181D; color: #fff; box-shadow: none; }
+[data-theme="dark"] .central-grupo-fc.ativa { background: #fff; color: #16181D; }
+
+/* A coluna só existe quando há largura sobrando: com muitos cards, o
+   espaço é deles (o media query no fim tira ela). */
+.central-grupo-lado {
+  width: 224px; flex: 0 0 auto; display: flex; flex-direction: column; gap: 11px;
+  overflow-y: auto; scrollbar-width: thin;
+}
+.central-grupo-bloco {
+  flex: 0 0 auto; background: var(--card-bg); border-radius: 16px; padding: 13px 14px;
+  box-shadow: 0 1px 2px rgba(18, 18, 30, .05), 0 5px 14px rgba(18, 18, 30, .055);
+}
+.central-grupo-bloco-rot {
+  font-size: 9.5px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--text-muted); margin: 0 0 11px;
+}
+
+/* "Esperando há mais tempo" — a barra é a leitura rápida: comprimento
+   proporcional ao mais antigo do grupo, âmbar quando passa do limite. */
+.central-grupo-esp + .central-grupo-esp { margin-top: 12px; }
+.central-grupo-esp-l { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.central-grupo-esp-n {
+  flex: 1; min-width: 0; font-size: 11.5px; font-weight: 650; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-grupo-esp-d { flex: 0 0 auto; font-size: 10px; font-weight: 700; color: var(--text-secondary); }
+.central-grupo-esp-d.alerta { color: var(--warning); }
+.central-grupo-esp-b { height: 6px; border-radius: 999px; background: var(--page-bg); overflow: hidden; }
+.central-grupo-esp-b > i { display: block; height: 100%; border-radius: 999px; background: var(--text-primary); }
+.central-grupo-esp-b.alerta > i { background: var(--warning); }
+
+/* A timeline do cliente escolhido — versão enxuta do feed da aba Hoje
+   (sem a arte grande: aqui ela é contexto ao lado dos cards, não o
+   assunto principal da tela). */
+.central-grupo-voltar {
+  border: none; background: none; cursor: pointer; padding: 0; margin: 0 0 9px;
+  font-family: var(--font-body); font-size: 10.5px; font-weight: 700;
+  color: var(--text-muted); display: flex; align-items: center; gap: 5px;
+}
+.central-grupo-voltar:hover { color: var(--text-primary); }
+.central-grupo-tl { display: flex; flex-direction: column; }
+.central-grupo-tl-i { display: flex; gap: 9px; padding: 9px 0; }
+.central-grupo-tl-i + .central-grupo-tl-i { border-top: 1px solid var(--border); }
+.central-grupo-tl-p {
+  flex: 0 0 auto; margin-top: 5px; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-muted);
+}
+.central-grupo-tl-p.novo { background: var(--kanban-yellow); }
+.central-grupo-tl-p.aprovado { background: var(--success); }
+.central-grupo-tl-p.ajuste { background: var(--warning); }
+.central-grupo-tl-t { flex: 1; min-width: 0; }
+.central-grupo-tl-txt { font-size: 11.5px; line-height: 1.45; color: var(--text-secondary); }
+.central-grupo-tl-txt b { color: var(--text-primary); font-weight: 650; }
+.central-grupo-tl-q { display: block; font-size: 10px; color: var(--text-muted); font-weight: 600; margin-top: 3px; }
+.central-grupo-tl-cita {
+  display: block; margin-top: 5px; font-size: 11px; line-height: 1.4; color: var(--text-primary);
+  border-left: 2px solid var(--kanban-yellow); padding-left: 8px;
+}
+.central-grupo-lado-vazio { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+
 @media (max-width: 900px) {
+  /* A coluna de contexto some: numa tela estreita ela roubaria a largura
+     dos cards, que são o assunto. O filtro por cliente fica — ele é o que
+     mais ajuda quando cabe pouca coisa na tela de uma vez. */
+  .central-grupo-corpo { flex-direction: column; }
+  .central-grupo-lado { display: none; }
   .central-grupo { inset: 8px; border-radius: 16px; }
   .central-grupo-pill { margin: 8px 8px 0; }
   .central-grupo-tit { display: none; }   /* o espaço vale mais pros quatro rótulos */

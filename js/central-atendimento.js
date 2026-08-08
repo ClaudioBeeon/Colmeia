@@ -1333,10 +1333,15 @@ const CENTRAL_GRUPOS = {
 };
 
 let centralGrupoAtual = null;
+// Cliente escolhido nas pílulas. "" = todos. Ele faz DUAS coisas: corta a
+// grade de cards e troca o que a coluna da direita mostra (de "esperando
+// há mais tempo" pra timeline daquele cliente).
+let centralGrupoCliente = "";
 
 function centralAbrirGrupo(chave) {
   if (!CENTRAL_GRUPOS[chave]) return;
   centralGrupoAtual = chave;
+  centralGrupoCliente = "";   // grupo novo, filtro limpo
   const pop = document.getElementById("centralGrupo");
   const fundo = document.getElementById("centralGrupoFundo");
   if (!pop || !fundo) return;
@@ -1377,15 +1382,29 @@ function centralRenderGrupo() {
       </button>`;
   }).join("");
   seg.querySelectorAll("[data-central-grupo]").forEach(b => {
-    b.addEventListener("click", () => { centralGrupoAtual = b.dataset.centralGrupo; centralRenderGrupo(); });
+    b.addEventListener("click", () => {
+      centralGrupoAtual = b.dataset.centralGrupo;
+      centralGrupoCliente = "";   // o filtro é do grupo, não da sessão
+      centralRenderGrupo();
+    });
   });
 
   const grupo = CENTRAL_GRUPOS[centralGrupoAtual];
-  const itens = grupo.itens();
+  const todos = grupo.itens();
+  centralRenderFiltrosDeCliente(todos);
+  centralRenderLadoDoGrupo(todos);
+
+  // O filtro corta a GRADE, nunca os contadores da pílula: eles são o
+  // tamanho do grupo, e mudar com o filtro faria parecer que peça sumiu.
+  const itens = centralGrupoCliente
+    ? todos.filter(it => (it.cliente || "") === centralGrupoCliente)
+    : todos;
   if (sub) sub.innerHTML = itens.length ? grupo.sub(itens.length) : "";
 
   if (!itens.length) {
-    grade.innerHTML = `<div class="central-grupo-vazio">${escaparHTML(grupo.vazio)}</div>`;
+    grade.innerHTML = `<div class="central-grupo-vazio">${escaparHTML(
+      centralGrupoCliente ? `Nada de ${centralGrupoCliente} neste grupo.` : grupo.vazio
+    )}</div>`;
     return;
   }
 
@@ -1505,3 +1524,163 @@ document.addEventListener("keydown", ev => {
   ev.stopPropagation();
   centralFecharGrupo();
 }, true);
+
+/**
+ * As pílulas de cliente. Só aparecem com MAIS DE UM cliente no grupo —
+ * com um só, a fileira seria um botão que não filtra nada, ocupando uma
+ * linha inteira pra dizer o que o card já diz.
+ */
+function centralRenderFiltrosDeCliente(itens) {
+  const el = document.getElementById("centralGrupoFiltros");
+  if (!el) return;
+
+  const porCliente = {};
+  itens.forEach(it => {
+    const c = it.cliente || "";
+    if (!c) return;
+    porCliente[c] = (porCliente[c] || 0) + 1;
+  });
+  const nomes = Object.keys(porCliente).sort((a, b) => porCliente[b] - porCliente[a] || a.localeCompare(b, "pt-BR"));
+
+  if (nomes.length < 2) {
+    el.hidden = true;
+    el.innerHTML = "";
+    // Um cliente só (ou nenhum) não pode deixar um filtro velho ligado —
+    // a grade ficaria vazia sem nada na tela explicando por quê.
+    centralGrupoCliente = "";
+    return;
+  }
+
+  el.hidden = false;
+  el.innerHTML = `
+    <button type="button" class="central-grupo-fc ${centralGrupoCliente ? "" : "ativa"}" data-central-fcli="">
+      Todos <span class="q">${itens.length}</span>
+    </button>
+    ${nomes.map(n => `
+      <button type="button" class="central-grupo-fc ${centralGrupoCliente === n ? "ativa" : ""}" data-central-fcli="${escaparHTML(n)}">
+        ${escaparHTML(n)} <span class="q">${porCliente[n]}</span>
+      </button>`).join("")}
+  `;
+  el.querySelectorAll("[data-central-fcli]").forEach(b => {
+    b.addEventListener("click", () => {
+      const alvo = b.dataset.centralFcli;
+      // Clicar no cliente que já está ligado desliga — sem isso, voltar
+      // pra "todos" exigiria achar a pílula "Todos" lá no começo da fila.
+      centralGrupoCliente = (alvo === centralGrupoCliente) ? "" : alvo;
+      centralRenderGrupo();
+    });
+  });
+}
+
+/**
+ * A coluna da direita. Sem cliente escolhido, mostra quem está esperando
+ * há mais tempo; com um escolhido, vira a TIMELINE dele (pedido do
+ * Cláudio, 2026-08-08) — porque essa é a pergunta que vem logo depois de
+ * escolher um cliente: "o que andou com ele?".
+ */
+function centralRenderLadoDoGrupo(itens) {
+  const el = document.getElementById("centralGrupoLado");
+  if (!el) return;
+  el.innerHTML = centralGrupoCliente
+    ? centralTimelineDoClienteHTML(centralGrupoCliente)
+    : centralEsperandoMaisHTML(itens);
+
+  el.querySelector("[data-central-lado-voltar]")?.addEventListener("click", () => {
+    centralGrupoCliente = "";
+    centralRenderGrupo();
+  });
+}
+
+/** "Esperando há mais tempo" — barra proporcional ao mais antigo do grupo. */
+function centralEsperandoMaisHTML(itens) {
+  const quandoDe = it => Number(it.respondidoEm) || Number(it.criadoEm) || Date.parse(it.pedidoEm) || 0;
+  const porCliente = {};
+  itens.forEach(it => {
+    const c = it.cliente || "";
+    const q = quandoDe(it);
+    if (!c || !q) return;
+    if (!porCliente[c] || q < porCliente[c]) porCliente[c] = q;   // o mais ANTIGO do cliente
+  });
+  const nomes = Object.keys(porCliente).sort((a, b) => porCliente[a] - porCliente[b]);
+  if (!nomes.length) {
+    return `<div class="central-grupo-bloco"><p class="central-grupo-lado-vazio">Nada esperando aqui agora.</p></div>`;
+  }
+
+  const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
+  const maisAntigo = Math.max(1, centralDiasDesde(porCliente[nomes[0]]));
+
+  return `
+    <div class="central-grupo-bloco">
+      <p class="central-grupo-bloco-rot">Esperando há mais tempo</p>
+      ${nomes.slice(0, 5).map(n => {
+        const dias = centralDiasDesde(porCliente[n]);
+        const alerta = dias >= limite;
+        // Piso de 6% pra "hoje" ainda desenhar uma barrinha — barra de
+        // largura zero parece dado faltando, não dado pequeno.
+        const pct = Math.max(6, Math.round((dias / maisAntigo) * 100));
+        return `
+          <div class="central-grupo-esp">
+            <div class="central-grupo-esp-l">
+              <span class="central-grupo-esp-n">${escaparHTML(n)}</span>
+              <span class="central-grupo-esp-d ${alerta ? "alerta" : ""}">${dias >= 1 ? dias + " d" : "hoje"}</span>
+            </div>
+            <div class="central-grupo-esp-b ${alerta ? "alerta" : ""}"><i style="width:${pct}%"></i></div>
+          </div>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+/**
+ * A timeline daquele cliente — as MESMAS fontes do feed da aba Hoje
+ * (centralConstruirTimeline), só filtradas. Nenhuma busca nova: os
+ * eventos já carregam o nome do cliente desde que o feed foi feito.
+ *
+ * Enxuta de propósito, sem a arte grande: aqui ela é contexto ao lado dos
+ * cards, não o assunto da tela. A arte já está no card ao lado.
+ */
+function centralTimelineDoClienteHTML(cliente) {
+  const eventos = (typeof centralConstruirTimeline === "function" ? centralConstruirTimeline() : [])
+    .filter(ev => (ev.cliente || "") === cliente);
+
+  const voltar = `
+    <button type="button" class="central-grupo-voltar" data-central-lado-voltar>‹ Todos os clientes</button>`;
+
+  if (!eventos.length) {
+    return `
+      <div class="central-grupo-bloco">
+        ${voltar}
+        <p class="central-grupo-bloco-rot">${escaparHTML(cliente)}</p>
+        <p class="central-grupo-lado-vazio">Nada aconteceu com esse cliente nos últimos dias — pelo menos nada que tenha passado pelo Colmeia.</p>
+      </div>`;
+  }
+
+  return `
+    <div class="central-grupo-bloco">
+      ${voltar}
+      <p class="central-grupo-bloco-rot">${escaparHTML(cliente)} · o que andou</p>
+      <div class="central-grupo-tl">
+        ${eventos.map(ev => {
+          // `ev.quem` é o DESIGNER num "mandou pra conferência" e o
+          // CLIENTE nos dois de resposta. Aqui a coluna inteira já é de um
+          // cliente só, então repetir o nome dele em cada linha é ruído —
+          // nesses casos o nome sai e sobra só o que aconteceu.
+          const doCliente = (ev.quem || "") === cliente;
+          // `ev.texto` foi escrito pro feed, onde o nome fica numa linha
+          // acima ("Mandou X pra conferência"). Inline, depois do nome,
+          // ele precisa começar minúsculo.
+          const frase = doCliente ? ev.texto : ev.texto.charAt(0).toLowerCase() + ev.texto.slice(1);
+          return `
+          <div class="central-grupo-tl-i">
+            <span class="central-grupo-tl-p ${escaparHTML(ev.tipo)}"></span>
+            <span class="central-grupo-tl-t">
+              <span class="central-grupo-tl-txt">${doCliente ? "" : `<b>${escaparHTML(ev.quem || "")}</b> `}${frase}</span>
+              ${ev.citacao ? `<span class="central-grupo-tl-cita">${escaparHTML(ev.citacao)}</span>` : ""}
+              <span class="central-grupo-tl-q">${escaparHTML(centralTempoRelativo(ev.quando))}</span>
+            </span>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
