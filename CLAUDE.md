@@ -926,6 +926,41 @@ Outras quatro coisas revisadas junto, todas no mesmo bloco:
 - **O overlay ganhou 10px de respiro nas bordas**, senão o cartão de cantos redondos encostava na
   moldura da tela.
 
+## O pop-up dos grupos da Central (2026-08-08)
+
+`centralAbrirGrupo`/`centralRenderGrupo` (js/central-atendimento.js) + o bloco `.central-grupo-*` /
+`.central-gc-*` no fim de `css/07-central-atendimento.css` + o markup no fim de
+`#centralAtendimento`. Protótipo **"Prateleira"** aprovado pelo Cláudio.
+
+**O que substitui:** clicar num dos quatro cartões de número da aba Hoje chamava
+`centralAbrirAprovacoesEm`, que levava pra OUTRA aba e destacava uma coluna lá — a pessoa saía da
+tela onde estava pra ver uma lista, e voltava clicando de novo. Agora abre por cima, e a **pílula
+preta troca entre os quatro grupos sem fechar nada**, com os contadores sempre à vista.
+`centralAbrirAprovacoesEm` continua existindo: é pra onde o grupo "Com o cliente" leva (ver abaixo).
+
+- **Mora DENTRO de `#centralAtendimento`**, não solto no `<body>`: aquele é `position: fixed; inset:
+  0; z-index: 50`, então o pop-up herda a moldura da Central e continua **abaixo** da conferência
+  (`.apv-conferencia`, z-index 120) — que é o que precisa acontecer quando clicar num card abre ela.
+- **O card:** a arte ocupa quase o cartão inteiro e a informação vem numa **prateleira branca
+  flutuando por dentro dele** (`.central-gc-prat`). Dois níveis de branco e duas sombras
+  encaixadas — a profundidade vem daí, não de borda. O card inteiro é o botão; a setinha é só a
+  pista, e acende de preto no hover.
+- ⚠️ **O texto do card muda com o grupo** (`CENTRAL_GRUPOS` + o bloco de selo em
+  `centralCardDoGrupoHTML`): "Esperando você" mostra há quanto tempo espera, "Prontas pra enviar"
+  quem conferiu, os dois do cliente há quanto tempo está fora. Sem isso, três dos quatro grupos
+  mostrariam um dado que não serve pra eles.
+- **Os quatro contadores são recalculados a cada desenho**, nunca guardados: conferir uma peça e
+  trocar de grupo tem que mostrar o número novo.
+- ⚠️ **`centralAbrirDoGrupo` lê o grupo ANTES de fechar o pop-up** — `centralFecharGrupo` zera
+  `centralGrupoAtual`, então checar depois daria sempre falso e o "voltou com ajuste" nunca abriria
+  no modo do cliente (`apvAbrirParaAlteracaoDoCliente`).
+- **"Com o cliente" não abre conferência**, porque não existe uma: a peça está fora esperando
+  resposta. Esse é o único grupo que ainda leva pra aba Aprovações, onde moram copiar o link e
+  cobrar no WhatsApp.
+- **O pop-up não decide nada** — não aprova, não devolve, não manda link. Clicar num card abre a
+  tela de conferência de sempre. Duplicar a decisão em dois lugares seria a chance de alguém
+  resolver uma peça sem ter olhado a arte direito.
+
 ## A Timeline da Central virou um feed (2026-08-08)
 
 `centralRenderTimelineHoje` (js/central-atendimento.js) + o bloco `.central-tl-*` em

@@ -715,3 +715,172 @@
 
 /* "Mais tempo parado com você" passando de 1 dia: o portão virou gargalo. */
 .cm-metrica-alerta b { color: var(--danger); }
+
+/* =====================================================================
+   O POP-UP DOS GRUPOS — protótipo "Prateleira", aprovado pelo Cláudio
+   (2026-08-08, artifact "Pop-up da Central — 3 modelos de card").
+
+   O QUE ELE SUBSTITUI: clicar num dos quatro cartões de número levava
+   pra outra aba e destacava uma coluna lá. A pessoa perdia o lugar onde
+   estava pra ver uma lista — e voltava clicando de novo. Agora abre por
+   cima, e a pílula preta troca de grupo sem fechar nada.
+
+   O CARD: a arte ocupa quase o cartão inteiro, e a informação vem numa
+   PRATELEIRA branca flutuando por dentro dele, com respiro em volta.
+   São dois níveis de branco e duas sombras encaixadas — é daí que vem a
+   profundidade, não de borda.
+   ===================================================================== */
+.central-grupo-fundo {
+  position: absolute; inset: 0; z-index: 30;
+  background: rgba(14, 14, 22, .42);
+  animation: centralGrupoFade var(--dur-base) var(--ease-apple);
+}
+.central-grupo-fundo[hidden] { display: none; }
+@keyframes centralGrupoFade { from { opacity: 0; } to { opacity: 1; } }
+
+.central-grupo {
+  position: absolute; inset: 18px; z-index: 31;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--page-bg); border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(10, 10, 20, .34);
+  animation: centralGrupoEntra var(--dur-slow) var(--ease-apple-spring);
+}
+.central-grupo[hidden] { display: none; }
+@keyframes centralGrupoEntra {
+  from { opacity: 0; transform: translateY(10px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ----- A pílula preta, no mesmo vocabulário da .central-topbar ----- */
+.central-grupo-pill {
+  flex: 0 0 auto; margin: 12px 12px 0; padding: 6px;
+  background: #14151A; border-radius: 999px;
+  display: flex; align-items: center; gap: 4px;
+  box-shadow: 0 8px 22px rgba(12, 12, 22, .28);
+}
+[data-theme="dark"] .central-grupo-pill { background: #0A0A0D; }
+.central-grupo-tit {
+  padding: 0 12px; font-size: 12.5px; font-weight: 800;
+  color: rgba(255, 255, 255, .5); white-space: nowrap; flex-shrink: 0;
+}
+/* Rola no braço quando os quatro rótulos não couberem, em vez de
+   quebrar linha: uma pílula de duas linhas deixa de parecer pílula (o
+   mesmo problema que a barra da conferência teve no celular). */
+.central-grupo-seg {
+  flex: 1; min-width: 0; display: flex; gap: 3px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.central-grupo-seg::-webkit-scrollbar { display: none; }
+.central-grupo-aba {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 7px;
+  border: none; background: none; cursor: pointer;
+  padding: 8px 13px; border-radius: 999px; white-space: nowrap;
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  color: rgba(255, 255, 255, .62);
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-aba:hover { color: #fff; }
+.central-grupo-aba .n {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: rgba(255, 255, 255, .13); color: rgba(255, 255, 255, .8);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 800;
+}
+.central-grupo-aba.ativa { background: #fff; color: #16181D; font-weight: 700; }
+.central-grupo-aba.ativa .n { background: #16181D; color: #fff; }
+/* O amarelo é reservado pro grupo que PEDE alguma coisa (voltou com
+   ajuste): num grupo só, ele continua chamando; em todos, não chamaria
+   em nenhum. */
+.central-grupo-aba.alerta .n { background: var(--kanban-yellow); color: #16181D; }
+.central-grupo-x {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255, 255, 255, .1); color: rgba(255, 255, 255, .75);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-x:hover { background: rgba(255, 255, 255, .2); color: #fff; }
+
+.central-grupo-corpo {
+  flex: 1; min-height: 0; padding: 14px; display: flex; flex-direction: column; gap: 12px;
+}
+.central-grupo-barra { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0 3px; }
+.central-grupo-sub { font-size: 12.5px; color: var(--text-secondary); }
+.central-grupo-sub b { color: var(--text-primary); font-weight: 700; }
+
+.central-grupo-grade {
+  flex: 1; min-height: 0; overflow-y: auto; align-content: start;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 13px;
+  /* 4px de folga em volta pra sombra do card levantado não ser cortada
+     pelo overflow da grade. */
+  padding: 4px;
+}
+.central-grupo-vazio {
+  grid-column: 1 / -1; padding: 40px 10px; text-align: center;
+  font-size: 13px; color: var(--text-muted);
+}
+
+/* ----- O card ----- */
+.central-gc {
+  position: relative; height: 210px; padding: 7px;
+  border: none; cursor: pointer; text-align: left; font-family: var(--font-body);
+  background: var(--card-bg); border-radius: 20px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(18, 18, 30, .05), 0 5px 14px rgba(18, 18, 30, .055);
+  transition: box-shadow var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple);
+}
+.central-gc:hover, .central-gc:focus-visible {
+  box-shadow: 0 2px 6px rgba(18, 18, 30, .07), 0 14px 32px rgba(18, 18, 30, .11);
+  transform: translateY(-3px);
+}
+/* A arte entra por `background-image` no JS quando a miniatura chega do
+   Drive; até lá fica o cinza do palco, que já reserva o espaço. */
+.central-gc-arte {
+  position: absolute; inset: 7px; border-radius: 15px;
+  background: var(--apv-palco, var(--page-bg)) center/cover no-repeat;
+}
+[data-theme="dark"] .central-gc-arte { background-color: rgba(255, 255, 255, .06); }
+.central-gc-cima { position: absolute; top: 15px; left: 15px; right: 15px; z-index: 3; display: flex; gap: 6px; flex-wrap: wrap; }
+.central-gc-selo {
+  background: rgba(255, 255, 255, .94); color: #16181D;
+  font-size: 9.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(10, 10, 18, .16);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-gc-selo.alerta { background: var(--kanban-yellow); }
+.central-gc-selo.ok { background: var(--success); color: #fff; }
+
+.central-gc-prat {
+  position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 3;
+  background: var(--card-bg); border-radius: 14px; padding: 10px 12px;
+  box-shadow: 0 4px 14px rgba(10, 10, 18, .16);
+  display: flex; align-items: center; gap: 9px;
+}
+[data-theme="dark"] .central-gc-prat { background: #1C1B26; }
+.central-gc-t { flex: 1; min-width: 0; }
+.central-gc-nome {
+  display: block; font-size: 12.5px; font-weight: 700; letter-spacing: -.02em;
+  color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-gc-cli {
+  display: block; font-size: 10.5px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A setinha é a única pista de que o card leva a algum lugar — não é um
+   botão à parte, pra ninguém achar que existe um "outro jeito" de abrir.
+   Ela acende de preto quando o card está sob o mouse. */
+.central-gc-seta {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--page-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-gc:hover .central-gc-seta { background: #16181D; color: #fff; }
+[data-theme="dark"] .central-gc:hover .central-gc-seta { background: #fff; color: #16181D; }
+
+@media (max-width: 900px) {
+  .central-grupo { inset: 8px; border-radius: 16px; }
+  .central-grupo-pill { margin: 8px 8px 0; }
+  .central-grupo-tit { display: none; }   /* o espaço vale mais pros quatro rótulos */
+  .central-grupo-corpo { padding: 10px; }
+  .central-grupo-grade { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .central-gc { height: 178px; }
+}

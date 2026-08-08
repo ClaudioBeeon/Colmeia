@@ -1545,6 +1545,37 @@
 
     </div>
   </div>
+
+  <!-- ======================================================================
+       POP-UP DOS GRUPOS (2026-08-08, protótipo "Prateleira" aprovado pelo
+       Cláudio)
+
+       O QUE ELE SUBSTITUI: clicar num dos quatro cartões de número da aba
+       Hoje levava pra OUTRA aba (Aprovações) e destacava uma coluna lá —
+       a pessoa saía da tela onde estava e tinha que procurar de novo o que
+       já tinha achado. Agora abre aqui em cima, e a pílula preta troca
+       entre os quatro grupos sem fechar nada.
+
+       Fica DENTRO de #centralAtendimento de propósito: ele é `position:
+       fixed; inset: 0; z-index: 50`, então este pop-up herda a moldura da
+       Central e continua ABAIXO da conferência (.apv-conferencia, z-index
+       120) — que é o que precisa acontecer quando clicar num card abre ela
+       por cima. Ver centralAbrirGrupo(), js/central-atendimento.js.
+       ====================================================================== -->
+  <div class="central-grupo-fundo" id="centralGrupoFundo" hidden></div>
+  <div class="central-grupo" id="centralGrupo" role="dialog" aria-modal="true" aria-labelledby="centralGrupoTitulo" hidden>
+    <div class="central-grupo-pill">
+      <span class="central-grupo-tit" id="centralGrupoTitulo">Suas peças</span>
+      <div class="central-grupo-seg" id="centralGrupoSeg" role="tablist" aria-label="Grupo de peças"></div>
+      <button type="button" class="central-grupo-x" id="centralGrupoFechar" aria-label="Fechar">✕</button>
+    </div>
+    <div class="central-grupo-corpo">
+      <div class="central-grupo-barra">
+        <span class="central-grupo-sub" id="centralGrupoSub"></span>
+      </div>
+      <div class="central-grupo-grade" id="centralGrupoGrade"></div>
+    </div>
+  </div>
 </div>
 
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).

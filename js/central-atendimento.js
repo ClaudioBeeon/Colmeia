@@ -311,12 +311,14 @@ function centralRenderHoje() {
   centralPreencherFotoAtendimento("ch", nomeExibido, false);
   centralRenderTimelineHoje();
 
-  // Leva pra COLUNA certa, não só pra aba (2026-08-06). Antes o botão
-  // guardava qual coluna no `data-central-stat-ir` e ninguém lia: a pessoa
-  // clicava em "3 peças esperando" e caía numa tela de quatro colunas,
-  // tendo que procurar de novo o que já tinha achado.
+  // Os quatro cartões abrem o POP-UP DOS GRUPOS (2026-08-08), não mais a
+  // aba Aprovações: ali a pessoa saía da tela onde estava pra ver uma
+  // lista, e voltava clicando de novo. O pop-up abre por cima e a pílula
+  // preta dele troca entre os quatro grupos sem fechar nada.
+  // `centralAbrirAprovacoesEm` continua existindo — é pra onde o "ver
+  // todas" do pop-up leva, e é o caminho de quem quer a tela inteira.
   el.querySelectorAll("[data-central-stat-ir]").forEach(btn => {
-    btn.addEventListener("click", () => centralAbrirAprovacoesEm(btn.dataset.centralStatIr));
+    btn.addEventListener("click", () => centralAbrirGrupo(btn.dataset.centralStatIr));
   });
   document.getElementById("chRadarBtn")?.addEventListener("click", () => centralTrocarAba("clientes"));
 
@@ -1279,3 +1281,227 @@ function centralRenderClientesEspera(itens) {
     </div>
   `).join("");
 }
+
+// ---------------------------------------------------------------------------
+// O POP-UP DOS GRUPOS (2026-08-08)
+//
+// Clicar num dos quatro cartões de número da aba Hoje abre este pop-up por
+// cima da Central, com a pílula preta no topo — e é nela que se troca entre
+// os quatro grupos, sem fechar nada. Antes o clique levava pra aba
+// Aprovações e destacava uma coluna lá: a pessoa saía do lugar onde estava
+// pra ver uma lista, e voltava clicando de novo.
+//
+// O QUE ELE NÃO FAZ, de propósito: não aprova, não devolve, não manda link.
+// Clicar num card abre a MESMA tela de conferência de sempre, que é onde
+// essas decisões moram. Duplicar a decisão em dois lugares seria a chance
+// de alguém resolver uma peça sem ter olhado a arte direito.
+// ---------------------------------------------------------------------------
+
+/**
+ * Os quatro grupos, num lugar só. Cada um sabe o próprio rótulo, de onde
+ * vêm os itens, e — o que mais importa — QUAL informação o card mostra:
+ * em "Esperando você" o que pesa é há quanto tempo espera; em "Prontas pra
+ * enviar", quem conferiu; nos dois do cliente, há quanto tempo está com
+ * ele. Sem isso, três dos quatro grupos mostrariam um dado que não serve.
+ */
+const CENTRAL_GRUPOS = {
+  esperando: {
+    rotulo: "Esperando você",
+    sub: n => `<b>${n} ${n === 1 ? "peça" : "peças"}</b> ${n === 1 ? "esperando" : "esperando"} sua conferência`,
+    vazio: "Nada esperando conferência agora. 🎉",
+    itens: () => centralFilaPor("pendente"),
+  },
+  prontas: {
+    rotulo: "Prontas pra enviar",
+    sub: n => `<b>${n} ${n === 1 ? "peça conferida" : "peças conferidas"}</b>, ${n === 1 ? "pronta" : "prontas"} pra mandar pro cliente`,
+    vazio: "Nada pronto pra enviar agora.",
+    itens: () => centralFilaPor("aprovada"),
+  },
+  comCliente: {
+    rotulo: "Com o cliente",
+    sub: n => `<b>${n} ${n === 1 ? "peça" : "peças"}</b> esperando resposta do cliente`,
+    vazio: "Nenhuma peça esperando cliente agora.",
+    itens: () => centralAprovacoesPor("pendente"),
+  },
+  ajuste: {
+    rotulo: "Voltou com ajuste",
+    alerta: true,
+    sub: n => `<b>${n} ${n === 1 ? "peça voltou" : "peças voltaram"}</b> com pedido de ajuste`,
+    vazio: "Nada voltou com ajuste. 🎉",
+    itens: () => centralAprovacoesPor("ajuste"),
+  },
+};
+
+let centralGrupoAtual = null;
+
+function centralAbrirGrupo(chave) {
+  if (!CENTRAL_GRUPOS[chave]) return;
+  centralGrupoAtual = chave;
+  const pop = document.getElementById("centralGrupo");
+  const fundo = document.getElementById("centralGrupoFundo");
+  if (!pop || !fundo) return;
+  fundo.hidden = false;
+  pop.hidden = false;
+  centralRenderGrupo();
+}
+
+function centralFecharGrupo() {
+  const pop = document.getElementById("centralGrupo");
+  const fundo = document.getElementById("centralGrupoFundo");
+  if (pop) pop.hidden = true;
+  if (fundo) fundo.hidden = true;
+  centralGrupoAtual = null;
+}
+
+/**
+ * Desenha a pílula (com os quatro contadores, sempre) e a grade do grupo
+ * ativo. Os contadores são recalculados aqui a cada desenho, não guardados:
+ * trocar de grupo depois de conferir uma peça tem que mostrar o número
+ * novo, e a fonte deles é o mesmo cache que o resto da Central já lê.
+ */
+function centralRenderGrupo() {
+  if (!centralGrupoAtual) return;
+  const seg = document.getElementById("centralGrupoSeg");
+  const grade = document.getElementById("centralGrupoGrade");
+  const sub = document.getElementById("centralGrupoSub");
+  if (!seg || !grade) return;
+
+  seg.innerHTML = Object.keys(CENTRAL_GRUPOS).map(chave => {
+    const g = CENTRAL_GRUPOS[chave];
+    const n = g.itens().length;
+    return `
+      <button type="button" role="tab" data-central-grupo="${chave}"
+              aria-selected="${chave === centralGrupoAtual ? "true" : "false"}"
+              class="central-grupo-aba ${chave === centralGrupoAtual ? "ativa" : ""} ${g.alerta && n ? "alerta" : ""}">
+        ${escaparHTML(g.rotulo)} <span class="n">${n}</span>
+      </button>`;
+  }).join("");
+  seg.querySelectorAll("[data-central-grupo]").forEach(b => {
+    b.addEventListener("click", () => { centralGrupoAtual = b.dataset.centralGrupo; centralRenderGrupo(); });
+  });
+
+  const grupo = CENTRAL_GRUPOS[centralGrupoAtual];
+  const itens = grupo.itens();
+  if (sub) sub.innerHTML = itens.length ? grupo.sub(itens.length) : "";
+
+  if (!itens.length) {
+    grade.innerHTML = `<div class="central-grupo-vazio">${escaparHTML(grupo.vazio)}</div>`;
+    return;
+  }
+
+  const daFila = centralGrupoAtual === "esperando" || centralGrupoAtual === "prontas";
+  grade.innerHTML = itens.map((it, i) => centralCardDoGrupoHTML(it, i, daFila)).join("");
+
+  // A miniatura entra depois, uma a uma — cada uma é uma ida ao Drive, e
+  // segurar a grade inteira esperando por elas atrasaria o que importa
+  // mais rápido (mesmo padrão da Timeline e de apvCarregarMiniatura).
+  grade.querySelectorAll("[data-central-gc-thumb]").forEach(el => {
+    const fileId = el.dataset.centralGcThumb;
+    if (fileId) centralCarregarMiniaturaGrupo(fileId, el);
+  });
+
+  grade.querySelectorAll("[data-central-gc]").forEach(btn => {
+    const item = itens[Number(btn.dataset.centralGc)];
+    btn.addEventListener("click", () => centralAbrirDoGrupo(item, daFila));
+  });
+}
+
+/** O card. Um desenho só pros quatro grupos; o que muda é o texto. */
+function centralCardDoGrupoHTML(it, i, daFila) {
+  const pecas = it.pecas || [];
+  const primeira = pecas[0] || {};
+
+  // Nome, cliente e miniatura saem de lugares diferentes nos dois tipos de
+  // item (fila de conferência × link de aprovação), mas o card é o mesmo.
+  const nome = daFila
+    ? (pecas.length > 1 ? `${pecas.length} peças` : (primeira.nomePeca || it.tituloTarefa || "Peça"))
+    : (it.tituloTarefa || String(it.nomeArquivo || "").split("|")[0] || "Peça");
+  const cliente = it.cliente || "Sem cliente";
+  const ehVideo = daFila
+    ? String(primeira.mimeType || "").indexOf("video/") === 0
+    : !!it.ehVideo;
+  const fileId = ehVideo ? "" : (daFila ? (primeira.fileId || "") : (it.fileId || ""));
+
+  // O selo do canto responde a pergunta daquele grupo, e só ela.
+  let selo = "", classeSelo = "";
+  if (centralGrupoAtual === "esperando") {
+    selo = typeof apvTempoDeEspera === "function" ? apvTempoDeEspera(it.pedidoEm) : "";
+    const dias = typeof centralDiasDesde === "function" ? centralDiasDesde(Date.parse(it.pedidoEm)) : 0;
+    if (dias >= 1) classeSelo = "alerta";
+  } else if (centralGrupoAtual === "prontas") {
+    selo = it.aprovadoPor ? `conferida por ${it.aprovadoPor}` : "conferida";
+    classeSelo = "ok";
+  } else {
+    const base = Number(it.respondidoEm) || Number(it.criadoEm) || 0;
+    const dias = typeof centralDiasDesde === "function" ? centralDiasDesde(base) : 0;
+    const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
+    selo = dias >= 1 ? `há ${dias} dia${dias === 1 ? "" : "s"}` : "hoje";
+    if (dias >= limite) classeSelo = "alerta";
+  }
+
+  return `
+    <button type="button" class="central-gc" data-central-gc="${i}">
+      <span class="central-gc-arte" ${fileId ? `data-central-gc-thumb="${escaparHTML(fileId)}"` : ""}></span>
+      <span class="central-gc-cima">
+        ${selo ? `<span class="central-gc-selo ${classeSelo}">${escaparHTML(selo)}</span>` : ""}
+        ${daFila && pecas.length > 1 ? `<span class="central-gc-selo">${pecas.length} peças</span>` : ""}
+      </span>
+      <span class="central-gc-prat">
+        <span class="central-gc-t">
+          <span class="central-gc-nome">${escaparHTML(nome)}</span>
+          <span class="central-gc-cli">${escaparHTML(cliente)}</span>
+        </span>
+        <span class="central-gc-seta" aria-hidden="true">›</span>
+      </span>
+    </button>
+  `;
+}
+
+async function centralCarregarMiniaturaGrupo(fileId, el) {
+  const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
+  if (!el.isConnected) return;   // a grade foi redesenhada enquanto vinha
+  if (!data || !data.ok || !data.base64) return;   // fica o cinza do palco
+  el.style.backgroundImage = `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")`;
+}
+
+/**
+ * O clique no card. Fecha o pop-up ANTES de abrir a conferência: as duas
+ * são camadas sobrepostas, e deixar o pop-up aberto por trás faria o Esc
+ * da conferência devolver pra ele em vez de pra Central.
+ *
+ * "Voltou com ajuste" abre no modo do pedido do CLIENTE (pílula amarela,
+ * o texto dele, os pontos marcados) — é a mesma peça, mas a pergunta ali
+ * é outra: não é "isso está bom?", é "o que ele pediu?".
+ */
+function centralAbrirDoGrupo(item, daFila) {
+  // Lê o grupo ANTES de fechar: `centralFecharGrupo` zera
+  // `centralGrupoAtual`, então checar depois daria sempre falso e o
+  // "voltou com ajuste" nunca abriria no modo do cliente.
+  const grupo = centralGrupoAtual;
+  centralFecharGrupo();
+  if (daFila) {
+    if (typeof apvAbrirConferencia === "function") apvAbrirConferencia(item.taskId, item.loteId);
+    return;
+  }
+  if (grupo === "ajuste" && typeof apvAbrirParaAlteracaoDoCliente === "function") {
+    apvAbrirParaAlteracaoDoCliente(item);
+    return;
+  }
+  // "Com o cliente": a peça está fora, esperando resposta — não existe
+  // conferência pra abrir. Leva pra coluna dela na aba Aprovações, que é
+  // onde moram copiar o link e cobrar no WhatsApp.
+  centralAbrirAprovacoesEm("comCliente");
+}
+
+document.getElementById("centralGrupoFechar")?.addEventListener("click", centralFecharGrupo);
+document.getElementById("centralGrupoFundo")?.addEventListener("click", centralFecharGrupo);
+// Esc fecha — em fase de captura e checando que ele está aberto, pra não
+// roubar o Esc de quem está por cima (a conferência) nem de quem está por
+// baixo (a Central).
+document.addEventListener("keydown", ev => {
+  if (ev.key !== "Escape") return;
+  const pop = document.getElementById("centralGrupo");
+  if (!pop || pop.hidden) return;
+  ev.stopPropagation();
+  centralFecharGrupo();
+}, true);
