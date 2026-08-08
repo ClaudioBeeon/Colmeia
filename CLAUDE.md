@@ -821,6 +821,27 @@ comigo" é uma decisão de trabalho — o incidente é a prova de que não podia
 Ao criar algo novo, usar esse critério: preferência de exibição → localStorage; decisão que doeria
 perder → planilha.
 
+## "Enviar para o cliente" abre os três canais (2026-08-08)
+
+O botão da pílula de cima, depois de aprovado, abria o **WhatsApp direto** — escolhia o canal pela
+pessoa, e quem só queria copiar o link tinha que descer a coluna até a barra de envio pra achar a
+opção. Agora ele abre o **mesmo menu de três canais** (WhatsApp / copiar link / e-mail) do botão
+"Mandar" da barra.
+
+**São dois elementos de menu, e o markup é repetido de propósito:** os dois abrem pra lados opostos
+(`#apvAcaoMenu` pra BAIXO a partir da pílula; `#apvEnvioMenu` pra CIMA, porque a barra mora no pé da
+coluna). Mover um único elemento entre dois pais pra reaproveitar três botões seria mais frágil que
+repeti-los. **O comportamento NÃO é repetido:** abrir/fechar passa por `apvAlternarMenuDeEnvio`
+(que também fecha o outro, pra nunca haver dois abertos) e a ação por `apvEnviarPara`; os cliques
+são ligados por `.apv-envio-menu [data-apv-envio]`, que pega os dois de uma vez.
+
+- **`.apv-contexto` ganhou `position: relative`** só pra ancorar esse menu: o botão é item direto da
+  fileira da pílula, sem invólucro próprio, e envolvê-lo num `<div>` mudaria o comportamento dele no
+  flex (mesmo raciocínio dos gomos do cabeçalho do chat).
+- **`apvClickAcao` recebe o evento e chama `stopPropagation`** — sem isso o "fechar ao clicar fora"
+  pegaria o próprio clique que abriu e fecharia o menu na hora.
+- Abrir uma peça nova fecha **os dois** menus (`.apv-envio-menu`, nos dois pontos de reset).
+
 ## A conferência no celular — a revisão de 2026-08-08
 
 ⚠️ **Regra nova de mobile pra tela de conferência vai no ÚLTIMO bloco `@media` do

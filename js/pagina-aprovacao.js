@@ -482,8 +482,9 @@ async function apvAbrirConferencia(taskId, loteId) {
   // tivesse deixado em "Infos" na peça anterior, a próxima abriria já num
   // lugar que não é o começo da conferência.
   apvTrocarInfoPane("brief");
-  const menuEnvio = document.getElementById("apvEnvioMenu");
-  if (menuEnvio) menuEnvio.hidden = true;
+  // Os DOIS menus de canal (o da barra e o do botão da pílula): peça nova
+  // não pode herdar um menu aberto da anterior.
+  document.querySelectorAll(".apv-envio-menu").forEach(m => { m.hidden = true; });
   document.getElementById("apvContextoId").hidden = true;
   document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
   // O texto que ficava aqui era o EXEMPLO estático do protótipo ("Post de
@@ -671,8 +672,9 @@ async function apvAbrirParaAlteracaoDoCliente(aprovacao) {
   document.getElementById("apvAcaoTrack").style.transform = "translateY(0)";
   apvMarcarPreviewVisto(false);
   apvTrocarInfoPane("brief");
-  const menuEnvio = document.getElementById("apvEnvioMenu");
-  if (menuEnvio) menuEnvio.hidden = true;
+  // Os DOIS menus de canal (o da barra e o do botão da pílula): peça nova
+  // não pode herdar um menu aberto da anterior.
+  document.querySelectorAll(".apv-envio-menu").forEach(m => { m.hidden = true; });
   document.getElementById("apvContextoId").hidden = true;
   document.getElementById("apvPalcoSlot").innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
   document.getElementById("apvBriefTexto").innerHTML = `
@@ -1574,16 +1576,48 @@ async function apvConfirmarAprovacao() {
  * O clique único do botão da pílula: o que ele faz depende de já ter
  * aprovado ou não — nunca da posição visual do rótulo.
  *
- * Depois de aprovado ele abre o WHATSAPP, não copia (2026-08-06). Antes
- * fazia exatamente a mesma coisa que o botão "Copiar link" logo abaixo —
- * dois botões com nomes diferentes pro mesmo gesto, e um deles prometendo
- * mais do que entregava: quem clicava em "Enviar para o cliente" via
- * "Link copiado" e ficava sem saber se o cliente tinha recebido. O
- * WhatsApp é o canal que a agência usa de verdade.
+ * Antes de aprovar, aprova. Depois de aprovado, ABRE O MENU DOS TRÊS
+ * CANAIS (2026-08-08, pedido do Cláudio), o mesmo do "Mandar" da barra de
+ * envio. Antes disso ele abria o WhatsApp direto: escolhia o canal pela
+ * pessoa, e quem só queria copiar o link tinha que descer a coluna até a
+ * barra lá embaixo pra encontrar a opção.
  */
-function apvClickAcao() {
+function apvClickAcao(ev) {
   if (!apvAprovado) { apvAprovar(); return; }
-  apvEnviarPara("whatsapp");
+  // Sem isto o "fechar ao clicar fora" registrado logo abaixo pegaria
+  // este MESMO clique e fecharia o menu no instante em que ele abre.
+  if (ev) ev.stopPropagation();
+  apvAlternarMenuDeEnvio("apvAcaoMenu");
+}
+
+/**
+ * Abre/fecha um dos menus de canal (o do botão da pílula e o da barra de
+ * envio), fechando o outro. Um só lugar decidindo isso — os dois menus
+ * existem porque abrem pra lados opostos, não porque fazem coisas
+ * diferentes.
+ */
+function apvAlternarMenuDeEnvio(id) {
+  const menu = document.getElementById(id);
+  if (!menu) return;
+
+  // Dois menus abertos ao mesmo tempo mostrariam a mesma escolha duas
+  // vezes, em dois cantos da tela.
+  document.querySelectorAll(".apv-envio-menu").forEach(m => { if (m !== menu) m.hidden = true; });
+
+  menu.hidden = !menu.hidden;
+  if (menu.hidden) return;
+
+  // Clicar fora fecha — mesma técnica do resto do app, adiada um tique
+  // pra não fechar sozinho com o MESMO clique que abriu.
+  setTimeout(() => {
+    const fechar = ev => {
+      if (menu.isConnected && !menu.hidden && !menu.contains(ev.target)) {
+        menu.hidden = true;
+        document.removeEventListener("click", fechar, true);
+      }
+    };
+    document.addEventListener("click", fechar, true);
+  }, 0);
 }
 
 /**
@@ -2611,26 +2645,14 @@ function apvLigarEventos() {
   // bloco é markup estático do index.html, nunca recriado.
   liga("apvBtnMandar", "click", (e) => {
     e.stopPropagation();
-    const menu = document.getElementById("apvEnvioMenu");
-    if (!menu) return;
-    menu.hidden = !menu.hidden;
-    if (menu.hidden) return;
-    // Clicar fora fecha — mesma técnica do resto do app, adiada um tique
-    // pra não fechar sozinho com o MESMO clique que abriu.
-    setTimeout(() => {
-      const fechar = ev => {
-        if (menu.isConnected && !menu.hidden && !menu.contains(ev.target)) {
-          menu.hidden = true;
-          document.removeEventListener("click", fechar, true);
-        }
-      };
-      document.addEventListener("click", fechar, true);
-    }, 0);
+    apvAlternarMenuDeEnvio("apvEnvioMenu");
   });
 
-  document.querySelectorAll("#apvEnvioMenu [data-apv-envio]").forEach(btn => {
+  // Os dois menus de uma vez (o da barra e o do botão da pílula) — eles
+  // têm os mesmos três botões e fazem a mesma coisa; só o lugar muda.
+  document.querySelectorAll(".apv-envio-menu [data-apv-envio]").forEach(btn => {
     btn.addEventListener("click", () => {
-      document.getElementById("apvEnvioMenu").hidden = true;
+      btn.closest(".apv-envio-menu").hidden = true;
       apvEnviarPara(btn.dataset.apvEnvio);
     });
   });

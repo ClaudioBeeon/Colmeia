@@ -237,6 +237,10 @@
   flex: 0 0 auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   padding: 10px 10px 10px 14px; background: var(--card-bg);
   border-radius: 999px; box-shadow: var(--shadow-card);
+  /* Âncora do menu de canais do botão de ação (.apv-acao-menu, no fim
+     deste arquivo). O botão não tem invólucro próprio pra ancorar nele —
+     ele é item direto desta fileira — então quem ancora é a pílula. */
+  position: relative;
 }
 
 /* O logo do Colmeia, na ponta esquerda da pílula.
@@ -1570,6 +1574,24 @@
    de verdade em vez de ficar nos 82px de sempre. */
 .apv-conferencia.apv-motivo-expandido .apv-bloco-motivo .apv-campo {
   flex: 1 1 auto; min-height: 240px;
+}
+
+/* ----- O menu de canais do botão da pílula (2026-08-08) --------------
+   Reusa `.apv-envio-menu` inteiro (fundo, sombra, o pop de entrada, o
+   estilo dos botões) e só troca a ancoragem: este abre pra BAIXO, a
+   partir do canto direito da pílula, enquanto o da barra de envio abre
+   pra CIMA porque mora no pé da coluna.
+
+   Ancorado na `.apv-contexto` e não no botão: o botão é item direto da
+   fileira da pílula, sem invólucro próprio, e envolver ele num `<div>` só
+   pra isso mudaria o comportamento dele no flex (foi o mesmo raciocínio
+   dos gomos do cabeçalho do chat — ver CLAUDE.md).
+
+   `z-index` acima da pílula (que tem sombra e fundo próprios) e das
+   colunas, senão ele abriria por trás do conteúdo logo abaixo. */
+.apv-acao-menu {
+  top: calc(100% + 8px); bottom: auto; right: 10px;
+  z-index: 40;
 }
 
 /* =====================================================================
