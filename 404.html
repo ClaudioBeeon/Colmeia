@@ -54,16 +54,26 @@
    * O formato é `sigla/idDaTarefa-cadeado`: letras, barra, números, traço.
    * A regra abaixo é estreita de propósito — qualquer outro endereço de
    * dois pedaços continua caindo no caminho normal.
+   *
+   * ⚠️ NÃO USE `new URL(".", location.href)` PRA ACHAR A BASE AQUI. Ela
+   * devolve a PASTA do endereço atual, não a raiz do site: em
+   * "/pdk/104590-z327" ela dá "/pdk/", e o código sobrava sem a sigla,
+   * não casava com a regra, e a pessoa ia parar na tela inicial do
+   * Colmeia (aconteceu de verdade em 2026-08-08). Funciona pro resto do
+   * arquivo porque toda ROTA DO APP tem um pedaço só — o link de
+   * aprovação é o único com dois.
+   *
+   * Por isso a base sai da PRÓPRIA regra: o que vem antes do código é a
+   * base, seja "/" (domínio próprio) ou "/Colmeia/" (o endereço antigo do
+   * GitHub Pages). Continua sem nome de repositório escrito na mão.
    */
-  var base = new URL(".", location.href);
-  var rota = location.pathname.slice(base.pathname.length);
-  var ehAprovacao = /^[a-z0-9]{2,6}\/\d+-[a-z0-9]{3,8}$/i.test(rota);
+  var casouAprovacao = location.pathname.match(/^(.*\/)([a-z0-9]{2,6}\/\d+-[a-z0-9]{3,8})$/i);
 
   // O `else` é obrigatório, não é estilo: `location.replace` NÃO
   // interrompe o script — sem ele, o desvio do fim do arquivo rodaria
   // logo em seguida e escreveria por cima do destino da aprovação.
-  if (ehAprovacao) {
-    location.replace(base.href + "aprovar.html?c=" + encodeURIComponent(rota));
+  if (casouAprovacao) {
+    location.replace(location.origin + casouAprovacao[1] + "aprovar.html?c=" + encodeURIComponent(casouAprovacao[2]));
   } else {
     try {
       sessionStorage.setItem("colmeiaRotaPendente", location.pathname + location.search + location.hash);
@@ -73,7 +83,9 @@
       // sozinha — não trava nada.
     }
 
-    var destino = base.pathname;
+    // Aqui `new URL(".", ...)` é o certo: toda ROTA DO APP tem um pedaço
+    // só ("/11503", "/minhas-horas"), então a pasta de cima é mesmo a base.
+    var destino = new URL(".", location.href).pathname;
     try {
       var voltas = Number(sessionStorage.getItem("colmeiaBounce404") || 0) + 1;
       sessionStorage.setItem("colmeiaBounce404", String(voltas));
