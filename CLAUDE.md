@@ -821,6 +821,40 @@ comigo" é uma decisão de trabalho — o incidente é a prova de que não podia
 Ao criar algo novo, usar esse critério: preferência de exibição → localStorage; decisão que doeria
 perder → planilha.
 
+## Auditoria da página do cliente — `aprovar.html` (2026-08-08)
+
+**O bug que importava, e não era de aparência:** com uma caixinha aberta ("Quem está aprovando?" ou
+o aviso de pontos marcados), apertar ← ou → **trocava a peça ATRÁS dela**. `enviarRespostaPeca` lê
+`pecaAtual` na hora do envio, então o Confirmar seguinte **aprovava a peça errada** — e o aviso de
+pontos mostrava a contagem da peça velha. Corrigido com `temModalAberto()`, checado antes de
+qualquer navegação. ⚠️ Ao acrescentar outro atalho de teclado aqui, checar isso também.
+
+Outras correções da mesma passada, todas de celular (é lá que o cliente abre — o link chega por
+WhatsApp):
+
+- **Arrastar o dedo troca de peça.** Antes só as setas, e ninguém procura seta num carrossel de
+  telefone. Só conta gesto bem mais horizontal que vertical (`|dx| ≥ 45` e `|dx| ≥ |dy| × 1.5`),
+  senão rolar a página trocaria a peça sem querer. ⚠️ A trava `arrastouAgora` é obrigatória: alguns
+  navegadores disparam `click` depois do arraste, e clique no visor **solta um pino** — sem ela,
+  trocar de peça deixava um ponto marcado no caminho.
+- **`58vh` → `58dvh`.** `vh` conta a altura com a barra de endereço escondida, então a peça podia
+  ser mais alta que a tela real e empurrar legenda e miniaturas pra fora. A linha de `vh` fica antes
+  como reserva pra navegador antigo.
+- **As caixinhas com o teclado aberto:** centralizadas, o Confirmar podia ficar embaixo do teclado
+  sem jeito de alcançar. No celular viram `align-items: flex-start` + `overflow-y: auto`.
+- **Cliente e título empilhados no topo** — lado a lado, um nome comprido espremia o título da peça
+  até sobrar só reticências, e o título é o que diz qual peça é.
+- **E-mail marketing (HTML) ganhou fundo branco próprio.** A maioria não declara cor no `body`, e o
+  cinza do palco vazava por trás do texto — o cliente julgava a peça sobre uma cor que não é a dela.
+- **Alvo de toque dos pinos** de 28px pra 34px.
+- **"Clique na peça" vira "Toque na peça"** em aparelho de toque (`ehToque()` decide só a PALAVRA,
+  nunca comportamento).
+- **O comprovante de data/hora passou a valer pro ajuste também** — existia só na aprovação, sem
+  motivo. E `enviarResposta` passa `Date.now()`, senão ficava em branco justo pra quem acabou de
+  responder.
+- **Favicon e `theme-color`.** A aba mostrava o ícone genérico de página sem favicon, o que num link
+  recebido por WhatsApp parece link duvidoso.
+
 ## "Enviar para o cliente" abre os três canais (2026-08-08)
 
 O botão da pílula de cima, depois de aprovado, abria o **WhatsApp direto** — escolhia o canal pela
