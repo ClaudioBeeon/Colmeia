@@ -183,6 +183,51 @@ const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xm
 // O Colmeia só faz leitura aqui — nunca escreve nada nesse painel.
 const PAINEL_BEEON_API_URL = "https://script.google.com/macros/s/AKfycbzzWtG4jkVpLvPwOAHaj-h9KK9k_8N6YWGUXfFtUDSXRiCj7ILDPvuSy9VJXhglTrzEQQ/exec";
 
+/**
+ * A URL que o CLIENTE recebe. Ponto único: isto estava copiado em 5
+ * lugares (aqui, o hub do cliente, a fila de repasse e duas vezes na
+ * conferência), e um formato novo de link teria que ser lembrado nos cinco.
+ *
+ * DOIS FORMATOS, e é o CÓDIGO que decide qual:
+ *   - com barra (`adn/11505-k7m2`, desde 2026-08-08) → vira
+ *     `colmeia.beeon.com.br/adn/11505-k7m2`, 42 caracteres. A barra é o
+ *     sinal: só o formato novo tem uma.
+ *   - sem barra (o UUID de 32 caracteres de antes) → continua indo pro
+ *     `aprovar.html?codigo=...` de sempre. Link já mandado pra cliente não
+ *     pode parar de abrir só porque o formato mudou.
+ *
+ * `new URL(".", location.href)` acha sozinho onde o Colmeia está
+ * publicado — o mesmo motivo de ROTA_BASE (js/roteador-url.js): continua
+ * certo se o endereço mudar, sem ninguém precisar lembrar de vir aqui.
+ */
+function linkDeAprovacaoDoCliente(codigo) {
+  const base = new URL(".", location.href).href;
+  const c = String(codigo || "");
+  if (c.indexOf("/") !== -1) return base + c;
+  return base + "aprovar.html?codigo=" + encodeURIComponent(c);
+}
+
+/**
+ * A sigla que o cliente GANHARIA sem ninguém escrever nada — só pra
+ * mostrar como dica no painel de Clientes ("automática: adn").
+ *
+ * ⚠️ É uma CÓPIA de `siglaAutomaticaDeCliente` (Aprovacao.gs), e o link de
+ * verdade é sempre montado lá no backend. Duas cópias porque o painel
+ * precisa mostrar a dica ANTES de salvar qualquer coisa, e uma ida ao
+ * servidor só pra isso deixaria a lista de clientes lenta. Se as duas
+ * discordarem, o pior que acontece é a dica mostrar uma letra diferente
+ * da que o link vai usar — nada quebra. Ao mexer numa, mexer na outra.
+ */
+function siglaAutomaticaDeCliente(nome) {
+  const limpo = String(nome || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!limpo) return "cli";
+  let sigla = limpo.charAt(0) + limpo.slice(1).replace(/[aeiou0-9]/g, "");
+  if (sigla.length < 3) sigla = limpo;
+  return sigla.slice(0, 3);
+}
+
 // ============================================
 // CHAMADA AO BACKEND — o caminho único de toda ida ao Apps Script
 // ============================================

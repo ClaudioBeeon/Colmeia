@@ -161,7 +161,7 @@ async function carregarAprovacoesNoHub(cliente) {
   el.innerHTML = renderAprovacoesDoClienteHTML(lista);
   el.querySelectorAll(".ch-aprov-copiar").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const url = new URL(".", location.href).href + "aprovar.html?codigo=" + btn.dataset.codigo;
+      const url = linkDeAprovacaoDoCliente(btn.dataset.codigo);
       try {
         await navigator.clipboard.writeText(url);
         mostrarToast("Link de aprovação copiado de novo.", "sucesso");

@@ -160,8 +160,15 @@ function roteadorInterpretarRota() {
   if (caminho === ROTEADOR_SLUGS.aprovacao) {
     let params = null;
     try { params = new URLSearchParams(location.search); } catch (e) { /* sem problema */ }
-    const tarefa = params && params.get("tarefa");
-    if (tarefa) return { tipo: "conferencia", id: tarefa, peca: (params.get("peca") || "") };
+    // `t`/`p` são os nomes de hoje (2026-08-08, o encurtamento do link que
+    // vai no comentário da tarefa); `tarefa`/`peca` são os de antes e
+    // continuam sendo lidos — tem link antigo em comentário de tarefa que
+    // não vai sumir, e ler os dois custa uma linha.
+    const tarefa = params && (params.get("t") || params.get("tarefa"));
+    if (tarefa) {
+      const peca = params.get("p") || params.get("peca") || "";
+      return { tipo: "conferencia", id: tarefa, peca };
+    }
   }
 
   const pagina = ROTEADOR_SLUGS_INVERSO[caminho];
@@ -180,8 +187,8 @@ function roteadorInterpretarRota() {
  */
 function roteadorLinkDaConferencia(taskId, nomePeca) {
   const url = location.origin + ROTA_BASE + ROTEADOR_SLUGS.aprovacao
-    + "?tarefa=" + encodeURIComponent(taskId);
-  return nomePeca ? url + "&peca=" + encodeURIComponent(nomePeca) : url;
+    + "?t=" + encodeURIComponent(taskId);
+  return nomePeca ? url + "&p=" + encodeURIComponent(nomePeca) : url;
 }
 
 /**

@@ -582,7 +582,7 @@ async function apvAbrirConferencia(taskId, loteId) {
   // comentário de dadosDaConferencia, AprovacaoInterna.gs).
   if (data.statusConferencia === "enviada" && data.linkCliente && data.linkCliente.codigo) {
     apvEnviado = true;
-    apvLinkGerado = new URL(".", location.href).href + "aprovar.html?codigo=" + data.linkCliente.codigo;
+    apvLinkGerado = linkDeAprovacaoDoCliente(data.linkCliente.codigo);
   }
 
   apvRedesenharPaineis();
@@ -1905,7 +1905,7 @@ async function apvRenderLinksExistentes(taskId) {
 
   blocoAgora.querySelectorAll("[data-apv-link-copiar]").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const url = base + "aprovar.html?codigo=" + links[Number(btn.dataset.apvLinkCopiar)].codigo;
+      const url = linkDeAprovacaoDoCliente(links[Number(btn.dataset.apvLinkCopiar)].codigo);
       try {
         await navigator.clipboard.writeText(url);
         mostrarToast("Link copiado.", "sucesso");
@@ -2033,7 +2033,7 @@ async function apvGarantirLink() {
   // Mesma conta do resto do app: a base sai de onde o index.html está
   // publicado, então nada quebra quando o domínio mudar (ver ROTA_BASE,
   // js/roteador-url.js).
-  apvLinkGerado = new URL(".", location.href).href + "aprovar.html?codigo=" + data.codigo;
+  apvLinkGerado = linkDeAprovacaoDoCliente(data.codigo);
   return apvLinkGerado;
 }
 

@@ -600,9 +600,14 @@
   // Script, atualizar as 3 juntas.
   var COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
 
+  // Dois nomes de propósito: `?c=` é o formato curto (2026-08-08, os links
+  // `colmeia.beeon.com.br/adn/11505-k7m2`, que o 404.html traduz pra cá) e
+  // `?codigo=` é o antigo, de 32 caracteres. Todo link já mandado pra
+  // cliente usa o antigo e precisa continuar abrindo — por isso os dois
+  // ficam, e o `?c=` vem primeiro só por ser o de hoje.
   function pegarCodigo() {
     var params = new URLSearchParams(location.search);
-    return params.get("codigo") || "";
+    return params.get("c") || params.get("codigo") || "";
   }
 
   // Mesmo prazo de 25s do resto do app (chamarBackend, js/config.js) —

@@ -247,6 +247,126 @@ function gerarLinkDeAprovacao(taskId, cliente, tituloTarefa, autor, fileId) {
   return gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, [escolhido]);
 }
 
+// ---------------------------------------------------------------------
+// O código curto e legível do link (2026-08-08)
+// ---------------------------------------------------------------------
+
+/**
+ * O PROBLEMA: o link do cliente era
+ * `colmeia.beeon.com.br/aprovar.html?codigo=` + um UUID de 32 caracteres
+ * — 80 caracteres no total. Chato de mandar por WhatsApp, e nos
+ * comentários das tarefas ocupava três linhas sem dizer nada. Pior: não
+ * dava pra olhar um link e saber de qual cliente ou tarefa ele era.
+ *
+ * O FORMATO NOVO (escolhido pelo Cláudio): `adn/11505-k7m2`, que vira
+ * `colmeia.beeon.com.br/adn/11505-k7m2` — 42 caracteres, quase metade.
+ *   - `adn`   = a sigla do cliente, pra bater o olho e reconhecer;
+ *   - `11505` = o id da tarefa no Runrun.it, pelo mesmo motivo;
+ *   - `k7m2`  = o cadeado, e é a parte que NÃO pode sair.
+ *
+ * POR QUE O CADEADO EXISTE: esta página não tem login — quem abre o link,
+ * vê a peça e pode aprovar. Sigla e id são os dois adivinháveis (a sigla
+ * sai do nome do cliente, e os ids do Runrun.it são sequenciais), então
+ * sem as 4 letras finais qualquer pessoa que recebesse UM link conseguiria
+ * abrir a peça de qualquer outro cliente trocando o número — e aprovar no
+ * lugar dele. Com elas, são 1,6 milhão de combinações POR TAREFA, e não
+ * existe lista de tarefas pra varrer.
+ *
+ * LINKS ANTIGOS CONTINUAM VALENDO: a busca é por igualdade exata do
+ * código (acharLinhaDeAprovacao), que nunca dependeu do tamanho nem do
+ * formato. Nada precisa ser migrado.
+ */
+var ALFABETO_CODIGO_APROVACAO = 'abcdefghijkmnpqrstuvwxyz23456789'; // sem l/o/0/1: confundem quem lê em voz alta
+
+/**
+ * Tira acento, espaço e maiúscula de uma sigla escrita à mão. É chamada na
+ * gravação (salvarLinksCliente) e não na leitura, pra que o que está
+ * guardado seja exatamente o que aparece na URL.
+ */
+function normalizarSiglaDeCliente(sigla) {
+  if (!sigla) return '';
+  return String(sigla)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '')
+    .slice(0, 6);
+}
+
+/**
+ * A sigla automática: a PRIMEIRA letra do nome, sempre, mais as
+ * consoantes seguintes — que é o que sobra quando se abrevia um nome à
+ * mão ("Bauducco" → bdc, "Alden" → ald, "Clínica São José" → cln).
+ *
+ * A primeira letra é mantida mesmo sendo vogal de propósito: só as
+ * consoantes fariam "Alden" virar `ldn`, que ninguém reconhece como
+ * Alden. Sobrando menos de 3 letras (nome curto, ou quase todo de
+ * vogais), completa com as primeiras letras mesmo. Nome sem letra
+ * nenhuma vira `cli` — nunca vazio, senão a URL ficaria com duas barras
+ * seguidas e o link não abriria.
+ */
+function siglaAutomaticaDeCliente(nome) {
+  var limpo = normalizarSiglaDeCliente(nome);
+  if (!limpo) return 'cli';
+  var sigla = limpo.charAt(0) + limpo.slice(1).replace(/[aeiou0-9]/g, '');
+  if (sigla.length < 3) sigla = limpo;
+  return sigla.slice(0, 3);
+}
+
+/**
+ * A sigla que vale pra este cliente: a escrita à mão no painel de
+ * Clientes quando existe, senão a automática.
+ *
+ * DUAS SIGLAS IGUAIS NÃO SÃO PROBLEMA aqui, e é de propósito: o que
+ * identifica a aprovação é o código inteiro (sigla + id + cadeado), e o id
+ * da tarefa já é único no Runrun.it. Se "Alden" e "Aldana" derem as duas
+ * `adn`, os links continuam distintos e continuam abrindo a peça certa —
+ * só fica menos óbvio de qual cliente é, que é justamente pra isso que o
+ * campo editável existe.
+ */
+function siglaDoCliente(nome) {
+  if (!nome) return 'cli';
+  try {
+    var lista = listarLinksClientes();
+    if (lista && lista.ok) {
+      for (var i = 0; i < lista.links.length; i++) {
+        var l = lista.links[i];
+        if (String(l.cliente).trim().toLowerCase() !== String(nome).trim().toLowerCase()) continue;
+        if (l.sigla) return normalizarSiglaDeCliente(l.sigla);
+        break;
+      }
+    }
+  } catch (e) {
+    // Planilha fora do ar não pode impedir um link de ser gerado — a
+    // sigla automática dá um link perfeitamente funcional.
+  }
+  return siglaAutomaticaDeCliente(nome);
+}
+
+/**
+ * Monta `sigla/taskId-cadeado`, conferindo que o resultado ainda não está
+ * em uso. `linhas` é a planilha já lida por quem chamou (não relê à toa);
+ * a repetição só é possível dentro da MESMA tarefa, porque o id entra no
+ * código — então a chance de precisar de uma segunda volta é ínfima.
+ */
+function montarCodigoDeAprovacao(taskId, cliente, linhas) {
+  var sigla = siglaDoCliente(cliente);
+  var usados = {};
+  for (var i = 1; i < (linhas || []).length; i++) {
+    if (linhas[i][0]) usados[String(linhas[i][0])] = true;
+  }
+  for (var tentativa = 0; tentativa < 40; tentativa++) {
+    var cadeado = '';
+    for (var c = 0; c < 4; c++) {
+      cadeado += ALFABETO_CODIGO_APROVACAO.charAt(Math.floor(Math.random() * ALFABETO_CODIGO_APROVACAO.length));
+    }
+    var codigo = sigla + '/' + taskId + '-' + cadeado;
+    if (!usados[codigo]) return codigo;
+  }
+  // 40 sorteios batendo no mesmo código é impossível na prática, mas um
+  // link sem código seria pior que um link feio: cai no formato antigo,
+  // que é garantidamente único.
+  return Utilities.getUuid().replace(/-/g, '');
+}
+
 /**
  * Grava a linha da aprovação. Vários arquivos são guardados na MESMA
  * célula, separados por "|" — id do Drive nunca tem esse caractere, e
@@ -284,7 +404,7 @@ function gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, arquivos) 
       }
     }
 
-    var codigo = Utilities.getUuid().replace(/-/g, '');
+    var codigo = montarCodigoDeAprovacao(taskId, cliente, linhas);
     sheet.appendRow([
       codigo, taskId, cliente || '', tituloTarefa || '', ids, nomes,
       tipos, new Date().getTime(), 'pendente', '', '', autor || ''

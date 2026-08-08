@@ -1234,7 +1234,7 @@ function cardDeAprovacaoHTML(a) {
 function urlDeAprovacao(codigo) {
   // Mesma técnica do resto do app: a base vem do endereço em que o
   // Colmeia está publicado agora (ver ROTA_BASE, js/roteador-url.js).
-  return new URL(".", location.href).href + "aprovar.html?codigo=" + codigo;
+  return linkDeAprovacaoDoCliente(codigo);
 }
 
 function wireCardsDeAprovacao(board) {

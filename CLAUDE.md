@@ -802,6 +802,54 @@ comigo" é uma decisão de trabalho — o incidente é a prova de que não podia
 Ao criar algo novo, usar esse critério: preferência de exibição → localStorage; decisão que doeria
 perder → planilha.
 
+## O link de aprovação encurtou e virou legível (2026-08-08)
+
+O time reclamou que os links eram grandes demais pra mandar pro cliente e enchiam o comentário da
+tarefa. Eram dois links diferentes, os dois inchados pelo mesmo motivo (um UUID de 32 caracteres):
+
+| | Antes | Agora |
+|---|---|---|
+| Link do cliente | `…/aprovar.html?codigo=<32>` (80 chars) | `…/adn/11505-k7m2` (**42**) |
+| Link do comentário | `…/aprovacoes?tarefa=114526&peca=<32>` (90 chars) | `…/aprovacoes?t=114526&p=k7m2p9` (**54**) |
+
+**O formato do link do cliente é `sigla/idDaTarefa-cadeado`** (`montarCodigoDeAprovacao`,
+Aprovacao.gs). Sigla e id existem pra ser LIDOS — bater o olho e saber de qual cliente e tarefa é.
+**O cadeado de 4 letras é o que não pode sair:** a página não tem login, e sigla e id são os dois
+adivinháveis (a sigla sai do nome do cliente, ids do Runrun.it são sequenciais). Sem ele, quem
+recebesse um link abriria a peça de qualquer outro cliente trocando o número — e aprovaria no lugar
+dele. Com ele são 1,6 milhão de combinações por tarefa, e não existe lista de tarefas pra varrer.
+
+**A sigla é mista:** automática (as consoantes do nome — Bauducco → `bdc`), com um campo editável
+por cliente no painel de Configurações → Clientes (coluna J da aba `LinksClientes`, vazia = "usa a
+automática"). Duas siglas iguais **não são problema**: o que identifica a aprovação é o código
+inteiro, e o id da tarefa já é único — o campo existe só pra ficar óbvio de quem é.
+⚠️ `siglaAutomaticaDeCliente` existe **duas vezes** (Aprovacao.gs e js/config.js): o painel precisa
+mostrar a dica antes de salvar, e uma ida ao servidor só pra isso deixaria a lista lenta. Divergir
+só faz a dica mostrar letra diferente da que o link usa — mas ao mexer numa, mexer na outra.
+
+**Quem faz o link bonito funcionar é o `404.html`.** O GitHub Pages não tem servidor: `/adn/11505-k7m2`
+não é arquivo nenhum, então cai no 404. Até aqui esse arquivo só sabia **subir uma pasta**, e
+`/adn/` também não existe — era o laço infinito de 2026-08-04. Agora ele **reconhece o padrão de
+aprovação e manda direto pro `aprovar.html?c=<codigo>`**, sem passar pela encomenda do
+sessionStorage. É o único lugar do site que consegue ler um caminho inventado e decidir o que fazer,
+porque é servido pra qualquer endereço inexistente em qualquer profundidade.
+⚠️ O `else` em volta do caminho normal é **obrigatório**: `location.replace` não interrompe o
+script, e sem ele o desvio do fim do arquivo escreveria por cima do destino da aprovação.
+
+**Nada foi migrado, e nada precisa ser.** A busca sempre foi por igualdade exata do código
+(`acharLinhaDeAprovacao`), que nunca dependeu do tamanho. Links já mandados pra cliente continuam
+abrindo: `aprovar.html` lê `?c=` (novo) **e** `?codigo=` (antigo), `linkDeAprovacaoDoCliente`
+(js/config.js) decide o formato pela presença de uma barra no código, e o roteador lê `t`/`p` e
+`tarefa`/`peca`.
+
+**`linkDeAprovacaoDoCliente` é ponto único.** A montagem da URL estava copiada em 5 lugares (hub do
+cliente, fila de repasse e 3× na conferência) — um formato novo teria que ser lembrado nos cinco.
+Nunca montar essa URL na mão de novo.
+
+**O `loteId` também encolheu** (32 → 6 caracteres, `pedirConferenciaInterna`): ele ia inteiro no link
+do comentário. É seguro porque `linhasDoLote` filtra por `taskId` **antes** de comparar o lote — só
+precisa ser único dentro de uma tarefa.
+
 ## Link de aprovação: várias peças, e vídeo pelo player do Drive (2026-08-04)
 
 Três coisas quebradas no link de aprovação, corrigidas juntas:

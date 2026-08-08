@@ -24,12 +24,18 @@ function getLinksClientesSheet() {
   var sheet = ss.getSheetByName('LinksClientes');
   if (!sheet) {
     sheet = ss.insertSheet('LinksClientes');
-    sheet.getRange('A1:I1').setValues([['cliente', 'drive', 'bancoImagens', 'bibliotecaAdobe', 'pastaPublicacoes', 'extras', 'pastaDriveVinculada', 'descricao', 'aliases']]);
+    sheet.getRange('A1:J1').setValues([['cliente', 'drive', 'bancoImagens', 'bibliotecaAdobe', 'pastaPublicacoes', 'extras', 'pastaDriveVinculada', 'descricao', 'aliases', 'sigla']]);
   }
-  // Planilhas criadas antes desse recurso não têm a coluna I — cria ela
-  // sozinho na primeira vez que alguém salvar/ler depois dessa versão.
+  // Planilhas criadas antes desses recursos não têm as colunas I/J — são
+  // criadas sozinhas na primeira vez que alguém salvar/ler depois desta
+  // versão. `sigla` (coluna J) entrou em 2026-08-08 com o link curto de
+  // aprovação (ver montarCodigoDeAprovacao, Aprovacao.gs): vazia significa
+  // "usa a sigla automática", não "cliente sem sigla".
   if (sheet.getLastColumn() < 9) {
     sheet.getRange(1, 9).setValue('aliases');
+  }
+  if (sheet.getLastColumn() < 10) {
+    sheet.getRange(1, 10).setValue('sigla');
   }
   return sheet;
 }
@@ -324,7 +330,8 @@ function listarLinksClientes() {
       extras: extras,
       pastaDriveVinculada: linhas[i][6] || '',
       descricao: linhas[i][7] || '',
-      aliases: linhas[i][8] ? String(linhas[i][8]).split('|').map(function (s) { return s.trim(); }).filter(Boolean) : []
+      aliases: linhas[i][8] ? String(linhas[i][8]).split('|').map(function (s) { return s.trim(); }).filter(Boolean) : [],
+      sigla: linhas[i][9] ? String(linhas[i][9]).trim() : ''
     });
   }
   return { ok: true, links: links };
@@ -347,11 +354,15 @@ function salvarLinksCliente(cliente, dados) {
       extrasTexto,
       dados.pastaDriveVinculada || '',
       dados.descricao || '',
-      aliasesTexto
+      aliasesTexto,
+      // Normalizada aqui, na porta de entrada, e não na hora de montar o
+      // link: assim o que está guardado é sempre o que vai aparecer na URL
+      // — sem espaço, sem acento, sem maiúscula.
+      normalizarSiglaDeCliente(dados.sigla)
     ];
     for (var i = 1; i < linhas.length; i++) {
       if (String(linhas[i][0]) === String(cliente)) {
-        sheet.getRange(i + 1, 2, 1, 8).setValues([linhaValores]);
+        sheet.getRange(i + 1, 2, 1, 9).setValues([linhaValores]);
         return { ok: true };
       }
     }

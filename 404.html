@@ -36,30 +36,60 @@
    * destino não existir, a pessoa vai parar na raiz do site em vez de
    * ficar presa no laço. Ela perde a rota, mas o app abre.
    */
-  try {
-    sessionStorage.setItem("colmeiaRotaPendente", location.pathname + location.search + location.hash);
-  } catch (e) {
-    // Sem sessionStorage (aba anônima bem restrita, por exemplo) a
-    // pessoa só cai na tela inicial normal, sem a tarefa/página abrindo
-    // sozinha — não trava nada.
-  }
+  /**
+   * ANTES DE TUDO: o link de aprovação do cliente (2026-08-08).
+   *
+   * Ele tem DOIS pedaços — `/adn/11505-k7m2` — e não é uma rota do app:
+   * quem atende é o `aprovar.html`, uma página solta, sem login. Subir uma
+   * pasta (o que o resto deste arquivo faz) levaria pra "/adn/", que não
+   * existe, e o GitHub cairia aqui de novo — o laço de agosto.
+   *
+   * Por isso ele é reconhecido e mandado DIRETO pro destino certo, sem
+   * passar pela encomenda do sessionStorage. Isto aqui é o "servidor" que
+   * o GitHub Pages não tem: este arquivo é servido pra qualquer endereço
+   * que não existe, em qualquer profundidade, então é o único lugar do
+   * site que consegue ler um caminho inventado e decidir o que fazer com
+   * ele.
+   *
+   * O formato é `sigla/idDaTarefa-cadeado`: letras, barra, números, traço.
+   * A regra abaixo é estreita de propósito — qualquer outro endereço de
+   * dois pedaços continua caindo no caminho normal.
+   */
+  var base = new URL(".", location.href);
+  var rota = location.pathname.slice(base.pathname.length);
+  var ehAprovacao = /^[a-z0-9]{2,6}\/\d+-[a-z0-9]{3,8}$/i.test(rota);
 
-  var destino = new URL(".", location.href).pathname;
-  try {
-    var voltas = Number(sessionStorage.getItem("colmeiaBounce404") || 0) + 1;
-    sessionStorage.setItem("colmeiaBounce404", String(voltas));
-    // Duas passagens por aqui já significam que o destino calculado
-    // também não existe — não adianta tentar uma terceira.
-    if (voltas > 2) {
-      sessionStorage.removeItem("colmeiaBounce404");
-      sessionStorage.removeItem("colmeiaRotaPendente");
-      destino = "/";
+  // O `else` é obrigatório, não é estilo: `location.replace` NÃO
+  // interrompe o script — sem ele, o desvio do fim do arquivo rodaria
+  // logo em seguida e escreveria por cima do destino da aprovação.
+  if (ehAprovacao) {
+    location.replace(base.href + "aprovar.html?c=" + encodeURIComponent(rota));
+  } else {
+    try {
+      sessionStorage.setItem("colmeiaRotaPendente", location.pathname + location.search + location.hash);
+    } catch (e) {
+      // Sem sessionStorage (aba anônima bem restrita, por exemplo) a
+      // pessoa só cai na tela inicial normal, sem a tarefa/página abrindo
+      // sozinha — não trava nada.
     }
-  } catch (e) {
-    // Sem sessionStorage não dá pra contar as voltas; segue o caminho
-    // normal, que é o que já acontecia antes deste cinto existir.
+
+    var destino = base.pathname;
+    try {
+      var voltas = Number(sessionStorage.getItem("colmeiaBounce404") || 0) + 1;
+      sessionStorage.setItem("colmeiaBounce404", String(voltas));
+      // Duas passagens por aqui já significam que o destino calculado
+      // também não existe — não adianta tentar uma terceira.
+      if (voltas > 2) {
+        sessionStorage.removeItem("colmeiaBounce404");
+        sessionStorage.removeItem("colmeiaRotaPendente");
+        destino = "/";
+      }
+    } catch (e) {
+      // Sem sessionStorage não dá pra contar as voltas; segue o caminho
+      // normal, que é o que já acontecia antes deste cinto existir.
+    }
+    location.replace(destino);
   }
-  location.replace(destino);
 </script>
 </head>
 <body></body>

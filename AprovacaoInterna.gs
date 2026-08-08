@@ -219,7 +219,19 @@ function pedirConferenciaInterna(dados) {
     // mandado junto numa fila (e numa conferência) só. Reenviar reatribui
     // a peça pro lote de agora — o que está sendo pedido junto AGORA é o
     // lote que interessa, mesmo que ela já pertencesse a outro antes.
-    var loteId = Utilities.getUuid().replace(/-/g, '');
+    //
+    // CURTO (6 caracteres), não um UUID de 32: este id vai inteiro dentro
+    // do link que o designer cola no comentário da tarefa, e era ele que
+    // fazia o comentário no Runrun.it ficar com um endereço de três linhas
+    // (reclamação do time, 2026-08-08). Curto é seguro aqui porque
+    // `linhasDoLote` filtra por taskId ANTES de comparar o lote — ou seja,
+    // só precisa ser único DENTRO de uma tarefa, e são 1 bilhão de
+    // combinações. Lotes antigos, de 32 caracteres, continuam batendo
+    // normalmente: a comparação sempre foi por igualdade exata.
+    var loteId = '';
+    for (var iLote = 0; iLote < 6; iLote++) {
+      loteId += ALFABETO_CODIGO_APROVACAO.charAt(Math.floor(Math.random() * ALFABETO_CODIGO_APROVACAO.length));
+    }
     var criadas = [];
 
     alvos.forEach(function (peca) {

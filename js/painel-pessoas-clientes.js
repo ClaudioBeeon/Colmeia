@@ -326,6 +326,12 @@ function renderPainelClientes() {
                   <textarea data-campo="descricao" placeholder="Ex: Açougue frigorífico em Passos, Itaú e SSP" rows="2">${dados.descricao || ""}</textarea>
                 </label>
                 <label class="cliente-link-field">
+                  <span>Sigla do link de aprovação${dados.sigla ? "" : ` (automática: <b>${escaparHTML(siglaAutomaticaDeCliente(cliente))}</b>)`}</span>
+                  <input type="text" data-campo="sigla" value="${escaparHTML(dados.sigla || "")}" maxlength="6"
+                         placeholder="${escaparHTML(siglaAutomaticaDeCliente(cliente))}"
+                         title="Aparece no link que vai pro cliente: colmeia.beeon.com.br/SIGLA/11505-k7m2. Deixa em branco pra usar a automática.">
+                </label>
+                <label class="cliente-link-field">
                   <span>Vincular pasta do Drive (se o nome vier diferente)</span>
                   <select class="cliente-drive-vinculo" data-campo="pastaDriveVinculada">
                     <option value="">— Escolher a pasta certa —</option>
@@ -427,6 +433,11 @@ function renderPainelClientes() {
       const form = body.querySelector(`[data-cliente-form="${CSS.escape(cliente)}"]`);
       const dados = {
         descricao: form.querySelector('[data-campo="descricao"]').value.trim(),
+        // Vazia significa "usa a automática", não "cliente sem sigla" — a
+        // normalização de verdade (acento, espaço, maiúscula) é feita no
+        // backend, na gravação, pra que o que fica guardado seja exatamente
+        // o que vai aparecer na URL.
+        sigla: form.querySelector('[data-campo="sigla"]').value.trim(),
         drive: form.querySelector('[data-campo="drive"]').value.trim(),
         bancoImagens: form.querySelector('[data-campo="bancoImagens"]').value.trim(),
         bibliotecaAdobe: form.querySelector('[data-campo="bibliotecaAdobe"]').value.trim(),
