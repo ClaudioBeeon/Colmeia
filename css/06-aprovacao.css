@@ -1571,3 +1571,118 @@
 .apv-conferencia.apv-motivo-expandido .apv-bloco-motivo .apv-campo {
   flex: 1 1 auto; min-height: 240px;
 }
+
+/* =====================================================================
+   CELULAR — a revisão de 2026-08-08
+
+   Este bloco é o ÚLTIMO do arquivo de propósito: existem outros dois
+   `@media (max-width: 900px)` mais acima (linhas ~895 e ~1388), e tudo
+   que foi escrito depois deles — o rebrand da conferência, a ficha da
+   Bee, o rodapé de alteração, o expandir — nunca chegou a ter regra de
+   celular nenhuma. Regra nova de mobile pra esta tela vem PRA CÁ.
+
+   O QUE ESTAVA QUEBRADO (relatado pelo Cláudio):
+
+   1. A PÍLULA DO TOPO. Ela é uma fileira com `flex-wrap: wrap` de sete
+      coisas — logo, id, cliente, peça, os chips de etapa, "N peças
+      esperando" e o botão de 210px. Num telefone isso quebrava em quatro
+      ou cinco linhas, e um `border-radius: 999px` em cima de um bloco de
+      cinco linhas não parece uma pílula, parece defeito.
+   2. AS COISAS SUMINDO. Consequência da primeira, e a pior:
+      `.apv-conferencia` tem `overflow: hidden`. A pílula é
+      `flex: 0 0 auto` — ela não encolhe. Então quanto mais linhas ela
+      ocupava, menos sobrava pras colunas, e o que passava do fim era
+      simplesmente CORTADO, sem scroll pra chegar lá.
+   3. PIOR DEPOIS DE APROVAR. Aprovar acende os chips "Card mãe →
+      Aprovação Cliente" DENTRO da pílula, com `margin: 0 auto` e sem
+      poder encolher: mais uma linha larga, e os chips estourando a
+      largura da tela por cima do que estava embaixo.
+
+   A SAÍDA: no celular a pílula deixa de ser pílula. Vira um cartão de
+   linhas empilhadas, cada informação na sua, com o botão ocupando a
+   largura toda — que é o que ele quer ser num telefone de qualquer jeito.
+   ===================================================================== */
+@media (max-width: 900px) {
+  /* Um respiro nas bordas: com `inset: 0` e `gap: 0` (regra lá de cima) o
+     cartão de cantos redondos ficava colado na moldura da tela, o que faz
+     o arredondamento parecer erro em vez de escolha. */
+  .apv-conferencia { padding: 10px 10px 0; gap: 10px; }
+  .apv-colunas { border-radius: 16px 16px 0 0; }
+
+  /* ---- 1. A pílula vira um cartão de linhas ---- */
+  .apv-contexto {
+    border-radius: 18px; padding: 12px 14px; gap: 10px;
+    align-items: center;
+  }
+  /* Sem o traço vertical: ele separava marca de informação numa FILEIRA;
+     empilhado ele viraria um risco solto no meio do nada. */
+  .apv-contexto-logo { height: 26px; padding-right: 0; margin-right: 0; border-right: none; }
+  /* Cliente e peça um sobre o outro. Lado a lado (o desktop) eles não
+     cabem em 390px, e o nome da peça é o que era cortado. */
+  .apv-contexto-nome {
+    flex: 1 1 auto; min-width: 0;
+    flex-direction: column; align-items: flex-start; gap: 1px;
+  }
+  .apv-contexto-cliente, .apv-contexto-peca {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .apv-contexto-cliente { font-size: 15px; }
+  .apv-contexto-peca { font-size: 13px; }
+  /* Linha própria, encostada à esquerda: `margin-left: auto` num item que
+     já está sozinho na linha jogava o texto pro canto direito, longe de
+     tudo. */
+  .apv-contexto-restam { flex: 1 1 100%; width: auto; margin-left: 0; font-size: 12px; }
+
+  /* ---- 2. Os chips de etapa, que estouravam depois de aprovar ---- */
+  .apv-contexto-etapa {
+    flex: 1 1 100%; min-width: 0; margin: 0;
+    justify-content: flex-start;
+  }
+  /* `min-width: 0` é o que autoriza o chip a encolher; sem ele um flex
+     item se recusa a ficar menor que o próprio texto e empurra o irmão
+     pra fora da tela. As reticências são o plano B de "Aprovação
+     Cliente" não caber. */
+  .apv-contexto-etapa .etapa-chip {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .apv-contexto-etapa .etapa-transfer { min-width: 0; flex: 1 1 auto; }
+
+  /* ---- 3. O botão de ação ocupa a linha ---- */
+  /* Largura fixa é do desktop, onde ele divide a fileira com o resto.
+     Aqui ele é a única ação da tela — e 210px num telefone deixava uma
+     sobra esquisita à direita. */
+  .apv-acao-btn { flex: 1 1 100%; width: auto; }
+  .apv-sair-alteracao { flex: 1 1 100%; justify-content: center; }
+
+  /* ---- 4. Nada de rolagem dentro de rolagem ---- */
+  /* No desktop o bloco de informações tem teto e rola por dentro, pra o
+     rodapé de alteração não sair da tela. No celular a COLUNA já rola:
+     um segundo scroll aninhado ali dentro faz o dedo rolar a caixinha
+     errada, e o rodapé não tem de onde fugir porque a página inteira
+     desce junto. */
+  .apv-info-bloco { max-height: none; min-height: 0; }
+  .apv-info-corpo { overflow: visible; }
+  .apv-alt-corpo.aberta { max-height: none; }
+
+  /* ---- 5. A barra preta de envio ---- */
+  /* Lado a lado em 390px, "Ver como o cliente vê" virava "Ver como o…" —
+     justo o rótulo que não pode encolher (já era um risco conhecido no
+     desktop, aqui virava certeza). Empilhados, os dois cabem inteiros. */
+  .apv-barra-envio { flex-wrap: wrap; border-radius: 22px; }
+  .apv-barra-ver { flex: 1 1 100%; padding: 12px; }
+  .apv-barra-mandar-wrap { flex: 1 1 100%; }
+  .apv-barra-mandar { width: 100%; justify-content: center; padding: 12px; }
+  .apv-envio-menu { left: 0; right: 0; }
+  .apv-envio-menu button { white-space: normal; text-align: center; }
+
+  /* ---- 6. O campo de alteração ---- */
+  /* "Expandir" existe pra trocar o espaço do briefing pelo do campo numa
+     tela onde os dois disputam altura. No celular eles não disputam nada
+     (a página rola), então o botão só esconderia informação à toa. */
+  .apv-motivo-topo .apv-expandir-btn { display: none; }
+  /* Se alguém tiver expandido no desktop e girado o celular / diminuído a
+     janela, o estado ficaria ligado sem botão nenhum pra desligar — e o
+     briefing sumido sem explicação. Aqui ele simplesmente não vale. */
+  .apv-conferencia.apv-motivo-expandido .apv-info-corpo { display: block; }
+  .apv-campo { min-height: 120px; }
+}

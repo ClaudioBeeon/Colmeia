@@ -821,6 +821,39 @@ comigo" é uma decisão de trabalho — o incidente é a prova de que não podia
 Ao criar algo novo, usar esse critério: preferência de exibição → localStorage; decisão que doeria
 perder → planilha.
 
+## A conferência no celular — a revisão de 2026-08-08
+
+⚠️ **Regra nova de mobile pra tela de conferência vai no ÚLTIMO bloco `@media` do
+`css/06-aprovacao.css`.** O arquivo tem TRÊS deles (~895, ~1388 e o do fim), e tudo escrito depois
+dos dois primeiros — o rebrand, a ficha da Bee, o rodapé de alteração, o expandir — nasceu sem
+regra de celular nenhuma. Só o último ganha de todos por ordem de escrita.
+
+**O que estava quebrado, e a causa comum:** a pílula do topo é uma fileira `flex-wrap: wrap` com
+sete coisas (logo, id, cliente, peça, chips de etapa, "N peças esperando" e o botão de 210px). Num
+telefone ela quebrava em 4–5 linhas — e `border-radius: 999px` num bloco de cinco linhas não parece
+pílula, parece defeito. Pior: `.apv-conferencia` tem `overflow: hidden` e a pílula é `flex: 0 0
+auto` (**não encolhe**), então cada linha a mais comia o espaço das colunas e **o que passava do fim
+era cortado, sem scroll pra chegar lá** — era essa a "informação sumindo". Depois de aprovar ficava
+pior porque os chips "Card mãe → Aprovação Cliente" acendem dentro da pílula, com `margin: 0 auto` e
+sem poder encolher.
+
+**A saída:** no celular a pílula deixa de ser pílula e vira um cartão de linhas empilhadas
+(`border-radius: 18px`), cliente e peça um sobre o outro com reticências, chips com `min-width: 0`
+pra poderem encolher, e o botão de ação ocupando a largura toda.
+
+Outras quatro coisas revisadas junto, todas no mesmo bloco:
+- **Nada de rolagem dentro de rolagem:** `.apv-info-bloco` perde o `max-height: 46vh` e
+  `.apv-info-corpo` volta a `overflow: visible`. No desktop o teto existe pro rodapé de alteração
+  não sair da tela; no celular a coluna já rola, e um scroll aninhado faz o dedo rolar a caixa
+  errada.
+- **A barra preta de envio empilha:** lado a lado em 390px, "Ver como o cliente vê" virava
+  "Ver como o…".
+- **O botão "Expandir" do campo de alteração some** — ele troca o espaço do briefing pelo do campo,
+  e no celular os dois não disputam altura nenhuma. O estado expandido também é neutralizado, pra
+  quem diminuir a janela não ficar com o briefing escondido e sem botão pra trazer de volta.
+- **O overlay ganhou 10px de respiro nas bordas**, senão o cartão de cantos redondos encostava na
+  moldura da tela.
+
 ## A Timeline da Central virou um feed (2026-08-08)
 
 `centralRenderTimelineHoje` (js/central-atendimento.js) + o bloco `.central-tl-*` em
