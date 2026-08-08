@@ -343,8 +343,16 @@
 /* A arte em tamanho cheio. `background-image` entra pelo JS quando a
    miniatura chega do Drive (centralCarregarMiniaturaTimeline) — até lá
    fica o retângulo vazio, que já reserva a altura e evita o pulo. */
+/* QUASE UM QUADRADO (pedido do Cláudio, 2026-08-08): 5:4, a proporção da
+   referência que ele mandou. É `aspect-ratio`, não uma altura fixa, de
+   propósito — a coluna da Timeline é `1.15fr` de um grid de 4, então a
+   largura dela muda com o tamanho da janela; com altura fixa a arte
+   viraria uma faixa larga na tela grande e um quadrado na pequena. O
+   `max-height` é só o teto pra numa tela bem larga um post não passar de
+   uma tela inteira sozinho. */
 .central-tl-arte {
-  position: relative; width: 100%; height: 148px; border-radius: 13px;
+  position: relative; width: 100%; aspect-ratio: 5 / 4; max-height: 300px;
+  border-radius: 13px;
   background-size: cover; background-position: center; background-color: rgba(255,255,255,.06);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
   overflow: hidden;
@@ -353,8 +361,8 @@
 /* Sombra só no rodapé da imagem: é onde as duas pastilhas moram, e sem
    ela uma arte clara engolia o nome do cliente. */
 .central-tl-arte::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 52%;
-  background: linear-gradient(transparent, rgba(8,8,12,.6));
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 34%;
+  background: linear-gradient(transparent, rgba(8,8,12,.62));
   pointer-events: none;
 }
 .central-tl-arte-cli, .central-tl-arte-cta { position: absolute; bottom: 8px; z-index: 2; }
@@ -375,7 +383,7 @@
 /* Miniatura que não veio (arquivo apagado, Drive fora): o bloco encolhe
    pra uma faixa com o botão, em vez de um retângulo cinza de 148px
    fingindo que tem uma arte ali. */
-.central-tl-arte.sem-imagem { height: 44px; }
+.central-tl-arte.sem-imagem { aspect-ratio: auto; height: 44px; }
 .central-tl-arte.sem-imagem::after { display: none; }
 .central-tl-arte.sem-imagem .central-tl-arte-cli { background: rgba(255,255,255,.08); }
 
@@ -396,9 +404,10 @@
     grid-template-areas: "foto foto" "esperando prontas" "comcliente ajuste" "timeline timeline" "radar radar";
   }
   .central-hoje-foto { min-height: 120px; }
-  /* 340px, não 220: com a arte em tamanho cheio um post sozinho já passa
-     de 230px, e a Timeline abria cortando o primeiro deles ao meio. */
-  .central-hoje-timeline { min-height: 340px; }
+  /* 440px, não 220: empilhada no celular a coluna fica larga, e com a
+     arte em 5:4 um post sozinho já passa de 380px — a Timeline abria
+     cortando o primeiro deles ao meio. */
+  .central-hoje-timeline { min-height: 440px; }
 }
 
 /* ===== Cartão de fila (Aprovações), reaproveitando .task-card/.card-*

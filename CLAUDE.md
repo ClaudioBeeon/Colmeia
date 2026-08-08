@@ -828,7 +828,14 @@ perder → planilha.
 Atendimento — a mesma tela que `colmeia.beeon.com.br/Laura` abre. Era uma lista de linhas apertadas
 com uma faixa de miniatura de 46px; virou um **feed no vocabulário de rede social** (protótipo "Feed
 cheio" aprovado pelo Cláudio): avatar de 34px, quem em destaque, hora abaixo do nome, pastilha de
-status à direita, e a peça em tamanho cheio (148px) com o nome do cliente e o "CONFERIR" por cima.
+status à direita, e a peça **quase quadrada** (`aspect-ratio: 5/4`, a proporção da referência que o
+Cláudio mandou) com o nome do cliente e o "CONFERIR" por cima.
+
+- **A arte usa `aspect-ratio`, nunca altura fixa.** A coluna da Timeline é `1.15fr` de um grid de 4,
+  então a largura dela muda com a janela — com altura fixa a arte virava uma faixa larga na tela
+  grande e um quadrado na pequena. O `max-height: 300px` é só o teto pra num monitor largo um post
+  não ocupar a tela inteira sozinho (a partir de ~1920px). ⚠️ `.sem-imagem` precisa zerar o
+  `aspect-ratio` junto com a altura, senão a proporção ganha e a faixa não encolhe.
 
 - ⚠️ **Foto SÓ no evento "mandou pra conferência"** (decisão do Cláudio). Ajuste e aprovação falam
   de uma peça que já passou por aqui — a arte não é informação nova neles, e sem foto esses eventos
