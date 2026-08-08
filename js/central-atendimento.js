@@ -346,11 +346,15 @@ function centralConstruirTimeline() {
     eventos.push({
       tipo: "novo",
       quando,
+      quem: item.designer || "Alguém",
       inicial: typeof initials === "function" ? initials(item.designer || "?") : "?",
-      texto: `<b>${escaparHTML(item.designer || "Alguém")}</b> mandou ${escaparHTML(rotulo)} pra conferência`,
+      texto: `Mandou <b>${escaparHTML(rotulo)}</b> pra conferência`,
+      cliente: item.cliente || "",
       // Vídeo não ganha miniatura (mesma regra do resto do app — ver
       // ehImagemPreviewable, js/notificacoes-uploads.js).
       fileId: (primeira.fileId && String(primeira.mimeType || "").indexOf("video/") !== 0) ? primeira.fileId : null,
+      loteId: item.loteId || null,
+      taskId: item.taskId || null,
     });
   });
 
@@ -363,11 +367,21 @@ function centralConstruirTimeline() {
     eventos.push({
       tipo: status,
       quando,
+      quem: a.cliente || "Cliente",
       inicial: typeof initials === "function" ? initials(a.cliente || "?") : "?",
       texto: status === "ajuste"
-        ? `<b>${escaparHTML(a.cliente || "Cliente")}</b> pediu ajuste em ${escaparHTML(peca)}`
-        : `<b>${escaparHTML(a.cliente || "Cliente")}</b> aprovou ${escaparHTML(peca)}`,
-      fileId: a.ehVideo ? null : (a.fileId || null),
+        ? `Pediu ajuste em <b>${escaparHTML(peca)}</b>`
+        : `Aprovou <b>${escaparHTML(peca)}</b>`,
+      cliente: a.cliente || "",
+      // FOTO SÓ NO "MANDOU PRA CONFERÊNCIA" (pedido do Cláudio,
+      // 2026-08-08). Ajuste e aprovação são notícia sobre uma peça que já
+      // passou por aqui — a arte já foi vista. Quem manda algo NOVO é o
+      // único caso em que a imagem é a informação, não enfeite; e sem foto
+      // esses eventos encolhem sozinhos, o que dá espaço pros que têm.
+      fileId: null,
+      // O que o cliente escreveu, na íntegra — é a instrução, e ficava
+      // invisível aqui (só aparecia depois de abrir a conferência).
+      citacao: status === "ajuste" ? (a.respostaTexto || "") : "",
       // Só o "pediu ajuste" é clicável — abre a conferência já no modo do
       // pedido do cliente (ver o wiring em centralRenderTimelineHoje). O
       // "aprovou" é só informativo, não tem nada a fazer com ele aqui.
@@ -377,6 +391,9 @@ function centralConstruirTimeline() {
 
   return eventos.sort((a, b) => b.quando - a.quando).slice(0, 20);
 }
+
+/** O rótulo curto da pastilha de status, no canto do cabeçalho do post. */
+const CENTRAL_TL_SELO = { novo: "conferir", ajuste: "ajuste", aprovado: "aprovada" };
 
 function centralRenderTimelineHoje() {
   const lista = document.getElementById("chTimelineList");
@@ -388,16 +405,47 @@ function centralRenderTimelineHoje() {
     return;
   }
 
+  // O FEED (2026-08-08, protótipo "Feed cheio" aprovado pelo Cláudio).
+  // Cada evento é um post: avatar grande, quem em destaque, a hora
+  // embaixo do nome, a pastilha de status à direita, a frase, e — só
+  // quando tem arte nova — a peça em tamanho cheio com o nome do cliente
+  // e o "Conferir" por cima dela.
   lista.innerHTML = eventos.map(ev => `
-    <div class="central-tl-item ${ev.codigo ? "clicavel" : ""}" ${ev.codigo ? `data-central-tl-abrir="${escaparHTML(ev.codigo)}"` : ""}>
-      <span class="central-tl-avatar ${ev.tipo}">${escaparHTML(ev.inicial)}</span>
-      <div class="central-tl-body">
-        <span class="central-tl-txt">${ev.texto}</span>
-        ${ev.fileId ? `<span class="central-tl-thumb" data-central-tl-thumb="${escaparHTML(ev.fileId)}"></span>` : ""}
-        <span class="central-tl-time">${centralTempoRelativo(ev.quando)}</span>
+    <div class="central-tl-post ${ev.codigo ? "clicavel" : ""}" ${ev.codigo ? `data-central-tl-abrir="${escaparHTML(ev.codigo)}"` : ""}>
+      <div class="central-tl-cab">
+        <span class="central-tl-avatar ${ev.tipo}">${escaparHTML(ev.inicial)}</span>
+        <span class="central-tl-quem">
+          <b>${escaparHTML(ev.quem || "")}</b>
+          <span class="central-tl-time">${centralTempoRelativo(ev.quando)}</span>
+        </span>
+        <span class="central-tl-selo ${ev.tipo}">${CENTRAL_TL_SELO[ev.tipo] || ""}</span>
       </div>
+      <span class="central-tl-txt">${ev.texto}</span>
+      ${ev.fileId ? `
+        <div class="central-tl-arte" data-central-tl-thumb="${escaparHTML(ev.fileId)}"
+             ${ev.loteId ? `data-central-tl-conferir="${escaparHTML(ev.taskId || "")}|${escaparHTML(ev.loteId)}"` : ""}>
+          ${ev.cliente ? `<span class="central-tl-arte-cli">${escaparHTML(ev.cliente)}</span>` : ""}
+          ${ev.loteId ? `<span class="central-tl-arte-cta">CONFERIR</span>` : ""}
+        </div>` : ""}
+      ${ev.citacao ? `
+        <div class="central-tl-cita">
+          <span class="central-tl-cita-rot">o que o cliente escreveu</span>
+          ${escaparHTML(ev.citacao)}
+        </div>` : ""}
     </div>
   `).join("");
+
+  // O "Conferir" em cima da arte abre a conferência daquela peça direto —
+  // é o mesmo destino do card na aba Aprovações, um clique mais curto.
+  // `stopPropagation` porque o post inteiro pode ser clicável (ajuste), e
+  // aí os dois disparariam.
+  lista.querySelectorAll("[data-central-tl-conferir]").forEach(el => {
+    el.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const [taskId, loteId] = String(el.dataset.centralTlConferir).split("|");
+      if (taskId && loteId && typeof apvAbrirConferencia === "function") apvAbrirConferencia(taskId, loteId);
+    });
+  });
 
   // Miniaturas entram depois, uma a uma — cada uma é uma ida ao Drive, e
   // segurar a Timeline inteira esperando por elas atrasaria a única coisa
@@ -423,8 +471,16 @@ function centralRenderTimelineHoje() {
 
 async function centralCarregarMiniaturaTimeline(fileId, el) {
   const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
-  if (!data || !data.ok || !data.base64) { el.remove(); return; }
   if (!el.isConnected) return; // saiu da tela (redesenhou) enquanto a miniatura vinha
+  if (!data || !data.ok || !data.base64) {
+    // Sem imagem, o bloco só continua existindo se ele carregar o
+    // "Conferir" — perder o botão porque uma miniatura falhou seria
+    // trocar um problema de aparência por um de função. Sem botão, ele
+    // não tem mais nada dentro e sai.
+    if (!el.querySelector(".central-tl-arte-cta")) el.remove();
+    else el.classList.add("sem-imagem");
+    return;
+  }
   el.style.backgroundImage = `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")`;
 }
 

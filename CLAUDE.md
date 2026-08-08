@@ -821,6 +821,28 @@ comigo" é uma decisão de trabalho — o incidente é a prova de que não podia
 Ao criar algo novo, usar esse critério: preferência de exibição → localStorage; decisão que doeria
 perder → planilha.
 
+## A Timeline da Central virou um feed (2026-08-08)
+
+`centralRenderTimelineHoje` (js/central-atendimento.js) + o bloco `.central-tl-*` em
+`css/07-central-atendimento.css`. É o card preto de altura total da aba **Hoje** da Central do
+Atendimento — a mesma tela que `colmeia.beeon.com.br/Laura` abre. Era uma lista de linhas apertadas
+com uma faixa de miniatura de 46px; virou um **feed no vocabulário de rede social** (protótipo "Feed
+cheio" aprovado pelo Cláudio): avatar de 34px, quem em destaque, hora abaixo do nome, pastilha de
+status à direita, e a peça em tamanho cheio (148px) com o nome do cliente e o "CONFERIR" por cima.
+
+- ⚠️ **Foto SÓ no evento "mandou pra conferência"** (decisão do Cláudio). Ajuste e aprovação falam
+  de uma peça que já passou por aqui — a arte não é informação nova neles, e sem foto esses eventos
+  encolhem sozinhos, o que dá espaço pros que têm. Quem decide é `fileId` no JS (fica `null` nos
+  dois casos); o CSS não esconde nada.
+- **O pedido do cliente aparece por extenso** (`citacao`, de `respostaTexto`) num bloco de citação.
+  Antes ele só existia depois de abrir a conferência, sendo que é a instrução do que fazer.
+- **Miniatura que não vem não pode levar o botão junto:** `centralCarregarMiniaturaTimeline` só
+  remove o bloco da arte se ele NÃO tiver o "Conferir" dentro; tendo, ele encolhe pra uma faixa
+  (`.sem-imagem`) em vez de sumir. Trocar um problema de aparência por um de função seria pior.
+- **Dois cliques diferentes no mesmo post:** o post inteiro é clicável só no "pediu ajuste" (abre a
+  conferência no modo do cliente); no "mandou pra conferência" quem leva é o botão em cima da arte
+  — daí o `stopPropagation` nele, senão os dois disparariam.
+
 ## O link de aprovação encurtou e virou legível (2026-08-08)
 
 O time reclamou que os links eram grandes demais pra mandar pro cliente e enchiam o comentário da

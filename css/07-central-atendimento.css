@@ -283,36 +283,111 @@
 .central-hoje-timeline-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 999px; }
 .central-hoje-timeline-vazio { font-size: 12px; color: rgba(255,255,255,.4); padding: 10px 2px; }
 
-.central-tl-item {
-  display: flex; align-items: flex-start; gap: 9px; padding: 8px 8px 9px;
-  border-radius: 12px; background: rgba(255,255,255,.045);
+/* ===== O FEED — protótipo "Feed cheio", aprovado pelo Cláudio
+   (2026-08-08, artifact "BeeLine — 3 versões da timeline").
+
+   O QUE ERA: uma lista de linhas apertadas com uma faixa de 46px de
+   miniatura embaixo do texto. Dava pra ler, mas não dava vontade — e a
+   faixa era baixa demais pra reconhecer a arte de verdade.
+
+   O QUE É: cada evento vira um POST, no vocabulário de rede social —
+   avatar grande, quem em destaque, a hora abaixo do nome, e a peça em
+   tamanho cheio com o "Conferir" por cima dela.
+
+   ⚠️ FOTO SÓ NO "MANDOU PRA CONFERÊNCIA" (decisão do Cláudio): ajuste e
+   aprovação falam de uma peça que já passou por aqui, então a arte não é
+   informação nova neles. Quem decide isso é `fileId`, no JS — aqui não
+   tem regra de esconder nada. ===== */
+.central-tl-post {
+  display: flex; flex-direction: column; gap: 9px; padding: 11px;
+  border-radius: 17px; background: rgba(255,255,255,.05);
   transition: background var(--dur-fast) var(--ease-apple);
 }
-.central-tl-item:hover { background: rgba(255,255,255,.085); }
-/* Só "pediu ajuste" é clicável (ver centralRenderTimelineHoje) — abre a
-   conferência já no modo do pedido do cliente. */
-.central-tl-item.clicavel { cursor: pointer; }
-.central-tl-item.clicavel:hover { background: rgba(255,199,0,.12); }
+.central-tl-post:hover { background: rgba(255,255,255,.08); }
+/* Só "pediu ajuste" é clicável no post inteiro (ver
+   centralRenderTimelineHoje) — abre a conferência já no modo do pedido do
+   cliente. No "mandou pra conferência" quem leva pra algum lugar é o
+   botão em cima da arte, não o post. */
+.central-tl-post.clicavel { cursor: pointer; }
+.central-tl-post.clicavel:hover { background: rgba(255,199,0,.11); }
+
+.central-tl-cab { display: flex; align-items: center; gap: 9px; }
 .central-tl-avatar {
-  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 10.5px; font-weight: 800; color: #16181D;
+  font-size: 12px; font-weight: 800; letter-spacing: -.02em; color: #16181D;
 }
 .central-tl-avatar.ajuste { background: var(--warning); }
 .central-tl-avatar.novo { background: var(--kanban-yellow); }
 .central-tl-avatar.aprovado { background: var(--success); }
-.central-tl-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-.central-tl-txt { font-size: 12px; line-height: 1.4; color: rgba(255,255,255,.92); }
-.central-tl-txt b { font-weight: 700; }
-.central-tl-time { font-size: 10.5px; color: rgba(255,255,255,.4); font-weight: 500; }
-/* A miniatura fica ABAIXO do texto, esticando quase a largura toda do
-   cartão — mas BAIXA de propósito (uma faixa, não um quadrado grande),
-   pedido do Cláudio no protótipo: dá pra reconhecer a arte sem a
-   miniatura virar o cartão inteiro. */
-.central-tl-thumb {
-  width: 100%; height: 46px; border-radius: 8px;
+/* Nome e hora empilhados ocupam a mesma altura do avatar — é isso que dá
+   o "cabeçalho de post" em vez de uma linha de lista. */
+.central-tl-quem { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.central-tl-quem b {
+  font-size: 13.5px; font-weight: 750; letter-spacing: -.015em; color: #fff;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-tl-time { font-size: 10.5px; color: rgba(255,255,255,.42); font-weight: 600; }
+.central-tl-selo {
+  flex-shrink: 0; font-size: 9.5px; font-weight: 750; letter-spacing: .04em;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+}
+.central-tl-selo.novo, .central-tl-selo.ajuste {
+  background: rgba(255,199,0,.15); color: #F0C450;
+}
+.central-tl-selo.aprovado { background: rgba(95,224,174,.15); color: var(--success); }
+
+.central-tl-txt { font-size: 12.5px; line-height: 1.5; color: rgba(255,255,255,.72); }
+.central-tl-txt b { font-weight: 650; color: rgba(255,255,255,.96); }
+
+/* A arte em tamanho cheio. `background-image` entra pelo JS quando a
+   miniatura chega do Drive (centralCarregarMiniaturaTimeline) — até lá
+   fica o retângulo vazio, que já reserva a altura e evita o pulo. */
+.central-tl-arte {
+  position: relative; width: 100%; height: 148px; border-radius: 13px;
   background-size: cover; background-position: center; background-color: rgba(255,255,255,.06);
-  box-shadow: 0 0 0 1px rgba(255,255,255,.1);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+  overflow: hidden;
+}
+.central-tl-arte[data-central-tl-conferir] { cursor: pointer; }
+/* Sombra só no rodapé da imagem: é onde as duas pastilhas moram, e sem
+   ela uma arte clara engolia o nome do cliente. */
+.central-tl-arte::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 52%;
+  background: linear-gradient(transparent, rgba(8,8,12,.6));
+  pointer-events: none;
+}
+.central-tl-arte-cli, .central-tl-arte-cta { position: absolute; bottom: 8px; z-index: 2; }
+.central-tl-arte-cli {
+  left: 8px; max-width: 55%;
+  background: rgba(10,10,14,.6); color: #fff; backdrop-filter: blur(7px);
+  font-size: 10px; font-weight: 650; padding: 4px 10px; border-radius: 999px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-tl-arte-cta {
+  right: 8px;
+  background: var(--kanban-yellow); color: #16181D;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .03em;
+  padding: 5px 12px; border-radius: 999px;
+  transition: filter var(--dur-fast) var(--ease-apple);
+}
+.central-tl-arte:hover .central-tl-arte-cta { filter: brightness(1.08); }
+/* Miniatura que não veio (arquivo apagado, Drive fora): o bloco encolhe
+   pra uma faixa com o botão, em vez de um retângulo cinza de 148px
+   fingindo que tem uma arte ali. */
+.central-tl-arte.sem-imagem { height: 44px; }
+.central-tl-arte.sem-imagem::after { display: none; }
+.central-tl-arte.sem-imagem .central-tl-arte-cli { background: rgba(255,255,255,.08); }
+
+/* O pedido do cliente, palavra por palavra. Ele é a instrução do que
+   fazer e antes só aparecia depois de abrir a conferência. */
+.central-tl-cita {
+  background: rgba(255,255,255,.055); border-radius: 11px; padding: 9px 11px;
+  font-size: 12px; line-height: 1.45; color: rgba(255,255,255,.94);
+}
+.central-tl-cita-rot {
+  display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: rgba(255,255,255,.38); margin-bottom: 4px;
 }
 
 @media (max-width: 900px) {
@@ -321,7 +396,9 @@
     grid-template-areas: "foto foto" "esperando prontas" "comcliente ajuste" "timeline timeline" "radar radar";
   }
   .central-hoje-foto { min-height: 120px; }
-  .central-hoje-timeline { min-height: 220px; }
+  /* 340px, não 220: com a arte em tamanho cheio um post sozinho já passa
+     de 230px, e a Timeline abria cortando o primeiro deles ao meio. */
+  .central-hoje-timeline { min-height: 340px; }
 }
 
 /* ===== Cartão de fila (Aprovações), reaproveitando .task-card/.card-*
