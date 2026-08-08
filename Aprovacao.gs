@@ -551,6 +551,12 @@ function buscarAprovacaoPublica(codigo) {
     // é o que faz o front continuar funcionando sem checar isso quando o
     // link é de peça única.
     respostasPorPeca: parsearRespostasPecas(linha.respostasPecas, pecas.length),
+    // "Preciso consultar antes" já foi clicado alguma vez? Sem isto, quem
+    // clicava e recarregava a página via o botão do jeito normal de novo,
+    // e clicava outra vez achando que não tinha funcionado (auditoria de
+    // 2026-08-08). NÃO é status: o link continua `pendente`, e o cliente
+    // segue podendo aprovar ou pedir ajuste normalmente.
+    consultandoEm: linha.consultandoEm || null,
     // Campos antigos, só pra uma aba já aberta com a versão anterior do
     // aprovar.html não quebrar de vez enquanto o GitHub Pages atualiza.
     base64: primeira.base64 || null,

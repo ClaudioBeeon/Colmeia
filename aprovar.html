@@ -136,6 +136,11 @@
   .board-loading-bee { width: 44px; height: 44px; animation: colmeia-bee-float 2.4s ease-in-out infinite; }
   .board-loading-text { font-size: 15px; font-weight: 700; color: var(--text-2); }
   .board-loading-text.fade-in { animation: colmeia-text-fade 0.4s var(--ease); }
+  .board-loading-demora {
+    max-width: 250px; margin: -4px 0 0; text-align: center;
+    font-size: 12.5px; line-height: 1.5; color: var(--text-3);
+    animation: colmeia-text-fade 0.4s var(--ease);
+  }
   @keyframes colmeia-glass-move {
     0%, 100% { transform: translate(0, 0) scale(1); }
     50% { transform: translate(6%, -6%) scale(1.08); }
@@ -455,6 +460,11 @@
     <div class="board-loading-content">
       <img src="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785023382/Icone_if96mt.png" class="board-loading-bee" alt="Colmeia">
       <p class="board-loading-text" id="loadingMsg"></p>
+      <!-- Só aparece quando a espera passa de 12s: aí não é mais "está
+           carregando", é "está demorando", e as frases fofas em rodízio
+           sozinhas começam a parecer que a página travou. Ver
+           iniciarMensagensCarregando. -->
+      <p class="board-loading-demora" id="loadingDemora" hidden>A peça é pesada — se a sua internet estiver lenta, pode levar um minutinho.</p>
     </div>
   </div>
 </div>
@@ -650,9 +660,21 @@
   // Mesmo prazo de 25s do resto do app (chamarBackend, js/config.js) —
   // sem isso, um Runrun.it fora do ar podia deixar o cliente olhando
   // "carregando" pra sempre, sem nunca cair na tela de erro.
+  //
+  // EXCEÇÃO: `buscarAprovacaoPublica` traz a ARTE embutida na resposta
+  // (base64), às vezes vários megabytes. Numa rede de celular ruim — que é
+  // exatamente onde esse link é aberto — 25s podia estourar no meio do
+  // download e o cliente via "nosso sistema está fora do ar" quando o
+  // sistema estava bem, só lento. Por isso ela tem prazo próprio, mais
+  // largo. As outras ações mandam pouca coisa e continuam em 25s: ali um
+  // prazo longo só faria a pessoa esperar mais pra descobrir que caiu.
+  var PRAZO_PADRAO_MS = 25000;
+  var PRAZO_BUSCAR_PECA_MS = 60000;
+
   function chamar(corpo) {
+    var prazo = (corpo && corpo.acao === "buscarAprovacaoPublica") ? PRAZO_BUSCAR_PECA_MS : PRAZO_PADRAO_MS;
     var controller = new AbortController();
-    var timeout = setTimeout(function () { controller.abort(); }, 25000);
+    var timeout = setTimeout(function () { controller.abort(); }, prazo);
     return fetch(COLMEIA_API_URL, { method: "POST", body: JSON.stringify(corpo), signal: controller.signal })
       .then(function (r) { return r.json(); })
       .catch(function () { return { ok: false, semRede: true, error: "Falha de conexão." }; })
@@ -663,7 +685,7 @@
     ["telaCarregando", "telaErro", "telaAprovacao"].forEach(function (t) {
       document.getElementById(t).hidden = (t !== id);
     });
-    if (id !== "telaCarregando") clearInterval(intervalMsgCarregando);
+    if (id !== "telaCarregando") { clearInterval(intervalMsgCarregando); clearTimeout(timerDemora); }
   }
 
   // Mesmas frases do tema colmeia usadas na entrada do app
@@ -678,6 +700,7 @@
     "Arrumando a colmeia...",
   ];
   var intervalMsgCarregando = null;
+  var timerDemora = null;
 
   function iniciarMensagensCarregando() {
     clearInterval(intervalMsgCarregando);
@@ -692,6 +715,16 @@
       el.textContent = mensagensCarregando[indice];
       el.classList.add("fade-in");
     }, 1800);
+
+    // Passou de 12s: conta a verdade. Uma arte de vários MB numa rede de
+    // celular ruim demora mesmo, e as frases em rodízio sozinhas começam a
+    // parecer tela travada — quem acha que travou fecha a aba, e aí a peça
+    // fica sem resposta por um problema que não existia.
+    clearTimeout(timerDemora);
+    timerDemora = setTimeout(function () {
+      var aviso = document.getElementById("loadingDemora");
+      if (aviso) aviso.hidden = false;
+    }, 12000);
   }
   iniciarMensagensCarregando();
 
@@ -1267,8 +1300,26 @@
    * responder na hora que quiser: por isso NÃO entra em modo leitura nem
    * esconde os botões, só troca este por uma confirmação.
    */
+  /**
+   * O botão no estado "já avisei". Função à parte porque isso acontece em
+   * DOIS momentos: logo depois do clique, e ao ABRIR a página de novo
+   * quando isso já tinha sido feito antes (`consultandoEm` vem do
+   * backend). Sem o segundo, quem avisava e recarregava via o botão
+   * normal outra vez e clicava de novo achando que não tinha funcionado.
+   */
+  function marcarConsultaAvisada(avisoChegou) {
+    var btn = document.getElementById("btnConsultar");
+    if (!btn) return;
+    btn.disabled = false;
+    btn.classList.add("btn-consultar-feito");
+    btn.textContent = avisoChegou === false
+      ? "✓ Anotado — pode responder quando quiser"
+      : "✓ Avisamos o time — pode responder quando quiser";
+  }
+
   document.getElementById("btnConsultar").addEventListener("click", function () {
     var btn = document.getElementById("btnConsultar");
+    if (btn.classList.contains("btn-consultar-feito")) return;  // já avisado
     btn.disabled = true;
     btn.textContent = "Avisando...";
     chamar({ acao: "avisarQueVaiConsultar", codigo: codigo }).then(function (data) {
@@ -1282,10 +1333,7 @@
       }
       // Vira texto, não some: sumir daria a impressão de que nada
       // aconteceu, e a pessoa clicaria de novo.
-      btn.classList.add("btn-consultar-feito");
-      btn.textContent = data.avisoChegou
-        ? "✓ Avisamos o time — pode responder quando quiser"
-        : "✓ Anotado — pode responder quando quiser";
+      marcarConsultaAvisada(data.avisoChegou);
     });
   });
 
@@ -1347,6 +1395,13 @@
         // tela que precisa ser óbvia pra quem nunca viu ela antes.
         document.getElementById("cartaoPins").hidden = !pecas.some(aceitaPins);
         desenharPeca(0, false);
+        // Já clicou em "Preciso consultar antes" numa visita anterior? O
+        // botão volta no estado certo em vez de convidar a clicar de novo.
+        // Sem `avisoChegou` guardado, assume que chegou — dizer "anotado"
+        // pra quem foi avisado de verdade seria uma piora, e o contrário
+        // (dizer "avisamos" sem ter avisado) é o caso raro: o reenvio
+        // automático já cobre ele (reenviarAvisosDeAprovacaoPendentes).
+        if (data.consultandoEm) marcarConsultaAvisada(true);
       }
 
       document.getElementById("btnAprovar").addEventListener("click", function () {

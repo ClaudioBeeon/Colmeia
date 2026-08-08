@@ -855,6 +855,23 @@ WhatsApp):
 - **Favicon e `theme-color`.** A aba mostrava o ícone genérico de página sem favicon, o que num link
   recebido por WhatsApp parece link duvidoso.
 
+Mais duas, da segunda leva:
+
+- **`buscarAprovacaoPublica` tem prazo próprio de 60s**, contra os 25s de todas as outras. Só ela
+  traz a ARTE embutida (base64, às vezes vários MB) — numa rede de celular ruim, que é exatamente
+  onde esse link é aberto, 25s estourava no meio do download e o cliente via "nosso sistema está
+  fora do ar" com o sistema funcionando, só lento. As outras ações mandam pouca coisa e ficam em
+  25s: ali um prazo longo só faria esperar mais pra descobrir que caiu. **Junto veio o aviso de
+  demora** (`#loadingDemora`, depois de 12s): sem ele, um minuto olhando as frases em rodízio parece
+  tela travada, e quem acha que travou fecha a aba — a peça fica sem resposta por um problema que
+  não existia.
+- **"Preciso consultar antes" sobrevive ao F5.** `buscarAprovacaoPublica` passou a devolver
+  `consultandoEm` (coluna Q, que já era gravada) e a página restaura o botão no estado "já avisei"
+  (`marcarConsultaAvisada`, chamada nos dois momentos: no clique e na abertura). Antes, recarregar
+  trazia o botão normal de volta e a pessoa clicava outra vez achando que não tinha funcionado.
+  ⚠️ Continua **não sendo status** — o link segue `pendente` e o cliente pode aprovar ou pedir
+  ajuste normalmente depois.
+
 ## "Enviar para o cliente" abre os três canais (2026-08-08)
 
 O botão da pílula de cima, depois de aprovado, abria o **WhatsApp direto** — escolhia o canal pela
