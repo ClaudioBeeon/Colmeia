@@ -1035,6 +1035,21 @@ Por causa da (3), **o resultado inteiro fica 10 min em cache** (`CALENDARIO_CACH
 velho. Um calendário do mês não precisa da pressa do quadro; a troco de alguns minutos de atraso,
 ninguém repaga a varredura ao abrir a Central.
 
+**O bug que fazia o calendário nascer vazio (2026-08-09).** `extrairDataPublicacaoTarefa`
+(RunrunLeitura.gs) lia `t.custom_fields['custom_24']` — tratando os campos personalizados como um
+OBJETO. Mas `extrairTipoTarefa`, no mesmo arquivo e funcionando há meses (é quem põe o ícone de tipo
+em todo card do quadro), trata o MESMO campo como um **array** de `{name, value}`. Os dois não podem
+estar certos: a data saía `null` em toda tarefa, e qualquer tela que dependia dela aparecia vazia
+**sem erro nenhum na tela** — o que fez o problema parecer ser do calendário, que era só a primeira
+tela a depender dela de verdade.
+
+Hoje a leitura aceita os três formatos (array, objeto e campo solto na raiz) e, no array, casa tanto
+pelo id `custom_24` quanto pelo NOME ("Data de Publicação") — se a agência recriar o campo, o id muda
+e o nome não. `normalizarDataPublicacao` aceita ISO, `dd/mm/aaaa`, timestamp e `{value|date}`.
+⚠️ Ao mexer em campo personalizado do Runrun.it, **conferir em qual formato o outro extrator do
+arquivo já lê** antes de escrever um novo — e, na dúvida, rodar `diagnosticoDataPublicacao()` pelo
+editor do Apps Script, que imprime o `custom_fields` cru de tarefas de verdade.
+
 **A DATA DE PUBLICAÇÃO MORA NO CARD MÃE; A ENTREGA DESEJADA, NA SUBTAREFA DO DESIGNER**
 (2026-08-09). Por isso o calendário não pode olhar cada tarefa sozinha — foi o erro da primeira
 versão: as subtarefas (que têm entrega e designer, mas não têm publicação) ficavam de fora, e o
