@@ -152,7 +152,11 @@ Arquivos, na ordem em que são carregados (`js/`):
 25. `pagina-aprovacao.js` — a **aprovação interna do atendimento** (a fila, a conferência, o envio
     e a devolução), mais `pedirAprovacaoDoAtendimento`, o ponto único por onde uma peça entra na
     fila. Ver seção própria abaixo.
-26. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+26. `central-atendimento.js` — a **Central do Atendimento** (overlay próprio: abas Hoje, Radar de
+    clientes, Aprovações e Minhas métricas, mais o calendário de postagens e o pop-up dos grupos).
+27. `central-atencao.js` — a pílula **"Precisa de atenção"** no rodapé da Timeline da Central e a
+    revisão que ela abre. Ver seção própria abaixo.
+28. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -971,6 +975,46 @@ radar e o calendário. Amarelo de propósito: no vocabulário do app, amarelo é
 - **Não substitui o "ver como" ao lado, e os dois convivem:** aquele troca de PESSOA (só coordenador
   vê), este corta por CLIENTE dentro do que a pessoa já enxerga.
 
+
+**As três fontes do calendário (2026-08-09).** A primeira versão usava só a varredura do quadro, e
+por isso o mês aparecia pela metade: aquela varredura traz **só tarefas abertas** e joga os **cards
+mãe** num balde separado. Hoje `calendarioDePostagens` junta três:
+
+1. **Abertas** — `getTarefasColmeia()`, o que está em produção agora.
+2. **Cards mãe** — do MESMO cache que a varredura já preencheu (`CACHE_CARD_MAE_ABERTOS`): custo
+   zero de rede.
+3. **Já entregues e fechadas** — `buscarPostagensFechadas`, uma varredura própria das tarefas
+   fechadas dos últimos 45 dias. É a única que custa; sem ela, todo dia que já passou aparecia
+   vazio, como se nada tivesse sido postado.
+
+Por causa da (3), **o resultado inteiro fica 10 min em cache** (`CALENDARIO_CACHE_CHAVE`), limpo por
+`invalidarCacheDoQuadro` junto com o resto — sem isso uma data recém-mudada continuaria no dia
+velho. Um calendário do mês não precisa da pressa do quadro; a troco de alguns minutos de atraso,
+ninguém repaga a varredura ao abrir a Central.
+
+**A DATA DE PUBLICAÇÃO MORA NO CARD MÃE; A ENTREGA DESEJADA, NA SUBTAREFA DO DESIGNER**
+(2026-08-09). Por isso o calendário não pode olhar cada tarefa sozinha — foi o erro da primeira
+versão: as subtarefas (que têm entrega e designer, mas não têm publicação) ficavam de fora, e o
+card mãe aparecia com a entrega DELE, que é outra coisa.
+
+Hoje `calendarioDePostagens` cruza os dois lados, e **uma linha do calendário = uma peça**:
+- a **peça** é quem tem data de publicação (quase sempre o card mãe);
+- a **entrega desejada** vem da subtarefa — a MAIS TARDE, quando há várias etapas abertas, porque é
+  quando a peça realmente fica pronta;
+- o **designer** vem da subtarefa que ainda está aberta (a mãe costuma estar com quem coordena);
+- **entregue** só quando TODAS as subtarefas fecharam — uma etapa aberta significa trabalho em pé;
+- subtarefa cuja mãe também está no calendário **não vira linha própria**, senão a mesma peça
+  apareceria uma vez por etapa do fluxo no mesmo dia.
+
+Card mãe que não veio na varredura (não está alocado a nenhum dos designers varridos) é resgatado
+por `parentTaskId`, uma leitura por mãe, com teto em `CALENDARIO_MAX_MAES_AVULSAS` — sem isso a peça
+inteira sumiria do calendário justamente por causa de onde a data mora.
+
+Na tela isso virou **três estados de dia**: preenchido = a postar, **vazado = já saiu** (dia todo
+entregue), amarelo = hoje. Peça entregue não acende mais o alerta vermelho de "entrega depois de
+postar" — o prazo já foi cumprido.
+
+
 ## O pop-up dos grupos da Central (2026-08-08)
 
 `centralAbrirGrupo`/`centralRenderGrupo` (js/central-atendimento.js) + o bloco `.central-grupo-*` /
@@ -1417,3 +1461,45 @@ automática ignora o `?v=` ao conferir ordem e nomes.
   extra, a menos que a mudança seja arriscada).
 - Desde 2026-07-28, push que muda `Código.gs`/`appsscript.json` na `main` publica sozinho em produção
   (ver "Deploy automático" acima) — não pedir mais pra colar manualmente no Apps Script.
+
+## "Precisa de atenção" — a pílula da Timeline (2026-08-09)
+
+`js/central-atencao.js` + a aba `PedidosAtencao` (Planilha.gs) + o bloco `.central-atencao-*` no fim
+de `css/07-central-atendimento.css`. Protótipo 2 aprovado pelo Cláudio ("o card preto vira a
+revisão"), com o cartão no desenho de pastilhas da versão B ("fala da Bee").
+
+No rodapé da Timeline aparece uma pílula quando existe peça que **posta hoje ou amanhã e ainda não
+ficou pronta**. Clicar nela faz o card preto inteiro virar a revisão: um baralho de cartões, uma
+peça por vez, e cada uma sai por um de dois lados (arrastando, pelos dois botões redondos, ou pelas
+setas ← →).
+
+**A fila não custa nenhuma busca nova:** sai de `centralPostagens`, o MESMO array que o calendário
+de postagens já busca uma vez por sessão (`calendarioDePostagens`, AprovacaoInterna.gs). Por isso a
+pílula só aparece depois que o calendário chega — `centralRenderCalendario` chama
+`centralRenderPilulaAtencao()` quando a busca volta.
+
+**Os dois lados são propositalmente desiguais:**
+- **Pedir atenção** grava na aba `PedidosAtencao`, cai no **sino do Colmeia de quem coordena**
+  (`centralChecarPedidosDeAtencaoNoSino`, pendurada no fim de `_verificarNotificacoesImpl`) e vira
+  um **evento vermelho na própria Timeline** — a cobrança é uma coisa que aconteceu, não um aviso
+  que some. É isso que impede duas pessoas do atendimento de cobrarem a mesma peça: peça já cobrada
+  para aquela data de postagem sai da fila da pílula.
+- **Segurar** não grava nada e não avisa ninguém: só tira o cartão da frente **até o fim do dia**,
+  em `localStorage` (`colmeia_atencao_seguradas_v1_<nome>`). Isso contraria a regra "decisão de
+  trabalho vai pra planilha" só na aparência — o que doeria perder é a COBRANÇA; perder um
+  "segurar" custa ver o mesmo cartão amanhã, que é exatamente o que se quer se a peça continua
+  parada.
+
+**Detalhes que já custaram tempo:**
+- O rodapé (`#chTimelinePe`) fica FORA de `.central-hoje-timeline-list`: dentro dela a pílula
+  rolaria junto com o feed e sumiria justo quando tem fila.
+- Os botões redondos precisam de `position: relative; z-index` — sem isso ficam **por baixo da
+  sombra da carta** (que desce bastante) e parecem apagados, como se estivessem desligados.
+- A Bee fica na ESQUERDA da pílula, com o pontinho vermelho no ombro dela: à direita ela caía
+  debaixo da bolinha flutuante da Bee (`.bee-fab`), que mora no mesmo canto. Pelo mesmo motivo, a
+  `.bee-fab` some enquanto a revisão está aberta (`body.central-atencao-revisando`).
+- O Esc é capturado em fase de CAPTURA, como na paleta de comando: sem isso ele fecharia a Central
+  inteira por baixo da revisão.
+- **O formato da peça (Feed/Stories/Reels…) é adivinhado pelo TÍTULO**, mesma ideia do
+  `SUGESTOES_DE_PROGRAMA` (js/detalhe-modal.js). Sem palavra conhecida, a pastilha simplesmente não
+  aparece — melhor faltar do que chutar errado.

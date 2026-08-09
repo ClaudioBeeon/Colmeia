@@ -49,6 +49,7 @@ const ORDEM_ESPERADA = [
   "js/pagina-bee.js",
   "js/pagina-aprovacao.js",
   "js/central-atendimento.js",
+  "js/central-atencao.js",
   "js/login-boot.js",
 ];
 

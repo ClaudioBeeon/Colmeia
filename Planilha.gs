@@ -1138,3 +1138,105 @@ function limparLogDePlaysAntigo() {
     Logger.log('Erro ao limpar o Log de Plays antigo: ' + err.message);
   }
 }
+
+// ===========================================================================
+// PEDIDOS DE ATENÇÃO (2026-08-09)
+//
+// O atendimento abre a pílula "Precisa de atenção" na Timeline da Central,
+// vê as peças que postam hoje/amanhã e ainda não ficaram prontas, e decide
+// uma a uma: PEDIR ATENÇÃO (chega no sino de quem coordena e vira um evento
+// na Timeline, pra ninguém cobrar duas vezes) ou SEGURAR (não faz barulho
+// nenhum — ver o comentário em js/central-atencao.js).
+//
+// Aba PRÓPRIA, e não uma linha a mais no FeedEventos, por dois motivos:
+// o FeedEventos é por DONO (cada designer lê só o que é dele) e o pedido
+// aqui precisa ser lido por TODO o atendimento — é justamente isso que
+// impede a segunda cobrança. E o pedido é uma decisão de trabalho: se
+// sumisse, alguém cobraria de novo achando que ninguém tinha cobrado.
+// ===========================================================================
+
+var PEDIDOS_ATENCAO_RETENCAO_DIAS = 14;
+
+function getPedidosAtencaoSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('PedidosAtencao');
+  if (!sheet) {
+    sheet = ss.insertSheet('PedidosAtencao');
+    sheet.getRange('A1:H1').setValues([[
+      'quando', 'task_id', 'titulo', 'cliente', 'publicacao', 'quem_pediu', 'designer', 'motivo'
+    ]]);
+  }
+  return sheet;
+}
+
+/**
+ * Grava o pedido. `publicacao` é a data de postagem daquela peça
+ * ("AAAA-MM-DD", a mesma de calendarioDePostagens) — é ela que diz se o
+ * pedido ainda vale hoje ou já é história.
+ */
+function registrarPedidoDeAtencao(dados) {
+  dados = dados || {};
+  if (!dados.taskId) return { ok: false, error: 'Sem tarefa pra pedir atenção.' };
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    getPedidosAtencaoSheet().appendRow([
+      new Date().getTime(),
+      String(dados.taskId),
+      dados.titulo || '',
+      dados.cliente || '',
+      dados.publicacao || '',
+      dados.quemPediu || '',
+      dados.designer || '',
+      dados.motivo || ''
+    ]);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: 'Não consegui gravar o pedido: ' + e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Os pedidos dos últimos PEDIDOS_ATENCAO_RETENCAO_DIAS dias, mais novo primeiro. */
+function listarPedidosDeAtencao() {
+  var sheet = getPedidosAtencaoSheet();
+  var linhas = sheet.getDataRange().getValues();
+  var corte = new Date().getTime() - PEDIDOS_ATENCAO_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+  var pedidos = [];
+  for (var i = 1; i < linhas.length; i++) {
+    var quando = Number(linhas[i][0]) || 0;
+    if (quando < corte) continue;
+    pedidos.push({
+      quando: quando,
+      taskId: String(linhas[i][1] || ''),
+      titulo: String(linhas[i][2] || ''),
+      cliente: String(linhas[i][3] || ''),
+      publicacao: String(linhas[i][4] || ''),
+      quemPediu: String(linhas[i][5] || ''),
+      designer: String(linhas[i][6] || ''),
+      motivo: String(linhas[i][7] || '')
+    });
+  }
+  pedidos.sort(function (a, b) { return b.quando - a.quando; });
+  return { ok: true, pedidos: pedidos };
+}
+
+/** Poda junto do backup diário, mesma ideia do FeedEventos. */
+function limparPedidosDeAtencaoAntigos() {
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getPedidosAtencaoSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var corte = new Date().getTime() - PEDIDOS_ATENCAO_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+    // De trás pra frente: apagar uma linha muda o índice das de baixo.
+    for (var i = linhas.length - 1; i >= 1; i--) {
+      if ((Number(linhas[i][0]) || 0) < corte) sheet.deleteRow(i + 1);
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}

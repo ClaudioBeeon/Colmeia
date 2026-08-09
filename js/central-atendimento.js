@@ -297,6 +297,12 @@ async function centralCarregarDados() {
   if (!caiuARede(fila) && fila && fila.ok) centralFilaCache = fila.itens || [];
   if (aprovacoes !== null) centralAprovacoesCache = aprovacoes || [];
 
+  // O que já foi cobrado pela pílula "Precisa de atenção" — é o que impede
+  // duas pessoas do atendimento de cobrarem a mesma peça (ver
+  // js/central-atencao.js). Não entra no Promise.all de cima porque é o
+  // dado menos urgente da tela: a fila e as aprovações desenham tudo.
+  if (typeof centralCarregarPedidosDeAtencao === "function") await centralCarregarPedidosDeAtencao();
+
   centralCarregado = true;
   centralRenderTudo();
 }
@@ -441,9 +447,14 @@ function centralRenderHoje() {
       ${centralHojeCartaoComCliente(comCliente, limiteAlerta)}
       ${centralHojeCartaoAjuste(voltouAjuste, ajusteSubiu)}
 
+      <!-- O rodapé (#chTimelinePe) é onde mora a pílula "Precisa de
+           atenção" (js/central-atencao.js). Fica FORA da lista de propósito:
+           dentro dela, a pílula rolaria junto com o feed e sumiria de vista
+           justo quando tem fila. -->
       <div class="hr-card central-hoje-tile central-hoje-timeline">
         <div class="central-hoje-timeline-head"><span class="central-hoje-timeline-livedot"></span>Timeline</div>
         <div class="central-hoje-timeline-list" id="chTimelineList"></div>
+        <div class="central-hoje-timeline-pe" id="chTimelinePe"></div>
       </div>
 
       <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-wide" id="chRadarBtn">
@@ -469,6 +480,10 @@ function centralRenderHoje() {
   centralPreencherFotoAtendimento("ch", nomeExibido, false);
   centralRenderTimelineHoje();
   centralRenderCalendario();
+  // A pílula de atenção sai das MESMAS postagens do calendário: aqui ela
+  // desenha com o que já estiver em memória, e centralRenderCalendario
+  // chama de novo quando a busca chega (primeira vez da sessão).
+  if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
 
   // Os quatro cartões abrem o POP-UP DOS GRUPOS (2026-08-08), não mais a
   // aba Aprovações: ali a pessoa saía da tela onde estava pra ver uma
@@ -747,11 +762,19 @@ function centralConstruirTimeline() {
     });
   });
 
+  // Terceira fonte (2026-08-09): os pedidos de atenção que alguém do
+  // atendimento fez pela pílula do rodapé. Entram aqui pra que a cobrança
+  // vire uma COISA QUE ACONTECEU e ninguém cobre a mesma peça duas vezes —
+  // ver js/central-atencao.js.
+  if (typeof centralEventosDePedidosDeAtencao === "function") {
+    centralEventosDePedidosDeAtencao().forEach(ev => eventos.push(ev));
+  }
+
   return eventos.sort((a, b) => b.quando - a.quando).slice(0, 20);
 }
 
 /** O rótulo curto da pastilha de status, no canto do cabeçalho do post. */
-const CENTRAL_TL_SELO = { novo: "conferir", ajuste: "ajuste", aprovado: "aprovada" };
+const CENTRAL_TL_SELO = { novo: "conferir", ajuste: "ajuste", aprovado: "aprovada", atencao: "atenção" };
 
 function centralRenderTimelineHoje() {
   const lista = document.getElementById("chTimelineList");
@@ -2245,6 +2268,8 @@ async function centralRenderCalendario() {
     const data = await chamarBackend({ acao: "calendarioDePostagens" });
     if (!document.getElementById("chCalendario")) return;   // saiu da aba
     centralPostagens = (data && data.ok && data.postagens) ? data.postagens : [];
+    // A fila de "precisa de atenção" sai daqui — só agora ela existe.
+    if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
   }
 
   centralDesenharCalendario();
@@ -2299,10 +2324,15 @@ function centralDesenharCalendario() {
       <div class="central-cal-grid">
         ${celulas.map(c => {
           const chave = centralCalChave(c.d);
-          const qtd = (porDia[chave] || []).length;
+          const doDia = porDia[chave] || [];
+          const qtd = doDia.length;
+          // Dia em que TUDO já foi entregue vira um círculo vazado, não
+          // preenchido: o mês passa a ter duas leituras à distância — o
+          // que já saiu e o que ainda tem trabalho pela frente.
+          const tudoEntregue = qtd > 0 && doDia.every(p => p.entregue);
           const classes = ["central-cal-d"];
           if (c.fora) classes.push("fora");
-          if (qtd && !c.fora) classes.push("tem");
+          if (qtd && !c.fora) classes.push(tudoEntregue ? "feito" : "tem");
           if (chave === hoje) classes.push("hoje");
           return `<button type="button" class="${classes.join(" ")}"
                     ${qtd && !c.fora ? `data-central-cal-dia="${chave}"` : "disabled"}
@@ -2311,7 +2341,8 @@ function centralDesenharCalendario() {
         }).join("")}
       </div>
       <div class="central-cal-pe">
-        <span class="central-cal-leg"><i class="tem"></i>tem postagem</span>
+        <span class="central-cal-leg"><i class="tem"></i>a postar</span>
+        <span class="central-cal-leg"><i class="feito"></i>já saiu</span>
         <span class="central-cal-leg"><i class="hoje"></i>hoje</span>
         <span class="central-cal-total">${noMes} no mês</span>
       </div>
@@ -2382,15 +2413,23 @@ function centralAbrirDiaDoCalendario(chave, itens, ancora) {
     ${itens.map((p, i) => {
       // Entrega DEPOIS da publicação é o erro que este calendário existe
       // pra pegar: a peça fica pronta depois do dia de postar.
-      const atrasada = p.entrega && p.entrega.substring(0, 10) > p.publicacao;
+      // Peça já entregue não pode acender o alerta de atraso: o prazo já
+      // foi cumprido, e o vermelho ali seria sobre um problema que não
+      // existe mais.
+      const atrasada = !p.entregue && p.entrega && p.entrega.substring(0, 10) > p.publicacao;
       return `
-        <button type="button" class="central-cal-card" data-central-cal-abrir="${i}">
+        <button type="button" class="central-cal-card ${p.entregue ? "feito" : ""}" data-central-cal-abrir="${i}">
           <span class="central-cal-card-t">
-            <span class="central-cal-card-nome">${escaparHTML(p.titulo || "Sem título")}</span>
+            <span class="central-cal-card-nome">
+              ${p.entregue ? `<span class="central-cal-ok" aria-label="entregue">✓</span>` : ""}${escaparHTML(p.titulo || "Sem título")}
+            </span>
             <span class="central-cal-card-cli">${escaparHTML(p.cliente || "Sem cliente")}${p.designer ? " · " + escaparHTML(p.designer) : ""}</span>
             <span class="central-cal-card-datas">
               <span class="central-cal-dt ${atrasada ? "atraso" : ""}">entrega ${escaparHTML(centralCalCurta(p.entrega) || "sem data")}${atrasada ? " · depois de postar" : ""}</span>
               <span class="central-cal-dt pub">posta ${escaparHTML(centralCalCurta(p.publicacao))}</span>
+              ${(!p.entregue && p.etapasAbertas)
+                ? `<span class="central-cal-dt">${p.etapasAbertas} etapa${p.etapasAbertas === 1 ? "" : "s"} aberta${p.etapasAbertas === 1 ? "" : "s"}</span>`
+                : ""}
             </span>
           </span>
           <span class="central-cal-card-seta" aria-hidden="true">›</span>

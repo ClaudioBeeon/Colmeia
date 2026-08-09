@@ -296,6 +296,11 @@ async function _verificarNotificacoesImpl() {
   notificacoes = log;
   atualizarBadgeNotificacoes();
 
+  // Pedidos de atenção da Central (js/central-atencao.js) entram no MESMO
+  // sino. Sem `await`: a busca tem trava de 3 min lá dentro e não pode
+  // atrasar a checagem de comentário, que é o que roda aqui.
+  if (typeof centralChecarPedidosDeAtencaoNoSino === "function") centralChecarPedidosDeAtencaoNoSino();
+
   if (!primeiraVez) {
     // Pop-up (pílula/ilha) pra comentário em tarefa sua (já é sempre o
     // caso aqui — minhasTarefas só tem tarefa alocada a você) ou que te

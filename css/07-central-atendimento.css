@@ -1197,6 +1197,9 @@
 .central-cal-leg i { width: 8px; height: 8px; border-radius: 50%; }
 .central-cal-leg i.tem { background: rgba(255, 255, 255, .24); }
 .central-cal-leg i.hoje { background: var(--kanban-yellow); }
+/* O terceiro estado do calendário: dia inteiro já entregue (círculo
+   vazado na grade — ver .central-cal-d.feito no fim deste arquivo). */
+.central-cal-leg i.feito { background: none; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .3); }
 .central-cal-total { margin-left: auto; font-size: 9.5px; font-weight: 700; color: rgba(255, 255, 255, .42); }
 
 /* ----- A caixinha do dia -----
@@ -1308,4 +1311,231 @@
   .central-hoje-cal { min-height: 320px; }
   .central-cal-pop { width: calc(100vw - 32px); max-width: 300px; }
   .central-pill-cliente-btn { max-width: 150px; }
+}
+
+/* ===================================================================
+   PRECISA DE ATENÇÃO (2026-08-09) — a pílula no rodapé da Timeline e a
+   revisão que ela abre por cima do card preto. Protótipo 2 aprovado pelo
+   Cláudio; a lógica toda está em js/central-atencao.js, com o porquê de
+   cada decisão no comentário do topo do arquivo.
+   =================================================================== */
+
+/* O evento de cobrança na Timeline — vermelho, o único do feed. Ajuste e
+   aprovação são notícia; este é uma pessoa chamando outra. */
+.central-tl-avatar.atencao { background: var(--danger); color: #fff; }
+.central-tl-selo.atencao { background: rgba(229,72,77,.18); color: #FF9DA0; }
+
+/* Rodapé fixo do card preto: nunca rola junto com o feed. */
+.central-hoje-timeline-pe { flex-shrink: 0; padding-top: 10px; }
+.central-hoje-timeline-pe:empty { display: none; }
+
+.central-atencao-pill {
+  width: 100%; display: flex; align-items: center; gap: 10px; cursor: pointer;
+  font: inherit; font-family: var(--font-body); text-align: left; color: #fff;
+  border: none; border-radius: 999px; padding: 10px 14px;
+  background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.09);
+  transition: background var(--dur-fast) var(--ease-apple);
+  animation: centralAtencaoPillEntra var(--dur-slow) var(--ease-apple-spring);
+}
+@keyframes centralAtencaoPillEntra { from { opacity: 0; transform: translateY(10px); } }
+.central-atencao-pill:hover { background: rgba(255,255,255,.11); }
+.central-atencao-ponto {
+  position: absolute; top: -1px; right: -1px;
+  width: 9px; height: 9px; border-radius: 50%; background: var(--danger);
+  border: 2px solid #16181D;
+  animation: centralAtencaoPulso 1.8s ease-out infinite;
+}
+@keyframes centralAtencaoPulso {
+  0%   { box-shadow: 0 0 0 0 rgba(229,72,77,.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(229,72,77,0); }
+  100% { box-shadow: 0 0 0 0 rgba(229,72,77,0); }
+}
+.central-atencao-pill-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.central-atencao-pill-txt b { font-size: 12.5px; font-weight: 700; line-height: 1.25; }
+.central-atencao-pill-txt span { font-size: 10.5px; color: rgba(255,255,255,.55); }
+/* A Bee no lugar do sino genérico: é ELA que alerta, e é a mesma carinha
+   que já avisa de arquivo novo dentro do card (beeIcon, js/bee.js). */
+.central-atencao-bee {
+  position: relative; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center;
+}
+.central-atencao-bee svg { width: 17px; height: 17px; display: block; }
+
+/* ---- a revisão, por cima da Timeline ---- */
+.central-atencao-revisao {
+  position: absolute; inset: 0; z-index: 5; background: #16181D;
+  display: flex; flex-direction: column; padding: 14px;
+  animation: centralAtencaoSobe var(--dur-slow) var(--ease-apple-spring);
+}
+@keyframes centralAtencaoSobe { from { opacity: 0; transform: translateY(14px); } }
+.central-atencao-cab { display: flex; align-items: center; gap: 9px; padding: 0 2px 6px; flex-shrink: 0; }
+.central-atencao-cab b { font-size: 12.5px; font-weight: 700; color: #fff; }
+.central-atencao-passos { display: flex; gap: 4px; margin-left: auto; }
+.central-atencao-passos i { width: 16px; height: 3px; border-radius: 999px; background: rgba(255,255,255,.18); display: block; }
+.central-atencao-passos i.feito { background: rgba(255,255,255,.4); }
+.central-atencao-passos i.agora { background: var(--kanban-yellow); }
+.central-atencao-x {
+  background: none; border: none; color: rgba(255,255,255,.4); cursor: pointer;
+  padding: 2px; display: flex; font: inherit;
+}
+.central-atencao-x:hover { color: #fff; }
+.central-atencao-x svg { width: 14px; height: 14px; display: block; }
+
+/* A margem de cima abre o espaço pras cartas de trás espiarem. */
+.central-atencao-baralho { flex: 1; min-height: 0; position: relative; margin: 24px 0 18px; }
+.central-atencao-carta {
+  position: absolute; inset: 0; border-radius: 20px; overflow: hidden;
+  background: #1D2026; box-shadow: 0 0 0 1px rgba(255,255,255,.09), 0 12px 26px rgba(0,0,0,.45);
+  display: flex; flex-direction: column; gap: 18px; padding: 20px;
+  transform-origin: 50% 100%; will-change: transform;
+  user-select: none; -webkit-user-select: none; touch-action: none;
+}
+.central-atencao-carta.frente { cursor: grab; }
+.central-atencao-carta.frente.arrastando { cursor: grabbing; }
+.central-atencao-carta.assentando { transition: transform var(--dur-base) var(--ease-apple-spring); }
+.central-atencao-carta.saindo { transition: transform var(--dur-base) var(--ease-apple), opacity var(--dur-base) var(--ease-apple); }
+
+.central-atencao-carimbo {
+  position: absolute; top: 16px; z-index: 6; opacity: 0; pointer-events: none;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  border-radius: 8px; padding: 5px 10px; transition: opacity var(--dur-fast) var(--ease-apple);
+}
+.central-atencao-carimbo.dir { right: 14px; background: var(--kanban-yellow); color: #16181D; transform: rotate(9deg); }
+.central-atencao-carimbo.esq { left: 14px; background: rgba(255,255,255,.9); color: #16181D; transform: rotate(-9deg); }
+
+.central-atencao-topo { display: flex; align-items: flex-start; gap: 12px; }
+.central-atencao-topo-txt { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.central-atencao-cli {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: rgba(255,255,255,.4);
+}
+.central-atencao-topo h3 {
+  margin: 0; font-size: 20px; font-weight: 700; line-height: 1.2; letter-spacing: -.02em;
+  color: #fff; text-wrap: balance;
+}
+.central-atencao-conta {
+  margin-left: auto; flex-shrink: 0; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.55);
+  border: 1px solid rgba(255,255,255,.18); border-radius: 999px; padding: 4px 10px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+.central-atencao-pastilhas { display: flex; flex-wrap: wrap; gap: 7px; }
+.central-atencao-pastilha {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600;
+  border-radius: 999px; padding: 7px 12px; background: rgba(255,255,255,.09); color: rgba(255,255,255,.92);
+}
+.central-atencao-pastilha.urgente { background: rgba(229,72,77,.22); color: #FFB3B5; }
+.central-atencao-pastilha.amanha { background: rgba(255,199,0,.18); color: #F0C450; }
+
+.central-atencao-pe { margin-top: auto; display: flex; flex-direction: column; gap: 16px; }
+.central-atencao-datas {
+  display: flex; border-radius: 14px; background: rgba(255,255,255,.045); overflow: hidden;
+}
+.central-atencao-data { flex: 1; min-width: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+.central-atencao-data + .central-atencao-data { border-left: 1px solid rgba(255,255,255,.09); }
+.central-atencao-data em {
+  font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .07em;
+  text-transform: uppercase; color: rgba(255,255,255,.4);
+}
+.central-atencao-data b { font-size: 13px; font-weight: 700; color: #fff; }
+.central-atencao-data b.urgente { color: #FF9DA0; }
+.central-atencao-quem { display: flex; align-items: center; gap: 11px; }
+.central-atencao-foto {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.14); color: #fff; font-size: 12.5px; font-weight: 800;
+}
+.central-atencao-quem-txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.central-atencao-quem-txt b { font-size: 13.5px; font-weight: 650; color: #fff; }
+.central-atencao-quem-txt span { font-size: 11px; color: rgba(255,255,255,.4); }
+
+/* ---- os dois botões ----
+   `position: relative; z-index` é o ajuste pedido pelo Cláudio: sem ele os
+   botões ficavam POR BAIXO da sombra da carta (que desce bastante), e
+   pareciam apagados, como se estivessem desligados. Agora eles desenham
+   por cima dela, e a margem do baralho dá o respiro que faltava. */
+.central-atencao-acoes {
+  position: relative; z-index: 6; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; gap: 30px;
+}
+.central-atencao-acoes[hidden] { display: none; }
+.central-atencao-acao { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.central-atencao-acao span { font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,.4); }
+.central-atencao-redondo {
+  width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer;
+  font: inherit; font-family: var(--font-body);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform var(--dur-fast) var(--ease-apple-spring), filter var(--dur-fast) var(--ease-apple);
+}
+.central-atencao-redondo:hover { transform: scale(1.08); filter: brightness(1.08); }
+.central-atencao-redondo:active { transform: scale(.94); }
+.central-atencao-redondo svg { width: 23px; height: 23px; display: block; }
+.central-atencao-redondo.segurar { background: rgba(255,255,255,.09); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.central-atencao-redondo.atencao { background: var(--kanban-yellow); color: #16181D; box-shadow: 0 6px 20px rgba(255,199,0,.3); }
+
+.central-atencao-fim {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 9px; text-align: center; height: 100%; padding: 20px;
+}
+.central-atencao-fim-ok {
+  width: 44px; height: 44px; border-radius: 50%; background: rgba(95,224,174,.16);
+  color: var(--success); display: flex; align-items: center; justify-content: center;
+}
+.central-atencao-fim-ok svg { width: 21px; height: 21px; }
+.central-atencao-fim b { font-size: 14px; font-weight: 700; color: #fff; }
+.central-atencao-fim span { font-size: 11.5px; color: rgba(255,255,255,.4); line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .central-atencao-pill, .central-atencao-revisao { animation: none; }
+  .central-atencao-ponto { animation: none; }
+}
+
+/* A bolinha flutuante da Bee fica no canto de baixo à direita da tela —
+   em cima do botão "Pedir atenção", já que a Timeline é a coluna da
+   direita. Some enquanto a revisão está aberta, mesmo tratamento que ela
+   já recebe com um card aberto (body.card-aberto, css/05-componentes.css). */
+body.central-atencao-revisando .bee-fab { opacity: 0; pointer-events: none; }
+
+/* A frase da Bee explicando por que a peça está na fila. */
+.central-atencao-motivo {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; line-height: 1.55; color: rgba(255,255,255,.86);
+}
+.central-atencao-motivo-bee {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background: var(--kanban-yellow); color: #16181D;
+  display: flex; align-items: center; justify-content: center;
+}
+.central-atencao-motivo-bee svg { width: 15px; height: 15px; display: block; }
+
+/* ---- Calendário: o que JÁ foi entregue (2026-08-09) ----
+   Desde que o calendário passou a incluir tarefas fechadas e cards mãe
+   (calendarioDePostagens, AprovacaoInterna.gs), um dia pode estar todo
+   resolvido — e ele não deve pesar igual a um dia com trabalho pela
+   frente. Círculo VAZADO em vez de preenchido: continua visível, para de
+   chamar. */
+.central-cal-d.feito {
+  background: none; color: rgba(255, 255, 255, .72);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .28); cursor: pointer;
+}
+.central-cal-d.feito:hover, .central-cal-d.feito:focus-visible { box-shadow: 0 0 0 2px #fff; outline: none; }
+/* Hoje continua mandando na cor mesmo com tudo entregue — é a única
+   marca de "onde estamos" no mês. */
+.central-cal-d.hoje.feito { background: var(--kanban-yellow); color: #16181D; box-shadow: none; }
+
+.central-cal-card.feito .central-cal-card-nome { color: var(--text-secondary); }
+.central-cal-ok {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; border-radius: 50%; margin-right: 5px;
+  background: var(--central-sucesso-suave); color: #0F7A54; font-size: 9px; font-weight: 800;
+  vertical-align: 1px;
+}
+[data-theme="dark"] .central-cal-ok { color: var(--success); }
+.central-cal-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  background: var(--page-bg); color: var(--text-muted);
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  vertical-align: 1px;
 }
