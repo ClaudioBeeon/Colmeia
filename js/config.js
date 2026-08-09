@@ -282,6 +282,12 @@ const ACOES_DEMORADAS = [
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive
   "buscarProgressoClientes",
   "buscarTermometroClientes", // varre todas as tarefas dos 3 designers, igual buscarProgressoClientes
+  // O calendário nasceu barato (só lia a varredura em cache do quadro),
+  // mas passou a puxar também as tarefas JÁ FECHADAS dos últimos 45 dias
+  // e os cards mãe que não estão alocados a ninguém varrido. Com o cache
+  // do backend frio isso passa de 25s com folga — e estourar o prazo aqui
+  // não mostrava erro nenhum: o calendário simplesmente abria vazio.
+  "calendarioDePostagens",
   "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
   "buscarImagemCheiaDrive", // idem, mas pra imagem do Drive ampliada (ver js/notificacoes-uploads.js)
   "beeGerarImagem",       // gera imagem de verdade (Gemini, ver NanoBanana.gs)

@@ -1955,8 +1955,15 @@ function calendarioDePostagens() {
     jaPedida[idPai] = true;
     maesQueFaltam.push(idPai);
   }
-  for (var m = 0; m < maesQueFaltam.length && m < CALENDARIO_MAX_MAES_AVULSAS; m++) {
-    var crua = runrunFetch('/tasks/' + maesQueFaltam[m]);
+  // ⚠️ Em PARALELO (runrunFetchAll), não uma de cada vez: eram até 40
+  // idas ao Runrun.it em fila indiana, e só isso já estourava o prazo da
+  // chamada — o calendário abria vazio sem dizer por quê.
+  var caminhosDasMaes = maesQueFaltam
+    .slice(0, CALENDARIO_MAX_MAES_AVULSAS)
+    .map(function (idMae) { return '/tasks/' + idMae; });
+  var maesCruas = caminhosDasMaes.length ? runrunFetchAll(caminhosDasMaes) : [];
+  for (var m = 0; m < maesCruas.length; m++) {
+    var crua = maesCruas[m];
     if (!crua || crua.erroFetch || !extrairDataPublicacaoTarefa(crua)) continue;
     var mae = transformarTarefaParaColmeia(crua);
     mae._cardMae = true;
@@ -2076,16 +2083,30 @@ function buscarPostagensFechadas() {
   var corte = Date.now() - CALENDARIO_JANELA_FECHADAS_MS;
   var contexto = contextoDosPaineis();
 
+  // ⚠️ Uma RODADA por página, com os designers em paralelo — o mesmo
+  // padrão de buscarTarefasAbertasSeparadas (RunrunLeitura.gs), e pelo
+  // mesmo motivo: em fila indiana isso era até 15 idas seguidas ao
+  // Runrun.it, o suficiente pra estourar o prazo da chamada sozinho.
+  // Quem "saiu da janela" (ou veio com página curta) não entra na
+  // rodada seguinte.
+  var ativos = [];
   Object.keys(RUNRUN_USUARIOS).forEach(function (email) {
-    var nomeDesigner = RUNRUN_USUARIOS[email];
-    var runrunId = idsPorEmail[email];
-    if (!runrunId) return;
+    if (idsPorEmail[email]) {
+      ativos.push({ nome: RUNRUN_USUARIOS[email], id: idsPorEmail[email] });
+    }
+  });
 
-    var pagina = 1;
-    while (pagina <= 5) {
-      var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
-        '&is_closed=true&sort=updated_at&sortDir=desc&limit=100&page=' + pagina);
-      if (!Array.isArray(lote) || lote.length === 0) break;
+  for (var pagina = 1; pagina <= 5 && ativos.length; pagina++) {
+    var caminhos = ativos.map(function (d) {
+      return '/tasks?responsible_id=' + encodeURIComponent(d.id) +
+        '&is_closed=true&sort=updated_at&sortDir=desc&limit=100&page=' + pagina;
+    });
+    var lotes = runrunFetchAll(caminhos);
+    var seguem = [];
+
+    for (var d = 0; d < ativos.length; d++) {
+      var lote = lotes[d];
+      if (!Array.isArray(lote) || lote.length === 0) continue;
 
       var saiuDaJanela = false;
       for (var i = 0; i < lote.length; i++) {
@@ -2096,12 +2117,12 @@ function buscarPostagensFechadas() {
         // transformar tarefa à toa (transformarTarefaParaColmeia não é de
         // graça, roda pra cada uma).
         if (!extrairDataPublicacaoTarefa(t)) continue;
-        fechadas.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
+        fechadas.push(transformarTarefaParaColmeia(t, ativos[d].nome, contexto));
       }
-      if (saiuDaJanela || lote.length < 100) break;
-      pagina++;
+      if (!saiuDaJanela && lote.length >= 100) seguem.push(ativos[d]);
     }
-  });
+    ativos = seguem;
+  }
 
   return fechadas;
 }

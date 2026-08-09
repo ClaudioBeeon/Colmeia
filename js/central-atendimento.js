@@ -2237,7 +2237,8 @@ function centralTimelineDoClienteHTML(cliente) {
 // quadro já usa, e que já traz `dataPublicacao` pronta.
 // ---------------------------------------------------------------------------
 
-let centralPostagens = null;      // null = ainda não buscou
+let centralPostagens = null;      // null = ainda não buscou (ou a busca falhou)
+let centralCalBuscando = false;   // trava: sem isso, o botão de tentar de novo dispara buscas empilhadas
 let centralCalMes = null;         // Date do primeiro dia do mês na tela
 
 const CENTRAL_CAL_DOW = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -2264,15 +2265,47 @@ async function centralRenderCalendario() {
   // Primeira vez: busca. Depois disso, o mesmo array serve pra virar de
   // mês quantas vezes quiser — o calendário inteiro é montado no navegador.
   if (centralPostagens === null) {
+    if (centralCalBuscando) return;   // já tem uma busca em andamento
+    centralCalBuscando = true;
     el.innerHTML = `<div class="central-cal-carregando">Carregando o calendário…</div>`;
-    const data = await chamarBackend({ acao: "calendarioDePostagens" });
+    let data;
+    try {
+      data = await chamarBackend({ acao: "calendarioDePostagens" });
+    } finally {
+      centralCalBuscando = false;
+    }
     if (!document.getElementById("chCalendario")) return;   // saiu da aba
-    centralPostagens = (data && data.ok && data.postagens) ? data.postagens : [];
+
+    // ⚠️ NÃO deixar a falha virar uma lista vazia. `centralPostagens` só
+    // é buscada quando está em `null`, então gravar `[]` aqui congela o
+    // calendário vazio pelo resto da sessão — e vazio parece "não tem
+    // nada postado", não "não consegui perguntar". Era exatamente esse o
+    // sintoma quando o prazo de 25s estourava (ver ACOES_DEMORADAS em
+    // js/config.js). Falhou: deixa em `null` e oferece tentar de novo.
+    if (!data || !data.ok || !Array.isArray(data.postagens)) {
+      centralCalErroHTML(el, data);
+      return;
+    }
+    centralPostagens = data.postagens;
     // A fila de "precisa de atenção" sai daqui — só agora ela existe.
     if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
   }
 
   centralDesenharCalendario();
+}
+
+/** O calendário quando a busca não voltou — com o botão de tentar de novo. */
+function centralCalErroHTML(el, data) {
+  const semRede = typeof caiuARede === "function" ? caiuARede(data) : !!(data && data.semRede);
+  el.innerHTML = `
+    <div class="central-cal-carregando central-cal-erro">
+      <span>${semRede
+        ? "Não consegui falar com o servidor pra montar o calendário."
+        : "Deu problema ao montar o calendário."}</span>
+      <button type="button" class="central-cal-retry" data-central-cal-retry="1">Tentar de novo</button>
+    </div>`;
+  const btn = el.querySelector("[data-central-cal-retry]");
+  if (btn) btn.addEventListener("click", () => centralRenderCalendario());
 }
 
 function centralDesenharCalendario() {

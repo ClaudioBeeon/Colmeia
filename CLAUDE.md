@@ -961,6 +961,26 @@ pra uma linha (a mesma altura dos cartões de número ao lado) pra abrir esse es
 - **A etiqueta de entrega fica laranja quando a entrega é DEPOIS do dia de postar.** É o erro que
   este calendário existe pra pegar: a peça fica pronta atrasada em relação à publicação.
 
+### O calendário abria vazio: prazo de 25s estourando em silêncio (2026-08-09)
+
+O calendário nasceu barato (só lia `getTarefasColmeia()`, a varredura que já está em cache) e por
+isso não estava em `ACOES_DEMORADAS`. Depois ele passou a puxar também as tarefas JÁ FECHADAS dos
+últimos 45 dias (`buscarPostagensFechadas`) e os cards mãe que não estão alocados a ninguém varrido
+— com o cache do backend frio, isso passa de 25s com folga. Três correções, que andam juntas:
+
+- **`calendarioDePostagens` entrou em `ACOES_DEMORADAS`** (js/config.js) → 90s. ⚠️ Ao tornar uma
+  ação de backend mais pesada, conferir se ela ainda cabe no prazo padrão — o prazo é escolhido pelo
+  NOME da ação, então ele não acompanha sozinho a mudança.
+- **Falha parou de virar lista vazia.** `centralPostagens` só é buscada quando está em `null`, então
+  gravar `[]` num erro **congelava o calendário vazio pelo resto da sessão** — e vazio parece "não
+  tem nada postado", não "não consegui perguntar". Hoje a falha deixa em `null` e desenha
+  `centralCalErroHTML` com um "Tentar de novo" (`centralCalBuscando` é a trava contra buscas
+  empilhadas).
+- **As duas varreduras viraram paralelas** (`runrunFetchAll`): o resgate dos cards mãe era até 40
+  idas seguidas ao Runrun.it, e as fechadas eram até 15 (3 designers × 5 páginas) em fila indiana.
+  Agora é uma rodada por página, com os designers juntos, e quem já saiu da janela não entra na
+  rodada seguinte — mesmo padrão de `buscarTarefasAbertasSeparadas`.
+
 ### O pill amarelo de cliente, na barra preta do topo
 
 Escolher um cliente ali muda a **Central inteira** — os quatro cartões de número, a timeline, o
