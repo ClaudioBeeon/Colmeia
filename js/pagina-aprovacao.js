@@ -93,6 +93,14 @@
 // A fila como veio do backend (ver listarConferenciasPendentes).
 let apvFila = [];
 
+// A conferência aberta agora foi aberta por um LINK DIRETO (o link que o
+// designer cola no comentário da tarefa), e não por um clique dentro do app?
+// É o que decide pra onde o X leva ao fechar — ver apvFecharConferencia.
+// Quem liga é o roteador, que é o único que abre a tela sem ninguém ter
+// clicado em nada; as duas funções de abrir desligam, porque a partir daí a
+// pessoa está navegando dentro do app e tem tela de trás pra voltar.
+let apvVeioDeLinkDireto = false;
+
 // A fila já foi buscada ao menos uma vez nesta sessão? Serve pra separar
 // "não tem nada esperando" de "ainda não perguntei" — a mesma distinção que
 // o resto do arquivo faz na tela.
@@ -460,6 +468,10 @@ async function apvAbrirConferencia(taskId, loteId) {
 
   if (typeof roteadorAoAbrirConferencia === "function") roteadorAoAbrirConferencia(taskId, loteId);
 
+  // Clique dentro do app até segunda ordem — o roteador liga de volta
+  // depois de abrir, quando a abertura partiu de um link colado/F5.
+  apvVeioDeLinkDireto = false;
+
   apvPecaAberta = null;
   apvVersaoNaTela = null;
   apvLinkGerado = "";
@@ -610,10 +622,35 @@ async function apvAbrirConferencia(taskId, loteId) {
   apvRedesenharPaineis();
 }
 
-/** Fecha a conferência e volta pra fila. Caminho inverso da abertura. */
+/**
+ * Fecha a conferência e volta pra fila. Caminho inverso da abertura.
+ *
+ * PRA ONDE ELA LEVA (2026-08-09, pedido do Cláudio): depende de como a peça
+ * foi aberta, e a diferença importa porque quase toda conferência é aberta
+ * por um LINK colado no comentário da tarefa, numa aba nova, por alguém do
+ * atendimento que não usa o resto do Colmeia.
+ *
+ *  - Aberta da fila ou de um card da Central → a tela de trás já é a certa;
+ *    fechar só desfaz o passo (history.back, ver roteadorAoFecharConferencia).
+ *  - Aberta por LINK DIRETO → não existe tela de trás nenhuma nesta aba, e o
+ *    que sobrava era a fila crua (`page-aprovacao`), uma página que o
+ *    atendimento nunca navega. Agora cai na CENTRAL do atendimento
+ *    responsável por aquele cliente — a mesma tela de `/Laura`.
+ *
+ * Quem sabe que veio de link é o próprio roteador, que é o único que abre a
+ * conferência sem ninguém ter clicado em nada (ver apvVeioDeLinkDireto logo
+ * abaixo) — checar `history.state` aqui pareceria equivalente, mas não é: um
+ * card da Central aberto numa aba que começou na raiz também não tem estado
+ * guardado, e cairia no caminho errado.
+ */
 function apvFecharConferencia() {
   const overlay = document.getElementById("apvConferencia");
   if (!overlay) return;
+
+  const veioDeLinkDireto = apvVeioDeLinkDireto;
+  // O cliente tem que ser lido AGORA: `apvPecaAberta` é zerada logo abaixo.
+  const clienteDaPeca = (apvPecaAberta && apvPecaAberta.cliente) || "";
+
   overlay.classList.remove("open");
   setTimeout(() => overlay.classList.remove("visible"), 220);
   const fundo = document.getElementById("apvConferenciaFundo");
@@ -633,6 +670,10 @@ function apvFecharConferencia() {
   const btnDescartar = document.getElementById("apvBtnDescartar");
   if (btnDescartar) btnDescartar.hidden = false;
   if (typeof roteadorAoFecharConferencia === "function") roteadorAoFecharConferencia();
+
+  if (veioDeLinkDireto && typeof centralAbrirParaClienteDaPeca === "function") {
+    centralAbrirParaClienteDaPeca(clienteDaPeca);
+  }
 }
 
 // Estado do modo "abriu a partir do pedido de alteração do CLIENTE" (não
@@ -684,6 +725,9 @@ async function apvAbrirParaAlteracaoDoCliente(aprovacao) {
   apvEnviado = false;
   apvAbaAtiva = "conferencia";
   apvModoAlteracaoCliente = true;
+  // Este caminho só existe a partir de um clique (card da Central, aba
+  // Aprovações da Fila de repasse) — nunca de um link direto.
+  apvVeioDeLinkDireto = false;
 
   document.getElementById("apvTabConferencia").classList.add("ativa");
   document.getElementById("apvTabCliente").classList.remove("ativa");
@@ -2604,6 +2648,9 @@ function apvLigarEventos() {
   };
 
   liga("apvBtnAprovar", "click", apvClickAcao);
+  // O X da pílula. Mesmo caminho do Esc — a saída é uma só, pra não existir
+  // "fechar" com dois comportamentos diferentes.
+  liga("apvFecharConferenciaBtn", "click", apvFecharConferencia);
   liga("apvBtnDevolver", "click", apvConfirmarDevolucao);
   liga("apvBtnDescartar", "click", apvDescartar);
 

@@ -13,13 +13,13 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-09a">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-09a">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-09a">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-09a">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-09a">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-09a">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-09a">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-09b">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-09b">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-09b">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-09b">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-09b">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-09b">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-09b">
 </head>
 <body>
 
@@ -747,8 +747,9 @@
   <div class="apv-conferencia-fundo" id="apvConferenciaFundo" aria-hidden="true"></div>
   <div class="apv-conferencia apv-area" id="apvConferencia" role="dialog" aria-modal="true" aria-labelledby="apvContextoPeca">
     <!-- Pílula de cima: cantos 100% arredondados (pedido do Cláudio, pra
-         combinar com o resto do Colmeia). Sem botão de voltar — ele saiu a
-         pedido; Esc continua fechando (ver apvLigarEventos). O botão da
+         combinar com o resto do Colmeia). Sem botão de VOLTAR — ele saiu a
+         pedido; quem fecha é o X do fim da fileira (2026-08-09), e o Esc
+         continua funcionando pelo mesmo caminho. O botão da
          direita é UM SÓ e troca de rótulo NA HORA, sem pausa artificial
          (pedido do Cláudio — "instantâneo como o resto do Colmeia"):
          Aprovar → Enviar para o cliente (ver apvClickAcao). A confirmação
@@ -834,6 +835,19 @@
            sem caminho de volta pra reler a peça ou mudar de ideia. -->
       <button type="button" class="apv-sair-alteracao" id="apvSairAlteracao">Voltar</button>
       </div>
+
+      <!-- O X de fechar (2026-08-09, pedido do Cláudio). Ele existia só como
+           Esc, que ninguém do atendimento adivinha — e essa tela é aberta
+           quase sempre por um LINK, numa aba nova, por quem não usa o
+           Colmeia. Sem um X visível, a única saída era fechar a aba.
+
+           Pra onde ele leva depende de como a conferência foi aberta (ver
+           apvVeioDeLinkDireto, js/pagina-aprovacao.js): vindo de um link
+           direto, cai na Central do atendimento responsável por aquele
+           cliente; vindo da Central ou da fila, só volta pra onde estava. -->
+      <button type="button" class="apv-fechar-conf" id="apvFecharConferenciaBtn" title="Fechar" aria-label="Fechar a conferência">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
 
       <!-- Os mesmos três canais do "Mandar" da barra de envio, agora
            também aqui (pedido do Cláudio, 2026-08-08). Antes o botão de
@@ -1605,32 +1619,32 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-09a"></script>
-<script src="js/fila-offline.js?v=2026-08-09a"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-09a"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-09a"></script>
-<script src="js/kanban-polling.js?v=2026-08-09a"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-09a"></script>
-<script src="js/regras-briefing.js?v=2026-08-09a"></script>
-<script src="js/kanban-board.js?v=2026-08-09a"></script>
-<script src="js/clientes-hub.js?v=2026-08-09a"></script>
-<script src="js/chat-comentarios.js?v=2026-08-09a"></script>
-<script src="js/detalhe-modal.js?v=2026-08-09a"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-09a"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-09a"></script>
-<script src="js/bee.js?v=2026-08-09a"></script>
-<script src="js/paginas-designers.js?v=2026-08-09a"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-09a"></script>
-<script src="js/pagina-repasse.js?v=2026-08-09a"></script>
-<script src="js/pagina-horas.js?v=2026-08-09a"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-09a"></script>
-<script src="js/paleta-comando.js?v=2026-08-09a"></script>
-<script src="js/roteador-url.js?v=2026-08-09a"></script>
-<script src="js/detalhe-historia.js?v=2026-08-09a"></script>
-<script src="js/modo-foco.js?v=2026-08-09a"></script>
-<script src="js/pagina-bee.js?v=2026-08-09a"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-09a"></script>
-<script src="js/central-atendimento.js?v=2026-08-09a"></script>
-<script src="js/login-boot.js?v=2026-08-09a"></script>
+<script src="js/config.js?v=2026-08-09b"></script>
+<script src="js/fila-offline.js?v=2026-08-09b"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-09b"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-09b"></script>
+<script src="js/kanban-polling.js?v=2026-08-09b"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-09b"></script>
+<script src="js/regras-briefing.js?v=2026-08-09b"></script>
+<script src="js/kanban-board.js?v=2026-08-09b"></script>
+<script src="js/clientes-hub.js?v=2026-08-09b"></script>
+<script src="js/chat-comentarios.js?v=2026-08-09b"></script>
+<script src="js/detalhe-modal.js?v=2026-08-09b"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-09b"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-09b"></script>
+<script src="js/bee.js?v=2026-08-09b"></script>
+<script src="js/paginas-designers.js?v=2026-08-09b"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-09b"></script>
+<script src="js/pagina-repasse.js?v=2026-08-09b"></script>
+<script src="js/pagina-horas.js?v=2026-08-09b"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-09b"></script>
+<script src="js/paleta-comando.js?v=2026-08-09b"></script>
+<script src="js/roteador-url.js?v=2026-08-09b"></script>
+<script src="js/detalhe-historia.js?v=2026-08-09b"></script>
+<script src="js/modo-foco.js?v=2026-08-09b"></script>
+<script src="js/pagina-bee.js?v=2026-08-09b"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-09b"></script>
+<script src="js/central-atendimento.js?v=2026-08-09b"></script>
+<script src="js/login-boot.js?v=2026-08-09b"></script>
 </body>
 </html>

@@ -353,6 +353,11 @@ async function roteadorAbrirRotaInicial() {
       // pra fila, que é onde a pessoa continua o trabalho.
       mostrarPagina("aprovacao");
       if (typeof apvAbrirConferencia === "function") await apvAbrirConferencia(rota.id, rota.peca);
+      // Marca DEPOIS de abrir: a própria `apvAbrirConferencia` zera essa
+      // marca no começo (o caso comum é o clique). É ela que faz o X da
+      // conferência cair na Central do atendimento responsável em vez de
+      // numa fila crua — ver apvFecharConferencia, js/pagina-aprovacao.js.
+      apvVeioDeLinkDireto = true;
     } else if (rota.tipo === "pagina") {
       mostrarPagina(rota.pagina);
     } else {

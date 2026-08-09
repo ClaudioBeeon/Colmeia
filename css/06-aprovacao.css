@@ -1725,3 +1725,41 @@
   .apv-conferencia.apv-motivo-expandido .apv-info-corpo { display: block; }
   .apv-campo { min-height: 120px; }
 }
+
+/* =====================================================================
+   O X DE FECHAR A CONFERÊNCIA (2026-08-09)
+   ---------------------------------------------------------------------
+   Antes disso a única saída era Esc — atalho que quem usa esta tela (o
+   atendimento, que não usa o Colmeia e chega aqui por um link, numa aba
+   nova) não tem como adivinhar. Fechar a aba virava a saída de verdade,
+   e aí a pessoa perdia a fila de trás junto.
+
+   Mora no FIM da fileira da pílula, depois do botão de ação: é a última
+   coisa à direita, o lugar onde se procura um X em qualquer janela.
+   Fundo translúcido em vez de cor própria porque a pílula troca de cor
+   com o estado da peça (preta / verde / amarela) — assim ele acompanha
+   os três sem precisar de uma regra pra cada.
+   ===================================================================== */
+.apv-fechar-conf {
+  flex: 0 0 auto; width: 34px; height: 34px; border: none; border-radius: 50%;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, .14); color: #fff;
+  transition: background var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
+}
+.apv-fechar-conf svg { width: 17px; height: 17px; }
+.apv-fechar-conf:hover { background: rgba(255, 255, 255, .26); }
+.apv-fechar-conf:active { transform: scale(.94); }
+/* O branco de cima serve pros DOIS fundos escuros da barra (o preto do estado
+   neutro e o verde do aprovado). Só o amarelo pede o inverso — ele é claro. */
+.apv-estado-alteracao .apv-fechar-conf { background: rgba(0, 0, 0, .12); color: #16181D; }
+.apv-estado-alteracao .apv-fechar-conf:hover { background: rgba(0, 0, 0, .2); }
+
+@media (max-width: 900px) {
+  /* No celular a pílula vira um cartão de linhas empilhadas e a fileira
+     quebra — em fluxo, o X cairia lá embaixo, depois do botão de ação, em
+     vez do canto. Fixo no canto de cima (a pílula já é `position:
+     relative`), com um respiro à direita no cartão pra nenhuma linha
+     passar por baixo dele. */
+  .apv-contexto { padding-right: 54px; }
+  .apv-fechar-conf { position: absolute; top: 11px; right: 11px; }
+}

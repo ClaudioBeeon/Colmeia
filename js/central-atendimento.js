@@ -87,6 +87,63 @@ function abrirCentralAtendimento() {
   }
 }
 
+/**
+ * Quem é o atendimento responsável por esse cliente? (2026-08-09)
+ *
+ * Mesma fonte que `centralClienteEhDoLogado` já lê — o vínculo
+ * cliente→atendimento do painel-designers-beeon (`pdTodosClientesPlano`, ver
+ * js/paginas-designers.js) — só que devolvendo o NOME em vez de um sim/não.
+ * Cliente sem vínculo cadastrado devolve "", e quem chama trata isso como
+ * "não sei de quem é" em vez de chutar alguém.
+ */
+function centralAtendimentoDoCliente(nomeCliente) {
+  if (!nomeCliente || typeof pdTodosClientesPlano !== "function") return "";
+  const alvo = normalizarParaComparar(nomeCliente);
+  const encontrado = pdTodosClientesPlano().find(({ c }) => c && c.cliente && normalizarParaComparar(c.cliente) === alvo);
+  return (encontrado && encontrado.c.atend) || "";
+}
+
+/**
+ * Abre a Central já na visão do atendimento responsável por aquele cliente.
+ *
+ * É pra onde a conferência cai ao ser fechada quando foi aberta por um LINK
+ * DIRETO (ver apvFecharConferencia, js/pagina-aprovacao.js): nesse caso não
+ * existe tela nenhuma por trás nesta aba, e a fila crua não é a casa de
+ * ninguém — a Central é.
+ *
+ * O "ver como" (`centralFiltroPessoa`) só existe pra quem COORDENA o
+ * atendimento; pra Laura/Manu/Giovanna a Central já é a delas e o filtro nem
+ * aparece, então aqui só a abertura vale. E se a Central não é uma tela que
+ * essa pessoa pode ver (um designer que recebeu o link), não abre nada — fica
+ * a fila, como já era.
+ */
+function centralAbrirParaClienteDaPeca(nomeCliente) {
+  const podeVerCentral = PAPEL_LOGADO === "atendimento" || (typeof souClaudio === "function" && souClaudio());
+  if (!podeVerCentral) return;
+
+  const souCoord = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+  if (souCoord) {
+    const responsavel = centralAtendimentoDoCliente(nomeCliente);
+    // Sem vínculo cadastrado, o coordenador continua vendo tudo (o padrão
+    // dele) em vez de cair numa Central filtrada em ninguém.
+    if (responsavel) {
+      centralFiltroPessoa = responsavel;
+      const select = document.getElementById("centralFiltroPessoaSelect");
+      // O seletor só tem as pessoas de ROTEADOR_SLUGS_PESSOA; um vínculo
+      // escrito diferente na planilha não pode deixar o campo mostrando
+      // outro nome que não o que está valendo de verdade.
+      if (select) {
+        centralPopularFiltroPessoa();
+        const casa = Array.from(select.options).some(o => o.value === responsavel);
+        if (casa) select.value = responsavel;
+        else centralFiltroPessoa = "";
+      }
+    }
+  }
+
+  abrirCentralAtendimento();
+}
+
 function fecharCentralAtendimento() {
   document.getElementById("centralAtendimento").hidden = true;
 }
