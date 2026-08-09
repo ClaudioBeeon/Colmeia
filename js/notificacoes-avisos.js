@@ -693,17 +693,28 @@ function marcarReunioesComoVistas(ids) {
 }
 let _primeiraChecagemReunioes = true;
 let _erroReuniaoJaAvisado = false;
+// Quem não tem agenda ligada ao Colmeia (todo o atendimento) para de ser
+// perguntado depois da primeira resposta — senão seriam duas idas ao
+// backend por sessão mais uma a cada 3 minutos, o dia inteiro, sempre com
+// a mesma resposta vazia.
+let _semAgendaLigada = false;
 
 async function verificarReunioesProximas() {
-  if (!COLMEIA_API_URL || !DESIGNER_LOGADO) return;
+  if (!COLMEIA_API_URL || !DESIGNER_LOGADO || _semAgendaLigada) return;
   try {
     const data = await chamarBackend({ acao: "buscarReunioesHoje", designer: DESIGNER_LOGADO });
+    // Sem agenda ligada não é erro nenhum: é o estado normal de quem entra
+    // pelo atendimento (ver buscarReunioesDeHoje, Agenda.gs). Só para de
+    // perguntar, sem aviso na tela.
+    if (data && data.semAgenda) { _semAgendaLigada = true; return; }
     if (!data.ok) {
-      // Antes isso falhava em silêncio (sem badge, sem notificação, sem
-      // pista nenhuma do motivo). Mostra o erro real UMA vez por sessão
-      // pra dar pra diagnosticar (ex: permissão da agenda não autorizada
-      // pra conta que publicou o Web App).
-      if (!_erroReuniaoJaAvisado) {
+      // Falha de verdade (ex: escopo da agenda não autorizado pra conta
+      // que publicou o Web App). O aviso na tela fica só pra quem pode
+      // consertar isso; pro resto do time seria um erro vermelho sobre
+      // uma coisa que não está na mão deles. Pro diagnóstico, o motivo
+      // continua indo pro console em qualquer caso.
+      console.warn("Não consegui checar a agenda:", data.error || "erro desconhecido");
+      if (!_erroReuniaoJaAvisado && typeof souClaudio === "function" && souClaudio()) {
         _erroReuniaoJaAvisado = true;
         mostrarToast("Não consegui checar sua agenda: " + (data.error || "erro desconhecido"), "erro");
       }

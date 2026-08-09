@@ -14,6 +14,21 @@
 // ============ GOOGLE AGENDA ============
 
 /**
+ * O e-mail cuja agenda o Colmeia consegue ler pra essa pessoa, ou null.
+ * Só quem está em RUNRUN_USUARIOS tem — o atendimento entra por código e
+ * nome, sem conta de designer, então pra eles isso é null e a agenda
+ * simplesmente não faz parte do app (ver as chamadas abaixo).
+ */
+function emailDaAgendaDe(designer) {
+  if (!designer) return null;
+  var alvo = String(designer).toLowerCase().trim();
+  for (var e in RUNRUN_USUARIOS) {
+    if (RUNRUN_USUARIOS[e].toLowerCase().trim() === alvo) return e;
+  }
+  return null;
+}
+
+/**
  * Devolve as reuniões de hoje (a partir de agora) do designer informado.
  * Funciona porque o Web App roda com a conta de quem implantou (ver
  * "executeAs": "USER_DEPLOYING" no appsscript.json) — como essa conta
@@ -26,11 +41,15 @@
  */
 function buscarReunioesDeHoje(designer) {
   if (!designer) return { ok: false, error: 'designer não informado.' };
-  var email = null;
-  for (var e in RUNRUN_USUARIOS) {
-    if (RUNRUN_USUARIOS[e].toLowerCase().trim() === designer.toLowerCase().trim()) { email = e; break; }
-  }
-  if (!email) return { ok: false, error: 'E-mail desse designer não configurado em RUNRUN_USUARIOS.' };
+  var email = emailDaAgendaDe(designer);
+  // NÃO É ERRO (2026-08-09): quem não está em RUNRUN_USUARIOS — todo o
+  // atendimento (Laura, Manu, Giovanna) e os coordenadores que entram por
+  // código — simplesmente não tem agenda ligada ao Colmeia. Isso é o
+  // estado normal deles, não uma falha; devolver `ok:false` fazia a tela
+  // mostrar um aviso vermelho de erro a cada sessão, sobre uma coisa que
+  // ninguém pode (nem precisa) consertar. `semAgenda` avisa o front-end
+  // pra ele parar de perguntar (ver verificarReunioesProximas).
+  if (!email) return { ok: true, reunioes: [], semAgenda: true };
 
   try {
     var agenda = CalendarApp.getCalendarById(email);
@@ -71,11 +90,11 @@ function buscarReunioesDeHoje(designer) {
  */
 function responderReuniao(designer, eventId, resposta) {
   if (!designer || !eventId) return { ok: false, error: 'Parâmetros faltando.' };
-  var email = null;
-  for (var e in RUNRUN_USUARIOS) {
-    if (RUNRUN_USUARIOS[e].toLowerCase().trim() === designer.toLowerCase().trim()) { email = e; break; }
-  }
-  if (!email) return { ok: false, error: 'E-mail desse designer não configurado em RUNRUN_USUARIOS.' };
+  var email = emailDaAgendaDe(designer);
+  // Aqui CONTINUA sendo erro, diferente das duas buscas acima: responder
+  // convite é uma ação que a pessoa pediu, e se não dá pra fazer ela
+  // precisa saber — o silêncio pareceria "respondi" sem ter respondido.
+  if (!email) return { ok: false, error: 'Sua conta não tem agenda ligada ao Colmeia — responda pelo Google Agenda.' };
   try {
     var agenda = CalendarApp.getCalendarById(email);
     if (!agenda) return { ok: false, error: 'Não consegui acessar a agenda de ' + designer + '.' };
@@ -494,11 +513,12 @@ function justificarDiaTimesheet(dados) {
  */
 function buscarAgendaDaSemana(designer, inicioISO) {
   if (!designer) return { ok: false, error: 'designer não informado.' };
-  var email = null;
-  for (var e in RUNRUN_USUARIOS) {
-    if (RUNRUN_USUARIOS[e].toLowerCase().trim() === designer.toLowerCase().trim()) { email = e; break; }
-  }
-  if (!email) return { ok: false, error: 'E-mail desse designer não configurado em RUNRUN_USUARIOS.' };
+  var email = emailDaAgendaDe(designer);
+  // Mesma ideia de buscarReunioesDeHoje: sem agenda ligada não é falha, é
+  // uma semana sem reunião nenhuma. O campo é `reunioes` (não `eventos`)
+  // porque é assim que o sucesso devolve lá embaixo, e é o que a página
+  // "Minhas horas" lê.
+  if (!email) return { ok: true, reunioes: [], semAgenda: true };
 
   try {
     var agenda = CalendarApp.getCalendarById(email);
