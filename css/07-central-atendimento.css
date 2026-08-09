@@ -792,6 +792,103 @@
    ajuste): num grupo só, ele continua chamando; em todos, não chamaria
    em nenhum. */
 .central-grupo-aba.alerta .n { background: var(--kanban-yellow); color: #16181D; }
+/* ----- Busca e seletor de clientes, DENTRO da pílula (2026-08-08) -----
+   A pílula deixou de ser só troca de aba: ela passa a carregar as duas
+   coisas que se faz o tempo todo aqui — procurar uma peça e cortar por
+   cliente — no mesmo espírito da barra preta do quadro (.topbar-dark),
+   que é status + ações, não navegação.
+
+   As abas encolhem (`flex-shrink` no .central-grupo-seg) pra abrir esse
+   espaço; a busca é quem estica com o que sobra. */
+.central-grupo-busca {
+  flex: 1 1 140px; min-width: 88px;
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(255, 255, 255, .09); border-radius: 999px; padding: 7px 13px;
+  color: rgba(255, 255, 255, .45);
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-busca:focus-within { background: rgba(255, 255, 255, .17); color: rgba(255, 255, 255, .8); }
+.central-grupo-busca svg { flex-shrink: 0; }
+.central-grupo-busca input {
+  flex: 1; min-width: 0; border: none; background: none; outline: none;
+  font-family: var(--font-body); font-size: 12px; color: #fff;
+  -webkit-appearance: none; appearance: none;
+}
+.central-grupo-busca input::placeholder { color: rgba(255, 255, 255, .42); }
+/* O X nativo do type=search é cinza escuro e some no fundo preto. */
+.central-grupo-busca input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+.central-grupo-cli-wrap { position: relative; flex: 0 0 auto; }
+.central-grupo-cli-btn {
+  display: flex; align-items: center; gap: 7px; cursor: pointer; border: none;
+  background: rgba(255, 255, 255, .09); color: #fff;
+  font-family: var(--font-body); font-size: 12px; font-weight: 650;
+  padding: 8px 13px; border-radius: 999px; white-space: nowrap; max-width: 180px;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-cli-btn:hover { background: rgba(255, 255, 255, .17); }
+.central-grupo-cli-btn > span { overflow: hidden; text-overflow: ellipsis; }
+.central-grupo-cli-btn svg { flex-shrink: 0; opacity: .6; transition: transform var(--dur-base) var(--ease-apple); }
+.central-grupo-cli-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* Filtro ligado acende na COR DO GRUPO: dá pra ver que a lista está
+   cortada sem precisar abrir o menu. */
+.central-grupo-cli-btn.filtrando { background: var(--central-g); color: var(--central-g-ink); }
+.central-grupo-cli-btn.filtrando svg { opacity: .85; }
+
+.central-grupo-cli-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  width: 252px; max-height: 320px; overflow-y: auto;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 16px; padding: 7px; box-shadow: var(--shadow-hover);
+  animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
+}
+.central-grupo-cli-menu[hidden] { display: none; }
+.central-grupo-cli-topo {
+  display: flex; gap: 6px; padding: 3px 4px 8px; margin-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+.central-grupo-cli-todos {
+  flex: 1; border: none; cursor: pointer; background: var(--page-bg);
+  font-family: var(--font-body); font-size: 11px; font-weight: 700; color: var(--text-secondary);
+  padding: 7px; border-radius: 9px;
+  transition: color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-cli-todos:hover { color: var(--text-primary); }
+.central-grupo-cli-i {
+  width: 100%; display: flex; align-items: center; gap: 9px; cursor: pointer;
+  border: none; background: none; text-align: left;
+  font-family: var(--font-body); font-size: 12.5px; color: var(--text-primary);
+  padding: 8px 9px; border-radius: 10px;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-cli-i:hover { background: var(--page-bg); }
+.central-grupo-cli-cx {
+  width: 17px; height: 17px; border-radius: 5px; flex: 0 0 auto;
+  border: 1.8px solid var(--apv-borda-forte, var(--border));
+  display: flex; align-items: center; justify-content: center;
+  color: transparent; font-size: 10px; font-weight: 800;
+}
+.central-grupo-cli-i.on .central-grupo-cli-cx { background: #16181D; border-color: #16181D; color: #fff; }
+[data-theme="dark"] .central-grupo-cli-i.on .central-grupo-cli-cx { background: #fff; border-color: #fff; color: #16181D; }
+.central-grupo-cli-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.central-grupo-cli-q { flex: 0 0 auto; font-size: 10.5px; font-weight: 700; color: var(--text-muted); }
+/* Cliente do atendimento que não tem peça NESTE grupo continua na lista
+   (ele é dela), mas apagado — some da vista sem sumir da lista. */
+.central-grupo-cli-i.vazio .central-grupo-cli-nome { color: var(--text-muted); }
+
+/* ----- A cor do grupo -----
+   Cada grupo tem a sua, e ela pinta a aba acesa, o botão de filtro ligado
+   e os detalhes do lado direito. Cor com significado: a tela muda de
+   temperatura ao trocar de grupo, e o amarelo deixa de ser o único
+   sotaque possível. */
+.central-grupo { --central-g: var(--kanban-yellow); --central-g-ink: #16181D; }
+.central-grupo.cor-prontas    { --central-g: #22B07D; --central-g-ink: #fff; }
+.central-grupo.cor-comCliente { --central-g: #3A5BFF; --central-g-ink: #fff; }
+.central-grupo.cor-ajuste     { --central-g: #C9720A; --central-g-ink: #fff; }
+.central-grupo.cor-concluidos { --central-g: #12885F; --central-g-ink: #fff; }
+.central-grupo-aba.ativa { background: var(--central-g); color: var(--central-g-ink); }
+.central-grupo-aba.ativa .n { background: rgba(0, 0, 0, .17); color: var(--central-g-ink); }
+
 /* O traço que separa os quatro grupos de trabalho EM ABERTO do quinto,
    que é histórico. Sem ele os cinco pareceriam cinco filas iguais — e uma
    delas não pede nada de ninguém. */
@@ -895,24 +992,6 @@
 .central-grupo-corpo { flex-direction: row; }
 .central-grupo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 
-.central-grupo-filtros {
-  flex: 0 0 auto; display: flex; gap: 6px; align-items: center;
-  overflow-x: auto; scrollbar-width: none; padding: 1px 3px;
-}
-.central-grupo-filtros::-webkit-scrollbar { display: none; }
-.central-grupo-filtros[hidden] { display: none; }
-.central-grupo-fc {
-  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-  border: none; background: var(--card-bg); color: var(--text-secondary);
-  font-family: var(--font-body); font-size: 11.5px; font-weight: 600;
-  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
-  box-shadow: 0 1px 2px rgba(18, 18, 30, .05), 0 5px 14px rgba(18, 18, 30, .055);
-  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
-}
-.central-grupo-fc:hover { color: var(--text-primary); }
-.central-grupo-fc .q { font-size: 9.5px; font-weight: 800; opacity: .6; }
-.central-grupo-fc.ativa { background: #16181D; color: #fff; box-shadow: none; }
-[data-theme="dark"] .central-grupo-fc.ativa { background: #fff; color: #16181D; }
 
 /* A coluna só existe quando há largura sobrando: com muitos cards, o
    espaço é deles (o media query no fim tira ela). */
@@ -928,6 +1007,43 @@
   font-size: 9.5px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase;
   color: var(--text-muted); margin: 0 0 11px;
 }
+
+/* ----- O radar de um cliente (protótipo 2, aprovado pelo Cláudio) -----
+   Aparece no lugar do ranking quando o filtro deixa UM cliente sozinho:
+   quem ele é, os três números dele, o que andou e as duas ações. */
+.central-radar-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.central-radar-av {
+  width: 38px; height: 38px; border-radius: 13px; flex: 0 0 auto;
+  background: var(--central-g); color: var(--central-g-ink);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; letter-spacing: -.02em;
+}
+.central-radar-n { flex: 1; min-width: 0; }
+.central-radar-nome {
+  display: block; font-size: 14px; font-weight: 800; letter-spacing: -.03em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-radar-sub { font-size: 10.5px; color: var(--text-secondary); }
+.central-radar-nums { display: flex; gap: 7px; margin-bottom: 13px; }
+.central-radar-num { flex: 1; min-width: 0; background: var(--page-bg); border-radius: 11px; padding: 8px 9px; }
+.central-radar-num b {
+  display: block; font-size: 16px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1;
+}
+.central-radar-num span { font-size: 9.5px; color: var(--text-secondary); font-weight: 600; }
+/* Só o número que PEDE alguma coisa ganha a cor do grupo — se os três
+   acendessem, nenhum chamaria. */
+.central-radar-num.alerta { background: color-mix(in srgb, var(--central-g) 14%, transparent); }
+.central-radar-num.alerta b { color: var(--central-g); }
+[data-theme="dark"] .central-radar-num.alerta b { color: var(--central-g); filter: brightness(1.35); }
+.central-radar-acoes { display: flex; gap: 7px; margin-top: 12px; }
+.central-radar-b {
+  flex: 1; border: none; cursor: pointer; text-align: center; border-radius: 11px; padding: 9px;
+  font-family: var(--font-body); font-size: 11px; font-weight: 700;
+  background: var(--page-bg); color: var(--text-primary);
+  transition: filter var(--dur-fast) var(--ease-apple);
+}
+.central-radar-b:hover { filter: brightness(0.96); }
+.central-radar-b.forte { background: var(--central-g); color: var(--central-g-ink); }
 
 /* "Esperando há mais tempo" — a barra é a leitura rápida: comprimento
    proporcional ao mais antigo do grupo, âmbar quando passa do limite. */

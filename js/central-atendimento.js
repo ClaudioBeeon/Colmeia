@@ -1350,15 +1350,18 @@ const CENTRAL_GRUPOS = {
 };
 
 let centralGrupoAtual = null;
-// Cliente escolhido nas pílulas. "" = todos. Ele faz DUAS coisas: corta a
-// grade de cards e troca o que a coluna da direita mostra (de "esperando
-// há mais tempo" pra timeline daquele cliente).
-let centralGrupoCliente = "";
+// Clientes DESMARCADOS no seletor da pílula. Guarda quem está de fora, e
+// não quem está dentro, de propósito: o padrão é TODOS marcados (pedido
+// do Cláudio), e um cliente novo que apareça no meio do dia já entra
+// marcado sozinho, sem ninguém precisar lembrar de ligá-lo.
+let centralGrupoForaDoFiltro = new Set();
+// O que foi digitado na busca da pílula.
+let centralGrupoBusca = "";
 
 function centralAbrirGrupo(chave) {
   if (!CENTRAL_GRUPOS[chave]) return;
   centralGrupoAtual = chave;
-  centralGrupoCliente = "";   // grupo novo, filtro limpo
+  centralGrupoLimparFiltros();
   const pop = document.getElementById("centralGrupo");
   const fundo = document.getElementById("centralGrupoFundo");
   if (!pop || !fundo) return;
@@ -1405,26 +1408,36 @@ function centralRenderGrupo() {
   seg.querySelectorAll("[data-central-grupo]").forEach(b => {
     b.addEventListener("click", () => {
       centralGrupoAtual = b.dataset.centralGrupo;
-      centralGrupoCliente = "";   // o filtro é do grupo, não da sessão
+      centralGrupoLimparFiltros();   // o filtro é do grupo, não da sessão
       centralRenderGrupo();
     });
   });
 
+  // A cor do grupo pinta a aba acesa, o filtro ligado e o lado direito.
+  const pop = document.getElementById("centralGrupo");
+  if (pop) {
+    pop.classList.remove("cor-prontas", "cor-comCliente", "cor-ajuste", "cor-concluidos");
+    if (centralGrupoAtual !== "esperando") pop.classList.add("cor-" + centralGrupoAtual);
+  }
+
   const grupo = CENTRAL_GRUPOS[centralGrupoAtual];
   const todos = grupo.itens();
-  centralRenderFiltrosDeCliente(todos);
-  centralRenderLadoDoGrupo(todos);
+  centralRenderMenuDeClientes(todos);
 
-  // O filtro corta a GRADE, nunca os contadores da pílula: eles são o
-  // tamanho do grupo, e mudar com o filtro faria parecer que peça sumiu.
-  const itens = centralGrupoCliente
-    ? todos.filter(it => (it.cliente || "") === centralGrupoCliente)
-    : todos;
+  // Os dois filtros cortam a GRADE, nunca os contadores da pílula: eles
+  // são o tamanho do grupo, e mudar com o filtro faria parecer que peça
+  // sumiu do sistema.
+  const itens = todos.filter(it => centralGrupoPassaNoFiltro(it));
   if (sub) sub.innerHTML = itens.length ? grupo.sub(itens.length) : "";
 
+  // A coluna da direita segue o filtro: um cliente sozinho vira o radar
+  // dele; mais de um (ou todos) volta pro ranking de espera.
+  centralRenderLadoDoGrupo(todos, itens);
+
   if (!itens.length) {
+    const filtrando = centralGrupoBusca || centralGrupoForaDoFiltro.size;
     grade.innerHTML = `<div class="central-grupo-vazio">${escaparHTML(
-      centralGrupoCliente ? `Nada de ${centralGrupoCliente} neste grupo.` : grupo.vazio
+      filtrando ? "Nada aqui com esse filtro." : grupo.vazio
     )}</div>`;
     return;
   }
@@ -1560,6 +1573,44 @@ function centralAbrirDoGrupo(item, daFila) {
   centralAbrirAprovacoesEm("comCliente");
 }
 
+// A busca da pílula. Redesenha a cada tecla — tudo é filtro em cima do
+// que já está na memória, então não há ida ao servidor pra economizar.
+document.getElementById("centralGrupoBusca")?.addEventListener("input", ev => {
+  centralGrupoBusca = centralSemAcento(ev.target.value.trim());
+  centralRenderGrupo();
+});
+// Esc dentro da busca limpa o campo em vez de fechar o pop-up — fechar a
+// tela inteira porque alguém quis desfazer uma busca seria demais.
+document.getElementById("centralGrupoBusca")?.addEventListener("keydown", ev => {
+  if (ev.key !== "Escape" || !ev.target.value) return;
+  ev.stopPropagation();
+  ev.target.value = "";
+  centralGrupoBusca = "";
+  centralRenderGrupo();
+});
+
+document.getElementById("centralGrupoCliBtn")?.addEventListener("click", ev => {
+  ev.stopPropagation();
+  const menu = document.getElementById("centralGrupoCliMenu");
+  const btn = document.getElementById("centralGrupoCliBtn");
+  if (!menu || !btn) return;
+  menu.hidden = !menu.hidden;
+  btn.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+  if (menu.hidden) return;
+  // Fechar ao clicar fora, adiado um tique pra não pegar o clique que
+  // acabou de abrir (mesma técnica dos outros menus do app).
+  setTimeout(() => {
+    const fechar = e => {
+      if (menu.isConnected && !menu.hidden && !menu.contains(e.target) && e.target !== btn) {
+        menu.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+        document.removeEventListener("click", fechar, true);
+      }
+    };
+    document.addEventListener("click", fechar, true);
+  }, 0);
+});
+
 document.getElementById("centralGrupoFechar")?.addEventListener("click", centralFecharGrupo);
 document.getElementById("centralGrupoFundo")?.addEventListener("click", centralFecharGrupo);
 // Esc fecha — em fase de captura e checando que ele está aberto, pra não
@@ -1589,74 +1640,213 @@ document.addEventListener("keydown", ev => {
   ev.preventDefault();
   ev.stopPropagation();
   centralGrupoAtual = chaves[prox];
-  centralGrupoCliente = "";
+  centralGrupoLimparFiltros();
   centralRenderGrupo();
 }, true);
 
-/**
- * As pílulas de cliente. Só aparecem com MAIS DE UM cliente no grupo —
- * com um só, a fileira seria um botão que não filtra nada, ocupando uma
- * linha inteira pra dizer o que o card já diz.
- */
-function centralRenderFiltrosDeCliente(itens) {
-  const el = document.getElementById("centralGrupoFiltros");
-  if (!el) return;
 
-  const porCliente = {};
+
+/** Limpa busca e seletor — chamado sempre que o GRUPO muda. */
+function centralGrupoLimparFiltros() {
+  centralGrupoForaDoFiltro = new Set();
+  centralGrupoBusca = "";
+  const campo = document.getElementById("centralGrupoBusca");
+  if (campo) campo.value = "";
+  const menu = document.getElementById("centralGrupoCliMenu");
+  if (menu) menu.hidden = true;
+}
+
+/** Este item passa pelos dois filtros da pílula (busca + clientes)? */
+function centralGrupoPassaNoFiltro(it) {
+  const cliente = it.cliente || "";
+  if (centralGrupoForaDoFiltro.has(cliente)) return false;
+  if (!centralGrupoBusca) return true;
+  // Procura no nome do cliente E no da peça: quem digita "bau" quer o
+  // cliente, quem digita "stories" quer a peça — e ninguém deveria ter
+  // que escolher em qual campo está procurando.
+  const pecas = (it.pecas || []).map(p => p.nomePeca || "").join(" ");
+  const alvo = `${cliente} ${it.tituloTarefa || ""} ${it.nomeArquivo || ""} ${pecas}`;
+  return centralSemAcento(alvo).indexOf(centralGrupoBusca) !== -1;
+}
+
+/** Minúsculo e sem acento — pra "acai" achar "Açaí". */
+function centralSemAcento(t) {
+  return String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * O menu de clientes da pílula. Lista TODOS os clientes do atendimento
+ * (pedido do Cláudio), não só os que têm peça neste grupo — quem não tem
+ * aparece apagado e com zero, porque some da vista sem sumir da lista.
+ *
+ * Começa com todos marcados: o estado guarda quem está FORA
+ * (`centralGrupoForaDoFiltro`), então cliente novo já nasce marcado.
+ */
+function centralRenderMenuDeClientes(itens) {
+  const btn = document.getElementById("centralGrupoCliBtn");
+  const txt = document.getElementById("centralGrupoCliTxt");
+  const menu = document.getElementById("centralGrupoCliMenu");
+  if (!btn || !menu || !txt) return;
+
+  const contagem = {};
   itens.forEach(it => {
     const c = it.cliente || "";
-    if (!c) return;
-    porCliente[c] = (porCliente[c] || 0) + 1;
+    if (c) contagem[c] = (contagem[c] || 0) + 1;
   });
-  const nomes = Object.keys(porCliente).sort((a, b) => porCliente[b] - porCliente[a] || a.localeCompare(b, "pt-BR"));
 
-  if (nomes.length < 2) {
-    el.hidden = true;
-    el.innerHTML = "";
-    // Um cliente só (ou nenhum) não pode deixar um filtro velho ligado —
-    // a grade ficaria vazia sem nada na tela explicando por quê.
-    centralGrupoCliente = "";
-    return;
+  // Os clientes do atendimento vêm do painel-designers-beeon (a mesma
+  // fonte que centralClienteEhDoLogado já usa pra decidir o que aparece).
+  // Os que estão no grupo entram de qualquer jeito, mesmo que aquela
+  // lista não os conheça — o que está na fila é verdade, a lista é apoio.
+  const doAtendimento = new Set(Object.keys(contagem));
+  if (typeof pdTodosClientesPlano === "function") {
+    pdTodosClientesPlano().forEach(({ c }) => {
+      const nome = c && c.cliente;
+      if (nome && centralClienteEhDoLogado(nome)) doAtendimento.add(nome);
+    });
   }
+  const nomes = Array.from(doAtendimento).sort((a, b) =>
+    (contagem[b] || 0) - (contagem[a] || 0) || a.localeCompare(b, "pt-BR"));
 
-  el.hidden = false;
-  el.innerHTML = `
-    <button type="button" class="central-grupo-fc ${centralGrupoCliente ? "" : "ativa"}" data-central-fcli="">
-      Todos <span class="q">${itens.length}</span>
-    </button>
-    ${nomes.map(n => `
-      <button type="button" class="central-grupo-fc ${centralGrupoCliente === n ? "ativa" : ""}" data-central-fcli="${escaparHTML(n)}">
-        ${escaparHTML(n)} <span class="q">${porCliente[n]}</span>
-      </button>`).join("")}
+  const fora = centralGrupoForaDoFiltro;
+  const dentro = nomes.filter(n => !fora.has(n));
+  const todosMarcados = fora.size === 0;
+  txt.textContent = todosMarcados
+    ? "Todos os clientes"
+    : (dentro.length === 1 ? dentro[0] : `${dentro.length} clientes`);
+  btn.classList.toggle("filtrando", !todosMarcados);
+
+  menu.innerHTML = `
+    <div class="central-grupo-cli-topo">
+      <button type="button" class="central-grupo-cli-todos" data-central-cli-todos="1">Marcar todos</button>
+      <button type="button" class="central-grupo-cli-todos" data-central-cli-todos="0">Desmarcar todos</button>
+    </div>
+    ${nomes.map(n => {
+      const q = contagem[n] || 0;
+      return `
+        <button type="button" class="central-grupo-cli-i ${fora.has(n) ? "" : "on"} ${q ? "" : "vazio"}" data-central-cli="${escaparHTML(n)}">
+          <span class="central-grupo-cli-cx" aria-hidden="true">✓</span>
+          <span class="central-grupo-cli-nome">${escaparHTML(n)}</span>
+          <span class="central-grupo-cli-q">${q}</span>
+        </button>`;
+    }).join("")}
   `;
-  el.querySelectorAll("[data-central-fcli]").forEach(b => {
+
+  menu.querySelectorAll("[data-central-cli]").forEach(b => {
     b.addEventListener("click", () => {
-      const alvo = b.dataset.centralFcli;
-      // Clicar no cliente que já está ligado desliga — sem isso, voltar
-      // pra "todos" exigiria achar a pílula "Todos" lá no começo da fila.
-      centralGrupoCliente = (alvo === centralGrupoCliente) ? "" : alvo;
+      const nome = b.dataset.centralCli;
+      if (fora.has(nome)) fora.delete(nome); else fora.add(nome);
+      centralRenderGrupo();
+    });
+  });
+  menu.querySelectorAll("[data-central-cli-todos]").forEach(b => {
+    b.addEventListener("click", () => {
+      centralGrupoForaDoFiltro = b.dataset.centralCliTodos === "1" ? new Set() : new Set(nomes);
       centralRenderGrupo();
     });
   });
 }
 
 /**
- * A coluna da direita. Sem cliente escolhido, mostra quem está esperando
- * há mais tempo; com um escolhido, vira a TIMELINE dele (pedido do
- * Cláudio, 2026-08-08) — porque essa é a pergunta que vem logo depois de
- * escolher um cliente: "o que andou com ele?".
+ * A coluna da direita. Com UM cliente sozinho no filtro, ela vira o
+ * RADAR dele (protótipo 2, aprovado pelo Cláudio): os números daquele
+ * cliente, a timeline dele e as duas ações que fazem sentido. Com mais de
+ * um (ou todos), volta pro ranking de quem espera há mais tempo.
+ *
+ * `itens` é a lista já FILTRADA — é dela que sai "qual cliente sozinho".
+ * `todos` é a do grupo inteiro, que é o que o ranking precisa enxergar.
  */
-function centralRenderLadoDoGrupo(itens) {
+function centralRenderLadoDoGrupo(todos, itens) {
   const el = document.getElementById("centralGrupoLado");
   if (!el) return;
-  el.innerHTML = centralGrupoCliente
-    ? centralTimelineDoClienteHTML(centralGrupoCliente)
-    : centralEsperandoMaisHTML(itens);
+
+  const clientes = Array.from(new Set((itens || []).map(it => it.cliente || "").filter(Boolean)));
+  el.innerHTML = clientes.length === 1
+    ? centralRadarDoClienteHTML(clientes[0], itens)
+    : centralEsperandoMaisHTML(todos);
 
   el.querySelector("[data-central-lado-voltar]")?.addEventListener("click", () => {
-    centralGrupoCliente = "";
+    centralGrupoForaDoFiltro = new Set();
     centralRenderGrupo();
   });
+  el.querySelector("[data-central-radar-link]")?.addEventListener("click", ev => {
+    const codigo = ev.currentTarget.dataset.centralRadarLink;
+    if (codigo && typeof linkDeAprovacaoDoCliente === "function") {
+      navigator.clipboard?.writeText(linkDeAprovacaoDoCliente(codigo));
+      if (typeof mostrarToast === "function") mostrarToast("Link copiado.", "sucesso");
+    }
+  });
+  el.querySelector("[data-central-radar-cobrar]")?.addEventListener("click", () => {
+    const texto = `Oi! Passando pra saber se conseguiram dar uma olhada nas peças que mandamos. 🙂`;
+    window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+  });
+}
+
+/**
+ * O radar de UM cliente: quem ele é, os três números dele, o que andou e
+ * as duas ações. Tudo sai do que já está carregado — os números vêm dos
+ * caches da Central e a timeline de centralConstruirTimeline.
+ */
+function centralRadarDoClienteHTML(cliente, itens) {
+  const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
+  const quandoDe = it => Number(it.respondidoEm) || Number(it.criadoEm) || Date.parse(it.pedidoEm) || 0;
+  const antigos = itens.map(quandoDe).filter(Boolean);
+  const diasParado = antigos.length ? centralDiasDesde(Math.min.apply(null, antigos)) : 0;
+
+  const doCliente = st => centralAprovacoesPor(st).filter(a => (a.cliente || "") === cliente).length;
+  const comCliente = doCliente("pendente");
+  const aprovadas = doCliente("aprovado");
+
+  const eventos = (typeof centralConstruirTimeline === "function" ? centralConstruirTimeline() : [])
+    .filter(ev => (ev.cliente || "") === cliente).slice(0, 4);
+
+  // O link mais recente desse cliente — é o que o "copiar link" copia.
+  const comLink = centralAprovacoesPor("pendente")
+    .filter(a => (a.cliente || "") === cliente)
+    .sort((a, b) => (Number(b.criadoEm) || 0) - (Number(a.criadoEm) || 0))[0];
+
+  const iniciais = typeof initials === "function" ? initials(cliente) : cliente.slice(0, 2).toUpperCase();
+
+  return `
+    <div class="central-grupo-bloco">
+      <button type="button" class="central-grupo-voltar" data-central-lado-voltar>‹ Todos os clientes</button>
+      <div class="central-radar-cab">
+        <span class="central-radar-av">${escaparHTML(iniciais)}</span>
+        <span class="central-radar-n">
+          <span class="central-radar-nome">${escaparHTML(cliente)}</span>
+          <span class="central-radar-sub">${itens.length} ${itens.length === 1 ? "peça" : "peças"} neste grupo</span>
+        </span>
+      </div>
+      <div class="central-radar-nums">
+        <span class="central-radar-num ${diasParado >= limite ? "alerta" : ""}">
+          <b>${diasParado >= 1 ? diasParado + "d" : "hoje"}</b><span>parado há</span>
+        </span>
+        <span class="central-radar-num"><b>${comCliente}</b><span>com ele</span></span>
+        <span class="central-radar-num"><b>${aprovadas}</b><span>aprovadas</span></span>
+      </div>
+      ${eventos.length ? `
+        <p class="central-grupo-bloco-rot">O que andou</p>
+        <div class="central-grupo-tl">
+          ${eventos.map(ev => {
+            const doCli = (ev.quem || "") === cliente;
+            const frase = doCli ? ev.texto : ev.texto.charAt(0).toLowerCase() + ev.texto.slice(1);
+            return `
+              <div class="central-grupo-tl-i">
+                <span class="central-grupo-tl-p ${escaparHTML(ev.tipo)}"></span>
+                <span class="central-grupo-tl-t">
+                  <span class="central-grupo-tl-txt">${doCli ? "" : `<b>${escaparHTML(ev.quem || "")}</b> `}${frase}</span>
+                  <span class="central-grupo-tl-q">${escaparHTML(centralTempoRelativo(ev.quando))}</span>
+                </span>
+              </div>`;
+          }).join("")}
+        </div>` : `<p class="central-grupo-lado-vazio">Nada andou com esse cliente nos últimos dias.</p>`}
+      ${comLink ? `
+        <div class="central-radar-acoes">
+          <button type="button" class="central-radar-b" data-central-radar-link="${escaparHTML(comLink.codigo || "")}">Copiar link</button>
+          <button type="button" class="central-radar-b forte" data-central-radar-cobrar>Cobrar</button>
+        </div>` : ""}
+    </div>
+  `;
 }
 
 /** "Esperando há mais tempo" — barra proporcional ao mais antigo do grupo. */

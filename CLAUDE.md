@@ -987,19 +987,35 @@ propósito** — chegar na ponta e voltar pro começo faz perder a noção de on
 Com três cards o pop-up era um cabeçalho e um vazio enorme. Duas peças ocupam esse espaço **com
 trabalho**, e nenhuma delas custa uma busca nova — tudo sai do cache que a Central já lê.
 
-- **Pílulas de cliente** (`centralRenderFiltrosDeCliente`). Só aparecem com **mais de um** cliente
-  no grupo; com um só seria um botão que não filtra nada. Clicar no cliente que já está ligado
-  desliga — sem isso, voltar pra "todos" exigiria achar a pílula "Todos" no começo da fila.
-  ⚠️ O filtro corta a GRADE, **nunca os contadores da pílula preta**: eles são o tamanho do grupo, e
-  mudar com o filtro faria parecer que peça sumiu.
+- **Busca e seletor de clientes moram DENTRO da pílula preta** (2026-08-08) — ela deixou de ser só
+  troca de aba, no mesmo espírito da `.topbar-dark` do quadro, que é status + ações. As abas
+  encolhem pra abrir espaço; a busca é quem estica com o que sobra.
+  - A busca procura no nome do CLIENTE e no da PEÇA ao mesmo tempo, sem acento — ninguém deveria ter
+    que escolher em qual campo está procurando. Esc dentro dela limpa o campo em vez de fechar o
+    pop-up.
+  - O seletor lista **todos os clientes do atendimento** (de `pdTodosClientesPlano`, a mesma fonte
+    de `centralClienteEhDoLogado`), não só os que têm peça no grupo — quem não tem aparece apagado
+    e com zero. ⚠️ O estado guarda quem está **FORA** (`centralGrupoForaDoFiltro`), não quem está
+    dentro: o padrão é todos marcados, e um cliente novo já nasce marcado sozinho.
+  - O botão acende na cor do grupo quando há filtro ligado — dá pra ver que a lista está cortada sem
+    abrir o menu.
+  ⚠️ Os dois filtros cortam a GRADE, **nunca os contadores da pílula preta**: eles são o tamanho do
+  grupo, e mudar com o filtro faria parecer que peça sumiu do sistema.
+- **Cada grupo tem uma cor** (`.cor-prontas`, `.cor-comCliente`, …, via `--central-g`), e ela pinta a
+  aba acesa, o botão de filtro ligado e os detalhes do lado direito. A tela muda de temperatura ao
+  trocar de grupo — cor com significado, não enfeite.
 - **Coluna de contexto** (`centralRenderLadoDoGrupo`), que tem dois estados:
   - sem cliente escolhido → **"esperando há mais tempo"** (`centralEsperandoMaisHTML`): uma barra
     por cliente, proporcional ao mais antigo do grupo, âmbar ao passar de `APROVACAO_DIAS_ALERTA`.
     O piso de 6% na largura existe pra "hoje" ainda desenhar uma barrinha — largura zero parece
     dado faltando, não dado pequeno.
-  - com cliente escolhido → **a timeline dele** (`centralTimelineDoClienteHTML`, pedido do Cláudio):
-    as MESMAS fontes do feed da aba Hoje (`centralConstruirTimeline`), só filtradas. Funciona sem
+  - com UM cliente sozinho no filtro → **o radar dele** (`centralRadarDoClienteHTML`, protótipo 2
+    aprovado pelo Cláudio): os três números daquele cliente (há quanto tempo parado, quantas com
+    ele, quantas aprovadas), a timeline dele e as duas ações — copiar link e cobrar. A timeline sai
+    das MESMAS fontes do feed da aba Hoje (`centralConstruirTimeline`), só filtradas: funciona sem
     busca nova porque os eventos já carregam `cliente` desde que o feed foi feito.
+    ⚠️ Quem decide entre ranking e radar é a lista **já filtrada** ter exatamente um cliente — não o
+    seletor. Buscar por um cliente também abre o radar dele, o que é o certo.
   - ⚠️ Ela **some no celular** (media query): numa tela estreita roubaria a largura dos cards, que
     são o assunto. O filtro por cliente fica — ali ele ajuda ainda mais.
 - **Dois cuidados de texto na timeline:** `ev.quem` é o DESIGNER num "mandou pra conferência" e o
