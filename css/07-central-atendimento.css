@@ -792,6 +792,17 @@
    ajuste): num grupo só, ele continua chamando; em todos, não chamaria
    em nenhum. */
 .central-grupo-aba.alerta .n { background: var(--kanban-yellow); color: #16181D; }
+/* O traço que separa os quatro grupos de trabalho EM ABERTO do quinto,
+   que é histórico. Sem ele os cinco pareceriam cinco filas iguais — e uma
+   delas não pede nada de ninguém. */
+.central-grupo-risco {
+  flex: 0 0 auto; width: 1px; height: 18px; margin: 0 5px;
+  background: rgba(255, 255, 255, .16);
+}
+/* Contador verde: aqui o número é boa notícia, não trabalho acumulado. */
+.central-grupo-aba.feito .n { background: rgba(95, 224, 174, .2); color: #7BE6BC; }
+.central-grupo-aba.feito.ativa .n { background: var(--success); color: #fff; }
+
 .central-grupo-x {
   flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer;
   background: rgba(255, 255, 255, .1); color: rgba(255, 255, 255, .75);

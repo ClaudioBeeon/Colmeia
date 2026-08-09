@@ -961,6 +961,27 @@ preta troca entre os quatro grupos sem fechar nada**, com os contadores sempre �
   tela de conferência de sempre. Duplicar a decisão em dois lugares seria a chance de alguém
   resolver uma peça sem ter olhado a arte direito.
 
+### A quinta aba: "Concluídos" (2026-08-08)
+
+Os quatro grupos originais são trabalho EM ABERTO; este é **histórico**, e a pílula mostra isso:
+um traço (`.central-grupo-risco`) separa ele dos outros e o contador é **verde** — aqui o número é
+boa notícia, não trabalho acumulado. Quem marca a diferença no código é `historico: true` no
+`CENTRAL_GRUPOS`.
+
+- ⚠️ **São os últimos 7 dias, não tudo.** `listarAprovacoesPendentes` (Aprovacao.gs) só devolve
+  aprovadas dentro de `APROVADAS_JANELA_DIAS`, de propósito, pra a lista não virar arquivo morto que
+  só cresce. O texto do topo diz isso — senão o número pareceria "o total de sempre".
+- **Custo zero:** essas linhas já vinham no mesmo cache que os outros grupos leem.
+- **Clicar abre o LINK DO CLIENTE em aba nova**, não uma conferência: a peça fechou, não há o que
+  decidir. O que ainda serve é ver a mesma página que o cliente viu, já com o "Aprovado" e o nome de
+  quem confirmou.
+- O selo do card mostra **quem aprovou** — e esse nome é do lado do CLIENTE (o que ele digitou na
+  caixinha da página de aprovação), não de alguém da Beeon. É a única informação que essa aba tem e
+  nenhuma outra tem.
+
+**Navegação por seta:** ← e → andam entre os grupos na ordem da pílula. **Não circulam de
+propósito** — chegar na ponta e voltar pro começo faz perder a noção de onde se está.
+
 ### O que preenche o espaço quando há poucas peças
 
 Com três cards o pop-up era um cabeçalho e um vazio enorme. Duas peças ocupam esse espaço **com

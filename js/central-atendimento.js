@@ -1330,6 +1330,23 @@ const CENTRAL_GRUPOS = {
     vazio: "Nada voltou com ajuste. 🎉",
     itens: () => centralAprovacoesPor("ajuste"),
   },
+  // O quinto (2026-08-08, pedido do Cláudio) é de natureza diferente dos
+  // outros quatro: eles são trabalho EM ABERTO, este é histórico. Daí o
+  // traço que o separa na pílula e o contador verde — e daí também o
+  // `historico: true`, que é o que o resto do código lê pra saber que
+  // aqui não há nada a fazer, só a conferir que fechou.
+  //
+  // ⚠️ SÃO OS ÚLTIMOS 7 DIAS, não tudo. `listarAprovacoesPendentes`
+  // (Aprovacao.gs) só traz aprovadas dentro de APROVADAS_JANELA_DIAS —
+  // de propósito, pra a aba não virar arquivo morto que só cresce. O
+  // rótulo diz isso, senão o número pareceria "o total de sempre".
+  concluidos: {
+    rotulo: "Concluídos",
+    historico: true,
+    sub: n => `<b>${n} ${n === 1 ? "peça aprovada" : "peças aprovadas"}</b> pelo cliente nos últimos 7 dias`,
+    vazio: "Nenhuma peça aprovada nos últimos 7 dias.",
+    itens: () => centralAprovacoesPor("aprovado"),
+  },
 };
 
 let centralGrupoAtual = null;
@@ -1374,10 +1391,14 @@ function centralRenderGrupo() {
   seg.innerHTML = Object.keys(CENTRAL_GRUPOS).map(chave => {
     const g = CENTRAL_GRUPOS[chave];
     const n = g.itens().length;
-    return `
+    // O traço antes do "Concluídos" separa o que é trabalho em aberto do
+    // que é histórico: sem ele, os cinco pareceriam cinco filas iguais, e
+    // um deles não pede nada de ninguém.
+    const risco = g.historico ? `<span class="central-grupo-risco" aria-hidden="true"></span>` : "";
+    return risco + `
       <button type="button" role="tab" data-central-grupo="${chave}"
               aria-selected="${chave === centralGrupoAtual ? "true" : "false"}"
-              class="central-grupo-aba ${chave === centralGrupoAtual ? "ativa" : ""} ${g.alerta && n ? "alerta" : ""}">
+              class="central-grupo-aba ${chave === centralGrupoAtual ? "ativa" : ""} ${g.alerta && n ? "alerta" : ""} ${g.historico ? "feito" : ""}">
         ${escaparHTML(g.rotulo)} <span class="n">${n}</span>
       </button>`;
   }).join("");
@@ -1425,7 +1446,17 @@ function centralRenderGrupo() {
   });
 }
 
-/** O card. Um desenho só pros quatro grupos; o que muda é o texto. */
+/** "hoje" / "ontem" / "há 4 dias" — o carimbo curto do card de concluído. */
+function centralQuandoCurto(quandoMs) {
+  const q = Number(quandoMs) || 0;
+  if (!q) return "";
+  const d = typeof centralDiasDesde === "function" ? centralDiasDesde(q) : 0;
+  if (d <= 0) return "hoje";
+  if (d === 1) return "ontem";
+  return `há ${d} dias`;
+}
+
+/** O card. Um desenho só pros cinco grupos; o que muda é o texto. */
 function centralCardDoGrupoHTML(it, i, daFila) {
   const pecas = it.pecas || [];
   const primeira = pecas[0] || {};
@@ -1450,6 +1481,12 @@ function centralCardDoGrupoHTML(it, i, daFila) {
   } else if (centralGrupoAtual === "prontas") {
     selo = it.aprovadoPor ? `conferida por ${it.aprovadoPor}` : "conferida";
     classeSelo = "ok";
+  } else if (centralGrupoAtual === "concluidos") {
+    // Quem aprovou é do lado do CLIENTE (o nome que ele digitou na
+    // caixinha da página de aprovação), não alguém da Beeon — é a única
+    // informação que essa aba tem e que nenhuma outra tem.
+    selo = it.quemAprovou ? `${it.quemAprovou} aprovou` : "aprovada";
+    classeSelo = "ok";
   } else {
     const base = Number(it.respondidoEm) || Number(it.criadoEm) || 0;
     const dias = typeof centralDiasDesde === "function" ? centralDiasDesde(base) : 0;
@@ -1464,6 +1501,7 @@ function centralCardDoGrupoHTML(it, i, daFila) {
       <span class="central-gc-cima">
         ${selo ? `<span class="central-gc-selo ${classeSelo}">${escaparHTML(selo)}</span>` : ""}
         ${daFila && pecas.length > 1 ? `<span class="central-gc-selo">${pecas.length} peças</span>` : ""}
+        ${centralGrupoAtual === "concluidos" ? `<span class="central-gc-selo">${escaparHTML(centralQuandoCurto(it.respondidoEm))}</span>` : ""}
       </span>
       <span class="central-gc-prat">
         <span class="central-gc-t">
@@ -1506,6 +1544,16 @@ function centralAbrirDoGrupo(item, daFila) {
     apvAbrirParaAlteracaoDoCliente(item);
     return;
   }
+  // Concluído: não existe conferência nem cobrança — a peça fechou. O que
+  // ainda serve é VER o que o cliente viu (a mesma página que ele abriu,
+  // já com o "Aprovado" e o nome de quem confirmou). Abre em aba nova pra
+  // não tirar ninguém da Central.
+  if (grupo === "concluidos") {
+    if (item.codigo && typeof linkDeAprovacaoDoCliente === "function") {
+      window.open(linkDeAprovacaoDoCliente(item.codigo), "_blank", "noopener");
+    }
+    return;
+  }
   // "Com o cliente": a peça está fora, esperando resposta — não existe
   // conferência pra abrir. Leva pra coluna dela na aba Aprovações, que é
   // onde moram copiar o link e cobrar no WhatsApp.
@@ -1518,11 +1566,31 @@ document.getElementById("centralGrupoFundo")?.addEventListener("click", centralF
 // roubar o Esc de quem está por cima (a conferência) nem de quem está por
 // baixo (a Central).
 document.addEventListener("keydown", ev => {
-  if (ev.key !== "Escape") return;
   const pop = document.getElementById("centralGrupo");
   if (!pop || pop.hidden) return;
+
+  if (ev.key === "Escape") {
+    ev.stopPropagation();
+    centralFecharGrupo();
+    return;
+  }
+
+  // ← → andam entre os grupos, na ordem da pílula. Quem está despachando
+  // fila não deveria precisar tirar a mão do teclado pra ir pro próximo
+  // grupo. Não anda em círculo de propósito: chegar na ponta e voltar pro
+  // começo faz a pessoa perder de vista onde está.
+  if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+  const alvo = ev.target;
+  if (alvo && (alvo.tagName === "INPUT" || alvo.tagName === "TEXTAREA")) return;
+  const chaves = Object.keys(CENTRAL_GRUPOS);
+  const i = chaves.indexOf(centralGrupoAtual);
+  const prox = i + (ev.key === "ArrowRight" ? 1 : -1);
+  if (i < 0 || prox < 0 || prox >= chaves.length) return;
+  ev.preventDefault();
   ev.stopPropagation();
-  centralFecharGrupo();
+  centralGrupoAtual = chaves[prox];
+  centralGrupoCliente = "";
+  centralRenderGrupo();
 }, true);
 
 /**
