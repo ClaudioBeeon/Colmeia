@@ -92,7 +92,9 @@ function centralAtencaoFila() {
     // desejada e o designer é a subtarefa, e o backend já junta os dois.
     .filter(p => !p.entregue)
     .filter(p => centralClienteEhDoLogado(p.cliente))
-    .filter(p => !centralClienteAtivo || (p.cliente || "") === centralClienteAtivo)
+    // Mesmo cliente escrito de outro jeito ainda é o mesmo cliente — ver
+    // centralMesmoCliente (js/central-atendimento.js).
+    .filter(p => !centralClienteAtivo || centralMesmoCliente(p.cliente, centralClienteAtivo))
     .filter(p => !seguradas[String(p.id)])
     .filter(p => !jaCobradas.has(`${p.id}::${p.publicacao}`))
     // Quem posta hoje na frente; dentro do mesmo dia, sem designer primeiro

@@ -1032,6 +1032,30 @@ radar e o calendário. Amarelo de propósito: no vocabulário do app, amarelo é
 - **Não substitui o "ver como" ao lado, e os dois convivem:** aquele troca de PESSOA (só coordenador
   vê), este corta por CLIENTE dentro do que a pessoa já enxerga.
 
+### Cliente repetido no seletor: comparar por CHAVE, nunca por `===` (2026-08-09)
+
+O mesmo cliente aparecia duas ou três vezes no seletor do pill. O nome chega de fontes que não
+conversam — a fila e as aprovações trazem o que está gravado na tarefa do Runrun.it, e a lista de
+"clientes de quem está vendo" vem do painel-designers-beeon. Um acento, um MAIÚSCULO ou um espaço a
+mais e viram dois nomes diferentes. Corrigir o cadastro não resolve: a grafia velha continua gravada
+nas peças antigas.
+
+- **`centralChaveCliente` / `centralMesmoCliente` / `centralUnificarClientes`** (js/central-atendimento.js)
+  são o ponto único. A chave é `normalizarParaComparar` (sem acento, minúsculo, pontuação virando
+  espaço) — a mesma que `pdMesclarPorCliente` já usava no painel dos designers.
+- ⚠️ **Unificar a lista SEM trocar as comparações teria quebrado a Central inteira**: escolher
+  "Clínicas União Passos" no pill deixaria de casar com as peças gravadas como "Clinicas União
+  PASSOS", e a tela ficaria vazia. As duas coisas andam juntas — `centralClienteEhDoLogado`, o
+  calendário, a pílula de atenção, o radar do cliente e a timeline dele passaram todos pra
+  `centralMesmoCliente`.
+- ⚠️ **`centralGrupoForaDoFiltro` guarda CHAVES, não nomes**, e `contagem` no menu de clientes também
+  é por chave — por nome cru o cliente virava duas linhas no menu, uma com o número e outra zerada.
+- **A grafia mostrada é a do CADASTRO** (painel-designers-beeon), que entra primeiro em
+  `centralUnificarClientes`: é a que o Cláudio corrige quando está errada. As outras fontes só
+  completam o que faltar — cliente que só existe numa peça continua aparecendo.
+- Isto é só de EXIBIÇÃO: não renomeia nada em lugar nenhum, e clientes de nomes de verdade
+  diferentes continuam separados.
+
 
 **As três fontes do calendário (2026-08-09).** A primeira versão usava só a varredura do quadro, e
 por isso o mês aparecia pela metade: aquela varredura traz **só tarefas abertas** e joga os **cards

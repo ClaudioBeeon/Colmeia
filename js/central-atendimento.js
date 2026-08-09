@@ -218,15 +218,25 @@ function centralRenderPillCliente() {
   // hoje com a lista do painel-designers-beeon: um cliente sem nenhuma
   // peça em aberto continua sendo cliente dela, e sumir dele da lista
   // faria parecer que o Colmeia esqueceu do cliente.
-  const nomes = new Set();
-  centralFilaCache.forEach(it => { if (it.cliente && centralClienteEhDaPessoa(it.cliente)) nomes.add(it.cliente); });
-  centralAprovacoesCache.forEach(a => { if (a.cliente && centralClienteEhDaPessoa(a.cliente)) nomes.add(a.cliente); });
+  //
+  // ⚠️ A lista é UNIFICADA por `centralUnificarClientes`: as três fontes
+  // escrevem o nome do cliente do seu próprio jeito (acento, maiúscula,
+  // espaço a mais), e sem isso o mesmo cliente aparecia duas ou três
+  // vezes no seletor. O cadastro do painel-designers-beeon vem PRIMEIRO
+  // de propósito — é a grafia oficial, a que o Cláudio corrige quando
+  // está errada; as outras duas só completam o que faltar.
+  const doCadastro = [];
   if (typeof pdTodosClientesPlano === "function") {
     pdTodosClientesPlano().forEach(({ c }) => {
-      if (c && c.cliente && centralClienteEhDaPessoa(c.cliente)) nomes.add(c.cliente);
+      if (c && c.cliente && centralClienteEhDaPessoa(c.cliente)) doCadastro.push(c.cliente);
     });
   }
-  const lista = Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const dasPecas = [];
+  centralFilaCache.forEach(it => { if (it.cliente && centralClienteEhDaPessoa(it.cliente)) dasPecas.push(it.cliente); });
+  centralAprovacoesCache.forEach(a => { if (a.cliente && centralClienteEhDaPessoa(a.cliente)) dasPecas.push(a.cliente); });
+
+  const lista = centralUnificarClientes(doCadastro.concat(dasPecas))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   txt.textContent = centralClienteAtivo || "Todos os clientes";
   av.textContent = centralClienteAtivo
@@ -239,7 +249,7 @@ function centralRenderPillCliente() {
       Todos os clientes
     </button>
     ${lista.map(n => `
-      <button type="button" class="central-pill-cli-i ${centralClienteAtivo === n ? "on" : ""}" data-central-pill-cli="${escaparHTML(n)}">
+      <button type="button" class="central-pill-cli-i ${centralMesmoCliente(centralClienteAtivo, n) && centralClienteAtivo ? "on" : ""}" data-central-pill-cli="${escaparHTML(n)}">
         ${escaparHTML(n)}
       </button>`).join("")}
   `;
@@ -386,8 +396,53 @@ function centralClienteEhDoLogado(nomeCliente) {
   // ⚠️ Quem MONTA a lista do pill não pode passar por aqui, senão sobraria
   // só o cliente já escolhido e não haveria como trocar. Essa parte usa
   // `centralClienteEhDaPessoa` direto, sem esta linha.
-  if (centralClienteAtivo && String(nomeCliente || "") !== centralClienteAtivo) return false;
+  if (centralClienteAtivo && !centralMesmoCliente(nomeCliente, centralClienteAtivo)) return false;
   return centralClienteEhDaPessoa(nomeCliente);
+}
+
+/**
+ * O MESMO cliente escrito de dois jeitos (2026-08-09).
+ *
+ * O nome do cliente chega de duas fontes que não conversam: a fila e as
+ * aprovações trazem o que está gravado na tarefa do Runrun.it, e a lista
+ * de "clientes de quem está vendo" vem do painel-designers-beeon. Basta
+ * um acento, um MAIÚSCULO ou um espaço a mais pra ser o mesmo cliente
+ * escrito diferente — e aí ele aparecia DUAS VEZES no seletor do pill.
+ *
+ * ⚠️ Comparar por igualdade exata (`===`) aqui é pior do que parece: com
+ * a lista já unificada, escolher "Clínicas União Passos" no pill deixaria
+ * de casar com as peças gravadas como "Clinicas União PASSOS" e a Central
+ * inteira ficaria vazia. Todo lugar que compara cliente com cliente passa
+ * por aqui.
+ *
+ * Isto é só de EXIBIÇÃO — não renomeia nada em lugar nenhum, e clientes
+ * de nomes de verdade diferentes continuam separados.
+ */
+function centralChaveCliente(nome) {
+  return typeof normalizarParaComparar === "function"
+    ? normalizarParaComparar(nome || "")
+    : String(nome || "").trim().toLowerCase();
+}
+
+function centralMesmoCliente(a, b) {
+  return centralChaveCliente(a) === centralChaveCliente(b);
+}
+
+/**
+ * Junta uma lista de nomes de cliente em UM por cliente de verdade.
+ * Mantém a primeira grafia vista — as fontes são passadas na ordem de
+ * preferência por quem chama.
+ */
+function centralUnificarClientes(nomes) {
+  const porChave = new Map();
+  (nomes || []).forEach(n => {
+    const nome = String(n || "").trim();
+    if (!nome) return;
+    const chave = centralChaveCliente(nome);
+    if (!chave || porChave.has(chave)) return;
+    porChave.set(chave, nome);
+  });
+  return Array.from(porChave.values());
 }
 
 /** O cliente pertence a quem está vendo? (sem o filtro do pill amarelo) */
@@ -1959,7 +2014,9 @@ function centralGrupoLimparFiltros() {
 /** Este item passa pelos dois filtros da pílula (busca + clientes)? */
 function centralGrupoPassaNoFiltro(it) {
   const cliente = it.cliente || "";
-  if (centralGrupoForaDoFiltro.has(cliente)) return false;
+  // Por CHAVE: o filtro é montado a partir do cadastro, e a peça pode
+  // estar gravada com outra grafia do mesmo cliente (ver centralMesmoCliente).
+  if (centralGrupoForaDoFiltro.has(centralChaveCliente(cliente))) return false;
   if (!centralGrupoBusca) return true;
   // Procura no nome do cliente E no da peça: quem digita "bau" quer o
   // cliente, quem digita "stories" quer a peça — e ninguém deveria ter
@@ -1988,28 +2045,36 @@ function centralRenderMenuDeClientes(itens) {
   const menu = document.getElementById("centralGrupoCliMenu");
   if (!btn || !menu || !txt) return;
 
+  // ⚠️ Contado por CHAVE, não pelo nome cru: a fila e o cadastro escrevem
+  // o mesmo cliente de jeitos diferentes, e por nome cru ele virava duas
+  // linhas no menu — uma com o número e outra zerada. Ver
+  // centralMesmoCliente.
   const contagem = {};
   itens.forEach(it => {
-    const c = it.cliente || "";
-    if (c) contagem[c] = (contagem[c] || 0) + 1;
+    const chave = centralChaveCliente(it.cliente);
+    if (chave) contagem[chave] = (contagem[chave] || 0) + 1;
   });
 
   // Os clientes do atendimento vêm do painel-designers-beeon (a mesma
   // fonte que centralClienteEhDoLogado já usa pra decidir o que aparece).
   // Os que estão no grupo entram de qualquer jeito, mesmo que aquela
   // lista não os conheça — o que está na fila é verdade, a lista é apoio.
-  const doAtendimento = new Set(Object.keys(contagem));
+  const doCadastro = [];
   if (typeof pdTodosClientesPlano === "function") {
     pdTodosClientesPlano().forEach(({ c }) => {
       const nome = c && c.cliente;
-      if (nome && centralClienteEhDoLogado(nome)) doAtendimento.add(nome);
+      if (nome && centralClienteEhDoLogado(nome)) doCadastro.push(nome);
     });
   }
-  const nomes = Array.from(doAtendimento).sort((a, b) =>
-    (contagem[b] || 0) - (contagem[a] || 0) || a.localeCompare(b, "pt-BR"));
+  const nomes = centralUnificarClientes(doCadastro.concat(itens.map(it => it.cliente)))
+    .sort((a, b) =>
+      (contagem[centralChaveCliente(b)] || 0) - (contagem[centralChaveCliente(a)] || 0)
+      || a.localeCompare(b, "pt-BR"));
 
+  // `fora` guarda CHAVES, não nomes — senão desmarcar o cliente pela
+  // grafia do cadastro deixaria passar as peças gravadas com a outra.
   const fora = centralGrupoForaDoFiltro;
-  const dentro = nomes.filter(n => !fora.has(n));
+  const dentro = nomes.filter(n => !fora.has(centralChaveCliente(n)));
   const todosMarcados = fora.size === 0;
   txt.textContent = todosMarcados
     ? "Todos os clientes"
@@ -2022,9 +2087,9 @@ function centralRenderMenuDeClientes(itens) {
       <button type="button" class="central-grupo-cli-todos" data-central-cli-todos="0">Desmarcar todos</button>
     </div>
     ${nomes.map(n => {
-      const q = contagem[n] || 0;
+      const q = contagem[centralChaveCliente(n)] || 0;
       return `
-        <button type="button" class="central-grupo-cli-i ${fora.has(n) ? "" : "on"} ${q ? "" : "vazio"}" data-central-cli="${escaparHTML(n)}">
+        <button type="button" class="central-grupo-cli-i ${fora.has(centralChaveCliente(n)) ? "" : "on"} ${q ? "" : "vazio"}" data-central-cli="${escaparHTML(n)}">
           <span class="central-grupo-cli-cx" aria-hidden="true">✓</span>
           <span class="central-grupo-cli-nome">${escaparHTML(n)}</span>
           <span class="central-grupo-cli-q">${q}</span>
@@ -2034,14 +2099,16 @@ function centralRenderMenuDeClientes(itens) {
 
   menu.querySelectorAll("[data-central-cli]").forEach(b => {
     b.addEventListener("click", () => {
-      const nome = b.dataset.centralCli;
-      if (fora.has(nome)) fora.delete(nome); else fora.add(nome);
+      const chave = centralChaveCliente(b.dataset.centralCli);
+      if (fora.has(chave)) fora.delete(chave); else fora.add(chave);
       centralRenderGrupo();
     });
   });
   menu.querySelectorAll("[data-central-cli-todos]").forEach(b => {
     b.addEventListener("click", () => {
-      centralGrupoForaDoFiltro = b.dataset.centralCliTodos === "1" ? new Set() : new Set(nomes);
+      centralGrupoForaDoFiltro = b.dataset.centralCliTodos === "1"
+        ? new Set()
+        : new Set(nomes.map(centralChaveCliente));
       centralRenderGrupo();
     });
   });
@@ -2060,7 +2127,9 @@ function centralRenderLadoDoGrupo(todos, itens) {
   const el = document.getElementById("centralGrupoLado");
   if (!el) return;
 
-  const clientes = Array.from(new Set((itens || []).map(it => it.cliente || "").filter(Boolean)));
+  // Unificado: duas grafias do mesmo cliente contavam como dois e o radar
+  // dele nunca abria (ver centralMesmoCliente).
+  const clientes = centralUnificarClientes((itens || []).map(it => it.cliente));
   el.innerHTML = clientes.length === 1
     ? centralRadarDoClienteHTML(clientes[0], itens)
     : centralEsperandoMaisHTML(todos);
@@ -2093,16 +2162,19 @@ function centralRadarDoClienteHTML(cliente, itens) {
   const antigos = itens.map(quandoDe).filter(Boolean);
   const diasParado = antigos.length ? centralDiasDesde(Math.min.apply(null, antigos)) : 0;
 
-  const doCliente = st => centralAprovacoesPor(st).filter(a => (a.cliente || "") === cliente).length;
+  // Comparação por chave em todo o radar: o cliente escolhido veio da
+  // lista unificada e pode não bater letra a letra com o que está gravado
+  // na peça (ver centralMesmoCliente).
+  const doCliente = st => centralAprovacoesPor(st).filter(a => centralMesmoCliente(a.cliente, cliente)).length;
   const comCliente = doCliente("pendente");
   const aprovadas = doCliente("aprovado");
 
   const eventos = (typeof centralConstruirTimeline === "function" ? centralConstruirTimeline() : [])
-    .filter(ev => (ev.cliente || "") === cliente).slice(0, 4);
+    .filter(ev => centralMesmoCliente(ev.cliente, cliente)).slice(0, 4);
 
   // O link mais recente desse cliente — é o que o "copiar link" copia.
   const comLink = centralAprovacoesPor("pendente")
-    .filter(a => (a.cliente || "") === cliente)
+    .filter(a => centralMesmoCliente(a.cliente, cliente))
     .sort((a, b) => (Number(b.criadoEm) || 0) - (Number(a.criadoEm) || 0))[0];
 
   const iniciais = typeof initials === "function" ? initials(cliente) : cliente.slice(0, 2).toUpperCase();
@@ -2128,7 +2200,7 @@ function centralRadarDoClienteHTML(cliente, itens) {
         <p class="central-grupo-bloco-rot">O que andou</p>
         <div class="central-grupo-tl">
           ${eventos.map(ev => {
-            const doCli = (ev.quem || "") === cliente;
+            const doCli = centralMesmoCliente(ev.quem, cliente);
             const frase = doCli ? ev.texto : ev.texto.charAt(0).toLowerCase() + ev.texto.slice(1);
             return `
               <div class="central-grupo-tl-i">
@@ -2152,12 +2224,17 @@ function centralRadarDoClienteHTML(cliente, itens) {
 /** "Esperando há mais tempo" — barra proporcional ao mais antigo do grupo. */
 function centralEsperandoMaisHTML(itens) {
   const quandoDe = it => Number(it.respondidoEm) || Number(it.criadoEm) || Date.parse(it.pedidoEm) || 0;
+  // Agrupado por CHAVE (ver centralMesmoCliente), senão o mesmo cliente
+  // escrito de dois jeitos virava duas barras no ranking.
   const porCliente = {};
+  const nomeDaChave = {};
   itens.forEach(it => {
     const c = it.cliente || "";
+    const chave = centralChaveCliente(c);
     const q = quandoDe(it);
-    if (!c || !q) return;
-    if (!porCliente[c] || q < porCliente[c]) porCliente[c] = q;   // o mais ANTIGO do cliente
+    if (!chave || !q) return;
+    if (!nomeDaChave[chave]) nomeDaChave[chave] = c;
+    if (!porCliente[chave] || q < porCliente[chave]) porCliente[chave] = q;   // o mais ANTIGO do cliente
   });
   const nomes = Object.keys(porCliente).sort((a, b) => porCliente[a] - porCliente[b]);
   if (!nomes.length) {
@@ -2179,7 +2256,7 @@ function centralEsperandoMaisHTML(itens) {
         return `
           <div class="central-grupo-esp">
             <div class="central-grupo-esp-l">
-              <span class="central-grupo-esp-n">${escaparHTML(n)}</span>
+              <span class="central-grupo-esp-n">${escaparHTML(nomeDaChave[n] || n)}</span>
               <span class="central-grupo-esp-d ${alerta ? "alerta" : ""}">${dias >= 1 ? dias + " d" : "hoje"}</span>
             </div>
             <div class="central-grupo-esp-b ${alerta ? "alerta" : ""}"><i style="width:${pct}%"></i></div>
@@ -2199,7 +2276,7 @@ function centralEsperandoMaisHTML(itens) {
  */
 function centralTimelineDoClienteHTML(cliente) {
   const eventos = (typeof centralConstruirTimeline === "function" ? centralConstruirTimeline() : [])
-    .filter(ev => (ev.cliente || "") === cliente);
+    .filter(ev => centralMesmoCliente(ev.cliente, cliente));
 
   const voltar = `
     <button type="button" class="central-grupo-voltar" data-central-lado-voltar>‹ Todos os clientes</button>`;
@@ -2223,7 +2300,7 @@ function centralTimelineDoClienteHTML(cliente) {
           // CLIENTE nos dois de resposta. Aqui a coluna inteira já é de um
           // cliente só, então repetir o nome dele em cada linha é ruído —
           // nesses casos o nome sai e sobra só o que aconteceu.
-          const doCliente = (ev.quem || "") === cliente;
+          const doCliente = centralMesmoCliente(ev.quem, cliente);
           // `ev.texto` foi escrito pro feed, onde o nome fica numa linha
           // acima ("Mandou X pra conferência"). Inline, depois do nome,
           // ele precisa começar minúsculo.
@@ -2353,7 +2430,7 @@ function centralDesenharCalendario() {
   // cliente escolhido no pill amarelo do topo, só as dele.
   const postagens = (centralPostagens || []).filter(p =>
     centralClienteEhDoLogado(p.cliente) &&
-    (!centralClienteAtivo || (p.cliente || "") === centralClienteAtivo));
+    (!centralClienteAtivo || centralMesmoCliente(p.cliente, centralClienteAtivo)));
 
   const porDia = {};
   postagens.forEach(p => {
