@@ -2,10 +2,11 @@
 // PRECISA DE ATENÇÃO (2026-08-09)
 // ============================================================================
 //
-// A pílula no RODAPÉ da Timeline da Central (protótipo 2, aprovado pelo
-// Cláudio): peças que postam HOJE ou AMANHÃ e ainda não ficaram prontas.
-// Clicar nela faz o card preto inteiro virar a revisão — uma peça de cada
-// vez, num baralho de cartões — e cada cartão sai por um de dois lados:
+// O pill AMARELO na barra preta do topo da Central (protótipo 2, aprovado
+// pelo Cláudio; nasceu no rodapé da Timeline e SUBIU pro topo no mesmo dia,
+// a pedido dele): peças ATRASADAS, e as que postam hoje ou amanhã, que
+// ainda não ficaram prontas. Clicar nele expande a revisão — uma peça de
+// cada vez, num baralho de cartões — e cada cartão sai por um de dois lados:
 //
 //   PEDIR ATENÇÃO (direita, amarelo) — grava o pedido na planilha, avisa
 //     quem coordena no sino do Colmeia e vira um evento vermelho na própria
@@ -64,25 +65,42 @@ function centralAtencaoSegurar(taskId) {
 // ===== A fila =====
 
 /**
- * As peças que postam hoje ou amanhã e ainda não foram entregues, já sem
- * as que alguém segurou hoje e sem as que JÁ FORAM COBRADAS pra aquela
- * data de postagem — cobrar duas vezes a mesma peça é exatamente o que a
- * gravação do pedido existe pra evitar.
+ * As peças ATRASADAS (já passou o dia de postar e não ficaram prontas) e
+ * as que postam hoje ou amanhã, já sem as que alguém segurou hoje e sem
+ * as que JÁ FORAM COBRADAS pra aquela data de postagem — cobrar duas
+ * vezes a mesma peça é exatamente o que a gravação do pedido existe pra
+ * evitar.
+ *
+ * ⚠️ As ATRASADAS entraram depois (2026-08-09, pedido do Cláudio). Na
+ * primeira versão a fila era só hoje+amanhã, e isso tinha um buraco feio:
+ * a peça que passava do dia de postar sem ficar pronta — o caso MAIS
+ * grave de todos — simplesmente saía da fila no dia seguinte, como se
+ * tivesse se resolvido sozinha.
+ *
+ * O limite de `CENTRAL_ATENCAO_DIAS_ATRAS` existe pra a fila não virar um
+ * cemitério: peça de um mês atrás que ninguém entregou não é uma decisão
+ * de hoje, e uma fila de 40 cartões não é revisada por ninguém.
  *
  * Devolve [] enquanto o calendário ainda não chegou (centralPostagens ===
  * null): sem dado, a pílula simplesmente não aparece, em vez de aparecer
  * zerada e piscar quando o dado chega.
  */
+const CENTRAL_ATENCAO_DIAS_ATRAS = 14;
+
 function centralAtencaoFila() {
   if (!Array.isArray(centralPostagens)) return [];
 
   const hoje = centralCalChave(new Date());
   const amanha = centralCalChave(new Date(Date.now() + 86400000));
+  const limiteAtras = centralCalChave(new Date(Date.now() - CENTRAL_ATENCAO_DIAS_ATRAS * 86400000));
   const seguradas = centralAtencaoSeguradas();
   const jaCobradas = new Set(centralPedidosAtencao.map(p => `${p.taskId}::${p.publicacao}`));
 
   return centralPostagens
-    .filter(p => p.publicacao === hoje || p.publicacao === amanha)
+    // Comparação de texto "AAAA-MM-DD" funciona como comparação de data
+    // porque o formato é ordenável por natureza — o mesmo truque que o
+    // calendário já usa.
+    .filter(p => p.publicacao && p.publicacao <= amanha && p.publicacao >= limiteAtras)
     // Só o que ainda não ficou pronto. "Entregue" aqui já leva em conta as
     // subtarefas: com etapas abertas no Runrun.it, a peça continua em pé
     // mesmo que o card mãe pareça parado (ver calendarioDePostagens).
@@ -97,18 +115,34 @@ function centralAtencaoFila() {
     .filter(p => !centralClienteAtivo || centralMesmoCliente(p.cliente, centralClienteAtivo))
     .filter(p => !seguradas[String(p.id)])
     .filter(p => !jaCobradas.has(`${p.id}::${p.publicacao}`))
-    // Quem posta hoje na frente; dentro do mesmo dia, sem designer primeiro
-    // (é o caso mais grave: ninguém sequer começou).
+    // A mais atrasada na frente, depois hoje, depois amanhã; dentro do
+    // mesmo dia, sem designer primeiro (é o caso mais grave: ninguém
+    // sequer começou).
     .sort((a, b) => {
       if (a.publicacao !== b.publicacao) return a.publicacao < b.publicacao ? -1 : 1;
       return (a.designer ? 1 : 0) - (b.designer ? 1 : 0);
     });
 }
 
-/** Quantas dessas postam HOJE — o número que a pílula destaca. */
-function centralAtencaoQuantasHoje(fila) {
+/** A fila separada nos três casos — é o que a pílula resume em uma linha. */
+function centralAtencaoContas(fila) {
   const hoje = centralCalChave(new Date());
-  return fila.filter(p => p.publicacao === hoje).length;
+  const amanha = centralCalChave(new Date(Date.now() + 86400000));
+  return {
+    atrasadas: fila.filter(p => p.publicacao < hoje).length,
+    hoje: fila.filter(p => p.publicacao === hoje).length,
+    amanha: fila.filter(p => p.publicacao === amanha).length,
+  };
+}
+
+/** Há quantos dias essa peça deveria ter sido postada? (0 = hoje) */
+function centralAtencaoDiasDeAtraso(publicacao) {
+  const hoje = centralCalChave(new Date());
+  if (!publicacao || publicacao >= hoje) return 0;
+  const [a1, m1, d1] = publicacao.split("-").map(Number);
+  const [a2, m2, d2] = hoje.split("-").map(Number);
+  const ms = new Date(a2, m2 - 1, d2) - new Date(a1, m1 - 1, d1);
+  return Math.max(0, Math.round(ms / 86400000));
 }
 
 // ===== A pílula =====
@@ -121,24 +155,38 @@ const CENTRAL_ATENCAO_ICONES = {
 };
 
 /**
- * Desenha (ou apaga) a pílula no rodapé da Timeline. Sem fila, ela some
- * sozinha e o card volta a ser só a Timeline — é o que impede a pílula de
- * virar um enfeite permanente que ninguém mais lê.
+ * Desenha (ou apaga) o pill na barra preta do topo. SEM FILA ELE NÃO
+ * EXISTE — some da barra inteiro, em vez de ficar ali zerado. É o que
+ * impede a pílula de virar um enfeite permanente que ninguém mais lê, e é
+ * também o que faz a barra do topo não ganhar mais um botão fixo.
  */
 function centralRenderPilulaAtencao() {
-  const pe = document.getElementById("chTimelinePe");
-  if (!pe) return;
+  const wrap = document.getElementById("centralAtencaoWrap");
+  const pill = document.getElementById("centralAtencaoPill");
+  if (!wrap || !pill) return;
 
   const fila = centralAtencaoFila();
-  if (!fila.length) { pe.innerHTML = ""; return; }
+  if (!fila.length) {
+    wrap.hidden = true;
+    pill.innerHTML = "";
+    // Zerou com a revisão aberta (a pessoa decidiu a última): fecha, senão
+    // sobraria um painel pendurado num botão que não existe mais.
+    if (centralAtencaoAberta) centralFecharRevisaoAtencao();
+    return;
+  }
+  wrap.hidden = false;
 
-  const hoje = centralAtencaoQuantasHoje(fila);
-  const amanha = fila.length - hoje;
+  const { atrasadas, hoje, amanha } = centralAtencaoContas(fila);
   const beeSvg = typeof beeIcon === "string" ? beeIcon : CENTRAL_ATENCAO_ICONES.raio;
 
-  const linhaDeBaixo = fila.length === 1
-    ? `${hoje ? "posta hoje" : "posta amanhã"} e ainda não ficou pronta`
-    : `${[hoje ? `${hoje} hoje` : "", amanha ? `${amanha} amanhã` : ""].filter(Boolean).join(" · ")} — nenhuma ficou pronta`;
+  // O resumo cita ATRASADAS primeiro e sempre: é o caso grave, e enterrá-lo
+  // depois de "3 hoje" faria a informação mais séria ser a menos vista.
+  const partes = [
+    atrasadas ? `${atrasadas} atrasada${atrasadas === 1 ? "" : "s"}` : "",
+    hoje ? `${hoje} hoje` : "",
+    amanha ? `${amanha} amanhã` : "",
+  ].filter(Boolean);
+  const linhaDeBaixo = partes.join(" · ");
 
   // A BEE É QUEM ALERTA (pedido do Cláudio): a carinha dela no lugar do
   // sino genérico do protótipo. É a mesma que já avisa de arquivo novo no
@@ -149,29 +197,44 @@ function centralRenderPilulaAtencao() {
   // que tira o ícone de baixo da bolinha flutuante da Bee, que mora
   // exatamente no canto de baixo à direita da tela — na direita, os dois
   // se sobrepunham.
-  pe.innerHTML = `
-    <button type="button" class="central-atencao-pill" id="chAtencaoPill">
-      <span class="central-atencao-bee">${beeSvg}<i class="central-atencao-ponto"></i></span>
-      <span class="central-atencao-pill-txt">
-        <b>${fila.length} peça${fila.length === 1 ? "" : "s"} pedindo atenção</b>
-        <span>${linhaDeBaixo}</span>
-      </span>
-    </button>`;
+  pill.classList.toggle("tem-atrasada", atrasadas > 0);
+  pill.innerHTML = `
+    <span class="central-atencao-bee">${beeSvg}<i class="central-atencao-ponto"></i></span>
+    <span class="central-atencao-pill-txt">
+      <b>${fila.length} pedindo atenção</b>
+      <span>${escaparHTML(linhaDeBaixo)}</span>
+    </span>`;
 
-  document.getElementById("chAtencaoPill")?.addEventListener("click", centralAbrirRevisaoAtencao);
+  // Religa o clique a cada desenho: o innerHTML acima troca o conteúdo,
+  // mas o botão é o MESMO elemento do index.html — por isso o listener é
+  // posto uma vez só, com a marca `dataset.ligado`.
+  if (!pill.dataset.ligado) {
+    pill.dataset.ligado = "1";
+    pill.addEventListener("click", ev => {
+      ev.stopPropagation();
+      if (centralAtencaoAberta) centralFecharRevisaoAtencao();
+      else centralAbrirRevisaoAtencao();
+    });
+  }
 }
 
 // ===== A revisão (o card preto vira a tela de decidir) =====
 
 function centralAbrirRevisaoAtencao() {
-  const card = document.querySelector(".central-hoje-timeline");
-  if (!card || centralAtencaoAberta) return;
+  // Expande do PILL, não mais por cima do card preto da Timeline
+  // (2026-08-09): quem decide isso não deveria ter que ir até uma coluna
+  // específica, e o painel some junto com a pílula quando a fila zera.
+  const pop = document.getElementById("centralAtencaoPop");
+  const pill = document.getElementById("centralAtencaoPill");
+  if (!pop || centralAtencaoAberta) return;
 
   centralAtencaoFilaAtual = centralAtencaoFila();
   if (!centralAtencaoFilaAtual.length) return;
   centralAtencaoIdx = 0;
   centralAtencaoPlacar = { pedidos: 0, segurados: 0 };
   centralAtencaoAberta = true;
+  pop.hidden = false;
+  pill?.setAttribute("aria-expanded", "true");
 
   const camada = document.createElement("div");
   camada.className = "central-atencao-revisao";
@@ -193,11 +256,11 @@ function centralAbrirRevisaoAtencao() {
         <span>Pedir atenção</span>
       </span>
     </div>`;
-  card.appendChild(camada);
-  // A bolinha da Bee fica no canto de baixo à direita da tela, exatamente
-  // por cima do botão "Pedir atenção" (a Timeline é a coluna da direita).
-  // Some enquanto a revisão está aberta, do mesmo jeito que já some com um
-  // card aberto (body.card-aberto, css/05-componentes.css).
+  pop.innerHTML = "";
+  pop.appendChild(camada);
+  // A bolinha da Bee fica no canto de baixo à direita da tela e a revisão
+  // é grande — some enquanto ela está aberta, do mesmo jeito que já some
+  // com um card aberto (body.card-aberto, css/05-componentes.css).
   document.body.classList.add("central-atencao-revisando");
 
   camada.querySelectorAll("[data-central-atencao]").forEach(b => {
@@ -205,16 +268,32 @@ function centralAbrirRevisaoAtencao() {
   });
   document.getElementById("chAtencaoFechar")?.addEventListener("click", centralFecharRevisaoAtencao);
   document.addEventListener("keydown", centralAtencaoTecla, true);
+  // Clicar fora fecha, como todo menu da barra preta. Em fase de captura e
+  // agendado pro próximo tique, senão o próprio clique que abriu fecharia.
+  setTimeout(() => document.addEventListener("click", centralAtencaoCliqueFora, true), 0);
 
   centralAtencaoRenderBaralho();
+}
+
+/** Clique fora do painel (e fora do pill) fecha a revisão. */
+function centralAtencaoCliqueFora(e) {
+  if (!centralAtencaoAberta) return;
+  const pop = document.getElementById("centralAtencaoPop");
+  const pill = document.getElementById("centralAtencaoPill");
+  if (pop && pop.contains(e.target)) return;
+  if (pill && pill.contains(e.target)) return;
+  centralFecharRevisaoAtencao();
 }
 
 function centralFecharRevisaoAtencao() {
   if (!centralAtencaoAberta) return;
   centralAtencaoAberta = false;
   document.removeEventListener("keydown", centralAtencaoTecla, true);
+  document.removeEventListener("click", centralAtencaoCliqueFora, true);
   document.body.classList.remove("central-atencao-revisando");
-  document.getElementById("chAtencaoRevisao")?.remove();
+  const pop = document.getElementById("centralAtencaoPop");
+  if (pop) { pop.hidden = true; pop.innerHTML = ""; }
+  document.getElementById("centralAtencaoPill")?.setAttribute("aria-expanded", "false");
   // A Timeline pode ter ganhado eventos novos (cada "pedir atenção" vira
   // um) e a pílula pode ter zerado — redesenha as duas.
   centralRenderTimelineHoje();
@@ -266,7 +345,13 @@ function centralAtencaoFormato(titulo) {
  * de cabeça pra chegar na mesma conclusão.
  */
 function centralAtencaoMotivo(p, postaHoje) {
-  const quando = postaHoje ? "posta hoje" : "posta amanhã";
+  const atraso = centralAtencaoDiasDeAtraso(p.publicacao);
+  // A frase da peça ATRASADA é escrita no passado de propósito: "deveria
+  // ter postado" é uma constatação de que algo já falhou, e é isso que
+  // separa esse caso do "posta hoje", que ainda dá tempo.
+  const quando = atraso
+    ? `deveria ter postado ${atraso === 1 ? "ontem" : `há ${atraso} dias`}`
+    : (postaHoje ? "posta hoje" : "posta amanhã");
   if (!p.designer) return `Ninguém pegou essa tarefa ainda, e ela ${quando}.`;
   const etapa = centralSemAcento(p.etapa || "");
   if (etapa.includes("ajuste")) return `Está em ajustes com ${p.designer} e ${quando}.`;
@@ -279,6 +364,7 @@ function centralAtencaoMotivo(p, postaHoje) {
 function centralAtencaoCartaoHTML(p, pos, total) {
   const hoje = centralCalChave(new Date());
   const postaHoje = p.publicacao === hoje;
+  const atraso = centralAtencaoDiasDeAtraso(p.publicacao);
   const formato = centralAtencaoFormato(p.titulo);
   const foto = typeof avatarHTML === "function" && p.designer
     ? avatarHTML(p.designer, "central-atencao-foto")
@@ -298,8 +384,10 @@ function centralAtencaoCartaoHTML(p, pos, total) {
 
     <div class="central-atencao-pastilhas">
       ${formato ? `<span class="central-atencao-pastilha">${escaparHTML(formato)}</span>` : ""}
-      <span class="central-atencao-pastilha ${postaHoje ? "urgente" : "amanha"}">
-        posta ${postaHoje ? "hoje" : "amanhã"}
+      <span class="central-atencao-pastilha ${atraso ? "atrasada" : postaHoje ? "urgente" : "amanha"}">
+        ${atraso
+          ? `atrasada ${atraso === 1 ? "1 dia" : atraso + " dias"}`
+          : `posta ${postaHoje ? "hoje" : "amanhã"}`}
       </span>
       ${p.etapa ? `<span class="central-atencao-pastilha">${escaparHTML(p.etapa)}</span>` : ""}
       ${p.designer ? "" : `<span class="central-atencao-pastilha urgente">sem designer</span>`}
@@ -313,8 +401,8 @@ function centralAtencaoCartaoHTML(p, pos, total) {
     <div class="central-atencao-pe">
       <div class="central-atencao-datas">
         <span class="central-atencao-data">
-          <em>Posta</em>
-          <b class="${postaHoje ? "urgente" : ""}">${escaparHTML(centralCalDiaPorExtenso(p.publicacao))}</b>
+          <em>${atraso ? "Deveria ter postado" : "Posta"}</em>
+          <b class="${atraso || postaHoje ? "urgente" : ""}">${escaparHTML(centralCalDiaPorExtenso(p.publicacao))}</b>
         </span>
         <span class="central-atencao-data">
           <em>Entrega combinada</em>

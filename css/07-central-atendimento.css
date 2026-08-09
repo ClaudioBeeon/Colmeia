@@ -1013,8 +1013,29 @@
 .central-gc-lixo:disabled { opacity: .5; cursor: default; }
 /* Em tela de toque não existe hover — ali ele fica sempre visível, senão
    seria um botão sem jeito nenhum de alcançar. */
+/* O CHECK "o cliente já aprovou, por fora" (2026-08-09). Só em "Com o
+   cliente" — ver centralMarcarAprovadaPorFora. Fica à ESQUERDA do
+   lixeirinha, e é VERDE no hover contra o vermelho dele: são as duas
+   ações opostas do card e não podem se confundir num clique rápido. */
+.central-gc-ok {
+  position: absolute; top: 13px; right: 49px; z-index: 4;
+  width: 30px; height: 30px; border: none; border-radius: 50%; cursor: pointer;
+  background: rgba(255, 255, 255, .94); color: #16181D;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(10, 10, 18, .16);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-apple), transform var(--dur-base) var(--ease-apple),
+              background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-gc-ok svg { width: 15px; height: 15px; }
+.central-gc-wrap:hover .central-gc-ok,
+.central-gc-ok:focus-visible { opacity: 1; pointer-events: auto; transform: translateY(-3px); }
+.central-gc-ok:hover { background: var(--success, #16A06A); color: #fff; }
+.central-gc-ok:disabled { opacity: .5; cursor: default; }
+
 @media (hover: none) {
-  .central-gc-lixo { opacity: 1; pointer-events: auto; }
+  .central-gc-lixo,
+  .central-gc-ok { opacity: 1; pointer-events: auto; }
 }
 
 /* ----- Filtro por cliente + coluna de contexto (2026-08-08) -----
@@ -1330,13 +1351,22 @@
   .central-hoje-cal { min-height: 320px; }
   .central-cal-pop { width: calc(100vw - 32px); max-width: 372px; }
   .central-pill-cliente-btn { max-width: 150px; }
+  /* Numa barra estreita a pílula de atenção vira só a Bee com o número:
+     ela e o pill de cliente disputam a mesma linha, e a que não pode
+     sumir é esta. A linha de baixo ("2 atrasadas · 1 hoje") sai; o
+     painel, que é onde a informação está de verdade, continua a um
+     clique. */
+  .central-atencao-pill { padding: 5px 12px 5px 5px; }
+  .central-atencao-pill-txt span { display: none; }
+  .central-atencao-pop { height: min(560px, calc(100vh - 120px)); }
 }
 
 /* ===================================================================
-   PRECISA DE ATENÇÃO (2026-08-09) — a pílula no rodapé da Timeline e a
-   revisão que ela abre por cima do card preto. Protótipo 2 aprovado pelo
-   Cláudio; a lógica toda está em js/central-atencao.js, com o porquê de
-   cada decisão no comentário do topo do arquivo.
+   PRECISA DE ATENÇÃO (2026-08-09) — o pill AMARELO na barra preta do topo
+   e a revisão em baralho que ele expande. Nasceu como uma pílula no rodapé
+   da Timeline (protótipo 2, aprovado pelo Cláudio) e SUBIU pro topo no
+   mesmo dia, a pedido dele. A lógica toda está em js/central-atencao.js,
+   com o porquê de cada decisão no comentário do topo do arquivo.
    =================================================================== */
 
 /* O evento de cobrança na Timeline — vermelho, o único do feed. Ajuste e
@@ -1344,20 +1374,32 @@
 .central-tl-avatar.atencao { background: var(--danger); color: #fff; }
 .central-tl-selo.atencao { background: rgba(229,72,77,.18); color: #FF9DA0; }
 
-/* Rodapé fixo do card preto: nunca rola junto com o feed. */
-.central-hoje-timeline-pe { flex-shrink: 0; padding-top: 10px; }
-.central-hoje-timeline-pe:empty { display: none; }
+/* ---- o pill AMARELO na barra preta do topo (2026-08-09) ----
+   Subiu do rodapé da Timeline pra cá a pedido do Cláudio. Amarelo pelo
+   mesmo motivo do pill de cliente e da pílula do "tocando" no quadro: no
+   vocabulário do app, amarelo é o que pede sua atenção AGORA. Com peça
+   atrasada na fila ele fica VERMELHO (`.tem-atrasada`) — aí não é mais
+   "olha isso", é "isso já passou do prazo". */
+.central-atencao-wrap { position: relative; flex-shrink: 0; }
+.central-atencao-wrap[hidden] { display: none; }
 
 .central-atencao-pill {
-  width: 100%; display: flex; align-items: center; gap: 10px; cursor: pointer;
-  font: inherit; font-family: var(--font-body); text-align: left; color: #fff;
-  border: none; border-radius: 999px; padding: 10px 14px;
-  background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.09);
-  transition: background var(--dur-fast) var(--ease-apple);
+  display: flex; align-items: center; gap: 9px; cursor: pointer;
+  font: inherit; font-family: var(--font-body); text-align: left;
+  border: none; border-radius: 999px; padding: 5px 15px 5px 5px;
+  background: var(--kanban-yellow); color: #16181D;
+  box-shadow: 0 4px 14px rgba(255, 199, 0, .32);
+  transition: background var(--dur-fast) var(--ease-apple), filter var(--dur-fast) var(--ease-apple);
   animation: centralAtencaoPillEntra var(--dur-slow) var(--ease-apple-spring);
 }
-@keyframes centralAtencaoPillEntra { from { opacity: 0; transform: translateY(10px); } }
-.central-atencao-pill:hover { background: rgba(255,255,255,.11); }
+@keyframes centralAtencaoPillEntra { from { opacity: 0; transform: translateY(-8px) scale(.94); } }
+.central-atencao-pill:hover { filter: brightness(1.06); }
+.central-atencao-pill.tem-atrasada {
+  background: var(--danger, #E5484D); color: #fff;
+  box-shadow: 0 4px 14px rgba(229, 72, 77, .36);
+}
+.central-atencao-pill.tem-atrasada .central-atencao-bee { background: rgba(255, 255, 255, .92); color: #16181D; }
+.central-atencao-pill.tem-atrasada .central-atencao-pill-txt span { color: rgba(255, 255, 255, .8); }
 .central-atencao-ponto {
   position: absolute; top: -1px; right: -1px;
   width: 9px; height: 9px; border-radius: 50%; background: var(--danger);
@@ -1369,26 +1411,46 @@
   70%  { box-shadow: 0 0 0 7px rgba(229,72,77,0); }
   100% { box-shadow: 0 0 0 0 rgba(229,72,77,0); }
 }
-.central-atencao-pill-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.central-atencao-pill-txt b { font-size: 12.5px; font-weight: 700; line-height: 1.25; }
-.central-atencao-pill-txt span { font-size: 10.5px; color: rgba(255,255,255,.55); }
+.central-atencao-pill-txt { min-width: 0; display: flex; flex-direction: column; gap: 0; }
+.central-atencao-pill-txt b { font-size: 12.5px; font-weight: 750; line-height: 1.2; white-space: nowrap; }
+.central-atencao-pill-txt span { font-size: 10.5px; font-weight: 600; color: rgba(22, 24, 29, .62); white-space: nowrap; }
 /* A Bee no lugar do sino genérico: é ELA que alerta, e é a mesma carinha
    que já avisa de arquivo novo dentro do card (beeIcon, js/bee.js). */
 .central-atencao-bee {
   position: relative; flex-shrink: 0;
   width: 30px; height: 30px; border-radius: 50%;
-  background: var(--kanban-yellow); color: #16181D;
+  background: rgba(22, 24, 29, .12); color: #16181D;
   display: flex; align-items: center; justify-content: center;
 }
 .central-atencao-bee svg { width: 17px; height: 17px; display: block; }
+.central-atencao-pill .central-atencao-ponto { border-color: var(--kanban-yellow); }
+.central-atencao-pill.tem-atrasada .central-atencao-ponto { border-color: var(--danger, #E5484D); background: #16181D; }
 
-/* ---- a revisão, por cima da Timeline ---- */
-.central-atencao-revisao {
-  position: absolute; inset: 0; z-index: 5; background: #16181D;
-  display: flex; flex-direction: column; padding: 14px;
-  animation: centralAtencaoSobe var(--dur-slow) var(--ease-apple-spring);
+/* ---- o painel que EXPANDE do pill (2026-08-09) ----
+   Antes a revisão cobria o card preto da Timeline (`position: absolute;
+   inset: 0` dentro dele). Agora é um painel ancorado no pill, no mesmo
+   molde do menu do pill de cliente logo ao lado — só que muito maior,
+   porque aqui dentro mora um baralho de cartões.
+
+   ⚠️ A ALTURA É FIXA (`height`, não `max-height`). O baralho é
+   `position: absolute` dentro dela: sem altura definida no pai, as cartas
+   não têm de onde tirar tamanho e o painel colapsa. */
+.central-atencao-pop {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 45;
+  width: 400px; max-width: calc(100vw - 32px); height: 560px; max-height: calc(100vh - 130px);
+  background: #16181D; border-radius: 22px; overflow: hidden;
+  box-shadow: 0 8px 24px rgba(10, 10, 18, .28), 0 28px 60px rgba(10, 10, 18, .4);
+  animation: centralAtencaoPopAbre var(--dur-base) var(--ease-apple-spring);
 }
-@keyframes centralAtencaoSobe { from { opacity: 0; transform: translateY(14px); } }
+.central-atencao-pop[hidden] { display: none; }
+@keyframes centralAtencaoPopAbre {
+  from { opacity: 0; transform: translateY(-10px) scale(.97); }
+}
+
+.central-atencao-revisao {
+  height: 100%; background: #16181D;
+  display: flex; flex-direction: column; padding: 14px;
+}
 .central-atencao-cab { display: flex; align-items: center; gap: 9px; padding: 0 2px 6px; flex-shrink: 0; }
 .central-atencao-cab b { font-size: 12.5px; font-weight: 700; color: #fff; }
 .central-atencao-passos { display: flex; gap: 4px; margin-left: auto; }
@@ -1447,6 +1509,9 @@
 }
 .central-atencao-pastilha.urgente { background: rgba(229,72,77,.22); color: #FFB3B5; }
 .central-atencao-pastilha.amanha { background: rgba(255,199,0,.18); color: #F0C450; }
+/* Atrasada é MAIS forte que "posta hoje": preenchida, não translúcida —
+   é a única pastilha que fala de um prazo já perdido. */
+.central-atencao-pastilha.atrasada { background: var(--danger, #E5484D); color: #fff; }
 
 .central-atencao-pe { margin-top: auto; display: flex; flex-direction: column; gap: 16px; }
 .central-atencao-datas {
@@ -1507,14 +1572,14 @@
 .central-atencao-fim span { font-size: 11.5px; color: rgba(255,255,255,.4); line-height: 1.5; }
 
 @media (prefers-reduced-motion: reduce) {
-  .central-atencao-pill, .central-atencao-revisao { animation: none; }
+  .central-atencao-pill, .central-atencao-pop { animation: none; }
   .central-atencao-ponto { animation: none; }
 }
 
-/* A bolinha flutuante da Bee fica no canto de baixo à direita da tela —
-   em cima do botão "Pedir atenção", já que a Timeline é a coluna da
-   direita. Some enquanto a revisão está aberta, mesmo tratamento que ela
-   já recebe com um card aberto (body.card-aberto, css/05-componentes.css). */
+/* A bolinha flutuante da Bee fica no canto de baixo à direita da tela e o
+   painel da revisão é grande. Some enquanto ele está aberto, mesmo
+   tratamento que ela já recebe com um card aberto (body.card-aberto,
+   css/05-componentes.css). */
 body.central-atencao-revisando .bee-fab { opacity: 0; pointer-events: none; }
 
 /* A frase da Bee explicando por que a peça está na fila. */

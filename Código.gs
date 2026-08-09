@@ -292,6 +292,8 @@ function handleRequest(e, method) {
         output = gerarLinkDeAprovacao(body.taskId, body.cliente, body.tituloTarefa, body.autor, body.fileId);
       } else if (body.acao === 'excluirLinkDeAprovacao') {
         output = excluirLinkDeAprovacao(body.codigo);
+      } else if (body.acao === 'aprovarAprovacaoPorFora') {
+        output = aprovarAprovacaoPorFora(body.dados);
       } else if (body.acao === 'listarLinksDaTarefa') {
         output = listarLinksDaTarefa(body.taskId);
       } else if (body.acao === 'pedirConferenciaInterna') {

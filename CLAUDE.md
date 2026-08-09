@@ -1142,6 +1142,18 @@ preta troca entre os quatro grupos sem fechar nada**, com os contadores sempre �
 - **"Com o cliente" não abre conferência**, porque não existe uma: a peça está fora esperando
   resposta. Esse é o único grupo que ainda leva pra aba Aprovações, onde moram copiar o link e
   cobrar no WhatsApp.
+- **O CHECK "já aprovou, por fora" (2026-08-09)** — `.central-gc-ok`, só neste grupo. Na vida real
+  o cliente responde no grupo do WhatsApp, no e-mail ou na reunião, e o link ficava pendente pra
+  sempre cobrando uma resposta que já veio; as duas saídas que existiam eram ruins (excluir o link
+  perde o registro de que a peça FOI aprovada, ou deixar cobrando). `aprovarAprovacaoPorFora`
+  (Aprovacao.gs) grava as MESMAS colunas que a resposta pelo link — status, quem aprovou, carimbo
+  de hora — pra tudo que já lê isso continuar funcionando sem saber que existe esse caminho.
+  ⚠️ **Só neste grupo, de propósito:** nos outros a decisão é nossa e tem tela própria, e um check
+  ali seria um atalho pra aprovar sem olhar a arte. O canal e o nome de quem aprovou são
+  perguntados (os dois opcionais) porque uma aprovação que ninguém rastreia depois é pior que
+  nenhuma — se der problema, a primeira pergunta é "quem disse que estava aprovado?". E a coluna
+  "quem aprovou" nunca recebe o nome de alguém da Beeon: isso faria "Concluídos" parecer que a
+  agência aprovou a própria peça.
 - **O pop-up não decide nada** — não aprova, não devolve, não manda link. Clicar num card abre a
   tela de conferência de sempre. Duplicar a decisão em dois lugares seria a chance de alguém
   resolver uma peça sem ter olhado a arte direito.
@@ -1564,10 +1576,23 @@ automática ignora o `?v=` ao conferir ordem e nomes.
 de `css/07-central-atendimento.css`. Protótipo 2 aprovado pelo Cláudio ("o card preto vira a
 revisão"), com o cartão no desenho de pastilhas da versão B ("fala da Bee").
 
-No rodapé da Timeline aparece uma pílula quando existe peça que **posta hoje ou amanhã e ainda não
-ficou pronta**. Clicar nela faz o card preto inteiro virar a revisão: um baralho de cartões, uma
-peça por vez, e cada uma sai por um de dois lados (arrastando, pelos dois botões redondos, ou pelas
-setas ← →).
+**Onde ela mora mudou no mesmo dia (2026-08-09, pedido do Cláudio):** nasceu no rodapé da Timeline
+e SUBIU pra barra preta do topo, como um **pill amarelo** ao lado do de cliente — mesmo espírito da
+pílula do "tocando" no quadro. O rodapé era o pé de uma coluna que rola, e o que pede decisão não
+podia estar lá. Clicar expande a revisão num painel ancorado no pill (`#centralAtencaoPop`), em vez
+de cobrir o card preto: um baralho de cartões, uma peça por vez, cada uma saindo por um de dois
+lados (arrastando, pelos dois botões redondos, ou pelas setas ← →).
+
+- **Sem fila, o pill não existe** — some da barra inteiro em vez de ficar zerado. É o que impede
+  virar enfeite permanente, e o que faz o topo não ganhar mais um botão fixo.
+- **A fila inclui as ATRASADAS** (`publicacao < hoje` e não entregue), não só hoje/amanhã. Na
+  primeira versão a peça que passava do dia de postar sem ficar pronta — o caso mais grave — saía
+  da fila no dia seguinte, como se tivesse se resolvido sozinha. `CENTRAL_ATENCAO_DIAS_ATRAS` (14)
+  é o teto: peça de um mês atrás não é decisão de hoje, e fila de 40 cartões ninguém revisa.
+- **Com atrasada na fila o pill fica VERMELHO** (`.tem-atrasada`), não amarelo: aí não é mais "olha
+  isso", é "isso já passou do prazo". O resumo cita as atrasadas primeiro e sempre.
+- **A altura do painel é FIXA** (`height`, não `max-height`): o baralho é `position: absolute` por
+  dentro, então sem altura definida no pai as cartas não têm de onde tirar tamanho e ele colapsa.
 
 **A fila não custa nenhuma busca nova:** sai de `centralPostagens`, o MESMO array que o calendário
 de postagens já busca uma vez por sessão (`calendarioDePostagens`, AprovacaoInterna.gs). Por isso a
@@ -1587,8 +1612,6 @@ pílula só aparece depois que o calendário chega — `centralRenderCalendario`
   parada.
 
 **Detalhes que já custaram tempo:**
-- O rodapé (`#chTimelinePe`) fica FORA de `.central-hoje-timeline-list`: dentro dela a pílula
-  rolaria junto com o feed e sumiria justo quando tem fila.
 - Os botões redondos precisam de `position: relative; z-index` — sem isso ficam **por baixo da
   sombra da carta** (que desce bastante) e parecem apagados, como se estivessem desligados.
 - A Bee fica na ESQUERDA da pílula, com o pontinho vermelho no ombro dela: à direita ela caía

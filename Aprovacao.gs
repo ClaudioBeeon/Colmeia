@@ -935,6 +935,88 @@ function avisarQueVaiConsultar(codigo) {
   return { ok: true, avisoChegou: avisoChegou };
 }
 
+/**
+ * "O cliente já aprovou, só que por fora" (2026-08-09, pedido do Cláudio).
+ *
+ * Na vida real o cliente responde no grupo do WhatsApp, no e-mail ou na
+ * reunião — e o link fica pendente pra sempre, cobrando uma resposta que
+ * já veio. Antes disso o atendimento só tinha duas saídas ruins: excluir
+ * o link (perde o registro de que a peça FOI aprovada) ou deixar lá
+ * cobrando.
+ *
+ * O que grava é o MESMO que a resposta do cliente grava — status
+ * `aprovado`, quem aprovou e o carimbo de hora — pra tudo que já lê essas
+ * colunas (a aba "Aprovações" da Fila de repasse, o grupo "Concluídos" da
+ * Central) continuar funcionando sem saber que existe esse caminho.
+ *
+ * ⚠️ O texto diz por onde veio E quem registrou. Uma aprovação que ninguém
+ * consegue rastrear depois é pior que nenhuma: se der problema com a peça,
+ * a primeira pergunta vai ser "quem disse que estava aprovado?".
+ */
+function aprovarAprovacaoPorFora(dados) {
+  dados = dados || {};
+  var codigo = dados.codigo;
+  if (!codigo) return { ok: false, error: 'Link inválido.' };
+
+  var quemRegistrou = String(dados.quemRegistrou || '').trim();
+  var canal = String(dados.canal || '').trim();      // "WhatsApp", "E-mail", "Pessoalmente"...
+  var quemAprovou = String(dados.quemAprovou || '').trim();
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  var linha;
+  try {
+    var sheet = getAprovacoesSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var indice = -1;
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) === String(codigo)) { indice = i; break; }
+    }
+    if (indice === -1) { lock.releaseLock(); return { ok: false, error: 'Não encontrei essa aprovação.' }; }
+
+    linha = linhaParaObjetoDeAprovacao(linhas[indice]);
+    // Já decidida: não sobrescreve. Uma resposta do próprio cliente vale
+    // mais que um registro manual, e "aprovar de novo" não é uma ação.
+    if (linha.status !== 'pendente') {
+      lock.releaseLock();
+      return { ok: false, error: 'Essa peça já tem resposta (' + linha.status + ').', jaRespondido: true, status: linha.status };
+    }
+
+    var texto = 'Aprovado por fora do link' + (canal ? ' (' + canal + ')' : '') +
+      (quemRegistrou ? ' — registrado por ' + quemRegistrou : '');
+    // A coluna "quem aprovou" é do lado do CLIENTE. Sem o nome dele, fica
+    // o canal — nunca o nome de quem é da Beeon, que faria a lista de
+    // "Concluídos" parecer que a agência aprovou a própria peça.
+    var nomeAprovador = quemAprovou || (canal ? 'cliente (' + canal + ')' : 'cliente');
+
+    sheet.getRange(indice + 1, 9, 1, 3).setValues([['aprovado', texto, new Date().getTime()]]);
+    sheet.getRange(indice + 1, 15).setValue(nomeAprovador);
+    linha.status = 'aprovado';
+    linha.respostaTexto = texto;
+    linha.quemAprovou = nomeAprovador;
+  } finally {
+    lock.releaseLock();
+  }
+
+  // Mesmo caminho (e mesma tolerância a falha) da resposta pelo link: o
+  // registro já está salvo, o que pode falhar é só AVISAR na tarefa.
+  var avisoChegou = false;
+  try {
+    var partes = ['Alterações do cliente (registrado pelo atendimento):'];
+    partes.push('✅ Aprovou "' + linha.nomeArquivo + '"' +
+      (canal ? ' por ' + canal : ' fora do link de aprovação') +
+      (quemAprovou ? ' — ' + quemAprovou : '') + '.');
+    if (quemRegistrou) partes.push('Registrado no Colmeia por ' + quemRegistrou + '.');
+    var envio = adicionarComentario(linha.taskId, partes.join('\n'), null);
+    avisoChegou = !!(envio && envio.ok);
+  } catch (e) {
+    avisoChegou = false;
+  }
+  if (!avisoChegou) marcarAvisoDeAprovacaoPendente(codigo);
+
+  return { ok: true, status: 'aprovado', quemAprovou: linha.quemAprovou, avisoChegou: avisoChegou };
+}
+
 var APROVACOES_RETENCAO_DIAS = 30;
 
 /**

@@ -344,6 +344,12 @@ async function centralCarregarDados() {
 
 function centralRenderTudo() {
   centralRenderPillCliente();
+  // A pílula de atenção mora na barra preta do topo desde 2026-08-09, não
+  // mais no rodapé da Timeline — então é desenhada aqui, junto do resto do
+  // topo, e não dentro do render da aba Hoje. Ela sai das MESMAS postagens
+  // do calendário: aqui desenha com o que já estiver em memória, e
+  // centralRenderCalendario chama de novo quando a busca chega.
+  if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
   centralRenderHoje();
   centralRenderClientes();
   centralRenderAprovacoes();
@@ -527,14 +533,13 @@ function centralRenderHoje() {
       ${centralHojeCartaoComCliente(comCliente, limiteAlerta)}
       ${centralHojeCartaoAjuste(voltouAjuste, ajusteSubiu)}
 
-      <!-- O rodapé (#chTimelinePe) é onde mora a pílula "Precisa de
-           atenção" (js/central-atencao.js). Fica FORA da lista de propósito:
-           dentro dela, a pílula rolaria junto com o feed e sumiria de vista
-           justo quando tem fila. -->
+      <!-- A pílula "Precisa de atenção" morava no rodapé deste card e SUBIU
+           pra barra preta do topo em 2026-08-09 (ver o comentário no
+           index.html e js/central-atencao.js) — aqui embaixo ela era o pé de
+           uma coluna que rola, e o que pede decisão não deveria estar lá. -->
       <div class="hr-card central-hoje-tile central-hoje-timeline">
         <div class="central-hoje-timeline-head"><span class="central-hoje-timeline-livedot"></span>Timeline</div>
         <div class="central-hoje-timeline-list" id="chTimelineList"></div>
-        <div class="central-hoje-timeline-pe" id="chTimelinePe"></div>
       </div>
 
       <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-wide" id="chRadarBtn">
@@ -560,10 +565,6 @@ function centralRenderHoje() {
   centralPreencherFotoAtendimento("ch", nomeExibido, false);
   centralRenderTimelineHoje();
   centralRenderCalendario();
-  // A pílula de atenção sai das MESMAS postagens do calendário: aqui ela
-  // desenha com o que já estiver em memória, e centralRenderCalendario
-  // chama de novo quando a busca chega (primeira vez da sessão).
-  if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
 
   // Os quatro cartões abrem o POP-UP DOS GRUPOS (2026-08-08), não mais a
   // aba Aprovações: ali a pessoa saía da tela onde estava pra ver uma
@@ -1730,6 +1731,76 @@ function centralRenderGrupo() {
       centralExcluirDoGrupo(item, daFila, btn);
     });
   });
+
+  grade.querySelectorAll("[data-central-gc-aprovar]").forEach(btn => {
+    const item = itens[Number(btn.dataset.centralGcAprovar)];
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();   // mesmo motivo do lixeirinha
+      centralMarcarAprovadaPorFora(item, btn);
+    });
+  });
+}
+
+/**
+ * "O cliente já aprovou, só que por outro caminho" (2026-08-09, pedido do
+ * Cláudio): WhatsApp, e-mail, reunião. Sem isso o link ficava pendente pra
+ * sempre, cobrando uma resposta que já tinha vindo — e as duas saídas que
+ * existiam eram ruins: excluir o link (perde o registro de que a peça foi
+ * aprovada) ou deixar cobrando.
+ *
+ * Pergunta o CANAL e o nome de quem aprovou, os dois opcionais. Não é
+ * burocracia: uma aprovação que ninguém consegue rastrear depois é pior
+ * que nenhuma — se der problema com a peça, a primeira pergunta vai ser
+ * "quem disse que estava aprovado?". Cancelar no primeiro prompt desiste
+ * de tudo.
+ */
+async function centralMarcarAprovadaPorFora(item, btn) {
+  if (!item || !item.codigo) return;
+
+  const canal = prompt(
+    `Marcar "${item.tituloTarefa || "esta peça"}" como aprovada pelo cliente.\n\n` +
+    `Por onde ele aprovou? (WhatsApp, e-mail, reunião…)`,
+    "WhatsApp"
+  );
+  if (canal === null) return;                    // desistiu
+  const quemAprovou = prompt("Quem aprovou, do lado do cliente? (pode deixar em branco)", "") || "";
+
+  if (btn) btn.disabled = true;
+  const data = await chamarBackend({
+    acao: "aprovarAprovacaoPorFora",
+    dados: {
+      codigo: item.codigo,
+      canal: String(canal || "").trim(),
+      quemAprovou: String(quemAprovou || "").trim(),
+      quemRegistrou: DESIGNER_LOGADO || "",
+    },
+  });
+
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "Não consegui marcar como aprovada agora.", "erro");
+    if (btn) btn.disabled = false;
+    return;
+  }
+
+  // Move de "Com o cliente" pra "Concluídos" no cache local, sem rebuscar:
+  // são as mesmas colunas que a resposta pelo link grava, então o resto da
+  // Central já sabe ler isso.
+  centralAprovacoesCache = centralAprovacoesCache.map(a => a.codigo === item.codigo
+    ? { ...a, status: "aprovado", quemAprovou: data.quemAprovou || a.quemAprovou, respondidoEm: Date.now() }
+    : a);
+  if (typeof aprovacoesCache !== "undefined" && Array.isArray(aprovacoesCache)) {
+    aprovacoesCache = aprovacoesCache.map(a => a.codigo === item.codigo
+      ? { ...a, status: "aprovado", quemAprovou: data.quemAprovou || a.quemAprovou, respondidoEm: Date.now() }
+      : a);
+    if (typeof atualizarBadgeAprovacoes === "function") atualizarBadgeAprovacoes();
+  }
+
+  mostrarToast(data.avisoChegou
+    ? "Marcada como aprovada — o aviso foi pra tarefa no Runrun.it."
+    : "Marcada como aprovada. O aviso na tarefa não saiu agora e será reenviado.", "sucesso");
+
+  centralRenderGrupo();
+  centralRenderTudo();
 }
 
 /**
@@ -1859,6 +1930,13 @@ function centralCardDoGrupoHTML(it, i, daFila) {
   // grupo (fila de conferência × link de aprovação).
   const rotuloExcluir = daFila ? "Tirar da fila" : "Excluir o link de aprovação";
 
+  // O CHECK só existe em "Com o cliente" (2026-08-09, pedido do Cláudio):
+  // é o único grupo em que a peça está esperando uma resposta que pode ter
+  // chegado por outro caminho — WhatsApp, e-mail, reunião. Nos outros a
+  // decisão é nossa e tem tela própria pra ela, então um check ali seria
+  // um atalho pra aprovar sem olhar a arte.
+  const podeMarcarAprovada = centralGrupoAtual === "comCliente";
+
   return `
     <div class="central-gc-wrap">
     <button type="button" class="central-gc" data-central-gc="${i}">
@@ -1878,6 +1956,11 @@ function centralCardDoGrupoHTML(it, i, daFila) {
     </button>
     <button type="button" class="central-gc-lixo" data-central-gc-excluir="${i}"
             title="${escaparHTML(rotuloExcluir)}" aria-label="${escaparHTML(rotuloExcluir)}">🗑️</button>
+    ${podeMarcarAprovada ? `
+      <button type="button" class="central-gc-ok" data-central-gc-aprovar="${i}"
+              title="Marcar como aprovada pelo cliente" aria-label="Marcar como aprovada pelo cliente">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m20 6-11 11-5-5" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>` : ""}
     </div>
   `;
 }
