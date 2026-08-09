@@ -264,7 +264,9 @@ function apvRenderFila(itens) {
           // duas coisas que dá pra fazer de verdade (2026-08-06).
           ? `<button type="button" class="apv-btn apv-btn-neutro apv-btn-p" data-apv-avisar="${i}">Avisar ${escaparHTML((item.designer || "designer").split(" ")[0])}</button>
              <button type="button" class="apv-btn apv-btn-neutro apv-btn-p" data-apv-sumiu-descartar="${i}">Tirar da fila</button>`
-          : `<button type="button" class="apv-btn apv-btn-primario" data-apv-conferir="${i}">${item.status === "aprovada" ? "Continuar envio" : "Conferir"}</button>`}
+          : `<button type="button" class="apv-btn apv-btn-primario" data-apv-conferir="${i}">${item.status === "aprovada" ? "Continuar envio" : "Conferir"}</button>
+             <button type="button" class="apv-btn apv-btn-neutro apv-btn-p apv-card-excluir" data-apv-tirar="${i}"
+                     title="Tirar da fila" aria-label="Tirar da fila">🗑️</button>`}
       </div>
     </article>
   `;
@@ -293,6 +295,25 @@ function apvRenderFila(itens) {
       const texto = `Oi! Mandei conferir "${nomes}" (${item.cliente || ""}) mas o arquivo não está mais na pasta do card — ` +
         `pode ter sido movido, renomeado ou apagado. Consegue subir de novo com o mesmo nome?`;
       window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+    });
+  });
+
+  // Tirar da fila SEM precisar abrir a conferência (2026-08-09, pedido do
+  // Cláudio): teste de designer, peça mandada duas vezes ou mandada antes de
+  // ficar pronta. Antes essa saída só existia dentro da conferência (ou no
+  // card cujo arquivo sumiu), então tirar 5 testes da fila dava 5 idas e
+  // voltas por uma tela inteira. Mesma ação de backend das outras duas.
+  lista.querySelectorAll("[data-apv-tirar]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const item = apvFila[Number(btn.dataset.apvTirar)];
+      if (!item) return;
+      const quantas = (item.pecas || []).length;
+      if (!confirm(
+        quantas > 1
+          ? `Tirar as ${quantas} peças deste lote da fila? O designer não é avisado, e nada muda no Runrun.it.`
+          : "Tirar essa peça da fila? O designer não é avisado, e nada muda no Runrun.it."
+      )) return;
+      apvDescartarDaFila(item);
     });
   });
 
@@ -2399,6 +2420,17 @@ async function apvDescartarDaFila(item) {
     acao: "descartarConferencia", taskId: item.taskId, loteId: item.loteId, quem: DESIGNER_LOGADO,
   });
   if (data && data.ok) {
+    // A Central do Atendimento pode estar carregada com a mesma fila em cache
+    // (ela abre por cima do app) — tirar de lá também, senão a peça
+    // continuaria contando nos grupos "Esperando você"/"Prontas pra enviar".
+    if (typeof centralFilaCache !== "undefined" && Array.isArray(centralFilaCache)) {
+      centralFilaCache = centralFilaCache.filter(
+        i => !(String(i.taskId) === String(item.taskId) && i.loteId === item.loteId)
+      );
+      if (typeof centralAtualizarBadges === "function") centralAtualizarBadges();
+      if (typeof centralAtendimentoAberta === "function" && centralAtendimentoAberta()
+          && typeof centralRenderTudo === "function") centralRenderTudo();
+    }
     mostrarToast("Tirado da fila.", "sucesso");
     return;
   }

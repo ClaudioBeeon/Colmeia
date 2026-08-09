@@ -1457,6 +1457,88 @@ function centralRenderGrupo() {
     const item = itens[Number(btn.dataset.centralGc)];
     btn.addEventListener("click", () => centralAbrirDoGrupo(item, daFila));
   });
+
+  grade.querySelectorAll("[data-central-gc-excluir]").forEach(btn => {
+    const item = itens[Number(btn.dataset.centralGcExcluir)];
+    btn.addEventListener("click", ev => {
+      // O lixeirinha fica POR CIMA do card, que também é clicável: sem parar
+      // a propagação, o mesmo clique abriria a conferência por trás da
+      // confirmação.
+      ev.stopPropagation();
+      centralExcluirDoGrupo(item, daFila, btn);
+    });
+  });
+}
+
+/**
+ * O lixeirinha do card do pop-up (2026-08-09, pedido do Cláudio: "tem vários
+ * teste que fiz em tarefas que estão contando de verdade").
+ *
+ * São DUAS exclusões diferentes, escolhidas pelo grupo aberto — e a diferença
+ * importa, porque o que some é outra coisa em cada uma:
+ *
+ *  - "Esperando você" / "Prontas pra enviar" são a FILA DE CONFERÊNCIA: o item
+ *    sai da fila (`descartarConferencia`), sem avisar o designer e sem mexer
+ *    no Runrun.it — o mesmo caminho do "Tirar da fila" de dentro da
+ *    conferência (apvDescartar), pra a regra do que é descartar continuar
+ *    morando num lugar só no backend.
+ *  - "Com o cliente" / "Voltou com ajuste" / "Concluídos" são LINKS DE
+ *    APROVAÇÃO: some a linha da planilha (`excluirLinkDeAprovacao`) e o link
+ *    para de abrir na hora. O arquivo do Drive não é tocado.
+ *
+ * Os dois caches são atualizados na mão em vez de rebuscar tudo: a Central e a
+ * página de Aprovações podem estar carregadas ao mesmo tempo (o pop-up abre
+ * por cima do app), e uma peça excluída aqui não pode continuar contando lá.
+ */
+async function centralExcluirDoGrupo(item, daFila, btn) {
+  if (!item) return;
+
+  if (daFila) {
+    if (!confirm("Tirar isso da fila de conferência? O designer não é avisado, e nada muda no Runrun.it.")) return;
+    if (btn) btn.disabled = true;
+    const data = await chamarBackend({
+      acao: "descartarConferencia", taskId: item.taskId, loteId: item.loteId, quem: DESIGNER_LOGADO,
+    });
+    if (!data || !data.ok) {
+      mostrarToast((data && data.error) || "Não consegui tirar da fila agora — tenta de novo.", "erro");
+      if (btn) btn.disabled = false;
+      return;
+    }
+    centralFilaCache = centralFilaCache.filter(
+      i => !(String(i.taskId) === String(item.taskId) && i.loteId === item.loteId)
+    );
+    // A fila da página de Aprovações (js/pagina-aprovacao.js) pode estar
+    // carregada por baixo — tirar de lá também, senão o contador vermelho
+    // continuaria contando uma peça que não existe mais.
+    if (typeof apvFila !== "undefined" && Array.isArray(apvFila)) {
+      apvFila = apvFila.filter(i => !(String(i.taskId) === String(item.taskId) && i.loteId === item.loteId));
+      if (typeof apvRenderFila === "function") apvRenderFila(apvFila);
+      if (typeof atualizarBadgeAprovacao === "function") atualizarBadgeAprovacao();
+    }
+    mostrarToast("Tirado da fila.", "sucesso");
+  } else {
+    if (!confirm("Excluir este link de aprovação? Ele para de abrir na hora, e não dá pra desfazer.")) return;
+    if (btn) btn.disabled = true;
+    const data = await chamarBackend({ acao: "excluirLinkDeAprovacao", codigo: item.codigo });
+    if (!data || !data.ok) {
+      mostrarToast((data && data.error) || "Não consegui excluir agora.", "erro");
+      if (btn) btn.disabled = false;
+      return;
+    }
+    centralAprovacoesCache = centralAprovacoesCache.filter(a => a.codigo !== item.codigo);
+    // Mesmo cuidado do lado da Fila de repasse (aba "Aprovações"), que lê o
+    // próprio cache (ver wireCardsDeAprovacao, js/pagina-repasse.js).
+    if (typeof aprovacoesCache !== "undefined" && Array.isArray(aprovacoesCache)) {
+      aprovacoesCache = aprovacoesCache.filter(a => a.codigo !== item.codigo);
+      if (typeof atualizarBadgeAprovacoes === "function") atualizarBadgeAprovacoes();
+    }
+    mostrarToast("Link excluído.", "sucesso");
+  }
+
+  // Redesenha o pop-up (contadores da pílula, grade e a coluna da direita) e
+  // as abas de trás, que leem os mesmos dois caches.
+  centralRenderGrupo();
+  centralRenderTudo();
 }
 
 /** "hoje" / "ontem" / "há 4 dias" — o carimbo curto do card de concluído. */
@@ -1508,7 +1590,15 @@ function centralCardDoGrupoHTML(it, i, daFila) {
     if (dias >= limite) classeSelo = "alerta";
   }
 
+  // O lixeirinha mora FORA do <button> do card (um botão dentro de outro é
+  // HTML inválido — o navegador desmonta a estrutura sozinho), por isso o
+  // card inteiro vive dentro de um `.central-gc-wrap` que só existe pra
+  // ancorar os dois. Ver centralExcluirDoGrupo pro que ele apaga em cada
+  // grupo (fila de conferência × link de aprovação).
+  const rotuloExcluir = daFila ? "Tirar da fila" : "Excluir o link de aprovação";
+
   return `
+    <div class="central-gc-wrap">
     <button type="button" class="central-gc" data-central-gc="${i}">
       <span class="central-gc-arte" ${fileId ? `data-central-gc-thumb="${escaparHTML(fileId)}"` : ""}></span>
       <span class="central-gc-cima">
@@ -1524,6 +1614,9 @@ function centralCardDoGrupoHTML(it, i, daFila) {
         <span class="central-gc-seta" aria-hidden="true">›</span>
       </span>
     </button>
+    <button type="button" class="central-gc-lixo" data-central-gc-excluir="${i}"
+            title="${escaparHTML(rotuloExcluir)}" aria-label="${escaparHTML(rotuloExcluir)}">🗑️</button>
+    </div>
   `;
 }
 
