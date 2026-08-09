@@ -297,6 +297,12 @@ async function centralCarregarDados() {
   if (!caiuARede(fila) && fila && fila.ok) centralFilaCache = fila.itens || [];
   if (aprovacoes !== null) centralAprovacoesCache = aprovacoes || [];
 
+  // O que já foi cobrado pela pílula "Precisa de atenção" — é o que impede
+  // duas pessoas do atendimento de cobrarem a mesma peça (ver
+  // js/central-atencao.js). Não entra no Promise.all de cima porque é o
+  // dado menos urgente da tela: a fila e as aprovações desenham tudo.
+  if (typeof centralCarregarPedidosDeAtencao === "function") await centralCarregarPedidosDeAtencao();
+
   centralCarregado = true;
   centralRenderTudo();
 }
@@ -441,9 +447,14 @@ function centralRenderHoje() {
       ${centralHojeCartaoComCliente(comCliente, limiteAlerta)}
       ${centralHojeCartaoAjuste(voltouAjuste, ajusteSubiu)}
 
+      <!-- O rodapé (#chTimelinePe) é onde mora a pílula "Precisa de
+           atenção" (js/central-atencao.js). Fica FORA da lista de propósito:
+           dentro dela, a pílula rolaria junto com o feed e sumiria de vista
+           justo quando tem fila. -->
       <div class="hr-card central-hoje-tile central-hoje-timeline">
         <div class="central-hoje-timeline-head"><span class="central-hoje-timeline-livedot"></span>Timeline</div>
         <div class="central-hoje-timeline-list" id="chTimelineList"></div>
+        <div class="central-hoje-timeline-pe" id="chTimelinePe"></div>
       </div>
 
       <button type="button" class="hr-card central-hoje-tile clicavel central-hoje-wide" id="chRadarBtn">
@@ -469,6 +480,10 @@ function centralRenderHoje() {
   centralPreencherFotoAtendimento("ch", nomeExibido, false);
   centralRenderTimelineHoje();
   centralRenderCalendario();
+  // A pílula de atenção sai das MESMAS postagens do calendário: aqui ela
+  // desenha com o que já estiver em memória, e centralRenderCalendario
+  // chama de novo quando a busca chega (primeira vez da sessão).
+  if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
 
   // Os quatro cartões abrem o POP-UP DOS GRUPOS (2026-08-08), não mais a
   // aba Aprovações: ali a pessoa saía da tela onde estava pra ver uma
@@ -747,11 +762,19 @@ function centralConstruirTimeline() {
     });
   });
 
+  // Terceira fonte (2026-08-09): os pedidos de atenção que alguém do
+  // atendimento fez pela pílula do rodapé. Entram aqui pra que a cobrança
+  // vire uma COISA QUE ACONTECEU e ninguém cobre a mesma peça duas vezes —
+  // ver js/central-atencao.js.
+  if (typeof centralEventosDePedidosDeAtencao === "function") {
+    centralEventosDePedidosDeAtencao().forEach(ev => eventos.push(ev));
+  }
+
   return eventos.sort((a, b) => b.quando - a.quando).slice(0, 20);
 }
 
 /** O rótulo curto da pastilha de status, no canto do cabeçalho do post. */
-const CENTRAL_TL_SELO = { novo: "conferir", ajuste: "ajuste", aprovado: "aprovada" };
+const CENTRAL_TL_SELO = { novo: "conferir", ajuste: "ajuste", aprovado: "aprovada", atencao: "atenção" };
 
 function centralRenderTimelineHoje() {
   const lista = document.getElementById("chTimelineList");
@@ -2245,6 +2268,8 @@ async function centralRenderCalendario() {
     const data = await chamarBackend({ acao: "calendarioDePostagens" });
     if (!document.getElementById("chCalendario")) return;   // saiu da aba
     centralPostagens = (data && data.ok && data.postagens) ? data.postagens : [];
+    // A fila de "precisa de atenção" sai daqui — só agora ela existe.
+    if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
   }
 
   centralDesenharCalendario();

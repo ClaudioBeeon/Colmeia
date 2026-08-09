@@ -722,6 +722,14 @@ function fazerBackupDaPlanilha() {
   } catch (err) {
     Logger.log('Erro ao limpar eventos antigos do feed: ' + err.message);
   }
+  // E pros pedidos de atenção da Central (ver PEDIDOS_ATENCAO_RETENCAO_DIAS
+  // em Planilha.gs): pedido de duas semanas atrás é sobre uma postagem que
+  // já aconteceu — não serve mais pra evitar cobrança repetida.
+  try {
+    limparPedidosDeAtencaoAntigos();
+  } catch (err) {
+    Logger.log('Erro ao limpar pedidos de atenção antigos: ' + err.message);
+  }
   // Mesma ideia pra fila da conferência interna (AprovacaoInterna.gs):
   // linha já decidida vira histórico e é podada em 30 dias. O que está
   // "pendente" nunca é apagado, por mais velho que seja — é trabalho em

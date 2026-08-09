@@ -319,6 +319,10 @@ function handleRequest(e, method) {
         output = briefingDaConferencia(body.taskId);
       } else if (body.acao === 'calendarioDePostagens') {
         output = calendarioDePostagens();
+      } else if (body.acao === 'pedirAtencaoNaTarefa') {
+        output = registrarPedidoDeAtencao(body.pedido);
+      } else if (body.acao === 'listarPedidosDeAtencao') {
+        output = listarPedidosDeAtencao();
       } else if (body.acao === 'entrarComoAtendimento') {
         output = entrarComoAtendimento(body.codigo);
       } else if (body.acao === 'buscarConferenciaDaTarefa') {
