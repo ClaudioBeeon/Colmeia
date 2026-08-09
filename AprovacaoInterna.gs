@@ -117,6 +117,51 @@ function versaoDoArquivo(nomeArquivo) {
 function listarVersoesDasPecas(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
 
+  // ⚠️ ESTA É A FUNÇÃO MAIS CARA DA CENTRAL (2026-08-09). Varrer a pasta
+  // do card no Drive não é uma chamada só: cada arquivo custa um pedido
+  // por propriedade lida (nome, tipo, data), e `listarConferenciasPendentes`
+  // chama isto UMA VEZ POR TAREFA da fila. Com uma fila de 15 tarefas de
+  // 20 arquivos, é mais de mil idas ao Drive — era o grosso da demora pra
+  // abrir a Central.
+  //
+  // O cache de 90s resolve porque a fila é aberta várias vezes seguidas
+  // (e por várias pessoas do atendimento, que compartilham o mesmo cache
+  // do script). Arquivo que sobe PELO Colmeia limpa o cache na hora
+  // (`invalidarCacheDeVersoesDasPecas`, chamado por subirArquivoNoCard),
+  // então o único atraso possível é o de quem sobe direto pelo Drive — e
+  // aí são 90s, não a eternidade.
+  var chaveCache = chaveDoCacheDeVersoes(taskId);
+  var cache = CacheService.getScriptCache();
+  try {
+    var guardado = cache.get(chaveCache);
+    if (guardado) return JSON.parse(guardado);
+  } catch (e) { /* cache indisponível: varre na mão */ }
+
+  var resultado = listarVersoesDasPecasSemCache(taskId);
+  // Só guarda o que deu certo: erro em cache é erro repetido por 90s.
+  if (resultado && resultado.ok) {
+    try {
+      cache.put(chaveCache, JSON.stringify(resultado), VERSOES_CACHE_SEGUNDOS);
+    } catch (e) { /* passou do tamanho do cache: só não guarda */ }
+  }
+  return resultado;
+}
+
+var VERSOES_CACHE_SEGUNDOS = 90;
+
+function chaveDoCacheDeVersoes(taskId) {
+  return 'versoesPecas_' + taskId;
+}
+
+/** Limpa o cache da varredura de pasta de um card (ver listarVersoesDasPecas). */
+function invalidarCacheDeVersoesDasPecas(taskId) {
+  if (!taskId) return;
+  try {
+    CacheService.getScriptCache().remove(chaveDoCacheDeVersoes(taskId));
+  } catch (e) { /* sem cache pra limpar */ }
+}
+
+function listarVersoesDasPecasSemCache(taskId) {
   var pastaInfo = buscarPastaSalvaDoCard(taskId);
   if (!pastaInfo.ok || !pastaInfo.url) {
     return { ok: false, error: 'Essa tarefa ainda não tem uma pasta do card vinculada no Drive. Crie a pasta do card primeiro.' };
@@ -190,11 +235,19 @@ function pedirConferenciaInterna(dados) {
   dados = dados || {};
   if (!dados.taskId) return { ok: false, error: 'taskId não informado.' };
 
-  var lista = listarVersoesDasPecas(dados.taskId);
+  // ⚠️ SEM CACHE de propósito, diferente de todo o resto: é AQUI que fica
+  // gravado qual versão estava valendo no pedido, e é desse número que
+  // sai o aviso de "tem versão nova" lá na conferência. Ler um retrato de
+  // 90s atrás faria o designer subir a v2, mandar pra revisão na hora e o
+  // sistema anotar v1 — o erro exato que esse campo existe pra pegar.
+  var lista = listarVersoesDasPecasSemCache(dados.taskId);
   if (!lista.ok) return lista;
   if (!lista.pecas.length) {
     return { ok: false, error: 'Não encontrei nenhuma imagem ou vídeo na pasta do card pra mandar pra conferência.' };
   }
+  // A pasta acabou de ser lida de verdade: joga fora o retrato velho pra
+  // a fila de conferência já abrir com esta versão.
+  invalidarCacheDeVersoesDasPecas(dados.taskId);
 
   // A interface pode mandar VÁRIAS peças (o card tem Feed e Stories, e as
   // duas ficaram prontas juntas) ou uma só. Sem nenhuma, vai a que foi

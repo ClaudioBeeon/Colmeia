@@ -981,6 +981,29 @@ isso não estava em `ACOES_DEMORADAS`. Depois ele passou a puxar também as tare
   Agora é uma rodada por página, com os designers juntos, e quem já saiu da janela não entra na
   rodada seguinte — mesmo padrão de `buscarTarefasAbertasSeparadas`.
 
+### A Central demorava demais pra abrir (2026-08-09)
+
+Duas causas somadas, uma de cada lado:
+
+**1. As buscas de abertura estavam em SÉRIE.** `centralCarregarDados` esperava fila+aprovações,
+depois esperava os pedidos de atenção, e só então desenhava — e o desenho é que disparava o
+calendário, o pedido mais demorado de todos. Quatro prazos enfileirados. Hoje as quatro saem no
+mesmo instante e a tela desenha assim que a parte útil chega: `centralGarantirPostagens()` (a busca
+do calendário, separada do desenho justamente pra poder sair na frente) e os pedidos de atenção não
+são esperados por ninguém — cada um redesenha só o seu pedaço quando chega.
+
+**2. `listarVersoesDasPecas` é a função mais cara da Central.** Varrer a pasta do card no Drive não
+é uma chamada só: cada arquivo custa um pedido por propriedade lida, e `listarConferenciasPendentes`
+chamava isso **uma vez por tarefa da fila**. Ganhou cache de 90s no script (compartilhado entre as
+pessoas do atendimento), limpo por `invalidarCacheDeVersoesDasPecas` quando um arquivo sobe pelo
+Colmeia (`subirArquivoNoCard`, Drive.gs).
+
+⚠️ **`pedirConferenciaInterna` usa `listarVersoesDasPecasSemCache` de propósito** — é ali que fica
+gravado qual versão estava valendo no pedido, e é desse número que sai o aviso de "tem versão nova".
+Um retrato de 90s atrás faria o designer subir a v2, mandar pra revisão na hora e o sistema anotar
+v1: o erro exato que esse campo existe pra pegar. Ao criar uma leitura nova de pasta, decidir do
+mesmo jeito — **exibir** pode usar o cache, **decidir** não.
+
 ### O pill amarelo de cliente, na barra preta do topo
 
 Escolher um cliente ali muda a **Central inteira** — os quatro cartões de número, a timeline, o

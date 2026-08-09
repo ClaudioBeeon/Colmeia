@@ -221,6 +221,10 @@ function subirArquivoNoCard(dados) {
     // um upload que acabou de acontecer aqui dentro. Quem escreve na
     // pasta é quem sabe que o que estava guardado ficou velho.
     invalidarCacheDeUploadsDoCard(dados.taskId);
+    // Mesmo motivo, pro cache de 90s da varredura de versões que a fila de
+    // conferência usa (ver listarVersoesDasPecas, AprovacaoInterna.gs):
+    // sem isso, "subiu a v2" demoraria até 90s pra aparecer na conferência.
+    invalidarCacheDeVersoesDasPecas(dados.taskId);
     return { ok: true, url: arquivo.getUrl(), nomeFinal: nomeFinal, pastaUrl: pastaInfo.url };
   } catch (err) {
     return { ok: false, error: 'Erro ao subir o arquivo: ' + err.message };

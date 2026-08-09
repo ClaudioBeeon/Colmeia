@@ -284,7 +284,34 @@ function centralTrocarAba(aba) {
   });
 }
 
+/**
+ * As buscas de abertura da Central — TODAS em paralelo (2026-08-09).
+ *
+ * Antes eram três rodadas em série: fila+aprovações juntas, DEPOIS os
+ * pedidos de atenção, e só então a tela desenhava — o que fazia o
+ * calendário (o pedido mais demorado de todos) começar por último, já
+ * com a Central desenhada. Somando os prazos, dava a espera enorme que o
+ * Cláudio reclamou.
+ *
+ * Agora as quatro saem no mesmo instante e a tela desenha assim que a
+ * PRIMEIRA parte útil chega, em vez de esperar a mais lenta:
+ * - fila + aprovações → os cartões de número e as listas;
+ * - pedidos de atenção → só a pílula da Timeline;
+ * - calendário → só o bloco do calendário, que se desenha sozinho.
+ */
 async function centralCarregarDados() {
+  // Sai na frente e não é esperado por ninguém: o calendário se desenha
+  // sozinho quando chega (centralRenderCalendario espera esta promessa).
+  centralGarantirPostagens();
+
+  // Também não segura o desenho: é o dado menos urgente da tela, e
+  // mexe só na pílula "Precisa de atenção" (js/central-atencao.js).
+  const atencao = (typeof centralCarregarPedidosDeAtencao === "function")
+    ? centralCarregarPedidosDeAtencao().then(() => {
+        if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
+      }).catch(() => { /* sem pílula de atenção; o resto da Central não depende dela */ })
+    : null;
+
   const [fila, aprovacoes] = await Promise.all([
     chamarBackend({ acao: "listarConferenciasPendentes" }),
     // Reaproveita a MESMA função de pagina-repasse.js — já cuida de
@@ -297,14 +324,12 @@ async function centralCarregarDados() {
   if (!caiuARede(fila) && fila && fila.ok) centralFilaCache = fila.itens || [];
   if (aprovacoes !== null) centralAprovacoesCache = aprovacoes || [];
 
-  // O que já foi cobrado pela pílula "Precisa de atenção" — é o que impede
-  // duas pessoas do atendimento de cobrarem a mesma peça (ver
-  // js/central-atencao.js). Não entra no Promise.all de cima porque é o
-  // dado menos urgente da tela: a fila e as aprovações desenham tudo.
-  if (typeof centralCarregarPedidosDeAtencao === "function") await centralCarregarPedidosDeAtencao();
-
   centralCarregado = true;
   centralRenderTudo();
+
+  // Se os pedidos de atenção ainda não tinham chegado na hora do desenho,
+  // a pílula é redesenhada acima por conta própria — nada a esperar aqui.
+  void atencao;
 }
 
 function centralRenderTudo() {
@@ -2238,7 +2263,8 @@ function centralTimelineDoClienteHTML(cliente) {
 // ---------------------------------------------------------------------------
 
 let centralPostagens = null;      // null = ainda não buscou (ou a busca falhou)
-let centralCalBuscando = false;   // trava: sem isso, o botão de tentar de novo dispara buscas empilhadas
+let centralCalBuscando = null;    // a promessa da busca em andamento (trava contra buscas empilhadas)
+let centralCalUltimoErro = null;  // a resposta que falhou, pra o desenho saber se foi rede ou recusa
 let centralCalMes = null;         // Date do primeiro dia do mês na tela
 
 const CENTRAL_CAL_DOW = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -2253,6 +2279,37 @@ function centralCalChave(d) {
   return `${d.getFullYear()}-${m}-${dia}`;
 }
 
+/**
+ * A BUSCA do calendário, separada do desenho (2026-08-09).
+ *
+ * Existe sozinha pra poder ser DISPARADA JUNTO com as outras buscas da
+ * Central, lá no `centralCarregarDados` — antes ela só começava depois
+ * que a tela inteira já tinha desenhado, então o pedido mais demorado de
+ * todos era o ÚLTIMO da fila. Devolve uma promessa; quem chama não
+ * precisa esperar.
+ */
+function centralGarantirPostagens() {
+  if (centralPostagens !== null) return Promise.resolve(true);
+  if (centralCalBuscando) return centralCalBuscando;   // já tem uma em andamento
+
+  centralCalBuscando = chamarBackend({ acao: "calendarioDePostagens" }).catch(() => null).then(data => {
+    centralCalBuscando = null;
+    // ⚠️ NÃO deixar a falha virar uma lista vazia. `centralPostagens` só
+    // é buscada quando está em `null`, então gravar `[]` aqui congela o
+    // calendário vazio pelo resto da sessão — e vazio parece "não tem
+    // nada postado", não "não consegui perguntar". Falhou: deixa em
+    // `null`, e o desenho oferece tentar de novo.
+    if (!data || !data.ok || !Array.isArray(data.postagens)) {
+      centralCalUltimoErro = data || null;
+      return false;
+    }
+    centralCalUltimoErro = null;
+    centralPostagens = data.postagens;
+    return true;
+  });
+  return centralCalBuscando;
+}
+
 async function centralRenderCalendario() {
   const el = document.getElementById("chCalendario");
   if (!el) return;
@@ -2262,31 +2319,11 @@ async function centralRenderCalendario() {
     centralCalMes = new Date(h.getFullYear(), h.getMonth(), 1);
   }
 
-  // Primeira vez: busca. Depois disso, o mesmo array serve pra virar de
-  // mês quantas vezes quiser — o calendário inteiro é montado no navegador.
   if (centralPostagens === null) {
-    if (centralCalBuscando) return;   // já tem uma busca em andamento
-    centralCalBuscando = true;
     el.innerHTML = `<div class="central-cal-carregando">Carregando o calendário…</div>`;
-    let data;
-    try {
-      data = await chamarBackend({ acao: "calendarioDePostagens" });
-    } finally {
-      centralCalBuscando = false;
-    }
+    const deuCerto = await centralGarantirPostagens();
     if (!document.getElementById("chCalendario")) return;   // saiu da aba
-
-    // ⚠️ NÃO deixar a falha virar uma lista vazia. `centralPostagens` só
-    // é buscada quando está em `null`, então gravar `[]` aqui congela o
-    // calendário vazio pelo resto da sessão — e vazio parece "não tem
-    // nada postado", não "não consegui perguntar". Era exatamente esse o
-    // sintoma quando o prazo de 25s estourava (ver ACOES_DEMORADAS em
-    // js/config.js). Falhou: deixa em `null` e oferece tentar de novo.
-    if (!data || !data.ok || !Array.isArray(data.postagens)) {
-      centralCalErroHTML(el, data);
-      return;
-    }
-    centralPostagens = data.postagens;
+    if (!deuCerto) { centralCalErroHTML(el, centralCalUltimoErro); return; }
     // A fila de "precisa de atenção" sai daqui — só agora ela existe.
     if (typeof centralRenderPilulaAtencao === "function") centralRenderPilulaAtencao();
   }
