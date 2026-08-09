@@ -956,8 +956,13 @@ pra uma linha (a mesma altura dos cartões de número ao lado) pra abrir esse es
 - **Cada peça da caixinha é um CARD clicável** que abre a tarefa (`abrirTarefaPorId`, que sabe buscar
   avulsa no Runrun.it quando ela não está carregada).
 - **Abre no hover E no clique:** num aparelho de toque hover não existe, e sem o clique o calendário
-  ficaria sem uso lá. A caixinha só fecha quando o mouse sai DELA também — senão sair do círculo pra
-  clicar num card fecharia antes do clique.
+  ficaria sem uso lá.
+- ⚠️ **O fechamento é ATRASADO (260ms), e isso é obrigatório** (2026-08-09). Como a caixinha mora
+  fora do bloco do calendário, o caminho do mouse do círculo até ela passa POR FORA dos dois: o
+  `mouseleave` do calendário disparava e ela sumia antes de dar pra clicar em qualquer peça — foi
+  exatamente o que o Cláudio relatou. Sair de um e entrar no outro agendam e cancelam o MESMO
+  temporizador (`centralAgendarFecharDia`/`centralCancelarFecharDia`), então a travessia não fecha
+  nada. Um `mouseleave` que fecha na hora não funciona aqui, por mais que pareça o óbvio.
 - **A etiqueta de entrega fica laranja quando a entrega é DEPOIS do dia de postar.** É o erro que
   este calendário existe pra pegar: a peça fica pronta atrasada em relação à publicação.
 

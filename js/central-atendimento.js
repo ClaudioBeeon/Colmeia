@@ -2436,7 +2436,8 @@ function centralDesenharCalendario() {
     b.addEventListener("click", () => centralAbrirDiaDoCalendario(dia, porDia[dia], b));
     b.addEventListener("focus", () => centralAbrirDiaDoCalendario(dia, porDia[dia], b));
   });
-  el.addEventListener("mouseleave", centralFecharDiaDoCalendario);
+  el.addEventListener("mouseenter", centralCancelarFecharDia);
+  el.addEventListener("mouseleave", centralAgendarFecharDia);
 }
 
 /** "8 de agosto", com o dia da semana por extenso. */
@@ -2456,7 +2457,33 @@ function centralCalCurta(iso) {
 }
 
 function centralFecharDiaDoCalendario() {
+  centralCancelarFecharDia();
   document.getElementById("centralCalPop")?.remove();
+}
+
+/**
+ * ⚠️ O FECHAMENTO É ATRASADO, e isso NÃO é enfeite (2026-08-09).
+ *
+ * A caixinha mora FORA do bloco do calendário (é filha de
+ * `#centralAtendimento` — o bloco tem `overflow: hidden` e cortaria ela,
+ * ver o comentário lá em cima). Então o caminho do mouse do círculo do
+ * dia até a caixinha passa POR FORA dos dois: o `mouseleave` do
+ * calendário disparava e ela sumia antes de dar pra clicar em qualquer
+ * peça. Sair de um e entrar no outro agenda e cancela o mesmo
+ * temporizador, então a travessia não fecha nada.
+ */
+let centralCalFecharTimer = null;
+
+function centralAgendarFecharDia() {
+  centralCancelarFecharDia();
+  centralCalFecharTimer = setTimeout(centralFecharDiaDoCalendario, 260);
+}
+
+function centralCancelarFecharDia() {
+  if (centralCalFecharTimer) {
+    clearTimeout(centralCalFecharTimer);
+    centralCalFecharTimer = null;
+  }
 }
 
 /**
@@ -2520,9 +2547,11 @@ function centralAbrirDiaDoCalendario(chave, itens, ancora) {
   pop.style.left = Math.max(12, esq) + "px";
   pop.style.top = topo + "px";
 
-  // Deixa a caixinha viva enquanto o mouse estiver DENTRO dela — sem
-  // isso, sair do círculo pra clicar num card fecharia antes do clique.
-  pop.addEventListener("mouseleave", centralFecharDiaDoCalendario);
+  // Entrar na caixinha cancela o fechamento agendado pela saída do
+  // calendário (ver centralAgendarFecharDia) — é o que faz a travessia
+  // do círculo até aqui não matar a caixinha no meio do caminho.
+  pop.addEventListener("mouseenter", centralCancelarFecharDia);
+  pop.addEventListener("mouseleave", centralAgendarFecharDia);
 
   pop.querySelectorAll("[data-central-cal-abrir]").forEach(b => {
     b.addEventListener("click", () => {
