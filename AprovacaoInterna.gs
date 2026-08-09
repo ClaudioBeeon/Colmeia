@@ -1932,7 +1932,12 @@ function diagnosticoEtapasDoRunrun() {
  * front-end, que já sabe qual mês está na tela e não precisa pedir de
  * novo pra virar a página do calendário.
  */
-var CALENDARIO_CACHE_CHAVE = 'calendarioPostagens';
+// O "_v2" no nome não é enfeite: o cache do Apps Script SOBREVIVE ao
+// deploy, então uma correção que muda o RESULTADO continuaria servindo o
+// resultado velho (aqui, um calendário vazio) por até 10 minutos depois de
+// publicada. Trocar a chave joga fora o que estava guardado na hora. Ao
+// mexer no que esta função devolve, subir a versão junto.
+var CALENDARIO_CACHE_CHAVE = 'calendarioPostagens_v2';
 var CALENDARIO_CACHE_SEGUNDOS = 600;   // 10 min
 
 // Quanto tempo pra trás olhar nas tarefas JÁ FECHADAS. 45 dias cobre o mês

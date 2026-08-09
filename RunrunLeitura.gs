@@ -453,11 +453,128 @@ function nomeColunaParaChave(nomeEtapa) {
 // no painel-designers-beeon (custom_24).
 var CAMPO_DATA_PUBLICACAO = 'custom_24';
 
+/**
+ * A Data de Publicação da tarefa, em "AAAA-MM-DD", ou null.
+ *
+ * ⚠️ ISSO ESTAVA QUEBRADO DESDE O COMEÇO (achado em 2026-08-09, quando o
+ * calendário da Central insistia em abrir vazio). A versão antiga era:
+ *
+ *     if (t.custom_fields && t.custom_fields['custom_24']) ...
+ *
+ * ou seja, tratava `custom_fields` como um OBJETO com chave 'custom_24'.
+ * Só que `extrairTipoTarefa`, aqui em cima — que funciona há meses e é
+ * quem põe o ícone de tipo em todo card do quadro — trata o MESMO campo
+ * como um ARRAY de `{name, value}`. Os dois não podem estar certos, e
+ * quem tem prova de funcionamento é o array: o resultado é que a data
+ * saía `null` em TODA tarefa, e qualquer tela que dependesse dela
+ * (calendário de postagens, coluna Publicação da Fila de repasse)
+ * aparecia vazia sem nenhum erro na tela.
+ *
+ * Agora lê nos três formatos possíveis, sem depender de adivinhar qual a
+ * API devolve: array de campos, objeto com chave, e o campo solto na
+ * raiz da tarefa. No array, casa tanto pelo ID (`custom_24`) quanto pelo
+ * NOME ("Data de Publicação") — se um dia a agência recriar o campo, o id
+ * muda mas o nome não.
+ */
 function extrairDataPublicacaoTarefa(t) {
-  if (t.custom_fields && t.custom_fields[CAMPO_DATA_PUBLICACAO]) {
-    return String(t.custom_fields[CAMPO_DATA_PUBLICACAO]).substring(0, 10);
+  if (!t) return null;
+
+  // 1) Array de campos — o formato que extrairTipoTarefa já usa.
+  if (Array.isArray(t.custom_fields)) {
+    for (var i = 0; i < t.custom_fields.length; i++) {
+      var campo = t.custom_fields[i];
+      if (!campo) continue;
+      var id = String(campo.id || campo.custom_field_id || campo.key || '').toLowerCase();
+      var nome = String(campo.name || campo.title || campo.label || '').toLowerCase();
+      var ehOId = id === CAMPO_DATA_PUBLICACAO || id === CAMPO_DATA_PUBLICACAO.replace('custom_', '');
+      var ehONome = nome.indexOf('publica') !== -1;   // "Data de Publicação", "Publicação"
+      if (!ehOId && !ehONome) continue;
+      var data = normalizarDataPublicacao(campo.value !== undefined ? campo.value : (campo.option_name || campo.date || campo.text));
+      if (data) return data;
+    }
   }
+
+  // 2) Objeto com o id como chave (o formato que a escrita usa).
+  if (t.custom_fields && !Array.isArray(t.custom_fields)) {
+    var direto = normalizarDataPublicacao(t.custom_fields[CAMPO_DATA_PUBLICACAO]);
+    if (direto) return direto;
+    for (var chave in t.custom_fields) {
+      if (String(chave).toLowerCase().indexOf('publica') === -1) continue;
+      var achado = normalizarDataPublicacao(t.custom_fields[chave]);
+      if (achado) return achado;
+    }
+  }
+
+  // 3) Campo solto na raiz da tarefa (algumas respostas vêm assim).
+  return normalizarDataPublicacao(t[CAMPO_DATA_PUBLICACAO]);
+}
+
+/** Aceita ISO, dd/mm/aaaa, {value|date}, Date ou timestamp — devolve "AAAA-MM-DD". */
+function normalizarDataPublicacao(valor) {
+  if (valor === null || valor === undefined || valor === '') return null;
+
+  if (typeof valor === 'object') {
+    if (valor instanceof Date) {
+      return Utilities.formatDate(valor, 'America/Sao_Paulo', 'yyyy-MM-dd');
+    }
+    return normalizarDataPublicacao(valor.value !== undefined ? valor.value : (valor.date || valor.text));
+  }
+
+  var texto = String(valor).trim();
+  if (!texto) return null;
+
+  // Já vem "AAAA-MM-DD" (com ou sem hora atrás).
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) return texto.substring(0, 10);
+
+  // "dd/mm/aaaa" — o formato que o Runrun.it mostra na tela pra quem é do Brasil.
+  var br = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return br[3] + '-' + br[2] + '-' + br[1];
+
+  // Timestamp em milissegundos.
+  if (/^\d{10,}$/.test(texto)) {
+    return Utilities.formatDate(new Date(Number(texto)), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  }
+
+  // Último recurso: deixa o próprio JS tentar entender (ex: "2026-08-09T12:00:00Z").
+  var d = new Date(texto);
+  if (!isNaN(d.getTime())) return Utilities.formatDate(d, 'America/Sao_Paulo', 'yyyy-MM-dd');
+
   return null;
+}
+
+/**
+ * SÓ LEITURA — rode pelo editor do Apps Script e mande o log se o
+ * calendário ainda aparecer vazio. Mostra, de tarefas de verdade, como o
+ * Runrun.it está mandando os campos personalizados: se é array ou objeto,
+ * que nomes e ids existem, e o que `extrairDataPublicacaoTarefa` conseguiu
+ * tirar de cada uma. É o que responde, sem chute, se a data não está sendo
+ * LIDA ou se ela simplesmente não está PREENCHIDA nas tarefas.
+ */
+function diagnosticoDataPublicacao() {
+  var idsPorEmail = buscarIdsResponsaveisRunrun();
+  var comData = 0, semData = 0, olhadas = 0;
+
+  Logger.log('=== DIAGNÓSTICO: Data de Publicação (custom_24) ===');
+  for (var email in RUNRUN_USUARIOS) {
+    var runrunId = idsPorEmail[email];
+    if (!runrunId) continue;
+    var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) + '&is_closed=false&limit=20&page=1');
+    if (!Array.isArray(lote)) continue;
+
+    Logger.log('--- ' + RUNRUN_USUARIOS[email] + ': ' + lote.length + ' tarefa(s) abertas nesta página');
+    for (var i = 0; i < lote.length && i < 5; i++) {
+      var t = lote[i];
+      olhadas++;
+      var lida = extrairDataPublicacaoTarefa(t);
+      if (lida) comData++; else semData++;
+      Logger.log('  #' + t.id + ' "' + String(t.title).substring(0, 40) + '"');
+      Logger.log('     custom_fields é ' + (Array.isArray(t.custom_fields) ? 'ARRAY' : (t.custom_fields ? 'OBJETO' : 'AUSENTE')));
+      Logger.log('     bruto: ' + JSON.stringify(t.custom_fields));
+      Logger.log('     >>> data lida: ' + (lida || 'NADA'));
+    }
+  }
+  Logger.log('=== RESUMO: ' + olhadas + ' tarefas olhadas | com data: ' + comData + ' | sem data: ' + semData + ' ===');
+  return { ok: true, olhadas: olhadas, comData: comData, semData: semData };
 }
 
 function tempoTrabalhadoAoVivo(t) {
