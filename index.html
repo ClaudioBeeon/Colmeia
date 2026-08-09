@@ -1442,6 +1442,22 @@
           <option value="">Ver tudo</option>
         </select>
       </div>
+
+      <!-- O pill AMARELO de cliente (2026-08-08, pedido do Cláudio: "igual
+           do Colmeia"). Escolher um cliente aqui muda a Central INTEIRA —
+           os quatro cartões de número, a timeline, o radar e o calendário.
+           Amarelo de propósito: no vocabulário do app, o amarelo é o que
+           está ativo agora (a pílula do "tocando" no quadro), e um filtro
+           ligado é exatamente isso.
+           Ver centralRenderPillCliente(), js/central-atendimento.js. -->
+      <div class="central-pill-cliente" id="centralPillCliente">
+        <button type="button" class="central-pill-cliente-btn" id="centralPillCliBtn" aria-expanded="false">
+          <span class="central-pill-cliente-av" id="centralPillCliAv" aria-hidden="true">TC</span>
+          <span id="centralPillCliTxt">Todos os clientes</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="central-pill-cliente-menu" id="centralPillCliMenu" hidden></div>
+      </div>
     </header>
 
     <div class="central-content" id="centralContent">

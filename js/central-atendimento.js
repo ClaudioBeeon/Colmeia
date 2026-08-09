@@ -192,6 +192,87 @@ function centralPopularFiltroPessoa() {
   });
 }
 
+/**
+ * O PILL AMARELO DE CLIENTE, na barra preta do topo (2026-08-08).
+ *
+ * Escolher um cliente aqui muda a CENTRAL INTEIRA — os quatro cartões de
+ * número, a timeline, o radar e o calendário. Amarelo de propósito: no
+ * vocabulário do app, amarelo é o que está ativo agora (a pílula do
+ * "tocando" no quadro), e um filtro ligado é exatamente isso.
+ *
+ * ⚠️ Ele NÃO substitui o "ver como" ao lado, e os dois convivem: aquele
+ * troca de PESSOA (só coordenador vê), este corta por CLIENTE dentro do
+ * que a pessoa já enxerga. Escolher a Laura e depois o Bauducco é uma
+ * combinação que faz sentido.
+ */
+let centralClienteAtivo = "";   // "" = todos
+
+function centralRenderPillCliente() {
+  const btn = document.getElementById("centralPillCliBtn");
+  const txt = document.getElementById("centralPillCliTxt");
+  const av = document.getElementById("centralPillCliAv");
+  const menu = document.getElementById("centralPillCliMenu");
+  if (!btn || !menu || !txt || !av) return;
+
+  // Os clientes de quem está vendo. Junta os que aparecem nas peças de
+  // hoje com a lista do painel-designers-beeon: um cliente sem nenhuma
+  // peça em aberto continua sendo cliente dela, e sumir dele da lista
+  // faria parecer que o Colmeia esqueceu do cliente.
+  const nomes = new Set();
+  centralFilaCache.forEach(it => { if (it.cliente && centralClienteEhDaPessoa(it.cliente)) nomes.add(it.cliente); });
+  centralAprovacoesCache.forEach(a => { if (a.cliente && centralClienteEhDaPessoa(a.cliente)) nomes.add(a.cliente); });
+  if (typeof pdTodosClientesPlano === "function") {
+    pdTodosClientesPlano().forEach(({ c }) => {
+      if (c && c.cliente && centralClienteEhDaPessoa(c.cliente)) nomes.add(c.cliente);
+    });
+  }
+  const lista = Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  txt.textContent = centralClienteAtivo || "Todos os clientes";
+  av.textContent = centralClienteAtivo
+    ? (typeof initials === "function" ? initials(centralClienteAtivo) : centralClienteAtivo.slice(0, 2).toUpperCase())
+    : "TC";
+  btn.classList.toggle("escolhido", !!centralClienteAtivo);
+
+  menu.innerHTML = `
+    <button type="button" class="central-pill-cli-i ${centralClienteAtivo ? "" : "on"}" data-central-pill-cli="">
+      Todos os clientes
+    </button>
+    ${lista.map(n => `
+      <button type="button" class="central-pill-cli-i ${centralClienteAtivo === n ? "on" : ""}" data-central-pill-cli="${escaparHTML(n)}">
+        ${escaparHTML(n)}
+      </button>`).join("")}
+  `;
+  menu.querySelectorAll("[data-central-pill-cli]").forEach(b => {
+    b.addEventListener("click", () => {
+      centralClienteAtivo = b.dataset.centralPillCli;
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      centralRenderTudo();
+    });
+  });
+}
+
+document.getElementById("centralPillCliBtn")?.addEventListener("click", ev => {
+  ev.stopPropagation();
+  const menu = document.getElementById("centralPillCliMenu");
+  const btn = document.getElementById("centralPillCliBtn");
+  if (!menu || !btn) return;
+  menu.hidden = !menu.hidden;
+  btn.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+  if (menu.hidden) return;
+  setTimeout(() => {
+    const fechar = e => {
+      if (menu.isConnected && !menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+        document.removeEventListener("click", fechar, true);
+      }
+    };
+    document.addEventListener("click", fechar, true);
+  }, 0);
+});
+
 function centralTrocarAba(aba) {
   centralAbaAtiva = aba;
   document.querySelectorAll(".central-nav-ic[data-central-tab]").forEach(b => {
@@ -221,6 +302,7 @@ async function centralCarregarDados() {
 }
 
 function centralRenderTudo() {
+  centralRenderPillCliente();
   centralRenderHoje();
   centralRenderClientes();
   centralRenderAprovacoes();
@@ -265,6 +347,20 @@ function centralAprovacoesPor(status) {
  * a mais do que esconder trabalho de verdade por um cadastro que faltou.
  */
 function centralClienteEhDoLogado(nomeCliente) {
+  // O pill amarelo do topo entra AQUI, no filtro que já decide tudo que a
+  // Central mostra — assim escolher um cliente muda os quatro cartões, a
+  // timeline, o radar e o calendário de uma vez, sem cada tela precisar
+  // lembrar de checar por conta própria.
+  //
+  // ⚠️ Quem MONTA a lista do pill não pode passar por aqui, senão sobraria
+  // só o cliente já escolhido e não haveria como trocar. Essa parte usa
+  // `centralClienteEhDaPessoa` direto, sem esta linha.
+  if (centralClienteAtivo && String(nomeCliente || "") !== centralClienteAtivo) return false;
+  return centralClienteEhDaPessoa(nomeCliente);
+}
+
+/** O cliente pertence a quem está vendo? (sem o filtro do pill amarelo) */
+function centralClienteEhDaPessoa(nomeCliente) {
   const souCoord = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
   if (souCoord && !centralFiltroPessoa) return true; // coordenador vendo tudo (padrão)
 
@@ -335,6 +431,11 @@ function centralRenderHoje() {
         <div class="central-hoje-foto-info"><b id="chFotoNome"></b><span id="chFotoPapel"></span></div>
       </div>
 
+      <!-- O calendário de postagens (2026-08-08). Fica embaixo da foto,
+           que encolheu pra uma linha só pra abrir esse espaço. Bloco
+           PRETO, como a Timeline — ver centralRenderCalendario(). -->
+      <div class="hr-card central-hoje-tile central-hoje-cal" id="chCalendario"></div>
+
       ${centralHojeCartaoEsperando(esperandoVoce)}
       ${centralHojeCartaoProntas(prontasEnviar)}
       ${centralHojeCartaoComCliente(comCliente, limiteAlerta)}
@@ -367,6 +468,7 @@ function centralRenderHoje() {
 
   centralPreencherFotoAtendimento("ch", nomeExibido, false);
   centralRenderTimelineHoje();
+  centralRenderCalendario();
 
   // Os quatro cartões abrem o POP-UP DOS GRUPOS (2026-08-08), não mais a
   // aba Aprovações: ali a pessoa saía da tela onde estava pra ver uma
@@ -2091,4 +2193,234 @@ function centralTimelineDoClienteHTML(cliente) {
       </div>
     </div>
   `;
+}
+
+// ---------------------------------------------------------------------------
+// O CALENDÁRIO DE POSTAGENS (2026-08-08, protótipo 1 aprovado pelo Cláudio)
+//
+// O mês inteiro num bloco preto embaixo da foto: dia sem postagem é o número
+// solto, dia com postagem é um CÍRCULO preenchido, e hoje é o círculo
+// AMARELO. Passar o mouse num dia com postagem abre uma caixinha com as
+// peças daquele dia — em cards clicáveis, que abrem a tarefa.
+//
+// ⚠️ A CAIXINHA MORA FORA DO CARTÃO. O cartão tem `overflow: hidden` (como
+// todo `.central-hoje-tile`), então uma caixinha desenhada dentro dele
+// simplesmente some na borda. Ela é filha de `#centralAtendimento`, com
+// z-index acima da grade, e é posicionada em pixel a partir do círculo do
+// dia (ver centralAbrirDiaDoCalendario).
+//
+// A DATA vem de `calendarioDePostagens` (AprovacaoInterna.gs), que não faz
+// nenhuma chamada nova ao Runrun.it: lê a mesma varredura em cache que o
+// quadro já usa, e que já traz `dataPublicacao` pronta.
+// ---------------------------------------------------------------------------
+
+let centralPostagens = null;      // null = ainda não buscou
+let centralCalMes = null;         // Date do primeiro dia do mês na tela
+
+const CENTRAL_CAL_DOW = ["D", "S", "T", "Q", "Q", "S", "S"];
+const CENTRAL_CAL_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+/** "AAAA-MM-DD" de uma Date, no fuso local (nunca toISOString, que é UTC
+ *  e joga o dia 1 pro dia 31 do mês anterior em quem está em UTC-3). */
+function centralCalChave(d) {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${dia}`;
+}
+
+async function centralRenderCalendario() {
+  const el = document.getElementById("chCalendario");
+  if (!el) return;
+
+  if (!centralCalMes) {
+    const h = new Date();
+    centralCalMes = new Date(h.getFullYear(), h.getMonth(), 1);
+  }
+
+  // Primeira vez: busca. Depois disso, o mesmo array serve pra virar de
+  // mês quantas vezes quiser — o calendário inteiro é montado no navegador.
+  if (centralPostagens === null) {
+    el.innerHTML = `<div class="central-cal-carregando">Carregando o calendário…</div>`;
+    const data = await chamarBackend({ acao: "calendarioDePostagens" });
+    if (!document.getElementById("chCalendario")) return;   // saiu da aba
+    centralPostagens = (data && data.ok && data.postagens) ? data.postagens : [];
+  }
+
+  centralDesenharCalendario();
+}
+
+function centralDesenharCalendario() {
+  const el = document.getElementById("chCalendario");
+  if (!el || !centralCalMes) return;
+
+  // Só as postagens dos clientes de quem está vendo — e, se houver um
+  // cliente escolhido no pill amarelo do topo, só as dele.
+  const postagens = (centralPostagens || []).filter(p =>
+    centralClienteEhDoLogado(p.cliente) &&
+    (!centralClienteAtivo || (p.cliente || "") === centralClienteAtivo));
+
+  const porDia = {};
+  postagens.forEach(p => {
+    if (!p.publicacao) return;
+    (porDia[p.publicacao] = porDia[p.publicacao] || []).push(p);
+  });
+
+  const ano = centralCalMes.getFullYear();
+  const mes = centralCalMes.getMonth();
+  const primeiro = new Date(ano, mes, 1);
+  const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+  const hoje = centralCalChave(new Date());
+
+  // A grade começa no domingo da semana do dia 1 e vai até fechar a
+  // última semana — é o que dá as colunas alinhadas com o cabeçalho.
+  const celulas = [];
+  const recuo = primeiro.getDay();
+  for (let i = 0; i < recuo; i++) {
+    const d = new Date(ano, mes, 1 - (recuo - i));
+    celulas.push({ d, fora: true });
+  }
+  for (let i = 1; i <= diasNoMes; i++) celulas.push({ d: new Date(ano, mes, i), fora: false });
+  while (celulas.length % 7 !== 0) {
+    celulas.push({ d: new Date(ano, mes, diasNoMes + (celulas.length % 7)), fora: true });
+  }
+
+  const noMes = postagens.filter(p => p.publicacao.startsWith(
+    `${ano}-${String(mes + 1).padStart(2, "0")}`)).length;
+
+  el.innerHTML = `
+    <div class="central-cal">
+      <div class="central-cal-cab">
+        <span class="central-cal-tit">${CENTRAL_CAL_MESES[mes]} ${ano}</span>
+        <button type="button" class="central-cal-nav" data-central-cal-mes="-1" aria-label="Mês anterior">‹</button>
+        <button type="button" class="central-cal-nav" data-central-cal-mes="1" aria-label="Próximo mês">›</button>
+      </div>
+      <div class="central-cal-dow">${CENTRAL_CAL_DOW.map(s => `<span>${s}</span>`).join("")}</div>
+      <div class="central-cal-grid">
+        ${celulas.map(c => {
+          const chave = centralCalChave(c.d);
+          const qtd = (porDia[chave] || []).length;
+          const classes = ["central-cal-d"];
+          if (c.fora) classes.push("fora");
+          if (qtd && !c.fora) classes.push("tem");
+          if (chave === hoje) classes.push("hoje");
+          return `<button type="button" class="${classes.join(" ")}"
+                    ${qtd && !c.fora ? `data-central-cal-dia="${chave}"` : "disabled"}
+                    ${qtd ? `aria-label="${qtd} ${qtd === 1 ? "postagem" : "postagens"} em ${c.d.getDate()}"` : ""}
+                  >${c.d.getDate()}</button>`;
+        }).join("")}
+      </div>
+      <div class="central-cal-pe">
+        <span class="central-cal-leg"><i class="tem"></i>tem postagem</span>
+        <span class="central-cal-leg"><i class="hoje"></i>hoje</span>
+        <span class="central-cal-total">${noMes} no mês</span>
+      </div>
+    </div>
+  `;
+
+  el.querySelectorAll("[data-central-cal-mes]").forEach(b => {
+    b.addEventListener("click", () => {
+      centralCalMes = new Date(centralCalMes.getFullYear(), centralCalMes.getMonth() + Number(b.dataset.centralCalMes), 1);
+      centralFecharDiaDoCalendario();
+      centralDesenharCalendario();
+    });
+  });
+
+  // Abre no hover E no clique: no computador o mouse basta, mas num
+  // aparelho de toque hover não existe — sem o clique, o calendário
+  // inteiro ficaria sem uso lá.
+  el.querySelectorAll("[data-central-cal-dia]").forEach(b => {
+    const dia = b.dataset.centralCalDia;
+    b.addEventListener("mouseenter", () => centralAbrirDiaDoCalendario(dia, porDia[dia], b));
+    b.addEventListener("click", () => centralAbrirDiaDoCalendario(dia, porDia[dia], b));
+    b.addEventListener("focus", () => centralAbrirDiaDoCalendario(dia, porDia[dia], b));
+  });
+  el.addEventListener("mouseleave", centralFecharDiaDoCalendario);
+}
+
+/** "8 de agosto", com o dia da semana por extenso. */
+function centralCalDiaPorExtenso(chave) {
+  const [a, m, d] = chave.split("-").map(Number);
+  const data = new Date(a, m - 1, d);
+  const semana = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"][data.getDay()];
+  return `${semana}, ${d} de ${CENTRAL_CAL_MESES[m - 1]}`;
+}
+
+/** "6/8" — a data curta das etiquetas do card. */
+function centralCalCurta(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+}
+
+function centralFecharDiaDoCalendario() {
+  document.getElementById("centralCalPop")?.remove();
+}
+
+/**
+ * A caixinha do dia. Cada peça é um CARD CLICÁVEL (pedido do Cláudio) que
+ * abre a tarefa no Colmeia — `abrirTarefaPorId` sabe buscar avulsa no
+ * Runrun.it quando ela não está carregada, então funciona mesmo pra
+ * tarefa que não está no quadro de ninguém aqui.
+ */
+function centralAbrirDiaDoCalendario(chave, itens, ancora) {
+  centralFecharDiaDoCalendario();
+  if (!itens || !itens.length || !ancora) return;
+
+  const dono = document.getElementById("centralAtendimento");
+  if (!dono) return;
+
+  const pop = document.createElement("div");
+  pop.className = "central-cal-pop";
+  pop.id = "centralCalPop";
+  pop.innerHTML = `
+    <div class="central-cal-pop-cab">
+      <span class="central-cal-pop-dia">${escaparHTML(centralCalDiaPorExtenso(chave))}</span>
+      <span class="central-cal-pop-q">${itens.length}</span>
+    </div>
+    ${itens.map((p, i) => {
+      // Entrega DEPOIS da publicação é o erro que este calendário existe
+      // pra pegar: a peça fica pronta depois do dia de postar.
+      const atrasada = p.entrega && p.entrega.substring(0, 10) > p.publicacao;
+      return `
+        <button type="button" class="central-cal-card" data-central-cal-abrir="${i}">
+          <span class="central-cal-card-t">
+            <span class="central-cal-card-nome">${escaparHTML(p.titulo || "Sem título")}</span>
+            <span class="central-cal-card-cli">${escaparHTML(p.cliente || "Sem cliente")}${p.designer ? " · " + escaparHTML(p.designer) : ""}</span>
+            <span class="central-cal-card-datas">
+              <span class="central-cal-dt ${atrasada ? "atraso" : ""}">entrega ${escaparHTML(centralCalCurta(p.entrega) || "sem data")}${atrasada ? " · depois de postar" : ""}</span>
+              <span class="central-cal-dt pub">posta ${escaparHTML(centralCalCurta(p.publicacao))}</span>
+            </span>
+          </span>
+          <span class="central-cal-card-seta" aria-hidden="true">›</span>
+        </button>`;
+    }).join("")}
+  `;
+  dono.appendChild(pop);
+
+  // Posiciona ao lado do círculo, em pixel — e vira pro outro lado / sobe
+  // quando não couber, pra nunca sair da tela.
+  const c = ancora.getBoundingClientRect();
+  const p = pop.getBoundingClientRect();
+  let esq = c.right + 12;
+  if (esq + p.width > window.innerWidth - 12) esq = c.left - p.width - 12;
+  let topo = c.top + c.height / 2 - 40;
+  if (topo + p.height > window.innerHeight - 12) topo = window.innerHeight - p.height - 12;
+  if (topo < 12) topo = 12;
+  pop.style.left = Math.max(12, esq) + "px";
+  pop.style.top = topo + "px";
+
+  // Deixa a caixinha viva enquanto o mouse estiver DENTRO dela — sem
+  // isso, sair do círculo pra clicar num card fecharia antes do clique.
+  pop.addEventListener("mouseleave", centralFecharDiaDoCalendario);
+
+  pop.querySelectorAll("[data-central-cal-abrir]").forEach(b => {
+    b.addEventListener("click", () => {
+      const p2 = itens[Number(b.dataset.centralCalAbrir)];
+      centralFecharDiaDoCalendario();
+      if (p2 && p2.id && typeof abrirTarefaPorId === "function") abrirTarefaPorId(String(p2.id));
+      else if (p2 && p2.link) window.open(p2.link, "_blank", "noopener");
+    });
+  });
 }

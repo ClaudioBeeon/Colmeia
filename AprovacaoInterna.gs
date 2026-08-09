@@ -1838,3 +1838,61 @@ function diagnosticoEtapasDoRunrun() {
 
   Logger.log('\n=== FIM. Copie TUDO acima e mande pro Claude. ===');
 }
+
+// ---------------------------------------------------------------------
+// O calendário de postagens da Central (2026-08-08)
+// ---------------------------------------------------------------------
+
+/**
+ * As tarefas que têm DATA DE PUBLICAÇÃO marcada, pro calendário da aba
+ * Hoje da Central do Atendimento.
+ *
+ * NÃO FAZ NENHUMA CHAMADA NOVA AO RUNRUN.IT. Sai inteiro de
+ * `getTarefasColmeia()` (Código.gs), que é a mesma varredura do quadro
+ * que já roda em cache pra todo mundo — e que já traz `dataPublicacao`
+ * pronta, extraída do campo personalizado do Runrun.it
+ * (`extrairDataPublicacaoTarefa`, RunrunLeitura.gs). Uma busca própria
+ * aqui seria varrer o Runrun.it de novo pelo mesmo dado.
+ *
+ * ⚠️ O QUE ISSO NÃO MOSTRA, e o front precisa dizer: `buscarTarefasRunrun`
+ * só traz tarefas ABERTAS e exclui card mãe (ver o CLAUDE.md). Então o
+ * calendário mostra o que está POR VIR e o que está em produção — peça já
+ * entregue e fechada some dele. Pra um calendário de "o que vem aí" isso
+ * é o certo; se um dia quiserem ver o passado, aí sim precisa de busca
+ * nova (`buscarExtrasRunrunCompleto` é o caminho, e é caro).
+ *
+ * Devolve a lista crua, sem agrupar por dia: quem monta o mês é o
+ * front-end, que já sabe qual mês está na tela e não precisa pedir de
+ * novo pra virar a página do calendário.
+ */
+function calendarioDePostagens() {
+  var tarefas;
+  try {
+    tarefas = getTarefasColmeia();
+  } catch (e) {
+    return { ok: false, error: 'Não consegui ler as tarefas agora.' };
+  }
+  if (!tarefas || !tarefas.length) return { ok: true, postagens: [] };
+
+  var postagens = [];
+  for (var i = 0; i < tarefas.length; i++) {
+    var t = tarefas[i];
+    if (!t || !t.dataPublicacao) continue;   // sem data marcada, não entra no calendário
+    postagens.push({
+      id: t.id,
+      titulo: t.title || '',
+      cliente: t.client || '',
+      designer: t.assignee || '',
+      // "AAAA-MM-DD" — já vem cortado assim de extrairDataPublicacaoTarefa.
+      publicacao: String(t.dataPublicacao).substring(0, 10),
+      // A entrega desejada é o outro prazo, e os dois juntos são o que
+      // responde "dá tempo?": publicar dia 10 com entrega dia 12 é um
+      // problema que só se enxerga vendo os dois lado a lado.
+      entrega: t.due || null,
+      etapa: t.runrunStage || '',
+      entregue: !!t.entregue,
+      link: t.link || ''
+    });
+  }
+  return { ok: true, postagens: postagens };
+}

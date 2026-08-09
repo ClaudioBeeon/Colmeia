@@ -243,11 +243,14 @@
      um piso (min-height) pra não espremer demais numa janela baixa; se
      nem o piso couber, `.central-content` rola a página inteira como
      rede de segurança, mas isso só acontece em telas bem pequenas. */
-  grid-template-rows: 4fr 4fr 3fr;
+  grid-template-rows: 3fr 4fr 2.6fr;
+  /* A foto encolheu pra UMA linha (a mesma altura dos cartões de número
+     ao lado) e o calendário ocupa o espaço que ela liberou — pedido do
+     Cláudio, 2026-08-08. */
   grid-template-areas:
     "foto esperando prontas timeline"
-    "foto comcliente ajuste timeline"
-    "radar radar radar timeline";
+    "cal comcliente ajuste timeline"
+    "cal radar radar timeline";
   flex: 1; min-height: 460px;
 }
 .central-hoje-tile {
@@ -522,7 +525,7 @@
   .central-hoje-n:first-child { padding-left: 0; }
   .central-hoje-grid {
     grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto);
-    grid-template-areas: "foto foto" "esperando prontas" "comcliente ajuste" "timeline timeline" "radar radar";
+    grid-template-areas: "foto foto" "esperando prontas" "comcliente ajuste" "cal cal" "timeline timeline" "radar radar";
   }
   .central-hoje-foto { min-height: 120px; }
   /* Empilhada, ela ocupa as duas colunas — num tablet de 900px isso são
@@ -1130,4 +1133,179 @@
   .central-grupo-corpo { padding: 10px; }
   .central-grupo-grade { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .central-gc { height: 178px; }
+}
+
+/* =====================================================================
+   O CALENDÁRIO DE POSTAGENS — protótipo 1, aprovado pelo Cláudio
+   (2026-08-08, a partir da referência que ele mandou).
+
+   Bloco PRETO como a Timeline, dias em CÍRCULO, hoje em AMARELO. Dia sem
+   postagem é o número solto; com postagem, o círculo se preenche. Nada de
+   contador em cima do dia — o "quantas" vem na caixinha, e o mês fica
+   limpo, que é o que a referência tem de melhor.
+   ===================================================================== */
+.central-hoje-cal {
+  grid-area: cal; background: #16181D; color: #fff; overflow: hidden;
+}
+[data-theme="dark"] .central-hoje-cal { background: #0C0B12; }
+.central-cal { height: 100%; padding: 14px 15px; display: flex; flex-direction: column; }
+.central-cal-carregando { padding: 20px 15px; font-size: 12px; color: rgba(255, 255, 255, .4); }
+
+.central-cal-cab { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; margin-bottom: 13px; }
+.central-cal-tit {
+  flex: 1; min-width: 0; font-size: 13px; font-weight: 750; letter-spacing: -.02em;
+  text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-cal-nav {
+  flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255, 255, 255, .1); color: rgba(255, 255, 255, .7);
+  font-family: var(--font-body); font-size: 12px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-cal-nav:hover { background: rgba(255, 255, 255, .2); color: #fff; }
+
+.central-cal-dow { flex: 0 0 auto; display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 5px; }
+.central-cal-dow span {
+  text-align: center; font-size: 9px; font-weight: 700;
+  color: rgba(255, 255, 255, .32); text-transform: uppercase; letter-spacing: .06em;
+}
+.central-cal-grid {
+  flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 1fr; place-items: center;
+}
+/* O dia é sempre um CÍRCULO — o que muda é o preenchimento. */
+.central-cal-d {
+  width: 30px; height: 30px; border-radius: 50%; border: none; padding: 0;
+  background: none; color: rgba(255, 255, 255, .82);
+  font-family: var(--font-body); font-size: 12px; font-weight: 650;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple);
+}
+.central-cal-d:disabled { cursor: default; }
+.central-cal-d.fora { color: rgba(255, 255, 255, .17); }
+.central-cal-d.tem { background: rgba(255, 255, 255, .13); color: #fff; font-weight: 750; cursor: pointer; }
+.central-cal-d.tem:hover, .central-cal-d.tem:focus-visible { box-shadow: 0 0 0 2px #fff; outline: none; }
+/* HOJE em amarelo — e ganha do "tem postagem", que é o estado mais fraco. */
+.central-cal-d.hoje { background: var(--kanban-yellow); color: #16181D; font-weight: 800; }
+
+.central-cal-pe {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(255, 255, 255, .09);
+}
+.central-cal-leg { display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 600; color: rgba(255, 255, 255, .42); }
+.central-cal-leg i { width: 8px; height: 8px; border-radius: 50%; }
+.central-cal-leg i.tem { background: rgba(255, 255, 255, .24); }
+.central-cal-leg i.hoje { background: var(--kanban-yellow); }
+.central-cal-total { margin-left: auto; font-size: 9.5px; font-weight: 700; color: rgba(255, 255, 255, .42); }
+
+/* ----- A caixinha do dia -----
+   ⚠️ MORA FORA DO CARTÃO, e isso é o ponto: `.central-hoje-tile` tem
+   `overflow: hidden`, então uma caixinha desenhada dentro dele é cortada
+   na borda (foi exatamente o erro do primeiro protótipo). Ela é filha de
+   #centralAtendimento, `position: fixed`, posicionada em pixel a partir
+   do círculo do dia — ver centralAbrirDiaDoCalendario. */
+.central-cal-pop {
+  position: fixed; z-index: 60; width: 286px; max-height: 74vh; overflow-y: auto;
+  background: var(--card-bg); border-radius: 16px; padding: 13px;
+  box-shadow: 0 4px 12px rgba(12, 12, 22, .16), 0 20px 46px rgba(12, 12, 22, .26);
+  animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
+}
+.central-cal-pop-cab { display: flex; align-items: baseline; gap: 8px; padding: 0 3px; margin-bottom: 9px; }
+.central-cal-pop-dia { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 800; letter-spacing: -.03em; }
+.central-cal-pop-q {
+  flex: 0 0 auto; font-size: 10px; font-weight: 800; color: #16181D;
+  background: var(--kanban-yellow); padding: 3px 9px; border-radius: 999px;
+}
+/* Cada peça é um CARD clicável (pedido do Cláudio): abre a tarefa. */
+.central-cal-card {
+  width: 100%; display: flex; align-items: center; gap: 9px; cursor: pointer;
+  border: none; text-align: left; font-family: var(--font-body);
+  background: var(--page-bg); border-radius: 13px; padding: 10px 11px;
+  transition: background var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
+}
+.central-cal-card + .central-cal-card { margin-top: 6px; }
+.central-cal-card:hover { background: var(--border); transform: translateX(2px); }
+.central-cal-card-t { flex: 1; min-width: 0; }
+.central-cal-card-nome {
+  display: block; font-size: 12.5px; font-weight: 750; letter-spacing: -.02em; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-cal-card-cli {
+  display: block; font-size: 10.5px; color: var(--text-secondary); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-cal-card-datas { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+.central-cal-dt {
+  font-size: 8.5px; font-weight: 700; padding: 3px 7px; border-radius: 999px;
+  background: var(--card-bg); color: var(--text-secondary);
+}
+.central-cal-dt.pub { background: var(--accent-soft); color: var(--accent); }
+/* Entrega DEPOIS do dia de postar é o erro que este calendário existe pra
+   pegar: a peça fica pronta atrasada em relação à publicação. */
+.central-cal-dt.atraso { background: var(--warning-soft); color: #C9720A; }
+[data-theme="dark"] .central-cal-dt.atraso { color: var(--warning); }
+.central-cal-card-seta {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--card-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; font-size: 12px;
+}
+.central-cal-card:hover .central-cal-card-seta { background: #16181D; color: #fff; }
+[data-theme="dark"] .central-cal-card:hover .central-cal-card-seta { background: #fff; color: #16181D; }
+
+/* =====================================================================
+   O PILL AMARELO DE CLIENTE, na barra preta do topo (2026-08-08)
+   Mesmo desenho da pílula amarela do quadro. Escolher um cliente aqui
+   muda a Central inteira — ver centralClienteEhDoLogado.
+   ===================================================================== */
+.central-pill-cliente { position: relative; flex-shrink: 0; }
+.central-pill-cliente-btn {
+  display: flex; align-items: center; gap: 8px; cursor: pointer; border: none;
+  background: rgba(255, 255, 255, .1); color: #fff;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 650;
+  padding: 6px 14px 6px 7px; border-radius: 999px; white-space: nowrap; max-width: 230px;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-pill-cliente-btn:hover { background: rgba(255, 255, 255, .18); }
+.central-pill-cliente-btn > span:not(.central-pill-cliente-av) { overflow: hidden; text-overflow: ellipsis; }
+.central-pill-cliente-btn svg { flex-shrink: 0; opacity: .6; transition: transform var(--dur-base) var(--ease-apple); }
+.central-pill-cliente-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.central-pill-cliente-av {
+  flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(255, 255, 255, .16); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9.5px; font-weight: 800;
+}
+/* Com cliente escolhido ele fica AMARELO — o mesmo sinal de "ativo agora"
+   que a pílula do quadro usa. */
+.central-pill-cliente-btn.escolhido {
+  background: var(--kanban-yellow); color: #16181D;
+  box-shadow: 0 4px 14px rgba(255, 199, 0, .32);
+}
+.central-pill-cliente-btn.escolhido:hover { background: #F0BC00; }
+.central-pill-cliente-btn.escolhido svg { opacity: .8; }
+.central-pill-cliente-btn.escolhido .central-pill-cliente-av { background: rgba(22, 24, 29, .14); color: #16181D; }
+
+.central-pill-cliente-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  width: 240px; max-height: 320px; overflow-y: auto;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 16px; padding: 7px; box-shadow: var(--shadow-hover);
+  animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
+}
+.central-pill-cliente-menu[hidden] { display: none; }
+.central-pill-cli-i {
+  width: 100%; border: none; cursor: pointer; background: none; text-align: left;
+  font-family: var(--font-body); font-size: 12.5px; color: var(--text-primary);
+  padding: 9px 11px; border-radius: 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.central-pill-cli-i:hover { background: var(--page-bg); }
+.central-pill-cli-i.on { background: var(--kanban-yellow); color: #16181D; font-weight: 750; }
+
+@media (max-width: 900px) {
+  .central-hoje-cal { min-height: 320px; }
+  .central-cal-pop { width: calc(100vw - 32px); max-width: 300px; }
+  .central-pill-cliente-btn { max-width: 150px; }
 }

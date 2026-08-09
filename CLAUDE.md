@@ -926,6 +926,51 @@ Outras quatro coisas revisadas junto, todas no mesmo bloco:
 - **O overlay ganhou 10px de respiro nas bordas**, senão o cartão de cantos redondos encostava na
   moldura da tela.
 
+## O calendário de postagens da Central (2026-08-08)
+
+`centralRenderCalendario` (js/central-atendimento.js) + `calendarioDePostagens`
+(AprovacaoInterna.gs) + o bloco `.central-cal-*` no fim de `css/07-central-atendimento.css`.
+Protótipo 1 aprovado pelo Cláudio, a partir de uma referência que ele mandou: **bloco preto** como a
+Timeline, **dias em círculo**, **hoje em amarelo**. Fica embaixo da foto do atendimento, que encolheu
+pra uma linha (a mesma altura dos cartões de número ao lado) pra abrir esse espaço.
+
+- **Custo ZERO no Runrun.it.** `calendarioDePostagens` lê `getTarefasColmeia()` — a mesma varredura
+  do quadro que já roda em cache — e ela já traz `dataPublicacao` pronta, extraída do campo
+  personalizado (`extrairDataPublicacaoTarefa`, RunrunLeitura.gs). Uma busca própria seria varrer o
+  Runrun.it de novo pelo mesmo dado.
+- ⚠️ **Só mostra tarefa ABERTA, e não mostra card mãe** — é o que `buscarTarefasRunrun` traz (ver o
+  CLAUDE.md). Pra um calendário de "o que vem aí" isso é o certo; peça já entregue e fechada some
+  dele. Ver o passado exigiria `buscarExtrasRunrunCompleto`, que é caro.
+- **A busca acontece UMA vez.** Virar de mês é tudo no navegador — o array inteiro já está na
+  memória, e pedir de novo a cada seta seria desperdício.
+- **`centralCalChave` monta "AAAA-MM-DD" no fuso LOCAL**, nunca `toISOString()`: em UTC-3 aquele
+  joga o dia 1 pro dia 31 do mês anterior, e o calendário inteiro sairia deslocado.
+- ⚠️ **A caixinha do dia mora FORA do cartão** (`position: fixed`, filha de `#centralAtendimento`).
+  `.central-hoje-tile` tem `overflow: hidden`, então uma caixinha desenhada dentro dele é cortada na
+  borda — foi exatamente o erro do primeiro protótipo, e o Cláudio não conseguiu vê-la. Ela é
+  posicionada em pixel a partir do círculo do dia, e vira pro outro lado / sobe quando não couber.
+- **Cada peça da caixinha é um CARD clicável** que abre a tarefa (`abrirTarefaPorId`, que sabe buscar
+  avulsa no Runrun.it quando ela não está carregada).
+- **Abre no hover E no clique:** num aparelho de toque hover não existe, e sem o clique o calendário
+  ficaria sem uso lá. A caixinha só fecha quando o mouse sai DELA também — senão sair do círculo pra
+  clicar num card fecharia antes do clique.
+- **A etiqueta de entrega fica laranja quando a entrega é DEPOIS do dia de postar.** É o erro que
+  este calendário existe pra pegar: a peça fica pronta atrasada em relação à publicação.
+
+### O pill amarelo de cliente, na barra preta do topo
+
+Escolher um cliente ali muda a **Central inteira** — os quatro cartões de número, a timeline, o
+radar e o calendário. Amarelo de propósito: no vocabulário do app, amarelo é o que está ativo agora
+(a pílula do "tocando" no quadro), e um filtro ligado é exatamente isso.
+
+- **Ele entra em `centralClienteEhDoLogado`**, o filtro que já decide tudo que a Central mostra —
+  assim nenhuma tela precisa lembrar de checar por conta própria.
+- ⚠️ **Por isso `centralClienteEhDaPessoa` teve que ser separada dela.** Quem MONTA a lista do pill
+  não pode passar pelo filtro do próprio pill, senão sobraria só o cliente já escolhido e não
+  haveria como trocar. A função nova é o teste "é cliente desta pessoa?" sem o filtro.
+- **Não substitui o "ver como" ao lado, e os dois convivem:** aquele troca de PESSOA (só coordenador
+  vê), este corta por CLIENTE dentro do que a pessoa já enxerga.
+
 ## O pop-up dos grupos da Central (2026-08-08)
 
 `centralAbrirGrupo`/`centralRenderGrupo` (js/central-atendimento.js) + o bloco `.central-grupo-*` /

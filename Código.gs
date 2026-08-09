@@ -317,6 +317,8 @@ function handleRequest(e, method) {
         output = moverCardMaeParaAprovacaoCliente(body.taskId, body.autor);
       } else if (body.acao === 'briefingDaConferencia') {
         output = briefingDaConferencia(body.taskId);
+      } else if (body.acao === 'calendarioDePostagens') {
+        output = calendarioDePostagens();
       } else if (body.acao === 'entrarComoAtendimento') {
         output = entrarComoAtendimento(body.codigo);
       } else if (body.acao === 'buscarConferenciaDaTarefa') {
