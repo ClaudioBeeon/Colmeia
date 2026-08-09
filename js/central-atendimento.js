@@ -2376,8 +2376,14 @@ function centralDesenharCalendario() {
     celulas.push({ d, fora: true });
   }
   for (let i = 1; i <= diasNoMes; i++) celulas.push({ d: new Date(ano, mes, i), fora: false });
+  // ⚠️ O contador é PRÓPRIO (`sobra`), não `celulas.length % 7`. Com o
+  // resto, agosto de 2026 (que fecha numa segunda) emendava em 2, 3, 4,
+  // 5, 6 de setembro — o dia 1º simplesmente não existia na grade, e uma
+  // peça que postasse nele sumia do calendário. Foi o que o Cláudio viu.
+  let sobra = 1;
   while (celulas.length % 7 !== 0) {
-    celulas.push({ d: new Date(ano, mes, diasNoMes + (celulas.length % 7)), fora: true });
+    celulas.push({ d: new Date(ano, mes, diasNoMes + sobra), fora: true });
+    sobra++;
   }
 
   const noMes = postagens.filter(p => p.publicacao.startsWith(
@@ -2448,9 +2454,21 @@ function centralCalDiaPorExtenso(chave) {
   return `${semana}, ${d} de ${CENTRAL_CAL_MESES[m - 1]}`;
 }
 
-/** "6/8" — a data curta das etiquetas do card. */
+/**
+ * "6/8" — a data curta das etiquetas do card.
+ *
+ * ⚠️ "AAAA-MM-DD" É LIDO NA MÃO, nunca por `new Date(texto)` (2026-08-09).
+ * O JavaScript trata uma data SEM HORA como meia-noite em UTC — em
+ * UTC-3 isso vira 21h do dia ANTERIOR, e `getDate()` devolve um dia a
+ * menos. Era o bug do "posta 5/8" numa peça que o calendário mostrava
+ * (certo) no dia 6: a etiqueta mentia, não a grade. Data COM hora
+ * (`due`, que vem com fuso) segue pelo caminho normal, onde não há
+ * ambiguidade nenhuma.
+ */
 function centralCalCurta(iso) {
   if (!iso) return "";
+  const soData = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (soData) return `${Number(soData[3])}/${Number(soData[2])}`;
   const d = new Date(iso);
   if (isNaN(d)) return "";
   return `${d.getDate()}/${d.getMonth() + 1}`;

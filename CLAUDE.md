@@ -949,6 +949,15 @@ pra uma linha (a mesma altura dos cartões de número ao lado) pra abrir esse es
   memória, e pedir de novo a cada seta seria desperdício.
 - **`centralCalChave` monta "AAAA-MM-DD" no fuso LOCAL**, nunca `toISOString()`: em UTC-3 aquele
   joga o dia 1 pro dia 31 do mês anterior, e o calendário inteiro sairia deslocado.
+- ⚠️ **Pelo mesmo motivo, `centralCalCurta` lê "AAAA-MM-DD" NA MÃO** (2026-08-09). `new Date(texto)`
+  trata data SEM HORA como meia-noite em **UTC** — em UTC-3 isso vira 21h do dia anterior e
+  `getDate()` devolve um dia a menos. Era o bug do "posta 5/8" numa peça que a grade mostrava
+  (certo) no dia 6: mentia a ETIQUETA, não a grade. Data COM hora (`due`) segue pelo `new Date`
+  normal, onde não há ambiguidade. **Ao formatar qualquer data vinda do backend, checar se ela tem
+  hora antes de entregar pro `new Date`.**
+- ⚠️ **As células do fim do mês têm contador PRÓPRIO**, não `celulas.length % 7` (2026-08-09). Com o
+  resto, agosto de 2026 emendava em 2, 3, 4, 5, 6 de setembro — **o dia 1º não existia na grade**, e
+  uma peça que postasse nele sumia do calendário.
 - ⚠️ **A caixinha do dia mora FORA do cartão** (`position: fixed`, filha de `#centralAtendimento`).
   `.central-hoje-tile` tem `overflow: hidden`, então uma caixinha desenhada dentro dele é cortada na
   borda — foi exatamente o erro do primeiro protótipo, e o Cláudio não conseguiu vê-la. Ela é
