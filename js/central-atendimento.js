@@ -2324,10 +2324,15 @@ function centralDesenharCalendario() {
       <div class="central-cal-grid">
         ${celulas.map(c => {
           const chave = centralCalChave(c.d);
-          const qtd = (porDia[chave] || []).length;
+          const doDia = porDia[chave] || [];
+          const qtd = doDia.length;
+          // Dia em que TUDO já foi entregue vira um círculo vazado, não
+          // preenchido: o mês passa a ter duas leituras à distância — o
+          // que já saiu e o que ainda tem trabalho pela frente.
+          const tudoEntregue = qtd > 0 && doDia.every(p => p.entregue);
           const classes = ["central-cal-d"];
           if (c.fora) classes.push("fora");
-          if (qtd && !c.fora) classes.push("tem");
+          if (qtd && !c.fora) classes.push(tudoEntregue ? "feito" : "tem");
           if (chave === hoje) classes.push("hoje");
           return `<button type="button" class="${classes.join(" ")}"
                     ${qtd && !c.fora ? `data-central-cal-dia="${chave}"` : "disabled"}
@@ -2336,7 +2341,8 @@ function centralDesenharCalendario() {
         }).join("")}
       </div>
       <div class="central-cal-pe">
-        <span class="central-cal-leg"><i class="tem"></i>tem postagem</span>
+        <span class="central-cal-leg"><i class="tem"></i>a postar</span>
+        <span class="central-cal-leg"><i class="feito"></i>já saiu</span>
         <span class="central-cal-leg"><i class="hoje"></i>hoje</span>
         <span class="central-cal-total">${noMes} no mês</span>
       </div>
@@ -2407,11 +2413,17 @@ function centralAbrirDiaDoCalendario(chave, itens, ancora) {
     ${itens.map((p, i) => {
       // Entrega DEPOIS da publicação é o erro que este calendário existe
       // pra pegar: a peça fica pronta depois do dia de postar.
-      const atrasada = p.entrega && p.entrega.substring(0, 10) > p.publicacao;
+      // Peça já entregue não pode acender o alerta de atraso: o prazo já
+      // foi cumprido, e o vermelho ali seria sobre um problema que não
+      // existe mais.
+      const atrasada = !p.entregue && p.entrega && p.entrega.substring(0, 10) > p.publicacao;
       return `
-        <button type="button" class="central-cal-card" data-central-cal-abrir="${i}">
+        <button type="button" class="central-cal-card ${p.entregue ? "feito" : ""}" data-central-cal-abrir="${i}">
           <span class="central-cal-card-t">
-            <span class="central-cal-card-nome">${escaparHTML(p.titulo || "Sem título")}</span>
+            <span class="central-cal-card-nome">
+              ${p.entregue ? `<span class="central-cal-ok" aria-label="entregue">✓</span>` : ""}${escaparHTML(p.titulo || "Sem título")}
+              ${p.cardMae ? `<span class="central-cal-tag">card mãe</span>` : ""}
+            </span>
             <span class="central-cal-card-cli">${escaparHTML(p.cliente || "Sem cliente")}${p.designer ? " · " + escaparHTML(p.designer) : ""}</span>
             <span class="central-cal-card-datas">
               <span class="central-cal-dt ${atrasada ? "atraso" : ""}">entrega ${escaparHTML(centralCalCurta(p.entrega) || "sem data")}${atrasada ? " · depois de postar" : ""}</span>

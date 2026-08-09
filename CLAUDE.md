@@ -975,6 +975,29 @@ radar e o calendário. Amarelo de propósito: no vocabulário do app, amarelo é
 - **Não substitui o "ver como" ao lado, e os dois convivem:** aquele troca de PESSOA (só coordenador
   vê), este corta por CLIENTE dentro do que a pessoa já enxerga.
 
+
+**As três fontes do calendário (2026-08-09).** A primeira versão usava só a varredura do quadro, e
+por isso o mês aparecia pela metade: aquela varredura traz **só tarefas abertas** e joga os **cards
+mãe** num balde separado. Hoje `calendarioDePostagens` junta três:
+
+1. **Abertas** — `getTarefasColmeia()`, o que está em produção agora.
+2. **Cards mãe** — do MESMO cache que a varredura já preencheu (`CACHE_CARD_MAE_ABERTOS`): custo
+   zero de rede. Aparecem com a etiqueta "card mãe" e **não entram** na fila de "Precisa de atenção"
+   (o guarda-chuva do mês não é uma peça pra alguém finalizar hoje).
+3. **Já entregues e fechadas** — `buscarPostagensFechadas`, uma varredura própria das tarefas
+   fechadas dos últimos 45 dias. É a única que custa; sem ela, todo dia que já passou aparecia
+   vazio, como se nada tivesse sido postado.
+
+Por causa da (3), **o resultado inteiro fica 10 min em cache** (`CALENDARIO_CACHE_CHAVE`), limpo por
+`invalidarCacheDoQuadro` junto com o resto — sem isso uma data recém-mudada continuaria no dia
+velho. Um calendário do mês não precisa da pressa do quadro; a troco de alguns minutos de atraso,
+ninguém repaga a varredura ao abrir a Central.
+
+Na tela isso virou **três estados de dia**: preenchido = a postar, **vazado = já saiu** (dia todo
+entregue), amarelo = hoje. Peça entregue não acende mais o alerta vermelho de "entrega depois de
+postar" — o prazo já foi cumprido.
+
+
 ## O pop-up dos grupos da Central (2026-08-08)
 
 `centralAbrirGrupo`/`centralRenderGrupo` (js/central-atendimento.js) + o bloco `.central-grupo-*` /

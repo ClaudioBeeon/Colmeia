@@ -84,6 +84,10 @@ function centralAtencaoFila() {
   return centralPostagens
     .filter(p => p.publicacao === hoje || p.publicacao === amanha)
     .filter(p => !p.entregue)
+    // Card mãe fica de fora: ele é o guarda-chuva do mês, não uma peça
+    // que alguém vai finalizar hoje — cobrar "o projeto do mês" não diz a
+    // ninguém o que fazer agora.
+    .filter(p => !p.cardMae)
     .filter(p => centralClienteEhDoLogado(p.cliente))
     .filter(p => !centralClienteAtivo || (p.cliente || "") === centralClienteAtivo)
     .filter(p => !seguradas[String(p.id)])

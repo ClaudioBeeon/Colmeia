@@ -675,7 +675,10 @@ function invalidarCacheDoQuadro() {
   try {
     var cache = CacheService.getScriptCache();
     var total = Number(cache.get(CACHE_QUADRO_CHAVE + '_n')) || 0;
-    var chaves = [CACHE_QUADRO_CHAVE + '_n', CACHE_CARD_MAE_ABERTOS];
+    // O calendário de postagens (AprovacaoInterna.gs) é montado a partir
+    // dessa mesma varredura e guardado por 10 min — sem limpar aqui, uma
+    // data de publicação recém-mudada continuaria aparecendo no dia velho.
+    var chaves = [CACHE_QUADRO_CHAVE + '_n', CACHE_CARD_MAE_ABERTOS, CALENDARIO_CACHE_CHAVE];
     for (var i = 0; i < total; i++) chaves.push(CACHE_QUADRO_CHAVE + '_' + i);
     cache.removeAll(chaves);
   } catch (e) { /* sem cache pra limpar, segue */ }

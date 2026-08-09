@@ -1197,6 +1197,9 @@
 .central-cal-leg i { width: 8px; height: 8px; border-radius: 50%; }
 .central-cal-leg i.tem { background: rgba(255, 255, 255, .24); }
 .central-cal-leg i.hoje { background: var(--kanban-yellow); }
+/* O terceiro estado do calendário: dia inteiro já entregue (círculo
+   vazado na grade — ver .central-cal-d.feito no fim deste arquivo). */
+.central-cal-leg i.feito { background: none; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .3); }
 .central-cal-total { margin-left: auto; font-size: 9.5px; font-weight: 700; color: rgba(255, 255, 255, .42); }
 
 /* ----- A caixinha do dia -----
@@ -1506,3 +1509,33 @@ body.central-atencao-revisando .bee-fab { opacity: 0; pointer-events: none; }
   display: flex; align-items: center; justify-content: center;
 }
 .central-atencao-motivo-bee svg { width: 15px; height: 15px; display: block; }
+
+/* ---- Calendário: o que JÁ foi entregue (2026-08-09) ----
+   Desde que o calendário passou a incluir tarefas fechadas e cards mãe
+   (calendarioDePostagens, AprovacaoInterna.gs), um dia pode estar todo
+   resolvido — e ele não deve pesar igual a um dia com trabalho pela
+   frente. Círculo VAZADO em vez de preenchido: continua visível, para de
+   chamar. */
+.central-cal-d.feito {
+  background: none; color: rgba(255, 255, 255, .72);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .28); cursor: pointer;
+}
+.central-cal-d.feito:hover, .central-cal-d.feito:focus-visible { box-shadow: 0 0 0 2px #fff; outline: none; }
+/* Hoje continua mandando na cor mesmo com tudo entregue — é a única
+   marca de "onde estamos" no mês. */
+.central-cal-d.hoje.feito { background: var(--kanban-yellow); color: #16181D; box-shadow: none; }
+
+.central-cal-card.feito .central-cal-card-nome { color: var(--text-secondary); }
+.central-cal-ok {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; border-radius: 50%; margin-right: 5px;
+  background: var(--central-sucesso-suave); color: #0F7A54; font-size: 9px; font-weight: 800;
+  vertical-align: 1px;
+}
+[data-theme="dark"] .central-cal-ok { color: var(--success); }
+.central-cal-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  background: var(--page-bg); color: var(--text-muted);
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  vertical-align: 1px;
+}
