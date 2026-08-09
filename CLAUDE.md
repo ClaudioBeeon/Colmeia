@@ -982,8 +982,7 @@ mãe** num balde separado. Hoje `calendarioDePostagens` junta três:
 
 1. **Abertas** — `getTarefasColmeia()`, o que está em produção agora.
 2. **Cards mãe** — do MESMO cache que a varredura já preencheu (`CACHE_CARD_MAE_ABERTOS`): custo
-   zero de rede. Aparecem com a etiqueta "card mãe" e **não entram** na fila de "Precisa de atenção"
-   (o guarda-chuva do mês não é uma peça pra alguém finalizar hoje).
+   zero de rede.
 3. **Já entregues e fechadas** — `buscarPostagensFechadas`, uma varredura própria das tarefas
    fechadas dos últimos 45 dias. É a única que custa; sem ela, todo dia que já passou aparecia
    vazio, como se nada tivesse sido postado.
@@ -992,6 +991,24 @@ Por causa da (3), **o resultado inteiro fica 10 min em cache** (`CALENDARIO_CACH
 `invalidarCacheDoQuadro` junto com o resto — sem isso uma data recém-mudada continuaria no dia
 velho. Um calendário do mês não precisa da pressa do quadro; a troco de alguns minutos de atraso,
 ninguém repaga a varredura ao abrir a Central.
+
+**A DATA DE PUBLICAÇÃO MORA NO CARD MÃE; A ENTREGA DESEJADA, NA SUBTAREFA DO DESIGNER**
+(2026-08-09). Por isso o calendário não pode olhar cada tarefa sozinha — foi o erro da primeira
+versão: as subtarefas (que têm entrega e designer, mas não têm publicação) ficavam de fora, e o
+card mãe aparecia com a entrega DELE, que é outra coisa.
+
+Hoje `calendarioDePostagens` cruza os dois lados, e **uma linha do calendário = uma peça**:
+- a **peça** é quem tem data de publicação (quase sempre o card mãe);
+- a **entrega desejada** vem da subtarefa — a MAIS TARDE, quando há várias etapas abertas, porque é
+  quando a peça realmente fica pronta;
+- o **designer** vem da subtarefa que ainda está aberta (a mãe costuma estar com quem coordena);
+- **entregue** só quando TODAS as subtarefas fecharam — uma etapa aberta significa trabalho em pé;
+- subtarefa cuja mãe também está no calendário **não vira linha própria**, senão a mesma peça
+  apareceria uma vez por etapa do fluxo no mesmo dia.
+
+Card mãe que não veio na varredura (não está alocado a nenhum dos designers varridos) é resgatado
+por `parentTaskId`, uma leitura por mãe, com teto em `CALENDARIO_MAX_MAES_AVULSAS` — sem isso a peça
+inteira sumiria do calendário justamente por causa de onde a data mora.
 
 Na tela isso virou **três estados de dia**: preenchido = a postar, **vazado = já saiu** (dia todo
 entregue), amarelo = hoje. Peça entregue não acende mais o alerta vermelho de "entrega depois de

@@ -1889,6 +1889,13 @@ var CALENDARIO_CACHE_SEGUNDOS = 600;   // 10 min
 // Runrun.it deixa ordenar — ver o comentário de buscarExtrasRunrunCompleto.)
 var CALENDARIO_JANELA_FECHADAS_MS = 45 * 24 * 60 * 60 * 1000;
 
+// Teto de leituras avulsas de card mãe (uma por mãe que não apareceu na
+// varredura — ver o resgate dentro de calendarioDePostagens). Cada uma é
+// uma ida ao Runrun.it; o teto é o que impede um mês atípico de virar
+// cem chamadas. Como o calendário inteiro fica em cache, na prática isso
+// é pago uma vez a cada CALENDARIO_CACHE_SEGUNDOS.
+var CALENDARIO_MAX_MAES_AVULSAS = 40;
+
 function calendarioDePostagens() {
   var cache = CacheService.getScriptCache();
   try {
@@ -1903,41 +1910,123 @@ function calendarioDePostagens() {
     return { ok: false, error: 'Não consegui ler as tarefas agora.' };
   }
 
-  var postagens = [];
-  var jaEntrou = {};   // id -> true, pra a mesma tarefa não aparecer duas vezes
-
-  function juntar(lista, ehCardMae, ehFechada) {
+  // ── Junta tudo num monte só, sem decidir nada ainda ──────────────────
+  var todas = [];
+  var porId = {};
+  function empilhar(lista, ehCardMae, ehFechada) {
     if (!lista || !lista.length) return;
     for (var i = 0; i < lista.length; i++) {
       var t = lista[i];
-      if (!t || !t.dataPublicacao) continue;   // sem data marcada, não entra no calendário
-      if (jaEntrou[t.id]) continue;
-      jaEntrou[t.id] = true;
-      postagens.push({
-        id: t.id,
-        titulo: t.title || '',
-        cliente: t.client || '',
-        designer: t.assignee || '',
-        // "AAAA-MM-DD" — já vem cortado assim de extrairDataPublicacaoTarefa.
-        publicacao: String(t.dataPublicacao).substring(0, 10),
-        // A entrega desejada é o outro prazo, e os dois juntos são o que
-        // responde "dá tempo?": publicar dia 10 com entrega dia 12 é um
-        // problema que só se enxerga vendo os dois lado a lado.
-        entrega: t.due || null,
-        etapa: t.runrunStage || '',
-        // Fechada no Runrun.it conta como entregue mesmo que a etapa não
-        // diga: é o que faz o dia que já passou aparecer resolvido.
-        entregue: ehFechada || !!t.entregue,
-        fechada: !!ehFechada,
-        cardMae: !!ehCardMae,
-        link: t.link || ''
-      });
+      if (!t || !t.id || porId[t.id]) continue;
+      t._cardMae = !!ehCardMae;
+      t._fechada = ehFechada || !!t.entregue;
+      porId[t.id] = t;
+      todas.push(t);
     }
   }
+  empilhar(tarefas, false, false);
+  empilhar(cardMaeAbertosDoCache(), true, false);
+  empilhar(buscarPostagensFechadas(), false, true);
 
-  juntar(tarefas, false, false);
-  juntar(cardMaeAbertosDoCache(), true, false);
-  juntar(buscarPostagensFechadas(), false, true);
+  // ── Filhas por mãe ───────────────────────────────────────────────────
+  var filhasPorMae = {};
+  for (var f = 0; f < todas.length; f++) {
+    var pai = todas[f].parentTaskId;
+    if (!pai) continue;
+    (filhasPorMae[pai] = filhasPorMae[pai] || []).push(todas[f]);
+  }
+
+  // ── Quem é PEÇA: quem tem data de publicação ─────────────────────────
+  // Mais as mães que não vieram na varredura (não estão alocadas a
+  // nenhum dos designers varridos, então nenhuma lista as trouxe) mas
+  // são o pai de alguma subtarefa que veio. Sem esse resgate, a peça
+  // inteira ficaria de fora do calendário — que é exatamente o buraco
+  // que a data morar na mãe cria.
+  var pecas = [];
+  for (var i = 0; i < todas.length; i++) {
+    if (todas[i].dataPublicacao) pecas.push(todas[i]);
+  }
+
+  var maesQueFaltam = [];
+  var jaPedida = {};
+  for (var s = 0; s < todas.length; s++) {
+    var idPai = todas[s].parentTaskId;
+    if (!idPai || porId[idPai] || jaPedida[idPai]) continue;
+    jaPedida[idPai] = true;
+    maesQueFaltam.push(idPai);
+  }
+  for (var m = 0; m < maesQueFaltam.length && m < CALENDARIO_MAX_MAES_AVULSAS; m++) {
+    var crua = runrunFetch('/tasks/' + maesQueFaltam[m]);
+    if (!crua || crua.erroFetch || !extrairDataPublicacaoTarefa(crua)) continue;
+    var mae = transformarTarefaParaColmeia(crua);
+    mae._cardMae = true;
+    mae._fechada = !!mae.entregue;
+    porId[mae.id] = mae;
+    pecas.push(mae);
+  }
+
+  // ── Cada peça vira uma linha, puxando da subtarefa o que só ela tem ──
+  var postagens = [];
+  var jaEntrou = {};
+  for (var p = 0; p < pecas.length; p++) {
+    var peca = pecas[p];
+    if (jaEntrou[peca.id]) continue;
+
+    // Subtarefa cuja MÃE também é peça não vira linha própria: senão a
+    // mesma peça apareceria duas (ou quatro) vezes no mesmo dia, uma por
+    // etapa do fluxo.
+    if (peca.parentTaskId && porId[peca.parentTaskId] && porId[peca.parentTaskId].dataPublicacao) continue;
+
+    jaEntrou[peca.id] = true;
+    var filhas = filhasPorMae[peca.id] || [];
+
+    // ENTREGA DESEJADA: a da subtarefa, não a da mãe. A mãe é o
+    // guarda-chuva (o prazo dela costuma ser o do cliente, ou nem existe);
+    // quem tem a data de quando a peça fica PRONTA é a tarefa do designer.
+    // Com mais de uma etapa aberta, vale a MAIS TARDE: é quando a peça
+    // realmente termina.
+    var entrega = peca.due || null;
+    var designer = '';
+    var etapa = peca.runrunStage || '';
+    for (var k = 0; k < filhas.length; k++) {
+      var filha = filhas[k];
+      if (filha.due && (!entrega || filha.due > entrega)) entrega = filha.due;
+      // Prefere quem ainda está com a peça na mão; sem ninguém aberto,
+      // fica o último que passou por ela.
+      if (!filha._fechada) { designer = filha.assignee || designer; etapa = filha.runrunStage || etapa; }
+      else if (!designer) designer = filha.assignee || '';
+    }
+    if (!designer) designer = peca.assignee || '';
+
+    // ENTREGUE: com subtarefas, a peça só está pronta quando TODAS
+    // fecharam — uma etapa aberta significa que ainda tem trabalho.
+    var entregue = filhas.length
+      ? filhas.every(function (x) { return x._fechada; })
+      : !!peca._fechada;
+
+    postagens.push({
+      id: peca.id,
+      titulo: peca.title || '',
+      cliente: peca.client || '',
+      designer: designer,
+      // "AAAA-MM-DD" — já vem cortado assim de extrairDataPublicacaoTarefa.
+      publicacao: String(peca.dataPublicacao).substring(0, 10),
+      // Os dois prazos juntos são o que responde "dá tempo?": publicar dia
+      // 10 com entrega dia 12 é um problema que só se enxerga vendo os
+      // dois lado a lado.
+      entrega: entrega,
+      etapa: etapa,
+      entregue: entregue,
+      fechada: !!peca._fechada,
+      cardMae: !!peca._cardMae,
+      // Quantas etapas a peça tem no Runrun.it — é o que explica, na
+      // caixinha do dia, por que uma peça "com 3 subtarefas" ainda não
+      // está pronta mesmo com duas delas fechadas.
+      etapasAbertas: filhas.filter(function (x) { return !x._fechada; }).length,
+      etapasTotal: filhas.length,
+      link: peca.link || ''
+    });
+  }
 
   try {
     cache.put(CALENDARIO_CACHE_CHAVE, JSON.stringify(postagens), CALENDARIO_CACHE_SEGUNDOS);

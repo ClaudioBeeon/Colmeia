@@ -83,11 +83,14 @@ function centralAtencaoFila() {
 
   return centralPostagens
     .filter(p => p.publicacao === hoje || p.publicacao === amanha)
+    // Só o que ainda não ficou pronto. "Entregue" aqui já leva em conta as
+    // subtarefas: com etapas abertas no Runrun.it, a peça continua em pé
+    // mesmo que o card mãe pareça parado (ver calendarioDePostagens).
+    //
+    // Card mãe NÃO é excluído de propósito: é nele que a data de
+    // publicação é marcada, então ele É a peça — quem tem a entrega
+    // desejada e o designer é a subtarefa, e o backend já junta os dois.
     .filter(p => !p.entregue)
-    // Card mãe fica de fora: ele é o guarda-chuva do mês, não uma peça
-    // que alguém vai finalizar hoje — cobrar "o projeto do mês" não diz a
-    // ninguém o que fazer agora.
-    .filter(p => !p.cardMae)
     .filter(p => centralClienteEhDoLogado(p.cliente))
     .filter(p => !centralClienteAtivo || (p.cliente || "") === centralClienteAtivo)
     .filter(p => !seguradas[String(p.id)])

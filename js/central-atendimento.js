@@ -2422,12 +2422,14 @@ function centralAbrirDiaDoCalendario(chave, itens, ancora) {
           <span class="central-cal-card-t">
             <span class="central-cal-card-nome">
               ${p.entregue ? `<span class="central-cal-ok" aria-label="entregue">✓</span>` : ""}${escaparHTML(p.titulo || "Sem título")}
-              ${p.cardMae ? `<span class="central-cal-tag">card mãe</span>` : ""}
             </span>
             <span class="central-cal-card-cli">${escaparHTML(p.cliente || "Sem cliente")}${p.designer ? " · " + escaparHTML(p.designer) : ""}</span>
             <span class="central-cal-card-datas">
               <span class="central-cal-dt ${atrasada ? "atraso" : ""}">entrega ${escaparHTML(centralCalCurta(p.entrega) || "sem data")}${atrasada ? " · depois de postar" : ""}</span>
               <span class="central-cal-dt pub">posta ${escaparHTML(centralCalCurta(p.publicacao))}</span>
+              ${(!p.entregue && p.etapasAbertas)
+                ? `<span class="central-cal-dt">${p.etapasAbertas} etapa${p.etapasAbertas === 1 ? "" : "s"} aberta${p.etapasAbertas === 1 ? "" : "s"}</span>`
+                : ""}
             </span>
           </span>
           <span class="central-cal-card-seta" aria-hidden="true">›</span>
