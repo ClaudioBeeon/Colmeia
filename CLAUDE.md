@@ -1626,6 +1626,13 @@ dá pra publicar esse código com segurança antes de o banco existir.
 `chamarBackend`/`caiuARede` do front-end: "não deu pra perguntar" não é "não tem nada". Devolver `[]`
 numa falha de rede é exatamente o bug que já apagou a conversa inteira da tela uma vez.
 
+**A chave tem que ser a `service_role` LEGADA — a nova não funciona aqui.** O Supabase oferece
+primeiro as chaves novas (`sb_secret_...`) e esconde a legada numa segunda aba, mas a nova responde
+`401 — Forbidden use of secret API key in browser`: ela barra pedido com cara de navegador, e o
+`UrlFetchApp` do Apps Script se identifica assim sem deixar trocar esse cabeçalho. Não é
+configuração errada — é uma checagem que o Apps Script não tem como passar. `testarSupabase()` já
+reconhece esse erro e diz o que fazer.
+
 **A chave `service_role` só pode viver nas propriedades do Apps Script.** Ela passa por cima de
 qualquer permissão do banco; no front-end (que é público) qualquer pessoa que abrisse o Colmeia
 teria o banco todo. Toda tabela nasce com `enable row level security` e **nenhuma policy** — assim a

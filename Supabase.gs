@@ -47,18 +47,31 @@
 // do Runrun.it/Gemini que já moram lá:
 //
 //   SUPABASE_URL       https://xxxxxxxx.supabase.co  (Settings → Data API)
-//   SUPABASE_KEY       a chave SECRETA (Settings → API Keys → Secret keys,
-//                      a "default", que começa com sb_secret_)
+//   SUPABASE_KEY       a chave `service_role` — Settings → API Keys, aba
+//                      "Legacy anon, service_role API keys". Começa com eyJ.
 //   SUPABASE_TABELAS   (começa vazia)
 //
-// A chave secreta é a sucessora da antiga "service_role" — o Supabase
-// renomeou isso em 2025 e as duas ainda funcionam do mesmo jeito, nos
-// mesmos cabeçalhos. A OUTRA chave da mesma tela, a "publishable"
-// (antiga "anon"), NÃO serve aqui: ela é feita pra viver no navegador e
-// respeita as regras de permissão do banco — como nenhuma tabela nossa
-// tem policy, ela não conseguiria ler nem gravar nada.
+// ⚠️ TEM QUE SER A CHAVE LEGADA, e isso é contra-intuitivo (2026-08-10).
 //
-// ⚠️ A chave secreta passa por cima de qualquer regra de permissão do
+// O Supabase hoje oferece primeiro as chaves NOVAS (`sb_secret_...` e
+// `sb_publishable_...`), e a legada fica escondida numa segunda aba. Só
+// que a chave nova é RECUSADA aqui:
+//
+//   401 — "Forbidden use of secret API key in browser"
+//
+// Ela se protege barrando pedido com cara de navegador, e o Apps Script
+// se identifica assim (o UrlFetchApp manda um User-Agent de navegador, e
+// não deixa esse cabeçalho ser trocado). Ou seja: não é configuração
+// errada nem falta de permissão — é uma checagem que o Apps Script não
+// tem como passar. A chave `service_role` legada não faz essa checagem e
+// continua sendo suportada; é a certa pra um backend como este.
+//
+// A chave `anon`/`publishable` também NÃO serve, por outro motivo: ela é
+// feita pra viver no navegador e respeita as regras de permissão do
+// banco — como nenhuma tabela nossa tem policy de propósito, ela não
+// conseguiria ler nem gravar nada.
+//
+// ⚠️ A service_role passa por cima de qualquer regra de permissão do
 // banco. Ela pode viver aqui porque o Apps Script roda no servidor do
 // Google e ninguém de fora lê essas propriedades. Ela NUNCA pode ir
 // parar em js/config.js nem em qualquer arquivo do front-end, que é
@@ -189,6 +202,17 @@ function testarSupabase() {
     Logger.log('✅ Falei com o Supabase e a tabela feed_eventos existe.');
   } else {
     Logger.log('❌ ' + r.erro);
+    // Traduz o erro mais provável de acontecer na primeira configuração,
+    // que é o que menos parece com o que realmente é (ver o aviso grande
+    // no topo deste arquivo).
+    if (r.erro.indexOf('in browser') !== -1 || r.erro.indexOf('secret API key') !== -1) {
+      Logger.log('   ↳ Essa é a chave NOVA (sb_secret_...), que o Apps Script não consegue usar.');
+      Logger.log('   ↳ Conserto: Settings → API Keys → aba "Legacy anon, service_role API keys"');
+      Logger.log('     → copiar a chave service_role (começa com eyJ) e pôr em SUPABASE_KEY.');
+    } else if (r.erro.indexOf('does not exist') !== -1 || r.erro.indexOf('PGRST205') !== -1) {
+      Logger.log('   ↳ A conexão funcionou, mas a tabela ainda não existe.');
+      Logger.log('   ↳ Conserto: rodar supabase/01-feed-eventos.sql no SQL Editor do Supabase.');
+    }
   }
   Logger.log('Tabelas mandando no Supabase agora: "' +
     (PropertiesService.getScriptProperties().getProperty('SUPABASE_TABELAS') || '(nenhuma)') + '"');
