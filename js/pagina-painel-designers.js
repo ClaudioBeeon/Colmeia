@@ -1058,7 +1058,6 @@ function pnlRenderTarefasModal() {
 
 function pnlRenderEsforcoModalCorpo(st, corpo) {
   const nomes = Object.keys(st.esforco).sort((a, b) => st.esforco[b].min - st.esforco[a].min);
-  const totalMin = nomes.reduce((s, n) => s + st.esforco[n].min, 0);
 
   const tiraHtml = `
     <div class="pnl-esforco-tira">
@@ -1093,7 +1092,6 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
   }
 
   corpo.innerHTML = `
-    <div class="pnl-esforco-total">Total ${st.filtroPessoa ? "de " + escaparHTML(st.filtroPessoa) : "do time"}: <b>${escaparHTML(pnlFormatTempo(st.filtroPessoa ? st.esforco[st.filtroPessoa].min : totalMin))}</b></div>
     ${tiraHtml}
     <div class="pnl-ordenar-row">
       <span class="pnl-ordenar-label">Ordenar por:</span>

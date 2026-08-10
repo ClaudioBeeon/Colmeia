@@ -251,19 +251,35 @@
 
 /* ---- modal de tarefas ---- */
 .pnl-tarefas-modal {
-  width: 640px; max-width: calc(100vw - 32px);
+  width: 640px; max-width: calc(100vw - 32px); max-height: 84vh;
   /* --success-soft não existe em css/01-base.css (só --success) — mesmo
      motivo/solução já usado em css/06-aprovacao.css e 07-central-atendimento.css. */
   --pnl-sucesso-suave: rgba(34, 176, 125, 0.12);
 }
-.pnl-tarefas-modal.pnl-modal-esforco { width: 820px; }
-.pnl-tarefas-abas { display: flex; gap: 6px; margin-bottom: 14px; }
+.pnl-tarefas-modal.pnl-modal-esforco { width: 860px; height: 84vh; }
+/* #pnlTarefasConteudo É o .rule-modal-body — precisa de flex:1 pra
+   ocupar o resto da altura do modal (o .rule-modal-header, acima dele,
+   tem altura própria e não sobra sozinho). Sem isso a "height: 84vh" do
+   modal não tinha efeito nenhum na lista, que continuava do tamanho do
+   próprio conteúdo. */
+.pnl-tarefas-modal.pnl-modal-esforco #pnlTarefasConteudo { flex: 1; min-height: 0; }
+.pnl-tarefas-abas { display: flex; gap: 6px; margin-bottom: 14px; flex-shrink: 0; }
 .pnl-tarefas-aba {
   border: none; background: var(--page-bg); color: var(--text-secondary); font-family: var(--font-body);
   font-size: 12px; font-weight: 700; padding: 7px 13px; border-radius: 999px; cursor: pointer;
 }
 .pnl-tarefas-aba.active { background: var(--kanban-yellow, #FFC700); color: #16181D; }
-.pnl-tarefas-lista { display: flex; flex-direction: column; gap: 16px; max-height: 50vh; overflow-y: auto; padding: 4px 4px 4px 2px; }
+/* Some com sua própria altura fixa e vira o item que ESTICA dentro do
+   corpo do modal (.rule-modal-body já é `display:flex; flex-direction:
+   column`, ver css/04-paginas.css) — assim a lista usa toda a altura
+   vertical que sobrar, em vez de parar num teto arbitrário e deixar
+   espaço em branco embaixo dela. `min-height: 0` é o que deixa um item
+   flex encolher menor que o próprio conteúdo, senão o overflow:auto não
+   funciona dentro de uma altura travada. */
+.pnl-tarefas-lista {
+  display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0;
+  overflow-y: auto; padding: 4px 4px 4px 2px;
+}
 
 /* Protótipo "Respiro Total" aprovado pelo Cláudio, com um ajuste dele: a
    linha é BRANCA (--card-bg) igual ao resto do modal, não um bloco cinza
@@ -289,16 +305,25 @@
 }
 .pnl-pub svg { width: 13px; height: 13px; }
 
+/* Larguras FIXAS por coluna (data/tempo/etapa/link), não largura pelo
+   próprio texto — sem isso, "45min" e "1h 10min" tinham pastilhas de
+   tamanhos diferentes e tudo que vinha depois (etapa, o botão de link)
+   desalinhava de uma linha pra outra, mesmo com justify-content:
+   space-between em cada linha (cada linha é um flex container
+   INDEPENDENTE — não existe "coluna da tabela" entre elas a não ser que
+   cada pedaço tenha a mesma largura em toda linha). */
 .pnl-tarefa-right { flex-shrink: 0; display: flex; align-items: center; gap: 10px; }
 .pnl-pill {
-  border: none; font-family: var(--font-body); font-size: 11.5px; font-weight: 700; padding: 8px 14px;
-  border-radius: 999px; white-space: nowrap; cursor: default; font-variant-numeric: tabular-nums;
+  border: none; font-family: var(--font-body); font-size: 11.5px; font-weight: 700; padding: 8px 10px;
+  border-radius: 999px; cursor: default; font-variant-numeric: tabular-nums;
+  text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 button.pnl-pill { cursor: pointer; }
 button.pnl-pill:hover { filter: brightness(0.96); }
-.pnl-pill-data { background: var(--pnl-sucesso-suave); color: var(--success); }
+.pnl-pill-data { background: var(--pnl-sucesso-suave); color: var(--success); width: 62px; }
 .pnl-pill-data.atrasada { background: var(--danger-soft); color: var(--danger); }
-.pnl-pill-tempo { background: var(--pnl-sucesso-suave); color: var(--success); }
+.pnl-pill-tempo { background: var(--pnl-sucesso-suave); color: var(--success); width: 72px; }
+.pnl-pill-etapa { width: 118px; }
 .pnl-tarefa-link {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border);
   background: var(--page-bg); color: var(--text-secondary); display: flex; align-items: center; justify-content: center;
@@ -307,9 +332,7 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 .pnl-tarefa-link:hover { background: var(--accent); color: #fff; border-color: transparent; }
 
 /* ---- Esforço de hoje: a tira de pessoas + ordenar, dentro do modal largo ---- */
-.pnl-esforco-total { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px; }
-.pnl-esforco-total b { color: var(--text-primary); }
-.pnl-esforco-tira { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.pnl-esforco-tira { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; flex-shrink: 0; }
 .pnl-esforco-tira-item {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   padding: 16px 10px; border-radius: var(--radius-lg); background: var(--card-bg); border: 1px solid var(--border);
@@ -323,7 +346,7 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 .pnl-esforco-tira-tempo { font-size: 14px; font-weight: 700; color: var(--success); }
 .pnl-esforco-tira-qtd { font-size: 10.5px; color: var(--text-muted); }
 
-.pnl-ordenar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.pnl-ordenar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
 .pnl-ordenar-label { font-size: 11.5px; color: var(--text-muted); }
 .pnl-sort-btn {
   border: 1px solid var(--border); background: var(--card-bg); color: var(--text-secondary); font-family: var(--font-body);

@@ -379,7 +379,22 @@ async function chamarBackend(corpo, opcoes) {
       body: JSON.stringify(corpo),
       signal: controller.signal,
     });
-    const data = await res.json();
+    // Separado do catch de baixo de propósito: se o fetch voltou, o
+    // pedido CHEGOU ao servidor — não é "sem internet". Antes, uma
+    // resposta que não desse pra entender como JSON (Apps Script às
+    // vezes devolve uma página de erro em HTML quando estoura uma
+    // exceção lá dentro) caía no mesmo catch-all de rede e virava "Sem
+    // internet, guardei pra quando a conexão voltar" — enganoso: a
+    // pessoa tinha internet (via o Runrun.it abrindo normal), e a ação
+    // ficava presa na fila offline esperando uma conexão que já estava
+    // ali, em vez de avisar que o SERVIDOR que recusou.
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      console.error(`Resposta do backend não é JSON em "${corpo.acao}" (HTTP ${res.status}):`, parseErr);
+      return { ok: false, error: `O servidor respondeu de um jeito inesperado (${res.status}). Tenta de novo.` };
+    }
     if (data && data.ok === false && data.error) {
       console.error(`Backend recusou "${corpo.acao}":`, data.error);
     }
