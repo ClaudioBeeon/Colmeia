@@ -66,11 +66,48 @@ const PNL_CORES_PALETA = [
   { bg: "#FEF0F0", fg: "#C0392B" }, { bg: "#FFF3CD", fg: "#856404" },
 ];
 
-function pnlCorDoDesigner(nome) {
-  if (pnlColors[nome]) return pnlColors[nome];
+function pnlCorPorHash(nome) {
   let hash = 0;
   for (let i = 0; i < nome.length; i++) hash = nome.charCodeAt(i) + ((hash << 5) - hash);
   return PNL_CORES_PALETA[Math.abs(hash) % PNL_CORES_PALETA.length];
+}
+
+function pnlCorDoDesigner(nome) {
+  if (pnlColors[nome]) return pnlColors[nome];
+  return pnlCorPorHash(nome);
+}
+
+// Mesma lista de serviços pré-definidos do painel original — usada só pra
+// dar uma cor fixa aos rótulos mais comuns; qualquer outro texto ganha
+// uma cor gerada por hash (pnlServicoStyle), igual o original já fazia.
+const PNL_SERVICOS_PREDEFINIDOS = [
+  { label: "Estático", bg: "#E6F1FB", color: "#185FA5" },
+  { label: "Vídeo", bg: "#FAEEDA", color: "#854F0B" },
+  { label: "Animação", bg: "#EAF3DE", color: "#3B6D11" },
+  { label: "E-mail", bg: "#FBEAF0", color: "#993556" },
+  { label: "Story", bg: "#F3EEFB", color: "#6B3FA0" },
+  { label: "Reels", bg: "#FEF0F0", color: "#C0392B" },
+  { label: "Banner", bg: "#E8F8F5", color: "#1A6B55" },
+  { label: "Tráfego", bg: "#FFF3CD", color: "#856404" },
+];
+
+function pnlServicoStyle(label) {
+  const pre = PNL_SERVICOS_PREDEFINIDOS.find(s => s.label.toLowerCase() === label.toLowerCase());
+  if (pre) return pre;
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = label.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return { bg: `hsl(${hue},55%,92%)`, color: `hsl(${hue},45%,35%)` };
+}
+
+function pnlFindCliente(designer, nomeCliente) {
+  return (pnlState[designer] || []).find(c => c.cliente === nomeCliente);
+}
+
+/** Quantas tarefas em aberto no Runrun.it esse cliente tem agora. */
+function pnlQtdTarefasDoCliente(nomeCliente) {
+  const alvo = typeof normalizarParaComparar === "function" ? normalizarParaComparar(nomeCliente) : nomeCliente.toLowerCase();
+  return pnlTarefasAbertas().filter(t => (typeof normalizarParaComparar === "function" ? normalizarParaComparar(t.client || "") : (t.client || "").toLowerCase()) === alvo).length;
 }
 
 function pnlFormatTempo(min) {
@@ -188,9 +225,9 @@ function pnlTarefasAbertas() {
 }
 
 function pnlCategoriaDoPrazo(t, hoje) {
-  if (!t.due) return null;
-  if (t.due < hoje) return "atrasadas";
-  if (t.due === hoje) return "hoje";
+  if (!t.dueISO) return null;
+  if (t.dueISO < hoje) return "atrasadas";
+  if (t.dueISO === hoje) return "hoje";
   return "futuras";
 }
 
@@ -202,22 +239,22 @@ function pnlPorCategoriaDePrazo() {
     const cat = pnlCategoriaDoPrazo(t, hoje);
     if (cat) grupos[cat].push(t);
   });
-  Object.values(grupos).forEach(l => l.sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999")));
+  Object.values(grupos).forEach(l => l.sort((a, b) => (a.dueISO || "9999").localeCompare(b.dueISO || "9999")));
   return grupos;
 }
 
 /** Tarefas com prioridade do Runrun.it (isUrgent) — qualquer prazo. */
 function pnlTarefasPrioridade() {
   return pnlTarefasAbertas().filter(t => t.isUrgent)
-    .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
+    .sort((a, b) => (a.dueISO || "9999").localeCompare(b.dueISO || "9999"));
 }
 
 /** Tarefas do mês corrente (por Entrega Desejada) + todas as atrasadas. */
 function pnlTarefasDoMes() {
   const hoje = hojeISO();
   const anoMes = hoje.slice(0, 7);
-  return pnlTarefasAbertas().filter(t => t.due && (t.due < hoje || t.due.slice(0, 7) === anoMes))
-    .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
+  return pnlTarefasAbertas().filter(t => t.dueISO && (t.dueISO < hoje || t.dueISO.slice(0, 7) === anoMes))
+    .sort((a, b) => (a.dueISO || "9999").localeCompare(b.dueISO || "9999"));
 }
 
 /**
@@ -232,13 +269,13 @@ function pnlEsforcoPorResponsavel() {
   const hoje = hojeISO();
   const porResponsavel = {}; // nome -> {min, tarefas:[]}
   pnlTarefasAbertas().forEach(t => {
-    if (!t.due || t.due > hoje) return;
+    if (!t.dueISO || t.dueISO > hoje) return;
     const nome = t.assignee || "Sem responsável";
     if (!porResponsavel[nome]) porResponsavel[nome] = { min: 0, tarefas: [] };
     porResponsavel[nome].min += t.tempoMedioMinutos || 0;
     porResponsavel[nome].tarefas.push(t);
   });
-  Object.values(porResponsavel).forEach(g => g.tarefas.sort((a, b) => (a.due || "").localeCompare(b.due || "")));
+  Object.values(porResponsavel).forEach(g => g.tarefas.sort((a, b) => (a.dueISO || "").localeCompare(b.dueISO || "")));
   return porResponsavel;
 }
 
@@ -294,25 +331,26 @@ function pnlRenderKPIs() {
       <div class="pnl-kpi-value">${escaparHTML(pnlFormatTempo(totalMin))}</div>
       <div class="pnl-kpi-sub">${designersAtivos} designers ativos</div>
     </div>
-    <div class="pnl-kpi-card ${nomesEsforco.length ? "clicavel" : ""}" id="pnlKpiEsforco">
+    <div class="pnl-kpi-card" id="pnlKpiEsforco">
       <div class="pnl-kpi-label">Esforço de hoje</div>
-      ${nomesEsforco.length ? nomesEsforco.map(n => `
-        <div class="pnl-esforco-linha">
-          <span class="pnl-esforco-nome">${escaparHTML(n)}</span>
-          <span class="pnl-esforco-barra"><i style="width:${Math.round(esforco[n].min / maiorMin * 100)}%" class="${esforco[n].min > 240 ? "alerta" : ""}"></i></span>
-          <span class="pnl-esforco-min">${escaparHTML(pnlFormatTempo(esforco[n].min))}</span>
-        </div>
-      `).join("") : `<div class="pnl-esforco-vazio">Nada atrasado nem pra hoje.</div>`}
+      <div class="pnl-kpi-esforco-cols">
+        ${nomesEsforco.length ? nomesEsforco.map(n => `
+          <div class="pnl-kpi-esforco-col" data-pnl-esforco-pessoa="${escaparHTML(n)}">
+            ${typeof avatarHTML === "function" ? avatarHTML(n, "pnl-kpi-esforco-avatar") : `<div class="pnl-kpi-esforco-avatar">${escaparHTML((typeof initials === "function" ? initials(n) : n.slice(0, 2)))}</div>`}
+            <div class="pnl-kpi-esforco-valor ${esforco[n].min > 240 ? "alerta" : ""}">${escaparHTML(pnlFormatTempo(esforco[n].min))}</div>
+            <div class="pnl-kpi-esforco-nome">${escaparHTML(n)}</div>
+          </div>
+        `).join("") : `<div class="pnl-esforco-vazio">Nada atrasado nem pra hoje.</div>`}
+      </div>
     </div>
   `;
 
-  if (nomesEsforco.length) {
-    const todasEsforco = [];
-    nomesEsforco.forEach(n => esforco[n].tarefas.forEach(t => todasEsforco.push(t)));
-    document.getElementById("pnlKpiEsforco")?.addEventListener("click", () => {
-      pnlAbrirTarefasModal("Esforço de hoje", { lista: todasEsforco });
+  el.querySelectorAll("[data-pnl-esforco-pessoa]").forEach(col => {
+    col.addEventListener("click", () => {
+      const nome = col.dataset.pnlEsforcoPessoa;
+      pnlAbrirTarefasModal(`Esforço de hoje — ${nome}`, { lista: esforco[nome].tarefas });
     });
-  }
+  });
 }
 
 function pnlRenderDesigners() {
@@ -345,9 +383,9 @@ function pnlRenderDesigners() {
 
     const tarefasDesigner = pnlTarefasDoDesignerPainel(designer);
     const hoje = hojeISO();
-    const atrasadas = tarefasDesigner.filter(t => t.due && t.due < hoje);
-    const hojeLista = tarefasDesigner.filter(t => t.due === hoje);
-    const futuras = tarefasDesigner.filter(t => t.due && t.due > hoje);
+    const atrasadas = tarefasDesigner.filter(t => t.dueISO && t.dueISO < hoje);
+    const hojeLista = tarefasDesigner.filter(t => t.dueISO === hoje);
+    const futuras = tarefasDesigner.filter(t => t.dueISO && t.dueISO > hoje);
     const temRunrun = atrasadas.length + hojeLista.length + futuras.length > 0;
 
     return `
@@ -396,12 +434,44 @@ function pnlRenderDesigners() {
 }
 
 function pnlBuildClientCardHTML(c, designer) {
+  const clientCol = pnlCorPorHash(c.cliente);
+  const qtdTarefas = pnlQtdTarefasDoCliente(c.cliente);
+  const tagsHtml = (c.servicos || []).map(s => {
+    const st = pnlServicoStyle(s);
+    return `<span class="pnl-tag" style="background:${st.bg};color:${st.color};">${escaparHTML(s)}<button type="button" class="pnl-tag-x" data-pnl-tag-remover="${escaparHTML(s)}" title="Remover serviço">×</button></span>`;
+  }).join("");
+
   return `
     <div class="pnl-client-card" draggable="true" data-pnl-cliente="${escaparHTML(c.cliente)}" data-pnl-de-designer="${escaparHTML(designer)}">
-      <span class="pnl-client-nome">${escaparHTML(c.cliente)}</span>
-      ${c.escopo ? `<span class="pnl-client-escopo">${escaparHTML(c.escopo)}</span>` : ""}
-      ${c.tempo ? `<span class="pnl-client-tempo">${escaparHTML(pnlFormatTempo(c.tempo))}</span>` : ""}
-      <button type="button" class="pnl-client-remover" data-pnl-remover-cliente="${escaparHTML(c.cliente)}" data-pnl-remover-designer="${escaparHTML(designer)}" title="Remover">✕</button>
+      <div class="pnl-client-top">
+        <div class="pnl-client-icon" style="background:${clientCol.bg};color:${clientCol.fg}">${escaparHTML(typeof initials === "function" ? initials(c.cliente) : c.cliente.slice(0, 2).toUpperCase())}</div>
+        <input type="text" class="pnl-client-name-input" value="${escaparHTML(c.cliente)}" data-pnl-cliente-nome-input>
+        <button type="button" class="pnl-mini-btn" data-pnl-remover-cliente="${escaparHTML(c.cliente)}" data-pnl-remover-designer="${escaparHTML(designer)}" title="Remover cliente">✕</button>
+      </div>
+      <div class="pnl-client-atend-row">
+        <span class="pnl-client-atend" data-pnl-atend-editar title="Clique para alterar o atendimento">${escaparHTML(c.atend || "Sem atendimento")}</span>
+        ${qtdTarefas ? `<span class="pnl-client-tarefas-badge">${qtdTarefas} tarefa${qtdTarefas > 1 ? "s" : ""} no Runrun.it</span>` : ""}
+      </div>
+      <div class="pnl-client-tags-row">
+        ${tagsHtml}
+        <button type="button" class="pnl-add-tag-btn" data-pnl-add-tag>+ serviço</button>
+      </div>
+      <div class="pnl-client-ctrl-row">
+        <span class="pnl-ctrl-label">Criativos</span>
+        <div class="pnl-ctrl-group">
+          <button type="button" class="pnl-ctrl-btn" data-pnl-cri-menos>−</button>
+          <span class="pnl-ctrl-val">${c.criativos || 0}</span>
+          <button type="button" class="pnl-ctrl-btn" data-pnl-cri-mais>+</button>
+        </div>
+      </div>
+      <div class="pnl-client-ctrl-row">
+        <span class="pnl-ctrl-label">Tempo médio</span>
+        <div class="pnl-ctrl-group">
+          <button type="button" class="pnl-ctrl-btn" data-pnl-tempo-menos>−</button>
+          <span class="pnl-ctrl-val" data-pnl-tempo-editar title="Clique pra editar">${escaparHTML(pnlFormatTempo(c.tempo || 0))}</span>
+          <button type="button" class="pnl-ctrl-btn" data-pnl-tempo-mais>+</button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -471,22 +541,24 @@ function pnlLigarEventosDaGrade(grid) {
       const hoje = hojeISO();
       const todas = pnlTarefasDoDesignerPainel(designer);
       const abas = [
-        { chave: "atrasadas", label: "Atrasadas", lista: todas.filter(t => t.due && t.due < hoje) },
-        { chave: "hoje", label: "Vence hoje", lista: todas.filter(t => t.due === hoje) },
-        { chave: "futuras", label: "Futuras", lista: todas.filter(t => t.due && t.due > hoje) },
+        { chave: "atrasadas", label: "Atrasadas", lista: todas.filter(t => t.dueISO && t.dueISO < hoje) },
+        { chave: "hoje", label: "Vence hoje", lista: todas.filter(t => t.dueISO === hoje) },
+        { chave: "futuras", label: "Futuras", lista: todas.filter(t => t.dueISO && t.dueISO > hoje) },
       ];
       pnlAbrirTarefasModal(designer, { abas, abaInicial: cat });
     });
   });
 
-  // Cliente: clique abre as tarefas dele; arrastar move de designer.
+  // Cliente: clique no corpo do card abre as tarefas dele; arrastar move de
+  // designer. Os campos editáveis (nome/atendimento/tags/contadores) têm o
+  // próprio stopPropagation, então esse guard só precisa cobrir input/button.
   grid.querySelectorAll("[data-pnl-cliente]").forEach(card => {
     card.addEventListener("click", ev => {
-      if (ev.target.closest("[data-pnl-remover-cliente]")) return;
+      if (ev.target.closest("input, button")) return;
       const nome = card.dataset.pnlCliente;
       const alvo = typeof normalizarParaComparar === "function" ? normalizarParaComparar(nome) : nome.toLowerCase();
       const tarefas = pnlTarefasAbertas().filter(t => (typeof normalizarParaComparar === "function" ? normalizarParaComparar(t.client || "") : (t.client || "").toLowerCase()) === alvo)
-        .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
+        .sort((a, b) => (a.dueISO || "9999").localeCompare(b.dueISO || "9999"));
       pnlAbrirTarefasModal(nome, { lista: tarefas });
     });
     card.addEventListener("dragstart", () => {
@@ -495,6 +567,132 @@ function pnlLigarEventosDaGrade(grid) {
       window._pnlDragAtual = card._pnlDrag;
     });
     card.addEventListener("dragend", () => card.classList.remove("arrastando"));
+  });
+
+  // Renomear cliente.
+  grid.querySelectorAll("[data-pnl-cliente-nome-input]").forEach(input => {
+    input.addEventListener("click", ev => ev.stopPropagation());
+    input.addEventListener("blur", () => {
+      const card = input.closest(".pnl-client-card");
+      const designer = card.dataset.pnlDeDesigner, antigo = card.dataset.pnlCliente;
+      const c = pnlFindCliente(designer, antigo);
+      const novo = input.value.trim();
+      if (!c || !novo || novo === antigo) { input.value = antigo; return; }
+      c.cliente = novo;
+      pnlRenderDesigners();
+      pnlAgendarSalvar();
+    });
+    input.addEventListener("keydown", ev => { if (ev.key === "Enter") input.blur(); });
+  });
+
+  // Atendimento: clique vira campo de texto (mesmo padrão do original).
+  grid.querySelectorAll("[data-pnl-atend-editar]").forEach(span => {
+    span.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const card = span.closest(".pnl-client-card");
+      const c = pnlFindCliente(card.dataset.pnlDeDesigner, card.dataset.pnlCliente);
+      if (!c) return;
+      const input = document.createElement("input");
+      input.type = "text"; input.className = "pnl-client-atend-input"; input.value = c.atend || "";
+      span.replaceWith(input);
+      input.focus(); input.select();
+      const commit = () => { c.atend = input.value.trim(); pnlRenderDesigners(); pnlAgendarSalvar(); };
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", ev2 => { if (ev2.key === "Enter") input.blur(); ev2.stopPropagation(); });
+    });
+  });
+
+  // Serviços (tags): remover e adicionar.
+  grid.querySelectorAll("[data-pnl-tag-remover]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const card = btn.closest(".pnl-client-card");
+      const c = pnlFindCliente(card.dataset.pnlDeDesigner, card.dataset.pnlCliente);
+      if (!c) return;
+      c.servicos = (c.servicos || []).filter(s => s !== btn.dataset.pnlTagRemover);
+      pnlRenderDesigners();
+      pnlAgendarSalvar();
+    });
+  });
+  grid.querySelectorAll("[data-pnl-add-tag]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const card = btn.closest(".pnl-client-card");
+      const c = pnlFindCliente(card.dataset.pnlDeDesigner, card.dataset.pnlCliente);
+      if (!c) return;
+      const label = prompt("Serviço (ex: Estático, Vídeo, Animação, E-mail, Story, Reels, Banner, Tráfego, ou personalizado):");
+      if (!label) return;
+      const v = label.trim();
+      if (!v) return;
+      c.servicos = c.servicos || [];
+      if (c.servicos.includes(v)) return;
+      c.servicos.push(v);
+      pnlRenderDesigners();
+      pnlAgendarSalvar();
+    });
+  });
+
+  // Criativos: +/-.
+  grid.querySelectorAll("[data-pnl-cri-menos]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const card = btn.closest(".pnl-client-card");
+      const c = pnlFindCliente(card.dataset.pnlDeDesigner, card.dataset.pnlCliente);
+      if (!c || !(c.criativos > 0)) return;
+      c.criativos--;
+      pnlRenderTudo();
+      pnlAgendarSalvar();
+    });
+  });
+  grid.querySelectorAll("[data-pnl-cri-mais]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const card = btn.closest(".pnl-client-card");
+      const c = pnlFindCliente(card.dataset.pnlDeDesigner, card.dataset.pnlCliente);
+      if (!c) return;
+      c.criativos = (c.criativos || 0) + 1;
+      pnlRenderTudo();
+      pnlAgendarSalvar();
+    });
+  });
+
+  // Tempo médio: +/- de 5 em 5, e clicar no número edita o valor exato.
+  grid.querySelectorAll("[data-pnl-tempo-menos]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const card = btn.closest(".pnl-client-card");
+      const c = pnlFindCliente(card.dataset.pnlDeDesigner, card.dataset.pnlCliente);
+      if (!c || !(c.tempo >= 5)) return;
+      c.tempo -= 5;
+      pnlRenderTudo();
+      pnlAgendarSalvar();
+    });
+  });
+  grid.querySelectorAll("[data-pnl-tempo-mais]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const card = btn.closest(".pnl-client-card");
+      const c = pnlFindCliente(card.dataset.pnlDeDesigner, card.dataset.pnlCliente);
+      if (!c) return;
+      c.tempo = (c.tempo || 0) + 5;
+      pnlRenderTudo();
+      pnlAgendarSalvar();
+    });
+  });
+  grid.querySelectorAll("[data-pnl-tempo-editar]").forEach(span => {
+    span.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const card = span.closest(".pnl-client-card");
+      const c = pnlFindCliente(card.dataset.pnlDeDesigner, card.dataset.pnlCliente);
+      if (!c) return;
+      const input = document.createElement("input");
+      input.type = "number"; input.className = "pnl-ctrl-input"; input.value = c.tempo || 0;
+      span.replaceWith(input);
+      input.focus(); input.select();
+      const commit = () => { c.tempo = Math.max(0, parseInt(input.value) || 0); pnlRenderTudo(); pnlAgendarSalvar(); };
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", ev2 => { if (ev2.key === "Enter") input.blur(); ev2.stopPropagation(); });
+    });
   });
 
   grid.querySelectorAll("[data-pnl-remover-cliente]").forEach(btn => {
@@ -547,23 +745,44 @@ function pnlRenderRunrunKPIs() {
 
 // ===== Atividade recente (reaproveita a busca que já existe no Colmeia) =====
 
+/**
+ * Junta arquivos da mesma pessoa, no mesmo cliente e na mesma PASTA de
+ * publicação — igual o painel original já fazia. Sem isso, subir 6 artes
+ * de uma vez virava 6 linhas repetidas, e cada uma mostrava o NOME DO
+ * ARQUIVO cru (que no Drive costuma ser um nome gerado tipo "asset_3fa9c1"
+ * — daí o Cláudio ver "letras e números aleatórios"); o que a pessoa quer
+ * saber é em qual pasta/cliente caiu o upload, não o nome do arquivo.
+ */
+function pnlAgruparAtividades(atividades) {
+  const grupos = new Map();
+  atividades.forEach(a => {
+    const chave = (a.quem || "") + "|" + (a.cliente || "") + "|" + (a.pasta || "");
+    if (!grupos.has(chave)) grupos.set(chave, { quem: a.quem, cliente: a.cliente, pasta: a.pasta, link: a.link, quando: a.quando, count: 0 });
+    const g = grupos.get(chave);
+    g.count++;
+    if (a.quando > g.quando) g.quando = a.quando;
+  });
+  return [...grupos.values()].sort((a, b) => b.quando - a.quando);
+}
+
 async function pnlCarregarAtividade() {
   const el = document.getElementById("pnlAtividadeLista");
   if (!el) return;
   el.innerHTML = `<div class="pnl-atividade-vazio">Carregando...</div>`;
   const atividades = typeof buscarAtividadesPainelBeeon === "function" ? await buscarAtividadesPainelBeeon() : [];
   if (!pnlAberta) return; // saiu da página enquanto buscava
-  if (!atividades.length) { el.innerHTML = `<div class="pnl-atividade-vazio">Nada nos últimos dias.</div>`; return; }
+  const grupos = pnlAgruparAtividades(atividades);
+  if (!grupos.length) { el.innerHTML = `<div class="pnl-atividade-vazio">Nada nos últimos dias.</div>`; return; }
 
-  el.innerHTML = atividades.slice(0, 20).map(a => `
-    <div class="pnl-atividade-item">
-      ${typeof avatarHTML === "function" ? avatarHTML(a.quem, "avatar-sm") : ""}
+  el.innerHTML = grupos.slice(0, 20).map(g => `
+    <a class="pnl-atividade-item" href="${g.link ? escaparHTML(g.link) : "#"}" target="_blank" rel="noopener">
+      ${typeof avatarHTML === "function" ? avatarHTML(g.quem, "avatar-sm") : ""}
       <div class="pnl-atividade-txt">
-        <span><b>${escaparHTML(a.quem || "?")}</b> subiu <b>${escaparHTML(a.arquivo || "um arquivo")}</b></span>
-        <div class="pnl-atividade-cliente">${escaparHTML(a.cliente || "")}</div>
-        <div class="pnl-atividade-quando">${pnlHaQuanto(a.quando)}</div>
+        <span><b>${escaparHTML(g.quem || "?")}</b> subiu ${g.count > 1 ? g.count + " arquivos" : "1 arquivo"}${g.pasta ? ` em <b>${escaparHTML(g.pasta)}</b>` : ""}</span>
+        <div class="pnl-atividade-cliente">${escaparHTML(g.cliente || "")}</div>
+        <div class="pnl-atividade-quando">${pnlHaQuanto(g.quando)}</div>
       </div>
-    </div>
+    </a>
   `).join("");
 }
 
@@ -780,8 +999,8 @@ function pnlRenderTarefasModal() {
 
 function pnlLinhaTarefaHTML(t, mostrarDesigner) {
   const hoje = hojeISO();
-  const atrasada = t.due && t.due < hoje && !t.entregue;
-  const dataCurta = t.due ? `${Number(t.due.slice(8, 10))}/${Number(t.due.slice(5, 7))}` : "sem data";
+  const atrasada = t.dueISO && t.dueISO < hoje && !t.entregue;
+  const dataCurta = t.due || "sem data";
   const subtitulo = [t.client, mostrarDesigner ? t.assignee : null].filter(Boolean).join(" · ");
   return `
     <button type="button" class="pnl-tarefa-row" data-pnl-abrir-tarefa="${escaparHTML(String(t.id))}">

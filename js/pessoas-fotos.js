@@ -336,6 +336,10 @@ function mapearTarefaDoBackend(t) {
     // dá pra calcular meta nenhuma).
     tempoMedioMinutos: t.tempoMedioMinutos || 0,
     estimatePct: calcularEstimatePct(t.workedSeconds || 0, t.tempoMedioMinutos || 0),
+    // is_urgent do Runrun.it — usado pelo KPI "Prioridades" do Painel de
+    // Designers (js/pagina-painel-designers.js). Não confundir com
+    // task.status === "prioridades" (etapa do quadro do Colmeia).
+    isUrgent: !!t.isUrgent,
   };
 }
 
