@@ -250,25 +250,81 @@
 .pnl-modal-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
 /* ---- modal de tarefas ---- */
-.pnl-tarefas-modal { width: 560px; max-width: calc(100vw - 32px); }
+.pnl-tarefas-modal {
+  width: 560px; max-width: calc(100vw - 32px);
+  /* --success-soft não existe em css/01-base.css (só --success) — mesmo
+     motivo/solução já usado em css/06-aprovacao.css e 07-central-atendimento.css. */
+  --pnl-sucesso-suave: rgba(34, 176, 125, 0.12);
+}
+.pnl-tarefas-modal.pnl-modal-esforco { width: 760px; }
 .pnl-tarefas-abas { display: flex; gap: 6px; margin-bottom: 14px; }
 .pnl-tarefas-aba {
   border: none; background: var(--page-bg); color: var(--text-secondary); font-family: var(--font-body);
   font-size: 12px; font-weight: 700; padding: 7px 13px; border-radius: 999px; cursor: pointer;
 }
 .pnl-tarefas-aba.active { background: var(--kanban-yellow, #FFC700); color: #16181D; }
-.pnl-tarefas-lista { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.pnl-tarefas-lista { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; }
+
 .pnl-tarefa-row {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
-  background: var(--page-bg); cursor: pointer; text-align: left; border: none; width: 100%;
-  font-family: var(--font-body); color: inherit;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px;
+  border-radius: 12px; background: var(--page-bg); font-family: var(--font-body);
 }
-.pnl-tarefa-row:hover { background: var(--border); }
-.pnl-tarefa-titulo { flex: 1; min-width: 0; }
-.pnl-tarefa-titulo b { display: block; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pnl-tarefa-cliente { font-size: 11px; color: var(--text-secondary); }
-.pnl-tarefa-data { flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-muted); }
-.pnl-tarefa-data.atrasada { color: var(--danger); }
+.pnl-tarefa-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pnl-tarefa-titulo-btn {
+  border: none; background: none; cursor: pointer; text-align: left; padding: 0; font-family: var(--font-body);
+  font-size: 13px; font-weight: 650; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 100%;
+}
+.pnl-tarefa-titulo-btn:hover { text-decoration: underline; }
+.pnl-tarefa-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.pnl-tarefa-badges .pnl-tag { padding: 2px 8px; font-size: 9.5px; }
+
+.pnl-tarefa-right { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+.pnl-pill {
+  border: none; font-family: var(--font-body); font-size: 10.5px; font-weight: 700; padding: 5px 10px;
+  border-radius: 999px; white-space: nowrap; cursor: default;
+}
+button.pnl-pill { cursor: pointer; }
+button.pnl-pill:hover { filter: brightness(0.96); }
+.pnl-pill-data { background: var(--pnl-sucesso-suave); color: var(--success); }
+.pnl-pill-data.atrasada { background: var(--danger-soft); color: var(--danger); }
+.pnl-pill-tempo { background: var(--page-bg); border: 1px solid var(--border); color: var(--text-secondary); }
+.pnl-tarefa-link {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--card-bg); color: var(--text-secondary); display: flex; align-items: center; justify-content: center;
+  font-size: 13px; text-decoration: none; transition: background var(--dur-fast) var(--ease-apple);
+}
+.pnl-tarefa-link:hover { background: var(--page-bg); color: var(--text-primary); }
+
+/* ---- Esforço de hoje: a tira de pessoas + ordenar, dentro do modal largo ---- */
+.pnl-esforco-total { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px; }
+.pnl-esforco-total b { color: var(--text-primary); }
+.pnl-esforco-tira { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.pnl-esforco-tira-item {
+  flex: 1 1 140px; min-width: 120px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 14px 10px; border-radius: var(--radius-lg); background: var(--page-bg); border: 1px solid transparent;
+  cursor: pointer; transition: border-color var(--dur-fast) var(--ease-apple), background var(--dur-fast) var(--ease-apple);
+}
+.pnl-esforco-tira-item:hover { border-color: var(--border); }
+.pnl-esforco-tira-item.selecionado { background: var(--card-bg); border-color: var(--success); box-shadow: var(--shadow-card); }
+.pnl-esforco-tira-avatar { width: 44px; height: 44px; border-radius: 50%; }
+.pnl-esforco-tira-nome { font-size: 12.5px; font-weight: 650; color: var(--text-primary); }
+.pnl-esforco-tira-tempo { font-size: 13px; font-weight: 700; color: var(--success); }
+.pnl-esforco-tira-qtd { font-size: 10.5px; color: var(--text-muted); }
+
+.pnl-ordenar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.pnl-ordenar-label { font-size: 11.5px; color: var(--text-muted); }
+.pnl-sort-btn {
+  border: 1px solid var(--border); background: var(--card-bg); color: var(--text-secondary); font-family: var(--font-body);
+  font-size: 11.5px; font-weight: 650; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+}
+.pnl-sort-btn.active { background: var(--accent); color: #fff; border-color: transparent; }
+
+@media (max-width: 700px) {
+  .pnl-tarefas-modal.pnl-modal-esforco { width: calc(100vw - 32px); }
+  .pnl-tarefa-row { flex-wrap: wrap; }
+  .pnl-tarefa-right { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+}
 
 /* ---- Configurações → Vincular clientes duplicados ---- */
 .pnl-vinc-explicacao { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px; }

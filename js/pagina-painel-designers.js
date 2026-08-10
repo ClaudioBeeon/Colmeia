@@ -331,7 +331,7 @@ function pnlRenderKPIs() {
       <div class="pnl-kpi-value">${escaparHTML(pnlFormatTempo(totalMin))}</div>
       <div class="pnl-kpi-sub">${designersAtivos} designers ativos</div>
     </div>
-    <div class="pnl-kpi-card" id="pnlKpiEsforco">
+    <div class="pnl-kpi-card ${nomesEsforco.length ? "clicavel" : ""}" id="pnlKpiEsforco">
       <div class="pnl-kpi-label">Esforço de hoje</div>
       <div class="pnl-kpi-esforco-cols">
         ${nomesEsforco.length ? nomesEsforco.map(n => `
@@ -345,12 +345,17 @@ function pnlRenderKPIs() {
     </div>
   `;
 
-  el.querySelectorAll("[data-pnl-esforco-pessoa]").forEach(col => {
-    col.addEventListener("click", () => {
-      const nome = col.dataset.pnlEsforcoPessoa;
-      pnlAbrirTarefasModal(`Esforço de hoje — ${nome}`, { lista: esforco[nome].tarefas });
+  // O card inteiro abre o pop-up (todo mundo); clicar numa coluna já abre
+  // filtrado só naquela pessoa — igual ao painel original.
+  if (nomesEsforco.length) {
+    document.getElementById("pnlKpiEsforco")?.addEventListener("click", () => pnlAbrirEsforcoModal());
+    el.querySelectorAll("[data-pnl-esforco-pessoa]").forEach(col => {
+      col.addEventListener("click", ev => {
+        ev.stopPropagation();
+        pnlAbrirEsforcoModal(col.dataset.pnlEsforcoPessoa);
+      });
     });
-  });
+  }
 }
 
 function pnlRenderDesigners() {
@@ -943,9 +948,19 @@ function pnlFecharModal() {
   pnlAddContexto = null;
 }
 
-// ===== Modal de tarefas (só leitura — abre a tarefa DE VERDADE no clique) =====
+// ===== Modal de tarefas =====
+// Duas formas de abrir: genérica (pnlAbrirTarefasModal — lista simples ou
+// com abas, ex: cliente/designer/Atrasadas) e a de Esforço (pnlAbrirEsforcoModal
+// — tira de pessoas pra filtrar + ordenar por Data/Tempo/Aba), que reproduz o
+// pop-up "Esforço de hoje" do painel original. As duas compartilham a mesma
+// linha de tarefa (pnlLinhaTarefaHTML), que já vem com a data e a etapa
+// EDITÁVEIS de verdade — reaproveitando os componentes reais do Colmeia
+// (abrirCalendarioColmeia + a ação "alterarEntrega", e abrirMenuEtapa +
+// moverEtapaNoBackend, ambos de js/chat-comentarios.js e js/detalhe-modal.js)
+// em vez de reinventar um editor à parte. Só o TÍTULO da tarefa abre o
+// pop-up de detalhe completo do Colmeia.
 
-let pnlTarefasEstadoAtual = null; // { titulo, abas, abaAtiva, lista, mostrarDesigner }
+let pnlTarefasEstadoAtual = null; // { titulo, abas, abaAtiva, lista, mostrarDesigner } OU { titulo, modoEsforco:true, esforco, filtroPessoa, ordenacao }
 
 function pnlAbrirTarefasModal(titulo, opcoes) {
   pnlTarefasEstadoAtual = {
@@ -956,18 +971,43 @@ function pnlAbrirTarefasModal(titulo, opcoes) {
     mostrarDesigner: !!opcoes.mostrarDesigner,
   };
   document.getElementById("pnlTarefasOverlay").hidden = false;
+  document.querySelector(".pnl-tarefas-modal")?.classList.remove("pnl-modal-esforco");
+  pnlRenderTarefasModal();
+}
+
+/** Abre igual ao card "Esforço de hoje" do painel original: tira de pessoas
+ *  pra filtrar (clique de novo tira o filtro), ordenar por Data/Tempo/Aba. */
+function pnlAbrirEsforcoModal(filtroInicial) {
+  pnlTarefasEstadoAtual = {
+    titulo: "Esforço de hoje",
+    modoEsforco: true,
+    esforco: pnlEsforcoPorResponsavel(),
+    filtroPessoa: filtroInicial || null,
+    ordenacao: "data",
+  };
+  document.getElementById("pnlTarefasOverlay").hidden = false;
+  document.querySelector(".pnl-tarefas-modal")?.classList.add("pnl-modal-esforco");
   pnlRenderTarefasModal();
 }
 
 function pnlFecharTarefasModal() {
   document.getElementById("pnlTarefasOverlay").hidden = true;
   pnlTarefasEstadoAtual = null;
+  // Se a pessoa fechou o pop-up com o calendário ou o menu de etapa ainda
+  // abertos por cima, eles ficariam órfãos na tela.
+  document.querySelectorAll(".colmeia-calendario, .status-menu").forEach(el => el.remove());
 }
 
 function pnlRenderTarefasModal() {
   const st = pnlTarefasEstadoAtual;
   if (!st) return;
   document.getElementById("pnlTarefasTitulo").textContent = st.titulo;
+  const corpo = document.getElementById("pnlTarefasConteudo");
+
+  if (st.modoEsforco) {
+    pnlRenderEsforcoModalCorpo(st, corpo);
+    return;
+  }
 
   const lista = st.abas ? st.abas.find(a => a.chave === st.abaAtiva).lista : st.lista;
   const abasHtml = st.abas ? `
@@ -976,11 +1016,10 @@ function pnlRenderTarefasModal() {
     </div>
   ` : "";
 
-  const corpo = document.getElementById("pnlTarefasConteudo");
   corpo.innerHTML = `
     ${abasHtml}
     <div class="pnl-tarefas-lista">
-      ${lista.length ? lista.map((t, i) => pnlLinhaTarefaHTML(t, st.mostrarDesigner)).join("")
+      ${lista.length ? lista.map(t => pnlLinhaTarefaHTML(t, st.mostrarDesigner)).join("")
         : `<div class="pnl-vazio">Nada aqui.</div>`}
     </div>
   `;
@@ -988,6 +1027,98 @@ function pnlRenderTarefasModal() {
   corpo.querySelectorAll("[data-pnl-aba]").forEach(btn => {
     btn.addEventListener("click", () => { st.abaAtiva = btn.dataset.pnlAba; pnlRenderTarefasModal(); });
   });
+  pnlWireLinhasDoModal(corpo, st);
+}
+
+function pnlRenderEsforcoModalCorpo(st, corpo) {
+  const nomes = Object.keys(st.esforco).sort((a, b) => st.esforco[b].min - st.esforco[a].min);
+  const totalMin = nomes.reduce((s, n) => s + st.esforco[n].min, 0);
+
+  const tiraHtml = `
+    <div class="pnl-esforco-tira">
+      ${nomes.map(nome => {
+        const qtd = st.esforco[nome].tarefas.length;
+        return `
+          <div class="pnl-esforco-tira-item ${st.filtroPessoa === nome ? "selecionado" : ""}" data-pnl-esforco-filtro="${escaparHTML(nome)}">
+            ${typeof avatarHTML === "function" ? avatarHTML(nome, "pnl-esforco-tira-avatar") : ""}
+            <div class="pnl-esforco-tira-nome">${escaparHTML(nome)}</div>
+            <div class="pnl-esforco-tira-tempo">${escaparHTML(pnlFormatTempo(st.esforco[nome].min))}</div>
+            <div class="pnl-esforco-tira-qtd">${qtd} tarefa${qtd === 1 ? "" : "s"}</div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+
+  let linhas = [];
+  nomes.forEach(nome => {
+    if (st.filtroPessoa && st.filtroPessoa !== nome) return;
+    st.esforco[nome].tarefas.forEach(t => linhas.push(t));
+  });
+
+  if (st.ordenacao === "tempo") {
+    linhas.sort((a, b) => (b.tempoMedioMinutos || 0) - (a.tempoMedioMinutos || 0));
+  } else if (st.ordenacao === "aba") {
+    const ordemEtapa = {};
+    (typeof columnsDef !== "undefined" ? columnsDef : []).forEach((c, i) => { ordemEtapa[c.key] = i; });
+    linhas.sort((a, b) => (ordemEtapa.hasOwnProperty(a.status) ? ordemEtapa[a.status] : 99) - (ordemEtapa.hasOwnProperty(b.status) ? ordemEtapa[b.status] : 99));
+  } else {
+    linhas.sort((a, b) => (a.dueISO || "9999").localeCompare(b.dueISO || "9999"));
+  }
+
+  corpo.innerHTML = `
+    <div class="pnl-esforco-total">Total ${st.filtroPessoa ? "de " + escaparHTML(st.filtroPessoa) : "do time"}: <b>${escaparHTML(pnlFormatTempo(st.filtroPessoa ? st.esforco[st.filtroPessoa].min : totalMin))}</b></div>
+    ${tiraHtml}
+    <div class="pnl-ordenar-row">
+      <span class="pnl-ordenar-label">Ordenar por:</span>
+      <button type="button" class="pnl-sort-btn ${st.ordenacao === "data" ? "active" : ""}" data-pnl-ordenar="data">Data</button>
+      <button type="button" class="pnl-sort-btn ${st.ordenacao === "tempo" ? "active" : ""}" data-pnl-ordenar="tempo">Tempo</button>
+      <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba">Aba</button>
+    </div>
+    <div class="pnl-tarefas-lista">
+      ${linhas.length ? linhas.map(t => pnlLinhaTarefaHTML(t, true)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
+    </div>
+  `;
+
+  corpo.querySelectorAll("[data-pnl-esforco-filtro]").forEach(el => {
+    el.addEventListener("click", () => {
+      const nome = el.dataset.pnlEsforcoFiltro;
+      st.filtroPessoa = st.filtroPessoa === nome ? null : nome;
+      pnlRenderTarefasModal();
+    });
+  });
+  corpo.querySelectorAll("[data-pnl-ordenar]").forEach(btn => {
+    btn.addEventListener("click", () => { st.ordenacao = btn.dataset.pnlOrdenar; pnlRenderTarefasModal(); });
+  });
+
+  pnlWireLinhasDoModal(corpo, st);
+}
+
+/** Acha, em qualquer formato de estado do modal, a tarefa de verdade por id
+ *  (pra editar data/etapa em cima do objeto real de tasksTodas). */
+function pnlAcharTarefaPorId(st, id) {
+  const pools = [];
+  if (st.lista) pools.push(st.lista);
+  if (st.abas) st.abas.forEach(a => pools.push(a.lista));
+  if (st.esforco) Object.values(st.esforco).forEach(g => pools.push(g.tarefas));
+  for (const pool of pools) {
+    const achada = pool.find(t => String(t.id) === String(id));
+    if (achada) return achada;
+  }
+  return null;
+}
+
+/** Depois de editar data/etapa, refaz os números que podem ter mudado —
+ *  esforço/KPIs de Runrun.it — sem fechar o pop-up. */
+function pnlAtualizarTudoAposEditar(st) {
+  if (st.modoEsforco) st.esforco = pnlEsforcoPorResponsavel();
+  pnlRenderTarefasModal();
+  pnlRenderDesigners();
+  pnlRenderRunrunKPIs();
+  if (typeof agendarAtualizacaoKanban === "function") agendarAtualizacaoKanban();
+}
+
+function pnlWireLinhasDoModal(corpo, st) {
   corpo.querySelectorAll("[data-pnl-abrir-tarefa]").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.dataset.pnlAbrirTarefa;
@@ -995,21 +1126,88 @@ function pnlRenderTarefasModal() {
       if (typeof abrirTarefaPorId === "function") abrirTarefaPorId(id);
     });
   });
+
+  // Data de entrega desejada — mesmo calendário do pop-up de detalhe.
+  corpo.querySelectorAll("[data-pnl-editar-data]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const t = pnlAcharTarefaPorId(st, btn.dataset.pnlEditarData);
+      if (!t || typeof abrirCalendarioColmeia !== "function") return;
+      abrirCalendarioColmeia({
+        ancoraEl: btn,
+        valorInicial: t.dueISO || "",
+        onEscolher: async novaData => {
+          if (!novaData || novaData === t.dueISO) return;
+          btn.textContent = "Salvando...";
+          const resultado = await enviarEscritaNoBackend({ acao: "alterarEntrega", taskId: t.id, novaData }, "mudar a entrega desejada");
+          if (!resultado.ok) {
+            mostrarToast(resultado.error ? String(resultado.error).slice(0, 60) : "Não consegui salvar a nova data.", "erro");
+            pnlRenderTarefasModal();
+            return;
+          }
+          const [ano, mes, dia] = novaData.split("-").map(Number);
+          t.dueISO = novaData;
+          t.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+          pnlAtualizarTudoAposEditar(st);
+        },
+      });
+    });
+  });
+
+  // Etapa — mesmo menu do pop-up de detalhe (abrirMenuEtapa já chama
+  // moverEtapaNoBackend e desfaz sozinho se o Runrun.it recusar).
+  corpo.querySelectorAll("[data-pnl-editar-etapa]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const t = pnlAcharTarefaPorId(st, btn.dataset.pnlEditarEtapa);
+      if (!t || typeof abrirMenuEtapa !== "function") return;
+      abrirMenuEtapa(t, btn, () => pnlAtualizarTudoAposEditar(st));
+    });
+  });
+}
+
+// Cores das etapas do quadro — mesmas 5 colunas de columnsDef (js/config.js),
+// só que em versão "suave" (fundo claro + texto colorido), igual toda outra
+// etiqueta do painel. Etapa fora das 5 colunas (ex: "Aprovação Cliente", um
+// card mãe) cai no neutro — o menu de etapa continua deixando mover pra
+// qualquer uma das 5 a partir daí.
+const PNL_ETAPA_CORES = {
+  pendentes: { bg: "var(--page-bg)", fg: "var(--text-secondary)" },
+  prioridades: { bg: "var(--accent-soft)", fg: "var(--accent)" },
+  fazendo: { bg: "var(--warning-soft)", fg: "var(--warning)" },
+  revisao: { bg: "var(--purple-soft)", fg: "var(--purple)" },
+  ajustes: { bg: "var(--danger-soft)", fg: "var(--danger)" },
+};
+function pnlCorDaEtapa(t) {
+  if (t.entregue) return { bg: "var(--pnl-sucesso-suave)", fg: "var(--success)" };
+  return PNL_ETAPA_CORES[t.status] || { bg: "var(--page-bg)", fg: "var(--text-secondary)" };
 }
 
 function pnlLinhaTarefaHTML(t, mostrarDesigner) {
   const hoje = hojeISO();
   const atrasada = t.dueISO && t.dueISO < hoje && !t.entregue;
   const dataCurta = t.due || "sem data";
-  const subtitulo = [t.client, mostrarDesigner ? t.assignee : null].filter(Boolean).join(" · ");
+  const designerCol = mostrarDesigner && t.assignee ? pnlCorPorHash(t.assignee) : null;
+  const clienteCol = t.client ? pnlCorPorHash(t.client) : null;
+  const etapaCor = pnlCorDaEtapa(t);
+  const rotuloEtapa = typeof rotuloDaEtapa === "function" ? rotuloDaEtapa(t) : (t.runrunStage || "Sem etapa");
+
   return `
-    <button type="button" class="pnl-tarefa-row" data-pnl-abrir-tarefa="${escaparHTML(String(t.id))}">
-      <span class="pnl-tarefa-titulo">
-        <b>${escaparHTML(t.title || "Sem título")}</b>
-        <span class="pnl-tarefa-cliente">${escaparHTML(subtitulo)}</span>
-      </span>
-      <span class="pnl-tarefa-data ${atrasada ? "atrasada" : ""}">${escaparHTML(dataCurta)}</span>
-    </button>
+    <div class="pnl-tarefa-row">
+      <div class="pnl-tarefa-info">
+        <button type="button" class="pnl-tarefa-titulo-btn" data-pnl-abrir-tarefa="${escaparHTML(String(t.id))}" title="Abrir a tarefa no Colmeia">${escaparHTML(t.title || "Sem título")}</button>
+        <div class="pnl-tarefa-badges">
+          ${designerCol ? `<span class="pnl-tag" style="background:${designerCol.bg};color:${designerCol.fg};">${escaparHTML(t.assignee)}</span>` : ""}
+          ${clienteCol ? `<span class="pnl-tag" style="background:${clienteCol.bg};color:${clienteCol.fg};">${escaparHTML(t.client)}</span>` : ""}
+        </div>
+      </div>
+      <div class="pnl-tarefa-right">
+        <button type="button" class="pnl-pill pnl-pill-data ${atrasada ? "atrasada" : ""}" data-pnl-editar-data="${escaparHTML(String(t.id))}" title="Clique pra trocar a Entrega Desejada">${escaparHTML(dataCurta)}</button>
+        <span class="pnl-pill pnl-pill-tempo">${escaparHTML(pnlFormatTempo(t.tempoMedioMinutos || 0))}</span>
+        <button type="button" class="pnl-pill pnl-pill-etapa" style="background:${etapaCor.bg};color:${etapaCor.fg};" data-pnl-editar-etapa="${escaparHTML(String(t.id))}" title="Clique pra mudar a etapa">${escaparHTML(rotuloEtapa)}</button>
+        ${t.link ? `<a class="pnl-tarefa-link" href="${escaparHTML(t.link)}" target="_blank" rel="noopener" title="Abrir no Runrun.it">↗</a>` : ""}
+      </div>
+    </div>
   `;
 }
 
