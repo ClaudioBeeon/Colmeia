@@ -131,8 +131,24 @@ async function tentarEsvaziarFilaOffline() {
       // erro pra sempre. Avisa a pessoa quando isso acontece.
       fila.shift();
       salvarFilaOffline(fila);
-      if (data && data.ok) enviadas++;
-      else mostrarToast(`Não consegui enviar "${item.descricao}" quando a internet voltou: ${(data && data.error) || "recusado"}`, "erro");
+      if (data && data.ok) {
+        enviadas++;
+        // O comentário guardado (ver enviarParaAlvo, js/detalhe-modal.js)
+        // ficou na tela com a bolha em "aguardando-rede" até aqui — agora
+        // que ele chegou de verdade no Runrun.it, se a MESMA tarefa ainda
+        // estiver aberta, recarrega a conversa pra trocar essa bolha
+        // provisória pela de verdade (com o autor/hora reais que vieram
+        // de lá). Guards por typeof: fila-offline.js carrega antes de
+        // detalhe-modal.js/chat-comentarios.js (ver ordem no CLAUDE.md).
+        if (item.corpo.acao === "adicionarComentario"
+          && typeof tasks !== "undefined" && typeof detailIdx !== "undefined"
+          && tasks[detailIdx] && String(tasks[detailIdx].id) === String(item.corpo.taskId)
+          && typeof recarregarThreadAtiva === "function") {
+          recarregarThreadAtiva();
+        }
+      } else {
+        mostrarToast(`Não consegui enviar "${item.descricao}" quando a internet voltou: ${(data && data.error) || "recusado"}`, "erro");
+      }
     }
 
     if (enviadas > 0) {

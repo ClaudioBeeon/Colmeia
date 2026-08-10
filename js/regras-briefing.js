@@ -855,8 +855,20 @@ async function buscarComentariosDoBackend(taskId) {
   return data.comentarios || [];
 }
 
+/**
+ * Devolve { ok, enfileirado } — não só um booleano. "adicionarComentario"
+ * está em ACOES_QUE_PODEM_ESPERAR (js/fila-offline.js): quando a rede
+ * falha na hora, `enviarEscritaNoBackend` NÃO manda o comentário pro
+ * Runrun.it agora — guarda pra mandar sozinho depois — mas já devolve
+ * `ok:true` (é assim que a fila funciona pra toda ação). Sem diferenciar
+ * os dois casos, quem chama (enviarParaAlvo, js/detalhe-modal.js) tratava
+ * "guardado pra depois" como "já está lá" e recarregava a conversa na
+ * hora — como o comentário ainda não existe de verdade no Runrun.it, essa
+ * recarga reescrevia a tela SEM ele, e a pessoa via o próprio comentário
+ * sumir (mesmo ele estando salvo e indo ser enviado sozinho em breve).
+ */
 async function enviarComentarioNoBackend(taskId, texto) {
-  if (!COLMEIA_API_URL || !taskId || !texto) return false;
+  if (!COLMEIA_API_URL || !taskId || !texto) return { ok: false };
   try {
     // donoDaTarefa/tituloDaTarefa não mudam o comentário em nada — são só
     // o contexto pro feed da aba Bee saber quem deve ver "fulano comentou
@@ -873,10 +885,10 @@ async function enviarComentarioNoBackend(taskId, texto) {
       tituloDaTarefa: t ? t.title : "",
     }, "enviar o comentário");
     if (!data.ok) console.error("Runrun.it recusou o comentário:", data.error);
-    return data.ok;
+    return { ok: data.ok, enfileirado: !!data.enfileirado, error: data.error };
   } catch (err) {
     console.error("Falha ao enviar comentário pro Runrun.it:", err);
-    return false;
+    return { ok: false };
   }
 }
 

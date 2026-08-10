@@ -416,8 +416,8 @@ function mostrarPromptRepetirComentario(task, texto) {
   wrap.querySelector('[data-repetir="nao"]').addEventListener("click", () => wrap.remove());
   wrap.querySelector('[data-repetir="sim"]').addEventListener("click", async () => {
     redesenhar(`<p>Enviando pro card mãe...</p>`);
-    const ok = await enviarComentarioNoBackend(task.parentTaskId, texto);
-    if (ok) {
+    const resultado = await enviarComentarioNoBackend(task.parentTaskId, texto);
+    if (resultado.ok && !resultado.enfileirado) {
       // O comentário já foi pro Runrun.it certinho, mas a aba "Card mãe" do
       // chat (js/chat-comentarios.js) guarda os comentários em cache
       // (chatMaeCache) pra não rebuscar toda vez que troca de aba — sem
@@ -428,7 +428,13 @@ function mostrarPromptRepetirComentario(task, texto) {
         recarregarThreadAtiva();
       }
     }
-    redesenhar(ok ? `<p>✓ Repetido no card mãe.</p>` : `<p>Não consegui enviar pro card mãe.</p>`);
+    // ⚠️ "enfileirado" NÃO é falha — é "sem internet agora, vai sozinho
+    // quando voltar" (ver fila-offline.js). Dizer "não consegui" ali seria
+    // mentira: o comentário está salvo e vai chegar, só não imediatamente.
+    const mensagem = resultado.enfileirado
+      ? "<p>Sem internet agora — vou repetir no card mãe assim que voltar.</p>"
+      : resultado.ok ? "<p>✓ Repetido no card mãe.</p>" : "<p>Não consegui enviar pro card mãe.</p>";
+    redesenhar(mensagem);
     setTimeout(() => { document.getElementById("beeRepetirPrompt")?.remove(); }, 2200);
   });
 }

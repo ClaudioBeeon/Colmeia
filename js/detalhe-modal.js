@@ -1311,12 +1311,38 @@ function renderDetail() {
       thread.scrollTop = thread.scrollHeight;
     }
 
-    const ok = arquivoAtual
-      ? await enviarComentarioComAnexoNoBackend(alvoId, textoParaEnviar, arquivoAtual)
+    // adicionarComentarioComAnexo NÃO passa pela fila offline (não está em
+    // ACOES_QUE_PODEM_ESPERAR — anexo é grande demais pra guardar no
+    // localStorage), então só tem sim/não. O comentário de texto puro
+    // passa pela fila, e "enfileirado" é um terceiro estado: NEM chegou a
+    // ir pro Runrun.it ainda, NEM falhou — está guardado, vai sozinho
+    // quando a internet voltar (ver enviarComentarioNoBackend e o
+    // comentário grande logo abaixo, no "if (enfileirado)").
+    const resultado = arquivoAtual
+      ? { ok: await enviarComentarioComAnexoNoBackend(alvoId, textoParaEnviar, arquivoAtual) }
       : await enviarComentarioNoBackend(alvoId, textoParaEnviar);
+    const ok = resultado.ok;
+    const enfileirado = !!resultado.enfileirado;
 
     const bolhaTemporaria = document.querySelector(`.comment-bubble[data-comment-id="${idTemporario}"]`);
-    if (ok) {
+    if (enfileirado) {
+      // ⚠️ NÃO chama recarregarThreadAtiva aqui: esse comentário ainda
+      // NÃO existe no Runrun.it (só foi guardado localmente pra mandar
+      // quando a internet voltar). Rebuscar os comentários agora traria a
+      // lista de volta SEM ele, e a recarga apagaria a bolha que acabou
+      // de aparecer — era esse o bug: a pessoa comentava, via a bolha, e
+      // ela sumia sozinha (mesmo o comentário estando salvo e indo ser
+      // enviado de verdade em breve — js/fila-offline.js reenvia sozinho
+      // e, quando conseguir, também atualiza essa conversa se ainda
+      // estiver aberta na tela).
+      if (bolhaTemporaria) {
+        bolhaTemporaria.classList.remove("pending");
+        bolhaTemporaria.classList.add("aguardando-rede");
+        const horaEl = bolhaTemporaria.querySelector(".comment-time");
+        if (horaEl) horaEl.textContent = "Sem internet — envio sozinho quando voltar";
+      }
+      mostrarToast("Sem internet agora. Guardei o comentário e mando sozinho quando a conexão voltar.", "erro");
+    } else if (ok) {
       // Confirma visualmente (some o opaco/pendente) até a lista real
       // (com a bolha de verdade vinda do Runrun.it) substituir tudo.
       if (bolhaTemporaria) bolhaTemporaria.classList.remove("pending");
