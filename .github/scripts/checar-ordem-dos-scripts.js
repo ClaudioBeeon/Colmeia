@@ -50,6 +50,7 @@ const ORDEM_ESPERADA = [
   "js/pagina-aprovacao.js",
   "js/central-atendimento.js",
   "js/central-atencao.js",
+  "js/pagina-painel-designers.js",
   "js/login-boot.js",
 ];
 
@@ -83,6 +84,7 @@ const ORDEM_CSS_ESPERADA = [
   "css/05-componentes.css",
   "css/06-aprovacao.css",
   "css/07-central-atendimento.css",
+  "css/08-painel-designers.css",
 ];
 
 const problemas = [];

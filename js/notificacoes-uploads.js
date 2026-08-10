@@ -456,6 +456,11 @@ async function carregarDadosPainelBeeon() {
       roles: resposta.data.roles || {},
       state: resposta.data.state || {},
       photos: resposta.data.photos || {}, // designer -> URL da foto, confirmado no script.js do painel
+      // Os dois de baixo só passaram a ser lidos aqui quando a página
+      // "Painel de Designers" entrou no Colmeia (2026-08-10) — antes
+      // ninguém do Colmeia precisava deles.
+      colors: resposta.data.colors || {}, // designer -> {bg, fg}
+      homeOffice: resposta.data.homeOffice || {}, // designer -> quantos já usou (0-6)
     };
 
     // Depois de carregado, atualiza as páginas que dependem desses dados.

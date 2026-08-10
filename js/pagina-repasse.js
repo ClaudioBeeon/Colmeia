@@ -1460,6 +1460,12 @@ function mostrarPagina(page) {
   // js/pagina-aprovacao.js) — a chamada já fica ligada aqui pra quem for
   // implementar só precisar preencher a função por dentro.
   if (page === "aprovacao") buildAprovacaoPage();
+  // Painel de Designers tem um poll próprio (6s) enquanto a página está
+  // aberta — liga ao entrar, desliga ao sair, senão ficaria rodando à
+  // toa pelo resto da sessão (mesmo cuidado do relógio da página de
+  // horas, ver abaixo).
+  if (page === "painel-designers" && typeof abrirPainelDesigners === "function") abrirPainelDesigners();
+  else if (typeof fecharPainelDesigners === "function") fecharPainelDesigners();
   // A página de horas tem um cronômetro que anda de 1 em 1 segundo — ele
   // precisa parar quando a pessoa sai dela, senão fica rodando à toa pelo
   // resto da sessão (ver iniciarRelogioDaPaginaHoras, js/pagina-horas.js).

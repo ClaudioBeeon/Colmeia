@@ -344,6 +344,13 @@ const ACOES_DEMORADAS = [
   "buscarImagemCheiaDrive", // idem, mas pra imagem do Drive ampliada (ver js/notificacoes-uploads.js)
   "beeGerarImagem",       // gera imagem de verdade (Gemini, ver NanoBanana.gs)
   "subirArquivoNoCard",   // arquivo arrastado pro card, sobe pro Drive (ver js/detalhe-modal.js)
+  // Painel de Designers (2026-08-10): o Colmeia repassa pro Apps Script
+  // SEPARADO que ainda guarda esse dado (PainelDesigners.gs) — soma o
+  // cold-start dos DOIS scripts, e a de listar clientes ainda varre o
+  // Drive do lado de lá.
+  "painelLerEstado",
+  "painelSalvarEstado",
+  "painelListarClientesParaVinculo",
 ];
 
 async function chamarBackend(corpo, opcoes) {

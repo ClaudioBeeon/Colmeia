@@ -69,6 +69,7 @@ const ROTEADOR_SLUGS = {
   repasse: "fila-de-repasse",
   bee: "bee",
   aprovacao: "aprovacoes",
+  "painel-designers": "painel-designers",
 };
 const ROTEADOR_SLUGS_INVERSO = Object.fromEntries(
   Object.entries(ROTEADOR_SLUGS).map(([pagina, slug]) => [slug, pagina])

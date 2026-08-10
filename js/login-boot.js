@@ -40,6 +40,15 @@ function iniciarAppPosLogin() {
   // dele — cai direto lá embaixo, sem ver o quadro/sidebar normal.
   const centralNav = document.getElementById("centralAtendimentoNavBtn");
   if (centralNav) centralNav.hidden = !souClaudio();
+
+  // Painel de Designers (2026-08-10) — mesma regra da Fila de repasse: só
+  // o Cláudio (é quem cadastra designer/cliente e olha o esforço do time).
+  // A aba "Vincular clientes" das Configurações do coordenador vem junto,
+  // porque é o mesmo dado do mesmo painel.
+  const painelDesignersNav = document.querySelector('.nav-ic[data-page="painel-designers"]');
+  if (painelDesignersNav) painelDesignersNav.hidden = !souClaudio();
+  const configTabVinculos = document.getElementById("configTabVinculos");
+  if (configTabVinculos) configTabVinculos.hidden = !souClaudio();
   if (PAPEL_LOGADO === "atendimento" && typeof abrirCentralAtendimento === "function") {
     abrirCentralAtendimento();
   }

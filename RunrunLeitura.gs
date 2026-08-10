@@ -742,6 +742,11 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback, contexto) {
     // entregue de antes (ex: pela aba "Runrun completo > Entregues") —
     // o botão de reabrir simplesmente não existia.
     entregue: !!t.is_closed,
+    // A prioridade DO RUNRUN.IT (diferente da coluna "Prioridades" do
+    // quadro do Colmeia, que é outra coisa) — usada pelo KPI "Prioridades"
+    // da página Painel de Designers (js/pagina-painel-designers.js), que
+    // reproduz o mesmo campo que o painel-designers-beeon já usava.
+    isUrgent: !!t.is_urgent,
     attachmentsCount: t.attachments_count || 0,
     // Não temos um campo de "desde quando é dessa pessoa" de verdade —
     // isso é a melhor aproximação disponível (data da última mudança na

@@ -363,6 +363,21 @@ function handleRequest(e, method) {
         output = beeBuscarNoDrive(body.termo, body.cliente);
       } else if (body.acao === 'beeBuscarLink') {
         output = beeBuscarLink(body.termo, body.cliente);
+      } else if (body.acao === 'painelLerEstado') {
+        // A página "Painel de Designers" do coordenador (js/pagina-painel-designers.js)
+        // — ponte pro Apps Script separado que ainda guarda esse dado. Ver
+        // o comentário grande no topo de PainelDesigners.gs.
+        output = painelLerEstado();
+      } else if (body.acao === 'painelSalvarEstado') {
+        output = painelSalvarEstado(body.dados);
+      } else if (body.acao === 'painelListarClientesParaVinculo') {
+        output = painelListarClientesParaVinculo();
+      } else if (body.acao === 'painelLinkarClientes') {
+        output = painelLinkarClientes(body.nomes);
+      } else if (body.acao === 'painelDesvincularCliente') {
+        output = painelDesvincularCliente(body.nomeOrigem);
+      } else if (body.acao === 'painelAtividadesRecentes') {
+        output = painelAtividadesRecentes();
       } else if (body.acao === 'beeAcharCardMae') {
         output = beeAcharCardMae(body.termo, body.cliente);
       } else if (body.acao === 'beeAtualizarMensagem') {

@@ -12,7 +12,14 @@ function atualizarAbasConfig() {
   document.getElementById("configTabClientes").classList.toggle("active", configTabAtiva === "clientes");
   const abaMemorias = document.getElementById("configTabMemorias");
   if (abaMemorias) abaMemorias.classList.toggle("active", configTabAtiva === "memorias");
+  const abaVinculos = document.getElementById("configTabVinculos");
+  if (abaVinculos) abaVinculos.classList.toggle("active", configTabAtiva === "vinculos");
   const hint = document.getElementById("configHint");
+  if (configTabAtiva === "vinculos") {
+    hint.textContent = "Liga nomes do mesmo cliente que aparecem diferentes no painel, no Runrun.it e no Drive — sem isso o Colmeia trata como clientes separados.";
+    if (typeof renderConfigVinculosClientes === "function") renderConfigVinculosClientes();
+    return;
+  }
   if (configTabAtiva === "memorias") {
     hint.textContent = "O que a Bee sabe sobre cada cliente. O que você escrever aqui ela usa em toda conversa sobre esse cliente — manias, o que evitar, o que faz aprovar mais rápido.";
     renderPainelMemoriasBee();

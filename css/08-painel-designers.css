@@ -1,0 +1,259 @@
+/* =====================================================================
+   PAINEL DE DESIGNERS (2026-08-10) — a "tela principal" do projeto irmão
+   painel-designers-beeon, trazida pra dentro do Colmeia. Ver o comentário
+   grande no topo de js/pagina-painel-designers.js pra tudo que é
+   funcional, e o do ícone no menu (index.html) pro porquê da integração.
+
+   Prefixo `pnl-` em TODA classe daqui — mesmo cuidado do `central-` da
+   Central do Atendimento (css/07-central-atendimento.css): sem isso,
+   nomes genéricos (ex: `.kpi-grid`) colidiriam com o resto do app.
+   ===================================================================== */
+
+.pnl-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.pnl-toolbar .search-box { flex: 1; min-width: 220px; }
+.pnl-sync { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.pnl-sync.erro { color: var(--danger); }
+.pnl-toolbar-acoes { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.pnl-btn-secundario {
+  border: 1px solid var(--border); background: var(--card-bg); color: var(--text-secondary);
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600; padding: 8px 13px;
+  border-radius: 10px; cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.pnl-btn-secundario:hover { background: var(--page-bg); color: var(--text-primary); }
+.pnl-btn-secundario.ativo { background: var(--kanban-yellow, #FFC700); color: #16181D; border-color: transparent; }
+
+.pnl-btn-primario {
+  border: none; background: var(--accent); color: #fff; font-family: var(--font-body);
+  font-size: 12.5px; font-weight: 700; padding: 8px 15px; border-radius: 10px; cursor: pointer;
+  white-space: nowrap; transition: filter var(--dur-fast) var(--ease-apple);
+}
+.pnl-btn-primario:hover { filter: brightness(1.08); }
+
+.pnl-add-wrap { position: relative; }
+.pnl-add-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 190px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 6px; box-shadow: var(--shadow-hover);
+}
+.pnl-add-menu[hidden] { display: none; }
+.pnl-add-menu button {
+  display: block; width: 100%; text-align: left; border: none; background: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 500; color: var(--text-primary);
+  padding: 9px 10px; border-radius: 8px;
+}
+.pnl-add-menu button:hover { background: var(--page-bg); }
+
+.pnl-mini-btn {
+  border: none; background: none; cursor: pointer; color: var(--text-muted); font-size: 14px;
+  width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.pnl-mini-btn:hover { background: var(--page-bg); color: var(--text-primary); }
+
+/* ---- KPIs de cima ---- */
+.pnl-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+@media (max-width: 900px) { .pnl-kpis { grid-template-columns: repeat(2, 1fr); } }
+.pnl-kpi-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 16px 18px; box-shadow: var(--shadow-card);
+}
+.pnl-kpi-card.clicavel { cursor: pointer; transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple); }
+.pnl-kpi-card.clicavel:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.pnl-kpi-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 6px; }
+.pnl-kpi-value { font-family: var(--font-display); font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: var(--text-primary); line-height: 1.1; }
+.pnl-kpi-sub { font-size: 11.5px; color: var(--text-secondary); margin-top: 4px; }
+
+/* "Esforço de hoje" é uma barra por designer, não um número só. */
+.pnl-esforco-linha { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11.5px; }
+.pnl-esforco-linha:first-child { margin-top: 8px; }
+.pnl-esforco-nome { flex: 0 0 62px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnl-esforco-barra { flex: 1; height: 6px; border-radius: 999px; background: var(--page-bg); overflow: hidden; }
+.pnl-esforco-barra i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.pnl-esforco-barra i.alerta { background: var(--danger); }
+.pnl-esforco-min { flex: 0 0 auto; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.pnl-esforco-vazio { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
+
+/* ---- layout de duas colunas ---- */
+.pnl-layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+@media (max-width: 1100px) { .pnl-layout { grid-template-columns: 1fr; } }
+
+.pnl-secao-titulo {
+  font-family: var(--font-display); font-size: 15px; font-weight: 650; color: var(--text-primary);
+  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.pnl-secao-titulo-sm { font-size: 13px; margin-bottom: 10px; }
+
+/* ---- grade de designers ---- */
+.pnl-designers { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.pnl-designer-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card); overflow: hidden; display: flex; flex-direction: column;
+  transition: box-shadow var(--dur-fast) var(--ease-apple);
+}
+.pnl-designer-card.arrastando-sobre { box-shadow: 0 0 0 2px var(--kanban-yellow, #FFC700) inset; }
+
+.pnl-dcard-top { padding: 14px 16px 12px; cursor: pointer; }
+.pnl-dcard-linha1 { display: flex; align-items: center; gap: 10px; }
+.pnl-dcard-avatar-wrap { position: relative; flex-shrink: 0; }
+.pnl-dcard-avatar {
+  width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 13px; overflow: hidden;
+}
+.pnl-dcard-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pnl-dcard-foto-btn {
+  position: absolute; bottom: -2px; right: -2px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--card-bg); border: 1px solid var(--border); color: var(--text-muted); font-size: 9px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.pnl-dcard-nome {
+  flex: 1; min-width: 0; border: none; background: none; font-family: var(--font-display);
+  font-size: 15px; font-weight: 650; color: var(--text-primary); padding: 3px 4px; border-radius: 6px;
+}
+.pnl-dcard-nome:focus { background: var(--page-bg); outline: none; }
+.pnl-dcard-remover {
+  flex-shrink: 0; border: none; background: none; cursor: pointer; color: var(--text-muted);
+  width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.pnl-dcard-remover:hover { background: var(--danger); color: #fff; }
+
+.pnl-dcard-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 12px; }
+.pnl-dstat { text-align: center; padding: 6px 2px; border-radius: 8px; }
+.pnl-dstat-num { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.pnl-dstat-label { font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; margin-top: 1px; }
+.pnl-dstat.clicavel { cursor: pointer; transition: background var(--dur-fast) var(--ease-apple); }
+.pnl-dstat.clicavel:hover { background: var(--page-bg); }
+
+.pnl-dcard-runrun { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
+.pnl-dstat-num.atrasadas { color: var(--danger); }
+.pnl-dstat-num.hoje { color: var(--warning); }
+.pnl-dstat-num.futuras { color: var(--success); }
+
+/* Home office: 6 bolinhas, preenche da esquerda pra direita. */
+.pnl-ho-row { display: flex; align-items: center; gap: 8px; padding: 0 16px 12px; }
+.pnl-ho-label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; flex-shrink: 0; }
+.pnl-ho-bars { display: flex; gap: 4px; }
+.pnl-ho-bar { width: 14px; height: 6px; border-radius: 999px; background: var(--page-bg); cursor: pointer; border: 1px solid var(--border); }
+.pnl-ho-bar.preenchida { background: var(--purple); border-color: var(--purple); }
+
+/* Clientes dentro do card — recolhe/expande. */
+.pnl-clientes-inner { max-height: 0; overflow: hidden; transition: max-height var(--dur-base) var(--ease-apple); }
+.pnl-designer-card.expandido .pnl-clientes-inner { max-height: 2000px; }
+.pnl-clientes-lista { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+
+.pnl-client-card {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px;
+  background: var(--page-bg); cursor: pointer; border: 1px solid transparent;
+  transition: border-color var(--dur-fast) var(--ease-apple);
+}
+.pnl-client-card:hover { border-color: var(--border); }
+.pnl-client-card.arrastando { opacity: .4; }
+.pnl-client-nome { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnl-client-escopo {
+  flex-shrink: 0; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  padding: 2px 7px; border-radius: 999px; background: var(--card-bg); color: var(--text-secondary);
+}
+.pnl-client-tempo { flex-shrink: 0; font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pnl-client-remover {
+  flex-shrink: 0; border: none; background: none; cursor: pointer; color: var(--text-muted); font-size: 12px;
+  width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+}
+.pnl-client-remover:hover { background: var(--danger); color: #fff; }
+
+.pnl-add-client-mini {
+  text-align: center; padding: 8px; border-radius: 10px; border: 1px dashed var(--border);
+  color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; margin: 2px 0 0;
+}
+.pnl-add-client-mini:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
+/* ---- coluna da direita: KPIs de Runrun + atividade ---- */
+.pnl-runrun-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+.pnl-runrun-kpi {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 13px 14px;
+  cursor: pointer; box-shadow: var(--shadow-card); transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
+}
+.pnl-runrun-kpi:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.pnl-runrun-kpi-num { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--text-primary); line-height: 1; }
+.pnl-runrun-kpi-label { font-size: 10.5px; color: var(--text-secondary); margin-top: 5px; }
+
+.pnl-atividade { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; box-shadow: var(--shadow-card); }
+.pnl-atividade-lista { display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; }
+.pnl-atividade-item { display: flex; gap: 9px; align-items: flex-start; font-size: 12px; }
+.pnl-atividade-item .avatar { flex-shrink: 0; }
+.pnl-atividade-txt { min-width: 0; }
+.pnl-atividade-txt b { color: var(--text-primary); }
+.pnl-atividade-cliente { color: var(--text-secondary); }
+.pnl-atividade-quando { color: var(--text-muted); font-size: 10.5px; margin-top: 1px; }
+.pnl-atividade-vazio, .pnl-vazio { font-size: 12.5px; color: var(--text-muted); padding: 8px 0; }
+
+/* A busca filtra a grade de designers na hora — ver pnlRenderDesigners()
+   em js/pagina-painel-designers.js. Sem tela de resultado separada, de
+   propósito: uma tela a mais era só mais um lugar pra manter em dia. */
+.pnl-designer-card.pnl-fora-do-filtro { display: none; }
+
+/* ---- modal adicionar cliente/designer ---- */
+.pnl-modal-campo { display: flex; flex-direction: column; gap: 6px; }
+.pnl-modal-campo label { font-size: 11.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
+.pnl-modal-campo input, .pnl-modal-campo select {
+  border: 1px solid var(--border); background: var(--page-bg); border-radius: 10px; padding: 9px 11px;
+  font-family: var(--font-body); font-size: 13.5px; color: var(--text-primary);
+}
+.pnl-modal-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* ---- modal de tarefas ---- */
+.pnl-tarefas-modal { width: 560px; max-width: calc(100vw - 32px); }
+.pnl-tarefas-abas { display: flex; gap: 6px; margin-bottom: 14px; }
+.pnl-tarefas-aba {
+  border: none; background: var(--page-bg); color: var(--text-secondary); font-family: var(--font-body);
+  font-size: 12px; font-weight: 700; padding: 7px 13px; border-radius: 999px; cursor: pointer;
+}
+.pnl-tarefas-aba.active { background: var(--kanban-yellow, #FFC700); color: #16181D; }
+.pnl-tarefas-lista { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.pnl-tarefa-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  background: var(--page-bg); cursor: pointer; text-align: left; border: none; width: 100%;
+  font-family: var(--font-body); color: inherit;
+}
+.pnl-tarefa-row:hover { background: var(--border); }
+.pnl-tarefa-titulo { flex: 1; min-width: 0; }
+.pnl-tarefa-titulo b { display: block; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnl-tarefa-cliente { font-size: 11px; color: var(--text-secondary); }
+.pnl-tarefa-data { flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-muted); }
+.pnl-tarefa-data.atrasada { color: var(--danger); }
+
+/* ---- Configurações → Vincular clientes duplicados ---- */
+.pnl-vinc-explicacao { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px; }
+.pnl-vinc-colunas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 900px) { .pnl-vinc-colunas { grid-template-columns: repeat(2, 1fr); } }
+.pnl-vinc-coluna { min-width: 0; }
+.pnl-vinc-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.pnl-vinc-qtd { background: var(--page-bg); color: var(--text-secondary); border-radius: 999px; padding: 1px 7px; font-size: 10px; }
+.pnl-vinc-lista { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.pnl-chip {
+  display: block; width: 100%; text-align: left; border: 1px solid var(--border); background: var(--page-bg);
+  color: var(--text-primary); font-size: 12px; padding: 7px 10px; border-radius: 8px; cursor: pointer;
+}
+.pnl-chip.selecionado { background: var(--kanban-yellow, #FFC700); color: #16181D; border-color: transparent; }
+.pnl-chip.ja-vinculado { color: var(--text-muted); }
+.pnl-vinc-grupo { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; overflow: hidden; }
+.pnl-vinc-grupo-cab {
+  width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 9px 11px;
+  border: none; background: var(--card-bg); cursor: pointer; font-family: var(--font-body); font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+}
+.pnl-vinc-grupo-corpo { padding: 0 11px 10px; display: flex; flex-direction: column; gap: 5px; }
+.pnl-vinc-item { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-secondary); }
+.pnl-vinc-item span b { color: var(--text-muted); font-weight: 700; margin-right: 4px; }
+.pnl-vinc-barra {
+  display: none; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 14px;
+  background: var(--page-bg); border-radius: 12px; font-size: 12.5px; color: var(--text-secondary);
+}
+.pnl-vinc-barra.visivel { display: flex; }
+.pnl-vinc-aviso { padding: 9px 12px; border-radius: 10px; font-size: 12.5px; margin-bottom: 10px; }
+.pnl-vinc-aviso.sucesso { background: var(--success); color: #fff; }
+.pnl-vinc-aviso.erro { background: var(--danger); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pnl-clientes-inner, .pnl-designer-card, .pnl-btn-primario, .pnl-btn-secundario { transition: none; }
+}

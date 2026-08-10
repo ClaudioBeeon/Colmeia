@@ -1049,6 +1049,13 @@ if (_configTabMemorias) {
     atualizarAbasConfig();
   });
 }
+const _configTabVinculos = document.getElementById("configTabVinculos");
+if (_configTabVinculos) {
+  _configTabVinculos.addEventListener("click", () => {
+    configTabAtiva = "vinculos";
+    atualizarAbasConfig();
+  });
+}
 
 /**
  * Roda tudo que o Colmeia precisa pra funcionar de verdade — só chamada

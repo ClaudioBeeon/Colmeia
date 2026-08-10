@@ -72,6 +72,11 @@ requisição, e todos compartilham o mesmo espaço de nomes — qualquer funçã
   aprovação e a devolução pro designer (que cria a subtarefa "Alteração VN" em Ajustes, com entrega
   hoje às 18h, ou faz o caminho alternativo quando o projeto do mês está fechado). Não confundir com
   `Aprovacao.gs`, que é o passo SEGUINTE — o link que o cliente abre. Ver seção própria abaixo.
+- `PainelDesigners.gs` (~140 linhas) — PONTE pro Apps Script separado do projeto irmão
+  painel-designers-beeon: a página "Painel de Designers" do Colmeia (js/pagina-painel-designers.js)
+  fala com este arquivo, que repassa pro backend de lá (`PAINEL_BEEON_API_URL`) e devolve a
+  resposta. O DADO continua morando na planilha de lá — só a tela mudou de casa. Ver seção própria
+  abaixo.
 
 **Ao criar um arquivo `.gs` novo:** é obrigatório liberá-lo no `.claspignore` (que ignora tudo por
 padrão), senão o clasp não o envia e o deploy passa "com sucesso" mas as funções dele não existem em
@@ -90,10 +95,11 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
 entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; o
-roteador de URL, 22; a história da peça, 23; o modo foco, 24; a página Bee, 25; e a aprovação do
-atendimento, 26) menores dentro
+roteador de URL, 22; a história da peça, 23; o modo foco, 24; a página Bee, 25; a aprovação do
+atendimento, 26; a Central do Atendimento, 27; a pílula de atenção, 28; e a página Painel de
+Designers, 29) menores dentro
 da pasta `js/`, cada um cuidando de um assunto. **Não é um sistema de build** — não tem bundler,
-TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os 26 arquivos
+TypeScript, nem npm envolvido no frontend. É só HTML puro: o `index.html` carrega os 29 arquivos
 com várias tags `<script src="js/...">` seguidas, **na ordem certa**, perto do fim do
 `<body>`. Isso funciona porque tags `<script>` comuns (sem `type="module"`) compartilham o mesmo
 espaço de variáveis globais do documento — é como se fosse um arquivo só, só que dividido em pedaços.
@@ -156,7 +162,10 @@ Arquivos, na ordem em que são carregados (`js/`):
     clientes, Aprovações e Minhas métricas, mais o calendário de postagens e o pop-up dos grupos).
 27. `central-atencao.js` — a pílula **"Precisa de atenção"** no rodapé da Timeline da Central e a
     revisão que ela abre. Ver seção própria abaixo.
-28. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+28. `pagina-painel-designers.js` — a página **Painel de Designers** (a tela principal do projeto
+    irmão painel-designers-beeon, trazida pra dentro do Colmeia) e a aba "Vincular clientes" das
+    Configurações do coordenador. Ver seção própria abaixo.
+29. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.
@@ -875,6 +884,91 @@ Mais duas, da segunda leva:
   trazia o botão normal de volta e a pessoa clicava outra vez achando que não tinha funcionado.
   ⚠️ Continua **não sendo status** — o link segue `pendente` e o cliente pode aprovar ou pedir
   ajuste normalmente depois.
+
+## Painel de Designers integrado ao Colmeia (2026-08-10)
+
+A "tela principal" do projeto irmão **painel-designers-beeon**
+(`github.com/ClaudioBeeon/Designers-Beeon`) — designers, clientes de cada um, criativos, tempo
+médio, home office, KPIs do Runrun.it e a tela "Vincular clientes duplicados" — passou a viver
+dentro do Colmeia, a pedido do Cláudio: *"o Colmeia está mais completo, integrar tudo seria
+interessante"*. Ver a análise que motivou isso na conversa (comparação técnica dos dois códigos
+antes de mexer em qualquer coisa).
+
+**Rota escolhida: só a TELA mudou de casa, o DADO não (ainda).** `PainelDesigners.gs` é uma ponte —
+cada ação nova (`painelLerEstado`, `painelSalvarEstado`, `painelListarClientesParaVinculo`,
+`painelLinkarClientes`, `painelDesvincularCliente`, `painelAtividadesRecentes`) recebe do
+front-end do Colmeia e repassa pro Apps Script SEPARADO do painel (`PAINEL_BEEON_API_URL`), que
+continua sendo dono da planilha. Foi escolha deliberada, não a "versão fácil de qualquer jeito":
+juntar as planilhas de vez é a etapa 4 de um plano em fases, deixada pra depois — mexer em onde o
+dado mora é o passo de maior risco, e não precisava acontecer pra entregar o que foi pedido agora.
+Se um dia fizer sentido juntar de vez, é só trocar o "de dentro" dessas funções — o front-end
+continua chamando as mesmas ações.
+
+**O que NÃO veio, e por quê:**
+- As páginas "Atendimento"/"Serviço"/"Todos os clientes" do painel original — o Cláudio confirmou
+  que o Colmeia já cobre isso (Clientes por atendimento, Meus clientes).
+- A edição de tarefa direto no card (arrastar etapa, trocar data numa janelinha flutuante) virou
+  **abrir a tarefa de verdade do Colmeia** (`abrirTarefaPorId`) — mais completa (comentários, Bee,
+  cronômetro) que o editor do painel, então é estritamente melhor, não uma perda.
+- Desfazer (Ctrl+Z) e exportar CSV ficaram de fora desta primeira versão.
+
+### O bug do "esforço de hoje" — corrigido na raiz, não só realocado
+
+O painel original calculava "Atrasadas/Hoje/Futuras/Prioridades/Mês/Esforço" numa varredura PRÓPRIA
+do Runrun.it, cacheada numa célula da planilha e atualizada por **um único gatilho de tempo a cada
+10 minutos**. Se esse gatilho parasse de disparar sozinho — o Apps Script derruba gatilho depois de
+falha repetida, **sem avisar visivelmente** — o número ficava travado no valor antigo, sem erro
+nenhum aparecer na tela. Era essa a causa provável do bug relatado.
+
+No Colmeia, os mesmos números saem inteiramente de **`tasksTodas`**, o array que o próprio quadro já
+mantém atualizado (poll de ~60s) — zero busca nova, zero cache extra, zero gatilho pra manter vivo.
+Não tem como esse número "travar sozinho": ele é recalculado do que já está fresco toda vez que a
+tela desenha. Ver `pnlPorCategoriaDePrazo`/`pnlTarefasPrioridade`/`pnlTarefasDoMes`/
+`pnlEsforcoPorResponsavel` em `js/pagina-painel-designers.js`.
+
+⚠️ **`t.isUrgent`** foi adicionado a `transformarTarefaParaColmeia` (RunrunLeitura.gs) só pra isso —
+é o campo `is_urgent` do Runrun.it, o mesmo que o painel usava pro KPI "Prioridades". Não confundir
+com a coluna "Prioridades" do quadro do Colmeia (`task.status === "prioridades"`), que é outra
+coisa (uma etapa do fluxo, não uma marcação do Runrun.it).
+
+### ⚠️ Designer do PAINEL ≠ designer do RUNRUN.IT — e isso não é um bug daqui
+
+Os designers cadastrados no painel (Paulo, Gustavo, Imane, "Sem designer"...) são o time de criação
+da Beeon — diferente de quem está **logado de verdade** no Runrun.it (`RUNRUN_USUARIOS`: Cláudio,
+Gustavo, Erick). Só o Gustavo é a mesma pessoa nos dois. Por isso os números de
+"atrasadas/hoje/futuras" e o esforço só aparecem no card de um designer do painel quando o NOME dele
+bate com um usuário real do Runrun.it — na prática, quase só o card do Gustavo mostra algo.
+
+**Isso já era assim no painel original** (o próprio código de lá tinha o mesmo comentário de aviso)
+— não é uma regressão da integração, é uma limitação de dado que sempre existiu. A comparação usa
+`nomesCorrespondem` (`pnlTarefasDoDesignerPainel`), o mesmo jeito que o resto do Colmeia já compara
+PESSOA por nome (ver a seção "Essa tarefa é minha?" mais abaixo — status de pessoa aceita
+comparação por nome; "de quem é a tarefa" não).
+
+### "Vincular clientes duplicados" virou a 4ª aba das Configurações do coordenador
+
+Não ganhou uma tela própria — entrou como aba nova (`configTabVinculos`) dentro do modal
+"Configurações do coordenador" que já existia (Pessoas / Links de clientes / Memórias da Bee),
+porque é literalmente a mesma categoria de coisa: cadastro que só o coordenador mexe. Mesmo shell
+(`peopleModalBody`), mesmo padrão de troca de aba (`atualizarAbasConfig`,
+js/painel-pessoas-clientes.js) chamando pra fora do arquivo
+(`renderConfigVinculosClientes`, js/pagina-painel-designers.js — funciona mesmo definida num
+arquivo carregado DEPOIS, porque só é *chamada* muito depois de todo script já ter carregado, nunca
+no carregamento da página em si).
+
+### Detalhes que já custaram raciocínio
+
+- **`pnlEstaEditando()` trava o poll de 8s** (mesmo padrão do `isUserEditing()` original): enquanto
+  qualquer campo de texto/select estiver com foco, o poll não sobrescreve por baixo do dedo.
+- **Salvar é tudo-ou-nada.** O painel guarda o estado inteiro numa célula só — não dá pra gravar "só
+  um designer". Toda ação de escrita manda o objeto completo (`pnlBuildPayload`), debounced 900ms
+  (`pnlAgendarSalvar`), igual o painel original sempre fez.
+- **`painelSalvarEstado`/`painelLinkarClientes`/`painelDesvincularCliente` invalidam os caches do
+  Colmeia** (`vinculosClientesPainel`, `tempoMedioClientesPainel`, RunrunLeitura.gs) — sem isso, uma
+  mudança feita agora só valeria pro resto do Colmeia depois de até 10 minutos.
+- **As três ações mais pesadas foram pra `ACOES_DEMORADAS`** (js/config.js): elas somam o cold-start
+  de DOIS Apps Script (Colmeia + painel), e `painelListarClientesParaVinculo` ainda varre o Drive do
+  lado de lá.
 
 ## O check "já aprovou, por fora" chegou na Aprovações da Fila de repasse (2026-08-09)
 

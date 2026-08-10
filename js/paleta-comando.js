@@ -228,6 +228,7 @@ function paletaMontarLinhas(termo) {
     { page: "tipos", nome: "Tipos de tarefas" },
     { page: "runrun", nome: "Runrun completo" },
     { page: "bee", nome: "Bee" },
+    { page: "painel-designers", nome: "Painel de Designers" },
   ];
 
   paginas

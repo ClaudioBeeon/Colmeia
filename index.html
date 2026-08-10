@@ -13,13 +13,14 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-09o">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-09o">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-09o">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-09o">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-09o">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-09o">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-09o">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-10a">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-10a">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-10a">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-10a">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-10a">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-10a">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-10a">
+<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-10a">
 </head>
 <body>
 
@@ -143,6 +144,19 @@
           <span class="nav-badge" id="aprovacaoBadge" hidden>0</span>
         </span>
         <span class="nav-label">Aprovações</span>
+      </a>
+      <!-- Painel de Designers (2026-08-10) — a "tela principal" do
+           projeto irmão painel-designers-beeon (claudiobeeon.github.io/
+           Designers-Beeon), trazida pra dentro do Colmeia a pedido do
+           Cláudio: designers, clientes de cada um, criativos/tempo médio,
+           home office. Só coordenador vê (mesma regra do ícone de Fila de
+           repasse) — ver js/pagina-painel-designers.js. O dado ainda mora
+           na planilha SEPARADA do painel (PainelDesigners.gs é só uma
+           ponte) — só a TELA mudou de casa, de propósito, pra não arriscar
+           mexer em onde o dado já está. -->
+      <a href="#" class="nav-ic" title="Painel de Designers" data-page="painel-designers" hidden>
+        <span class="nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="4" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="15" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/></svg></span>
+        <span class="nav-label">Painel de Designers</span>
       </a>
       <!-- Central do Atendimento — área NOVA e SEPARADA do resto do Colmeia
            (pedido do Cláudio, 2026-08-06): quem tem papel "atendimento"
@@ -333,6 +347,12 @@
           <button type="button" class="config-tab active" id="configTabPessoas">Pessoas</button>
           <button type="button" class="config-tab" id="configTabClientes">Links de clientes</button>
           <button type="button" class="config-tab" id="configTabMemorias">Memórias da Bee</button>
+          <!-- "Vincular clientes duplicados" (2026-08-10) — veio do painel
+               de designers junto com a tela principal dele. Mesmo dado de
+               sempre (aba VinculosClientes de lá); só a tela mudou de
+               endereço. Ver renderConfigVinculosClientes,
+               js/pagina-painel-designers.js. -->
+          <button type="button" class="config-tab" id="configTabVinculos" hidden>Vincular clientes</button>
         </div>
         <p class="people-modal-hint" id="configHint">Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.</p>
         <div class="rule-modal-body" id="peopleModalBody"></div>
@@ -661,6 +681,80 @@
       </div>
       <section class="board repasse-board" id="repasseBoard"></section>
     </section>
+
+    <!-- Painel de Designers (2026-08-10) — ver o comentário no ícone do
+         menu, acima, e js/pagina-painel-designers.js pra tudo que é
+         funcional. Fica dentro da moldura normal do Colmeia (como Fila de
+         repasse), não como overlay cheio (como a Central) — é uma tela de
+         cadastro, não um modo separado do app. -->
+    <section class="app-page" id="page-painel-designers" hidden>
+      <div class="pnl-toolbar">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="text" id="pnlBusca" placeholder="Buscar cliente ou designer...">
+        </div>
+        <span class="pnl-sync" id="pnlSync"></span>
+        <div class="pnl-toolbar-acoes">
+          <button type="button" class="pnl-btn-secundario" id="pnlOrdenarBtn"><i></i>A-Z</button>
+          <button type="button" class="pnl-btn-secundario" id="pnlExpandirBtn">Abrir todos</button>
+          <div class="pnl-add-wrap">
+            <button type="button" class="pnl-btn-primario" id="pnlAddBtn">+ Adicionar</button>
+            <div class="pnl-add-menu" id="pnlAddMenu" hidden>
+              <button type="button" data-pnl-add="designer">Adicionar designer</button>
+              <button type="button" data-pnl-add="cliente">Adicionar cliente</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pnl-kpis" id="pnlKpis"></div>
+
+      <div class="pnl-layout">
+        <div class="pnl-col-main">
+          <div class="pnl-secao-titulo">Designers</div>
+          <div class="pnl-designers" id="pnlDesigners"></div>
+        </div>
+        <div class="pnl-col-lado">
+          <div class="pnl-runrun-kpis" id="pnlRunrunKpis"></div>
+          <div class="pnl-atividade">
+            <div class="pnl-secao-titulo pnl-secao-titulo-sm">
+              Atividade recente
+              <button type="button" class="pnl-mini-btn" id="pnlAtividadeRefresh" title="Atualizar">↻</button>
+            </div>
+            <div class="pnl-atividade-lista" id="pnlAtividadeLista"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modal "Adicionar cliente" / "Adicionar designer" (Painel de Designers). -->
+    <div class="rule-modal-overlay" id="pnlModalOverlay" hidden>
+      <div class="rule-modal pnl-modal" id="pnlModalBox">
+        <div class="rule-modal-header">
+          <h3 id="pnlModalTitulo">Novo cliente</h3>
+          <button type="button" id="pnlModalFechar" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="rule-modal-body" id="pnlModalCorpo"></div>
+      </div>
+    </div>
+
+    <!-- Modal de tarefas (clicou num cliente, num designer, ou num dos
+         cartões de Runrun.it/Esforço). Lista só — abrir uma tarefa de
+         verdade usa abrirTarefaPorId, o pop-up de detalhe de sempre do
+         Colmeia, em vez de reinventar edição aqui dentro. -->
+    <div class="rule-modal-overlay" id="pnlTarefasOverlay" hidden>
+      <div class="rule-modal pnl-tarefas-modal">
+        <div class="rule-modal-header">
+          <h3 id="pnlTarefasTitulo">Tarefas</h3>
+          <button type="button" id="pnlTarefasFechar" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="rule-modal-body" id="pnlTarefasConteudo"></div>
+      </div>
+    </div>
 
     <!-- ============ TELA 1: FILA DE APROVAÇÃO DO ATENDIMENTO ============
          A porta de entrada de quem confere. É a única das cinco telas que
@@ -1457,6 +1551,10 @@
           <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="13" rx="6.5" ry="5.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 8.5c0-2 1.6-3.5 4-3.5s4 1.5 4 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 13h10M7 15.8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
           <span class="central-nav-label">Bee</span>
         </button>
+        <button type="button" class="central-nav-ic" data-central-ir-pagina="painel-designers">
+          <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="4" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="15" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/></svg></span>
+          <span class="central-nav-label">Painel de Designers</span>
+        </button>
       </div>
     </nav>
     <div class="central-sidebar-profile">
@@ -1695,33 +1793,34 @@
 <!-- script.js foi separado em vários arquivos por assunto (pasta js/).
      A ORDEM abaixo importa: alguns arquivos usam variáveis/funções
      declaradas nos arquivos anteriores, então não reordenar. -->
-<script src="js/config.js?v=2026-08-09o"></script>
-<script src="js/fila-offline.js?v=2026-08-09o"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-09o"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-09o"></script>
-<script src="js/kanban-polling.js?v=2026-08-09o"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-09o"></script>
-<script src="js/regras-briefing.js?v=2026-08-09o"></script>
-<script src="js/kanban-board.js?v=2026-08-09o"></script>
-<script src="js/clientes-hub.js?v=2026-08-09o"></script>
-<script src="js/chat-comentarios.js?v=2026-08-09o"></script>
-<script src="js/detalhe-modal.js?v=2026-08-09o"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-09o"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-09o"></script>
-<script src="js/bee.js?v=2026-08-09o"></script>
-<script src="js/paginas-designers.js?v=2026-08-09o"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-09o"></script>
-<script src="js/pagina-repasse.js?v=2026-08-09o"></script>
-<script src="js/pagina-horas.js?v=2026-08-09o"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-09o"></script>
-<script src="js/paleta-comando.js?v=2026-08-09o"></script>
-<script src="js/roteador-url.js?v=2026-08-09o"></script>
-<script src="js/detalhe-historia.js?v=2026-08-09o"></script>
-<script src="js/modo-foco.js?v=2026-08-09o"></script>
-<script src="js/pagina-bee.js?v=2026-08-09o"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-09o"></script>
-<script src="js/central-atendimento.js?v=2026-08-09o"></script>
-<script src="js/central-atencao.js?v=2026-08-09o"></script>
-<script src="js/login-boot.js?v=2026-08-09o"></script>
+<script src="js/config.js?v=2026-08-10a"></script>
+<script src="js/fila-offline.js?v=2026-08-10a"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-10a"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-10a"></script>
+<script src="js/kanban-polling.js?v=2026-08-10a"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-10a"></script>
+<script src="js/regras-briefing.js?v=2026-08-10a"></script>
+<script src="js/kanban-board.js?v=2026-08-10a"></script>
+<script src="js/clientes-hub.js?v=2026-08-10a"></script>
+<script src="js/chat-comentarios.js?v=2026-08-10a"></script>
+<script src="js/detalhe-modal.js?v=2026-08-10a"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-10a"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-10a"></script>
+<script src="js/bee.js?v=2026-08-10a"></script>
+<script src="js/paginas-designers.js?v=2026-08-10a"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-10a"></script>
+<script src="js/pagina-repasse.js?v=2026-08-10a"></script>
+<script src="js/pagina-horas.js?v=2026-08-10a"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-10a"></script>
+<script src="js/paleta-comando.js?v=2026-08-10a"></script>
+<script src="js/roteador-url.js?v=2026-08-10a"></script>
+<script src="js/detalhe-historia.js?v=2026-08-10a"></script>
+<script src="js/modo-foco.js?v=2026-08-10a"></script>
+<script src="js/pagina-bee.js?v=2026-08-10a"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-10a"></script>
+<script src="js/central-atendimento.js?v=2026-08-10a"></script>
+<script src="js/central-atencao.js?v=2026-08-10a"></script>
+<script src="js/pagina-painel-designers.js?v=2026-08-10a"></script>
+<script src="js/login-boot.js?v=2026-08-10a"></script>
 </body>
 </html>

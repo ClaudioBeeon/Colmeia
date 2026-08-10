@@ -8,6 +8,7 @@ const pageTitles = {
   repasse: ["Fila de repasse", "Tarefas esperando com o atendimento"],
   bee: ["Bee", "O que aconteceu nas suas tarefas, e a Bee sempre à mão"],
   aprovacao: ["Peças esperando você", "Conferência do atendimento antes de ir pro cliente"],
+  "painel-designers": ["Painel de Designers", "Designers, clientes e o esforço de hoje"],
 };
 
 // Nome do designer logado no Colmeia hoje (mesmo usado na barra lateral).
