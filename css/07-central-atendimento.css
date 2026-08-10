@@ -1451,7 +1451,12 @@
   height: 100%; background: #16181D;
   display: flex; flex-direction: column; padding: 14px;
 }
-.central-atencao-cab { display: flex; align-items: center; gap: 9px; padding: 0 2px 6px; flex-shrink: 0; }
+/* Mesmo z-index dos botões, pelo mesmo motivo: a sombra da carta também
+   sobe um pouco, e o título/X ficariam por baixo dela. */
+.central-atencao-cab {
+  position: relative; z-index: 2; flex-shrink: 0;
+  display: flex; align-items: center; gap: 9px; padding: 0 2px 6px;
+}
 .central-atencao-cab b { font-size: 12.5px; font-weight: 700; color: #fff; }
 .central-atencao-passos { display: flex; gap: 4px; margin-left: auto; }
 .central-atencao-passos i { width: 16px; height: 3px; border-radius: 999px; background: rgba(255,255,255,.18); display: block; }
@@ -1465,7 +1470,17 @@
 .central-atencao-x svg { width: 14px; height: 14px; display: block; }
 
 /* A margem de cima abre o espaço pras cartas de trás espiarem. */
-.central-atencao-baralho { flex: 1; min-height: 0; position: relative; margin: 24px 0 18px; }
+/* ⚠️ O `z-index: 1` aqui NÃO é decoração — é o que resolve de vez o
+   "botões por baixo da sombra da carta" (2026-08-09, segunda vez).
+   Cada carta leva `z-index: 10/9/8` escrito na mão (ver
+   centralAtencaoRenderBaralho), e sem z-index PRÓPRIO este elemento não
+   abre um contexto de empilhamento — então aquelas cartas subiam pro
+   mesmo nível dos botões e venciam por número, por mais alto que o
+   z-index dos botões fosse. Com o contexto criado aqui, o 10 das cartas
+   passa a valer só DENTRO do baralho, e o baralho inteiro (sombra junto)
+   fica abaixo dos botões. Aumentar o z-index dos botões seria enxugar
+   gelo: o próximo ajuste no baralho quebraria de novo. */
+.central-atencao-baralho { flex: 1; min-height: 0; position: relative; z-index: 1; margin: 24px 0 22px; }
 .central-atencao-carta {
   position: absolute; inset: 0; border-radius: 20px; overflow: hidden;
   background: #1D2026; box-shadow: 0 0 0 1px rgba(255,255,255,.09), 0 12px 26px rgba(0,0,0,.45);
@@ -1536,12 +1551,13 @@
 .central-atencao-quem-txt span { font-size: 11px; color: rgba(255,255,255,.4); }
 
 /* ---- os dois botões ----
-   `position: relative; z-index` é o ajuste pedido pelo Cláudio: sem ele os
-   botões ficavam POR BAIXO da sombra da carta (que desce bastante), e
-   pareciam apagados, como se estivessem desligados. Agora eles desenham
-   por cima dela, e a margem do baralho dá o respiro que faltava. */
+   Ficavam POR BAIXO da sombra da carta (que desce bastante) e pareciam
+   apagados, como se estivessem desligados. Quem resolve isso é o
+   `z-index: 1` do baralho logo acima — leia o porquê lá; o `z-index: 2`
+   daqui sozinho nunca bastaria, porque as cartas carregam 10/9/8 no
+   próprio elemento. */
 .central-atencao-acoes {
-  position: relative; z-index: 6; flex-shrink: 0;
+  position: relative; z-index: 2; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; gap: 30px;
 }
 .central-atencao-acoes[hidden] { display: none; }

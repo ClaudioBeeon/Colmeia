@@ -1612,8 +1612,12 @@ pílula só aparece depois que o calendário chega — `centralRenderCalendario`
   parada.
 
 **Detalhes que já custaram tempo:**
-- Os botões redondos precisam de `position: relative; z-index` — sem isso ficam **por baixo da
-  sombra da carta** (que desce bastante) e parecem apagados, como se estivessem desligados.
+- ⚠️ **Os botões ficavam por baixo da sombra da carta, e o conserto é no BARALHO, não neles.** Cada
+  carta leva `z-index: 10/9/8` escrito na mão; sem `z-index` próprio, `.central-atencao-baralho`
+  não abre contexto de empilhamento, então aquele 10 competia direto com o dos botões e vencia por
+  número. Hoje o baralho tem `z-index: 1` (contexto criado) e o cabeçalho e os botões têm `2` — o
+  10 das cartas passa a valer só lá dentro. Subir o z-index dos botões "resolveria" até o próximo
+  ajuste; isso já quebrou duas vezes.
 - A Bee fica na ESQUERDA da pílula, com o pontinho vermelho no ombro dela: à direita ela caía
   debaixo da bolinha flutuante da Bee (`.bee-fab`), que mora no mesmo canto. Pelo mesmo motivo, a
   `.bee-fab` some enquanto a revisão está aberta (`body.central-atencao-revisando`).
