@@ -77,8 +77,14 @@
 // parar em js/config.js nem em qualquer arquivo do front-end, que é
 // público — quem abrisse o Colmeia veria a chave e teria o banco todo.
 
-var SUPABASE_URL = PropertiesService.getScriptProperties().getProperty('SUPABASE_URL');
-var SUPABASE_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_KEY');
+// O `replace` do fim tira espaço sobrando e barra no fim do endereço.
+// Não é frescura: copiar a URL do painel do Supabase traz barra no fim
+// com facilidade, e aí o endereço montado fica "...co//rest/v1/tabela",
+// que o Supabase recusa com um erro que não ajuda em nada a descobrir
+// isso ("PGRST125 — Invalid path specified in request URL").
+var SUPABASE_URL = (PropertiesService.getScriptProperties().getProperty('SUPABASE_URL') || '')
+  .trim().replace(/\/+$/, '');
+var SUPABASE_KEY = (PropertiesService.getScriptProperties().getProperty('SUPABASE_KEY') || '').trim();
 
 /** Já dá pra falar com o Supabase? (as duas chaves preenchidas) */
 function supabaseConfigurado() {
@@ -212,7 +218,13 @@ function testarSupabase() {
     } else if (r.erro.indexOf('does not exist') !== -1 || r.erro.indexOf('PGRST205') !== -1) {
       Logger.log('   ↳ A conexão funcionou, mas a tabela ainda não existe.');
       Logger.log('   ↳ Conserto: rodar supabase/01-feed-eventos.sql no SQL Editor do Supabase.');
+    } else if (r.erro.indexOf('PGRST125') !== -1 || r.erro.indexOf('Invalid path') !== -1) {
+      Logger.log('   ↳ O endereço saiu torto. Confira SUPABASE_URL: tem que ser só');
+      Logger.log('     "https://xxxx.supabase.co" — sem barra no fim e sem /rest/v1.');
     }
+    // Mostra o endereço montado (nunca a chave) — com ele na frente dos
+    // olhos, um erro de digitação na URL fica óbvio na hora.
+    Logger.log('   Endereço usado: ' + SUPABASE_URL + '/rest/v1/feed_eventos');
   }
   Logger.log('Tabelas mandando no Supabase agora: "' +
     (PropertiesService.getScriptProperties().getProperty('SUPABASE_TABELAS') || '(nenhuma)') + '"');
