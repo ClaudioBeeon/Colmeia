@@ -258,12 +258,38 @@ function pnlTarefasDoMes() {
 }
 
 /**
+ * Tempo médio de VERDADE pra uma tarefa: não o `t.tempoMedioMinutos` que
+ * vem do backend (esse é uma média só por CLIENTE, vinda do cadastro do
+ * painel só que sem separar por designer — `transformarTarefaParaColmeia`,
+ * RunrunLeitura.gs), mas o número que está escrito NA TELA, no card do
+ * cliente dentro da aba do designer (`pnlState[designer][i].tempo` — o
+ * mesmo campo que os botões +/- de "Tempo médio" de pnlBuildClientCardHTML
+ * editam). Pedido do Cláudio: cada designer pode ter um tempo diferente
+ * pro MESMO cliente, e é esse número — o que ele cadastrou — que tem que
+ * mandar no esforço do dia, não uma média genérica vinda do Runrun.it.
+ *
+ * Acha o designer do PAINEL a partir de quem está com a tarefa no
+ * Runrun.it (mesmo cuidado de pnlTarefasDoDesignerPainel — são pessoas
+ * de cadastros diferentes) e, dentro do cadastro dele, o cliente da
+ * tarefa. Sem cadastro pra essa dupla designer+cliente, o tempo é 0 — não
+ * cai pra nenhuma média emprestada, porque emprestar de outro designer é
+ * exatamente o que estava errado antes.
+ */
+function pnlTempoMedioCadastrado(nomeResponsavelRunrun, nomeCliente) {
+  if (!nomeResponsavelRunrun || !nomeCliente) return 0;
+  const designerPainel = pnlDesigners.find(d => nomesCorrespondem(nomeResponsavelRunrun, d));
+  if (!designerPainel) return 0;
+  const alvo = typeof normalizarParaComparar === "function" ? normalizarParaComparar(nomeCliente) : nomeCliente.toLowerCase();
+  const c = (pnlState[designerPainel] || []).find(c => (typeof normalizarParaComparar === "function" ? normalizarParaComparar(c.cliente) : c.cliente.toLowerCase()) === alvo);
+  return c ? (c.tempo || 0) : 0;
+}
+
+/**
  * Esforço de hoje: tarefas atrasadas ou pra hoje, somando o tempo médio
- * do cliente (já vem pronto em `t.tempoMedioMinutos`, calculado no
- * backend a partir do mesmo cadastro do painel — ver transformarTarefaParaColmeia,
- * RunrunLeitura.gs). Agrupado por quem está com a tarefa no Runrun.it —
- * NÃO pelo designer do painel: são pessoas diferentes (ver o aviso no
- * grupo abaixo).
+ * CADASTRADO NO PAINEL (pnlTempoMedioCadastrado — ver comentário acima),
+ * não uma média vinda do Runrun.it. Agrupado por quem está com a tarefa
+ * no Runrun.it — NÃO pelo designer do painel: são pessoas diferentes (ver
+ * o aviso no grupo abaixo).
  */
 function pnlEsforcoPorResponsavel() {
   const hoje = hojeISO();
@@ -272,7 +298,7 @@ function pnlEsforcoPorResponsavel() {
     if (!t.dueISO || t.dueISO > hoje) return;
     const nome = t.assignee || "Sem responsável";
     if (!porResponsavel[nome]) porResponsavel[nome] = { min: 0, tarefas: [] };
-    porResponsavel[nome].min += t.tempoMedioMinutos || 0;
+    porResponsavel[nome].min += pnlTempoMedioCadastrado(nome, t.client);
     porResponsavel[nome].tarefas.push(t);
   });
   Object.values(porResponsavel).forEach(g => g.tarefas.sort((a, b) => (a.dueISO || "").localeCompare(b.dueISO || "")));
@@ -1057,7 +1083,7 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
   });
 
   if (st.ordenacao === "tempo") {
-    linhas.sort((a, b) => (b.tempoMedioMinutos || 0) - (a.tempoMedioMinutos || 0));
+    linhas.sort((a, b) => pnlTempoMedioCadastrado(b.assignee, b.client) - pnlTempoMedioCadastrado(a.assignee, a.client));
   } else if (st.ordenacao === "aba") {
     const ordemEtapa = {};
     (typeof columnsDef !== "undefined" ? columnsDef : []).forEach((c, i) => { ordemEtapa[c.key] = i; });
@@ -1187,6 +1213,10 @@ function pnlCorDaEtapa(t) {
   return PNL_ETAPA_CORES[t.status] || { bg: "var(--border)", fg: "var(--text-secondary)" };
 }
 
+// Ícone de calendário reaproveitado na etiqueta "Publica X" — mesmo traço
+// (stroke-width 1.8) dos outros ícones já usados no painel.
+const PNL_ICONE_CALENDARIO = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+
 function pnlLinhaTarefaHTML(t, mostrarDesigner) {
   const hoje = hojeISO();
   const atrasada = t.dueISO && t.dueISO < hoje && !t.entregue;
@@ -1196,6 +1226,9 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner) {
   const etapaCor = pnlCorDaEtapa(t);
   const rotuloEtapa = typeof rotuloDaEtapa === "function" ? rotuloDaEtapa(t) : (t.runrunStage || "Sem etapa");
   const publicacaoCurta = pnlFormatDataCurta(t.dataPublicacao);
+  // Tempo cadastrado pelo Cláudio na aba do designer (ver pnlTempoMedioCadastrado)
+  // — não a média genérica do Runrun.it.
+  const tempoCadastrado = pnlTempoMedioCadastrado(t.assignee, t.client);
 
   return `
     <div class="pnl-tarefa-row">
@@ -1204,12 +1237,12 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner) {
         <div class="pnl-tarefa-badges">
           ${designerCol ? `<span class="pnl-tag" style="background:${designerCol.bg};color:${designerCol.fg};">${escaparHTML(t.assignee)}</span>` : ""}
           ${clienteCol ? `<span class="pnl-tag" style="background:${clienteCol.bg};color:${clienteCol.fg};">${escaparHTML(t.client)}</span>` : ""}
-          ${publicacaoCurta ? `<span class="pnl-tag pnl-tag-publicacao" title="Data de Publicação (Runrun.it)">📅 ${escaparHTML(publicacaoCurta)}</span>` : ""}
+          ${publicacaoCurta ? `<span class="pnl-pub" title="Data de Publicação (Runrun.it)">${PNL_ICONE_CALENDARIO} Publica ${escaparHTML(publicacaoCurta)}</span>` : ""}
         </div>
       </div>
       <div class="pnl-tarefa-right">
         <button type="button" class="pnl-pill pnl-pill-data ${atrasada ? "atrasada" : ""}" data-pnl-editar-data="${escaparHTML(String(t.id))}" title="Clique pra trocar a Entrega Desejada">${escaparHTML(dataCurta)}</button>
-        <span class="pnl-pill pnl-pill-tempo">${escaparHTML(pnlFormatTempo(t.tempoMedioMinutos || 0))}</span>
+        <span class="pnl-pill pnl-pill-tempo" title="Tempo médio cadastrado na aba de ${escaparHTML(t.assignee || "")}">${escaparHTML(pnlFormatTempo(tempoCadastrado))}</span>
         <button type="button" class="pnl-pill pnl-pill-etapa" style="background:${etapaCor.bg};color:${etapaCor.fg};" data-pnl-editar-etapa="${escaparHTML(String(t.id))}" title="Clique pra mudar a etapa">${escaparHTML(rotuloEtapa)}</button>
         ${t.link ? `<a class="pnl-tarefa-link" href="${escaparHTML(t.link)}" target="_blank" rel="noopener" title="Abrir no Runrun.it">↗</a>` : ""}
       </div>
