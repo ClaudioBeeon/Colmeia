@@ -876,6 +876,31 @@ Mais duas, da segunda leva:
   ⚠️ Continua **não sendo status** — o link segue `pendente` e o cliente pode aprovar ou pedir
   ajuste normalmente depois.
 
+## "Aprovar todas" na página do cliente (2026-08-09)
+
+Um link quase sempre traz **Feed + Stories da mesma campanha**, e desde que a resposta virou por
+peça (M5) o cliente tinha que aprovar uma a uma — **digitando o nome dele em cada uma**. Era o
+atrito mais bobo do fluxo inteiro: a decisão é uma só, o trabalho era N.
+
+`#btnAprovarTudo` (aprovar.html) pergunta o nome **uma vez** e aprova todas as pendentes. O
+"Aprovar" de sempre continua ali, pra quem quer decidir peça por peça — os dois convivem, como o
+Cláudio pediu.
+
+- **Só aparece com 2+ pendentes** (`atualizarCardDecisao`): com uma só, ele e o "Aprovar" fariam a
+  mesma coisa, e dois botões iguais lado a lado é só chance de errar o clique.
+- ⚠️ **Envia UMA DE CADA VEZ, em fila.** A gravação passa por `pegarTravaDaPlanilha`, e pedidos
+  simultâneos disputariam a trava; além disso é o ÚLTIMO a chegar que dispara o `todasRespondidas`
+  (o agregado do link), o que só é confiável se ele for mesmo o último. O botão vira "Aprovando 2 de
+  4…" enquanto corre.
+- **Falha PARA a fila.** As que já passaram continuam aprovadas (a planilha gravou), e o aviso diz
+  quantas foram e quantas faltaram, pra a pessoa repetir só o resto — em vez de tentar tudo de novo
+  e não saber o que já valeu.
+- **O aviso de pontos marcados vale aqui também**, olhando TODAS as pendentes: aprovar quatro de
+  uma vez com ponto marcado numa delas é justamente o engano mais caro de desfazer.
+- ⚠️ **`confirmarAprovacaoComNome` lê `aprovandoTudo` ANTES de fechar o modal** — `fecharModalQuemAprova`
+  zera a marca (é o caminho do cancelar), então checar depois daria sempre falso e "aprovar todas"
+  viraria "aprovar essa". Mesmo padrão de `centralAbrirDoGrupo`.
+
 ## "Enviar para o cliente" abre os três canais (2026-08-08)
 
 O botão da pílula de cima, depois de aprovado, abria o **WhatsApp direto** — escolhia o canal pela

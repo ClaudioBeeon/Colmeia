@@ -534,6 +534,14 @@
                na hora que quiser). Sem botões aqui, só o que foi decidido. -->
           <div id="respostaPecaFeita" hidden></div>
           <div class="acoes-coluna" id="acoesPrincipais">
+            <!-- APROVAR TUDO (2026-08-09, pedido do Cláudio). Um link
+                 quase sempre traz Feed + Stories da mesma campanha, e
+                 aprovar peça por peça obrigava o cliente a digitar o nome
+                 dele de novo a cada uma. Este botão pergunta o nome UMA
+                 VEZ e aprova todas as que ainda estão pendentes.
+                 Só aparece com mais de uma peça pendente — ver
+                 atualizarCardDecisao. -->
+            <button type="button" class="btn btn-aprovar btn-bloco" id="btnAprovarTudo" hidden></button>
             <button type="button" class="btn btn-aprovar btn-bloco" id="btnAprovar">✅ Aprovar</button>
             <button type="button" class="btn btn-ajuste btn-bloco" id="btnPedirAjuste">✏️ Pedir ajuste</button>
             <!-- O terceiro caminho (2026-08-06). Só existiam aprovar e
@@ -1181,6 +1189,15 @@
     var pendentes = respostasPorPeca.filter(function (r) { return !r; }).length;
     rotulo.textContent = "O que você achou desta peça?" + (pecas.length > 1 ? " (faltam " + pendentes + " de " + pecas.length + ")" : "");
 
+    // "Aprovar todas" só faz sentido com MAIS DE UMA pendente: com uma só,
+    // ele e o "Aprovar" fariam exatamente a mesma coisa, e dois botões
+    // iguais lado a lado é só chance de errar o clique.
+    var btnTudo = document.getElementById("btnAprovarTudo");
+    if (btnTudo) {
+      btnTudo.hidden = pendentes < 2;
+      btnTudo.textContent = "✅ Aprovar todas as " + pendentes + " peças";
+    }
+
     if (resposta) {
       acoes.hidden = true;
       form.classList.remove("aberto");
@@ -1415,8 +1432,32 @@
           prenderFoco(document.getElementById("modalAvisoPins"));
           return;
         }
-        abrirModalQuemAprova();
+        abrirModalQuemAprova(false);
       });
+
+      // APROVAR TODAS — o aviso de pontos marcados vale aqui também, só
+      // que olhando TODAS as pendentes: aprovar quatro de uma vez quando
+      // uma delas tem ponto marcado é justamente o engano que esse aviso
+      // existe pra pegar, e seria o mais caro de desfazer.
+      document.getElementById("btnAprovarTudo").addEventListener("click", function () {
+        var fila = pecasPendentes();
+        var comPino = pins.filter(function (p) { return fila.indexOf(p.peca) !== -1; });
+        if (comPino.length) {
+          var quantas = {};
+          comPino.forEach(function (p) { quantas[p.peca] = true; });
+          var nPecas = Object.keys(quantas).length;
+          document.getElementById("avisoPinsTexto").textContent =
+            "Você marcou " + (comPino.length === 1 ? "1 ponto" : comPino.length + " pontos") +
+            (nPecas > 1 ? " em " + nPecas + " das peças" : " numa das peças") +
+            " — isso normalmente é pra pedir um ajuste. Se aprovar todas mesmo assim, os pontos vão junto no aviso pro time, mas as peças já entram como aprovadas. Tem certeza?";
+          pinsAvisoParaTudo = true;
+          document.getElementById("modalAvisoPins").hidden = false;
+          prenderFoco(document.getElementById("modalAvisoPins"));
+          return;
+        }
+        abrirModalQuemAprova(true);
+      });
+
       document.getElementById("btnPedirAjuste").addEventListener("click", function () {
         document.getElementById("formAjuste").classList.add("aberto");
         document.getElementById("acoesPrincipais").hidden = true;
@@ -1468,14 +1509,95 @@
   }
 
   /** M5: envia a resposta de UMA peça (link com várias). */
+  /** Manda UMA peça e devolve a promessa crua — sem mexer na tela. */
+  function responderUmaPeca(indice, aprovado, respostaTexto, quemRespondeu) {
+    var pinsDaPeca = pins.filter(function (p) { return p.peca === indice; });
+    return chamar({
+      acao: "responderPecaAprovacaoPublica", codigo: codigo, indicePeca: indice,
+      aprovado: aprovado, respostaTexto: respostaTexto, pins: pinsDaPeca,
+      quemRespondeu: quemRespondeu || ""
+    });
+  }
+
+  /** Os índices das peças que ainda não têm resposta. */
+  function pecasPendentes() {
+    var lista = [];
+    respostasPorPeca.forEach(function (r, i) { if (!r) lista.push(i); });
+    return lista;
+  }
+
+  /**
+   * APROVAR TODAS (2026-08-09, pedido do Cláudio).
+   *
+   * Uma de cada vez, EM FILA — não todas de uma vez. A gravação no
+   * backend passa por uma trava na planilha (`pegarTravaDaPlanilha`), e
+   * quatro pedidos simultâneos disputariam essa trava; além disso é o
+   * ÚLTIMO a chegar que dispara o `todasRespondidas` (o agregado do link),
+   * e isso só é confiável se ele for mesmo o último.
+   *
+   * Uma peça que falhar PARA a fila em vez de seguir em frente: as que já
+   * passaram continuam aprovadas (a planilha já gravou), e a tela volta
+   * mostrando quais faltaram, pra a pessoa tentar de novo só o resto.
+   */
+  function aprovarTodasAsPecas(nome) {
+    var fila = pecasPendentes();
+    if (!fila.length) return;
+
+    var botoes = document.querySelectorAll("#blocoPendente button");
+    botoes.forEach(function (b) { b.disabled = true; });
+    document.getElementById("erroEnvio").style.display = "none";
+
+    var btnTudo = document.getElementById("btnAprovarTudo");
+    var total = fila.length;
+
+    function passo(k) {
+      if (k >= fila.length) {
+        // Todas foram: busca o agregado calculado no backend, mesmo
+        // caminho do envio de uma peça só.
+        chamar({ acao: "buscarAprovacaoPublica", codigo: codigo }).then(function (fresh) {
+          var ok = fresh && fresh.ok;
+          mostrarComoRespondido(
+            ok ? fresh.status : "aprovado",
+            ok ? fresh.respostaTexto : "",
+            true,
+            ok ? fresh.quemAprovou : nome,
+            ok ? fresh.respondidoEm : Date.now()
+          );
+        });
+        return;
+      }
+
+      if (btnTudo) btnTudo.textContent = "Aprovando " + (k + 1) + " de " + total + "…";
+
+      responderUmaPeca(fila[k], true, "", nome).then(function (data) {
+        if (!data || !data.ok) {
+          botoes.forEach(function (b) { b.disabled = false; });
+          var erro = document.getElementById("erroEnvio");
+          var faltaram = fila.length - k;
+          erro.textContent = ((data && data.error) || "Não consegui enviar agora.") +
+            " " + (k ? "As " + k + " primeiras foram aprovadas; " : "") +
+            "faltaram " + faltaram + ". Tenta de novo em alguns segundos.";
+          erro.style.display = "block";
+          atualizarBadgesCarrossel();
+          atualizarCardDecisao();
+          return;
+        }
+        respostasPorPeca[fila[k]] = {
+          status: data.status, texto: "", quemAprovou: data.quemAprovou, respondidoEm: Date.now()
+        };
+        passo(k + 1);
+      });
+    }
+    passo(0);
+  }
+
   function enviarRespostaPeca(aprovado, respostaTexto, quemRespondeu) {
     var botoes = document.querySelectorAll("#blocoPendente button");
     botoes.forEach(function (b) { b.disabled = true; });
     document.getElementById("erroEnvio").style.display = "none";
     var indice = pecaAtual;
-    var pinsDaPeca = pins.filter(function (p) { return p.peca === indice; });
 
-    chamar({ acao: "responderPecaAprovacaoPublica", codigo: codigo, indicePeca: indice, aprovado: aprovado, respostaTexto: respostaTexto, pins: pinsDaPeca, quemRespondeu: quemRespondeu || "" })
+    responderUmaPeca(indice, aprovado, respostaTexto, quemRespondeu)
       .then(function (data) {
         botoes.forEach(function (b) { b.disabled = false; });
         if (!data || !data.ok) {
@@ -1555,7 +1677,23 @@
     try { return localStorage.getItem(chaveNomeAprovador()) || ""; } catch (e) { return ""; }
   }
 
-  function abrirModalQuemAprova() {
+  // Qual dos dois caminhos abriu a caixinha do nome: "essa" ou "todas".
+  // Guardado porque o Confirmar é o MESMO botão nos dois casos.
+  var aprovandoTudo = false;
+
+  function abrirModalQuemAprova(tudo) {
+    aprovandoTudo = !!tudo;
+    var pendentes = respondePorPeca() ? pecasPendentes().length : 1;
+
+    // O texto muda pra deixar explícito o que o Confirmar vai fazer — é a
+    // única defesa contra aprovar quatro peças achando que aprovou uma.
+    document.getElementById("modalQuemAprovaTitulo").textContent = aprovandoTudo
+      ? "Aprovar todas as " + pendentes + " peças?"
+      : "Quem está aprovando?";
+    document.getElementById("btnConfirmarAprovar").textContent = aprovandoTudo
+      ? "✅ Aprovar as " + pendentes + " peças"
+      : "✅ Confirmar aprovação";
+
     document.getElementById("erroNome").style.display = "none";
     document.getElementById("nomeAprovador").value = ultimoNomeAprovador();
     document.getElementById("modalQuemAprova").hidden = false;
@@ -1566,6 +1704,7 @@
   }
   function fecharModalQuemAprova() {
     document.getElementById("modalQuemAprova").hidden = true;
+    aprovandoTudo = false;   // cancelou: o próximo Aprovar volta a ser "essa"
     soltarFoco();
   }
   function confirmarAprovacaoComNome() {
@@ -1575,9 +1714,14 @@
       document.getElementById("nomeAprovador").focus();
       return;
     }
+    // ⚠️ LÊ `aprovandoTudo` ANTES de fechar: `fecharModalQuemAprova` zera
+    // essa marca (é o caminho do "cancelar"), então checar depois daria
+    // sempre falso e o "aprovar todas" viraria "aprovar essa".
+    var tudo = aprovandoTudo;
     lembrarNomeAprovador(nome);
     fecharModalQuemAprova();
-    if (respondePorPeca()) enviarRespostaPeca(true, "", nome);
+    if (tudo) aprovarTodasAsPecas(nome);
+    else if (respondePorPeca()) enviarRespostaPeca(true, "", nome);
     else enviarResposta(true, "", nome);
   }
   document.getElementById("btnConfirmarAprovar").addEventListener("click", confirmarAprovacaoComNome);
@@ -1600,13 +1744,19 @@
   });
 
   // ===== Aviso de pontos marcados (ver btnAprovar, mais acima) =====
+  // Qual botão abriu o aviso — "Aprovar" ou "Aprovar todas". Sem isso o
+  // "Aprovar mesmo assim" cairia sempre no caminho de uma peça só.
+  var pinsAvisoParaTudo = false;
+
   function fecharModalAvisoPins() {
     document.getElementById("modalAvisoPins").hidden = true;
     soltarFoco();
   }
   document.getElementById("btnAprovarMesmoAssim").addEventListener("click", function () {
+    var tudo = pinsAvisoParaTudo;
+    pinsAvisoParaTudo = false;
     fecharModalAvisoPins();
-    abrirModalQuemAprova();
+    abrirModalQuemAprova(tudo);
   });
   document.getElementById("btnVoltarPins").addEventListener("click", fecharModalAvisoPins);
   document.getElementById("modalAvisoPins").addEventListener("mousedown", function (e) {
