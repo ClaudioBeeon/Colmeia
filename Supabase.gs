@@ -46,11 +46,19 @@
 // Em Configurações do projeto → Propriedades do script, igual às chaves
 // do Runrun.it/Gemini que já moram lá:
 //
-//   SUPABASE_URL       https://xxxxxxxx.supabase.co
-//   SUPABASE_KEY       a chave "service_role" (Settings → API)
+//   SUPABASE_URL       https://xxxxxxxx.supabase.co  (Settings → Data API)
+//   SUPABASE_KEY       a chave SECRETA (Settings → API Keys → Secret keys,
+//                      a "default", que começa com sb_secret_)
 //   SUPABASE_TABELAS   (começa vazia)
 //
-// ⚠️ A service_role passa por cima de qualquer regra de permissão do
+// A chave secreta é a sucessora da antiga "service_role" — o Supabase
+// renomeou isso em 2025 e as duas ainda funcionam do mesmo jeito, nos
+// mesmos cabeçalhos. A OUTRA chave da mesma tela, a "publishable"
+// (antiga "anon"), NÃO serve aqui: ela é feita pra viver no navegador e
+// respeita as regras de permissão do banco — como nenhuma tabela nossa
+// tem policy, ela não conseguiria ler nem gravar nada.
+//
+// ⚠️ A chave secreta passa por cima de qualquer regra de permissão do
 // banco. Ela pode viver aqui porque o Apps Script roda no servidor do
 // Google e ninguém de fora lê essas propriedades. Ela NUNCA pode ir
 // parar em js/config.js nem em qualquer arquivo do front-end, que é
