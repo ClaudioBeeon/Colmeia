@@ -77,6 +77,8 @@ requisição, e todos compartilham o mesmo espaço de nomes — qualquer funçã
   fala com este arquivo, que repassa pro backend de lá (`PAINEL_BEEON_API_URL`) e devolve a
   resposta. O DADO continua morando na planilha de lá — só a tela mudou de casa. Ver seção própria
   abaixo.
+- `Supabase.gs` (~180 linhas) — a ponte com o **banco de dados de verdade** (PostgreSQL no
+  Supabase), que está substituindo a planilha aba por aba. Ver seção própria abaixo.
 
 **Ao criar um arquivo `.gs` novo:** é obrigatório liberá-lo no `.claspignore` (que ignora tudo por
 padrão), senão o clasp não o envia e o deploy passa "com sucesso" mas as funções dele não existem em
@@ -1591,6 +1593,59 @@ descobria — só quando o cliente cobrasse.
 **Tom das mensagens, de propósito:** amarelo (a cor da casa), nunca vermelho, e sem jargão. Pro
 cliente, "fora do ar" não é erro dele nem problema dele — e a resposta que ele acabou de dar está
 salva. Ele sempre tem dois caminhos (tentar de novo / WhatsApp), nunca um beco sem saída.
+
+## Migração pro Supabase — aba por aba, sem reescrever nada (2026-08-10)
+
+`Supabase.gs` + a pasta `supabase/` (os comandos SQL de cada tabela, em ordem).
+
+**O problema que motivou:** `pegarTravaDaPlanilha` usa `LockService.getScriptLock()`, que não trava
+uma linha nem uma aba — trava o **script inteiro**. Os 90 pontos de gravação do Colmeia disputam uma
+fila só: enquanto alguém grava um comentário, mais ninguém consegue gravar nada, nem coisa sem
+relação nenhuma. É o único ponto que já está no tamanho errado pro time de hoje. O resto
+(GitHub Pages, Runrun.it como dono da tarefa, o cache em camadas) está certo e não se mexe.
+
+**A decisão principal, e a que mais economiza:** o front-end **não muda uma linha**, e o Apps Script
+continua sendo a camada de API. Só o miolo das funções que gravam troca de lugar de guardar —
+`navegador → Apps Script → planilha` vira `navegador → Apps Script → Supabase`, sem ninguém acima
+saber. Migrar pra Edge Functions/Cloudflare foi descartado por ora: o Apps Script **não é** o
+gargalo, a trava é. Firebase/Firestore também — o dado do Colmeia é claramente relacional (tarefa,
+cliente, designer, aprovação, todos se referenciando por id) e forçar um banco de documentos custaria
+redesenhar o modelo inteiro em vez de só trocar onde ele mora.
+
+**Como cada aba troca de lado, sem deploy e com volta atrás de graça:** a propriedade de script
+`SUPABASE_TABELAS` lista as tabelas que já mandam no Supabase, separadas por vírgula.
+`supabaseManda(tabela)` responde por tabela.
+- Fora da lista → grava nos **dois** lugares, lê da planilha (fase de conferência).
+- Dentro da lista → lê do Supabase, e a planilha vira cópia de segurança.
+
+Tirar o nome da lista volta tudo ao normal na hora. E **enquanto `SUPABASE_URL`/`SUPABASE_KEY` não
+existirem, nada muda**: `supabaseConfigurado()` dá `false` e todo o caminho novo é pulado — por isso
+dá pra publicar esse código com segurança antes de o banco existir.
+
+**Ler do Supabase que falhou cai na planilha, nunca devolve vazio.** Mesmo cuidado do
+`chamarBackend`/`caiuARede` do front-end: "não deu pra perguntar" não é "não tem nada". Devolver `[]`
+numa falha de rede é exatamente o bug que já apagou a conversa inteira da tela uma vez.
+
+**A chave `service_role` só pode viver nas propriedades do Apps Script.** Ela passa por cima de
+qualquer permissão do banco; no front-end (que é público) qualquer pessoa que abrisse o Colmeia
+teria o banco todo. Toda tabela nasce com `enable row level security` e **nenhuma policy** — assim a
+chave pública (anon) não lê nem escreve nada, e só o backend passa.
+
+**Ordem da migração** (do menos arriscado pro mais valioso):
+1. `FeedEventos` ✅ — a peça-piloto: pequena, ninguém depende dela pra trabalhar e o dado se apaga
+   sozinho em 14 dias. Serve pra exercitar chave/conexão/gravação/leitura/limpeza antes de encostar
+   em algo que dói perder.
+2. `Log de Plays` e `PedidosAtencao` — mesma forma (anexar e podar), mais volume.
+3. `BeeChat` — hoje a conversa inteira mora dentro de UMA célula por tarefa; vira uma linha por
+   mensagem, e a conversa passa a poder ser buscada.
+4. `Aprovacoes`, `ConferenciaInterna`, `Devolucoes` — **o prêmio**: onde mais gente escreve ao mesmo
+   tempo (designer, atendimento e o cliente pelo link público), e onde a trava única mais dói.
+5. Login com sessão de verdade — hoje a senha sozinha identifica a PESSOA.
+6. As abas de cadastro (LinksClientes, Pessoas, AcessoRapido) — **talvez nunca**: quase não têm
+   escrita concorrente, e vale muito poder abrir a planilha e corrigir uma linha na mão.
+
+**`testarSupabase()`** roda direto no editor do Apps Script e diz se as chaves estão certas — usar
+antes de pôr qualquer tabela na lista.
 
 ## Bug recorrente conhecido
 

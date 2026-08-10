@@ -602,20 +602,45 @@ function registrarEventoFeed(dono, tipo, autor, taskId, titulo, detalhe) {
   // Não faz sentido se avisar do que você mesmo acabou de fazer — o feed
   // é "o que aconteceu nas suas tarefas", não um espelho dos seus cliques.
   if (autor && String(autor).toLowerCase().trim() === String(dono).toLowerCase().trim()) return;
+  var quando = new Date().getTime();
+
+  // Grava nos DOIS lugares enquanto a migração está em andamento. Não é
+  // desperdício: é o que deixa comparar os dois lados e voltar atrás sem
+  // perder nada. Quando o Supabase estiver mandando há tempo suficiente,
+  // esta metade da planilha sai daqui.
   try {
     var sheet = getFeedEventosSheet();
     sheet.appendRow([
-      new Date().getTime(), dono, tipo, autor || '', taskId ? String(taskId) : '',
+      quando, dono, tipo, autor || '', taskId ? String(taskId) : '',
       titulo || '', detalhe || ''
     ]);
   } catch (e) { /* feed é extra: falhar aqui não pode quebrar a ação */ }
+
+  if (supabaseConfigurado()) {
+    // supabaseInserir nunca estoura (devolve {ok:false}) — mesmo motivo do
+    // try/catch acima: o feed é um extra e não pode derrubar a ação de
+    // verdade que o usuário acabou de fazer dar certo.
+    supabaseInserir('feed_eventos', {
+      quando: quando, dono: dono, tipo: tipo, autor: autor || '',
+      task_id: taskId ? String(taskId) : '', titulo: titulo || '', detalhe: detalhe || ''
+    });
+  }
 }
 
 function buscarFeedEventos(designer) {
   if (!designer) return { ok: false, error: 'designer não informado.' };
+  var corte = new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+
+  if (supabaseManda('feed_eventos')) {
+    var r = buscarFeedEventosNoSupabase(designer, corte);
+    // Se o Supabase não respondeu, cai na planilha em vez de mostrar um
+    // feed vazio: "não deu pra perguntar" não é a mesma coisa que "não
+    // tem nada" — o mesmo cuidado que o chamarBackend do front-end tem.
+    if (r) return r;
+  }
+
   var sheet = getFeedEventosSheet();
   var linhas = sheet.getDataRange().getValues();
-  var corte = new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
   var eventos = [];
   for (var i = 1; i < linhas.length; i++) {
     var quando = Number(linhas[i][0]) || 0;
@@ -635,11 +660,49 @@ function buscarFeedEventos(designer) {
 }
 
 /**
+ * A mesma busca de cima, feita pelo banco em vez de pelo laço.
+ * Filtro e ordenação vão no pedido: o banco devolve só as linhas desta
+ * pessoa, dentro da janela de 14 dias, já da mais nova pra mais velha.
+ * Devolve null quando não deu pra perguntar (quem chama cai na planilha).
+ */
+function buscarFeedEventosNoSupabase(designer, corte) {
+  var dono = encodeURIComponent(String(designer).toLowerCase().trim());
+  var r = supabaseBuscar('feed_eventos',
+    'select=quando,tipo,autor,task_id,titulo,detalhe' +
+    '&dono_norm=eq.' + dono +
+    '&quando=gte.' + corte +
+    '&order=quando.desc');
+  if (!r.ok || !Array.isArray(r.dados)) return null;
+  return {
+    ok: true,
+    eventos: r.dados.map(function (linha) {
+      return {
+        quando: Number(linha.quando) || 0,
+        tipo: String(linha.tipo || ''),
+        autor: String(linha.autor || ''),
+        taskId: String(linha.task_id || ''),
+        titulo: String(linha.titulo || ''),
+        detalhe: String(linha.detalhe || '')
+      };
+    })
+  };
+}
+
+/**
  * Joga fora o que passou da validade. Roda junto do backup diário (mesmo
  * lugar da limpeza das conversas da Bee) — sem isso a aba cresceria pra
  * sempre e a leitura do feed ia ficando mais lenta a cada dia.
  */
 function limparFeedEventosAntigos() {
+  // No banco, "joga fora o que passou da validade" é UM comando — não
+  // precisa de trava nenhuma nem de apagar linha por linha de trás pra
+  // frente. Fica fora do lock de propósito: não tem nada a ver com a
+  // planilha e não deve ficar preso na fila dela.
+  if (supabaseConfigurado()) {
+    var corteSb = new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+    supabaseApagar('feed_eventos', 'quando=lt.' + corteSb);
+  }
+
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
