@@ -1642,7 +1642,12 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
 1. `FeedEventos` ✅ — a peça-piloto: pequena, ninguém depende dela pra trabalhar e o dado se apaga
    sozinho em 14 dias. Serve pra exercitar chave/conexão/gravação/leitura/limpeza antes de encostar
    em algo que dói perder.
-2. `Log de Plays` e `PedidosAtencao` — mesma forma (anexar e podar), mais volume.
+2. `Log de Plays` e `PedidosAtencao` ✅ — mesma forma, feitas juntas de propósito: separar seria
+   repetir a mesma conversa três vezes sem aprender nada. O Log de Plays é a aba que mais cresce do
+   Colmeia (uma linha por play, 60 dias de validade) — é onde a varredura linear mais custava.
+   `buscarPlaysDeHoje` continua **agrupando por tarefa no Apps Script** nos dois caminhos: o que muda
+   é só de onde vêm as linhas (o banco já entrega filtradas). Um cálculo só, sem os dois lados
+   poderem divergir.
 3. `BeeChat` — hoje a conversa inteira mora dentro de UMA célula por tarefa; vira uma linha por
    mensagem, e a conversa passa a poder ser buscada.
 4. `Aprovacoes`, `ConferenciaInterna`, `Devolucoes` — **o prêmio**: onde mais gente escreve ao mesmo
@@ -1650,6 +1655,13 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
 5. Login com sessão de verdade — hoje a senha sozinha identifica a PESSOA.
 6. As abas de cadastro (LinksClientes, Pessoas, AcessoRapido) — **talvez nunca**: quase não têm
    escrita concorrente, e vale muito poder abrir a planilha e corrigir uma linha na mão.
+
+**Toda aba migrada precisa da CÓPIA INICIAL antes de virar a chave.** Gravar nos dois lugares só
+vale dali pra frente — sem copiar o que já está na aba, a tela daquela aba apareceria vazia até o
+banco encher de novo. `supabaseCopiaInicial` (Supabase.gs) é a função comum; cada aba tem só um
+`migrar<Aba>ParaSupabase()` de três linhas por cima dela. Apaga e recopia (rodar duas vezes não
+duplica) e **se recusa a rodar depois da virada** — aí quem manda é o banco, e recopiar por cima
+apagaria o que só existe lá.
 
 **`testarSupabase()`** roda direto no editor do Apps Script e diz se as chaves estão certas — usar
 antes de pôr qualquer tabela na lista.

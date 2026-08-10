@@ -660,75 +660,28 @@ function buscarFeedEventos(designer) {
 }
 
 /**
- * A CÓPIA INICIAL: leva pro Supabase o que já está na aba.
- *
- * Sem isso, virar a chave (pôr feed_eventos em SUPABASE_TABELAS) faria o
- * feed de todo mundo aparecer vazio até o banco encher de novo — a
- * gravação nos dois lugares só vale dali pra frente, e o histórico útil
- * do feed é justamente os últimos 14 dias.
- *
- * Rodar direto no editor do Apps Script, uma vez, ANTES de virar a chave.
- * Pode rodar de novo à vontade: apaga tudo que está no banco e recopia da
- * planilha, então nunca duplica — enquanto a chave não virou, a planilha
- * ainda é a fonte de verdade, e essa é a direção certa de copiar.
+ * A cópia inicial do feed. Rodar uma vez, ANTES de virar a chave — o
+ * porquê e as regras estão em supabaseCopiaInicial (Supabase.gs).
+ * Linha mais velha que a validade fica de fora: seria podada logo.
  */
 function migrarFeedEventosParaSupabase() {
-  if (!supabaseConfigurado()) {
-    Logger.log('❌ Faltam SUPABASE_URL e/ou SUPABASE_KEY.');
-    return;
-  }
-  if (supabaseManda('feed_eventos')) {
-    // Depois da virada quem manda é o banco, e a planilha vira cópia:
-    // recopiar por cima aqui apagaria o que só existe no banco.
-    Logger.log('❌ feed_eventos já está em SUPABASE_TABELAS — a cópia inicial já passou da hora.');
-    Logger.log('   Se for mesmo pra recomeçar, tire da lista primeiro.');
-    return;
-  }
-
-  var limpeza = supabaseApagar('feed_eventos', 'id=gte.0');
-  if (!limpeza.ok) {
-    Logger.log('❌ Não consegui limpar a tabela antes de copiar: ' + limpeza.erro);
-    return;
-  }
-
-  var linhas = getFeedEventosSheet().getDataRange().getValues();
-  var corte = new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
-  var lote = [];
-  var copiados = 0;
-  var pulados = 0;
-
-  for (var i = 1; i < linhas.length; i++) {
-    var quando = Number(linhas[i][0]) || 0;
-    // O que já passou da validade não vale a viagem: seria apagado na
-    // próxima limpeza diária de qualquer jeito.
-    if (quando < corte) { pulados++; continue; }
-    lote.push({
-      quando: quando,
-      dono: String(linhas[i][1] || ''),
-      tipo: String(linhas[i][2] || ''),
-      autor: String(linhas[i][3] || ''),
-      task_id: String(linhas[i][4] || ''),
-      titulo: String(linhas[i][5] || ''),
-      detalhe: String(linhas[i][6] || '')
-    });
-    // De 500 em 500: uma tabela com milhares de linhas viraria um pedido
-    // gigante só, que estoura o prazo do UrlFetchApp.
-    if (lote.length >= 500) {
-      var r = supabaseInserir('feed_eventos', lote);
-      if (!r.ok) { Logger.log('❌ Parou no meio: ' + r.erro); return; }
-      copiados += lote.length;
-      lote = [];
+  supabaseCopiaInicial(
+    'feed_eventos',
+    getFeedEventosSheet(),
+    new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000,
+    0, // a coluna do carimbo de tempo
+    function (linha) {
+      return {
+        quando: Number(linha[0]) || 0,
+        dono: String(linha[1] || ''),
+        tipo: String(linha[2] || ''),
+        autor: String(linha[3] || ''),
+        task_id: String(linha[4] || ''),
+        titulo: String(linha[5] || ''),
+        detalhe: String(linha[6] || '')
+      };
     }
-  }
-  if (lote.length) {
-    var ultimo = supabaseInserir('feed_eventos', lote);
-    if (!ultimo.ok) { Logger.log('❌ Parou no fim: ' + ultimo.erro); return; }
-    copiados += lote.length;
-  }
-
-  Logger.log('✅ Copiei ' + copiados + ' evento(s) pro Supabase.');
-  Logger.log('   (' + pulados + ' ficaram de fora por já terem passado dos ' + FEED_RETENCAO_DIAS + ' dias.)');
-  Logger.log('   Agora dá pra virar a chave: propriedade SUPABASE_TABELAS = feed_eventos');
+  );
 }
 
 /**
@@ -1172,13 +1125,20 @@ function getLogPlaysSheet() {
  */
 function registrarPlay(taskId, taskTitle, designer) {
   if (!taskId || !designer) return;
+  var agora = new Date();
+  var dataISO = Utilities.formatDate(agora, 'America/Sao_Paulo', 'yyyy-MM-dd');
+
+  if (supabaseConfigurado()) {
+    supabaseInserir('log_plays', {
+      task_id: String(taskId), titulo: taskTitle || '', designer: designer,
+      quando: agora.getTime(), data: dataISO
+    });
+  }
+
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
-    var sheet = getLogPlaysSheet();
-    var agora = new Date();
-    var dataISO = Utilities.formatDate(agora, 'America/Sao_Paulo', 'yyyy-MM-dd');
-    sheet.appendRow([taskId, taskTitle || '', designer, agora.getTime(), dataISO]);
+    getLogPlaysSheet().appendRow([taskId, taskTitle || '', designer, agora.getTime(), dataISO]);
   } finally {
     lock.releaseLock();
   }
@@ -1208,6 +1168,15 @@ function buscarPlaysDeHoje(designer, janela) {
     var hojeISO = Utilities.formatDate(agora, 'America/Sao_Paulo', 'yyyy-MM-dd');
     corte = new Date(hojeISO + 'T00:00:00-03:00').getTime();
   }
+  // Vindo do banco, o filtro (esta pessoa, dentro da janela) já foi feito
+  // lá — chega só o que interessa, em vez da aba inteira. O agrupamento
+  // por tarefa continua aqui, igual pros dois caminhos: é pouca linha a
+  // essa altura, e manter um cálculo só evita os dois lados divergirem.
+  if (supabaseManda('log_plays')) {
+    var doBanco = buscarPlaysNoSupabase(designer, corte);
+    if (doBanco) linhas = doBanco; // já no formato de linha da planilha
+  }
+
   var porTarefa = {};
   for (var i = 1; i < linhas.length; i++) {
     var taskId = linhas[i][0], titulo = linhas[i][1], nomeDesigner = linhas[i][2], quando = linhas[i][3];
@@ -1226,6 +1195,27 @@ function buscarPlaysDeHoje(designer, janela) {
 }
 
 /**
+ * Os plays desta pessoa dentro da janela, vindos do banco — devolvidos no
+ * MESMO formato de linha da planilha (e com uma linha falsa de cabeçalho
+ * na frente), pra quem chama poder trocar a fonte sem mudar o resto.
+ * Devolve null quando não deu pra perguntar: aí o caminho da planilha
+ * segue normal, em vez de a tela mostrar um dia vazio que não é verdade.
+ */
+function buscarPlaysNoSupabase(designer, corte) {
+  var alvo = encodeURIComponent(String(designer).toLowerCase().trim());
+  var r = supabaseBuscar('log_plays',
+    'select=task_id,titulo,designer,quando' +
+    '&designer_norm=eq.' + alvo +
+    '&quando=gte.' + corte);
+  if (!r.ok || !Array.isArray(r.dados)) return null;
+  var linhas = [['task_id', 'titulo', 'designer', 'quando']]; // cabeçalho de mentira
+  r.dados.forEach(function (p) {
+    linhas.push([String(p.task_id), String(p.titulo || ''), String(p.designer || ''), Number(p.quando) || 0]);
+  });
+  return linhas;
+}
+
+/**
  * Todos os plays já registrados de UMA tarefa específica (sem corte de
  * data) — usado pela "História da peça" (ver buscarHistoriaDaTarefa,
  * Código.gs), a linha do tempo dentro do card. O log só guarda o
@@ -1234,6 +1224,22 @@ function buscarPlaysDeHoje(designer, janela) {
  */
 function buscarHistoricoDePlaysDaTarefa(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
+
+  if (supabaseManda('log_plays')) {
+    var r = supabaseBuscar('log_plays',
+      'select=designer,quando&task_id=eq.' + encodeURIComponent(String(taskId)));
+    if (r.ok && Array.isArray(r.dados)) {
+      return {
+        ok: true,
+        plays: r.dados.map(function (p) {
+          return { designer: String(p.designer || ''), quando: Number(p.quando) || 0 };
+        })
+      };
+    }
+    // Não deu pra perguntar: cai na planilha em vez de dizer que a tarefa
+    // nunca teve play nenhum.
+  }
+
   var sheet = getLogPlaysSheet();
   var linhas = sheet.getDataRange().getValues();
   var eventos = [];
@@ -1251,6 +1257,14 @@ function buscarHistoricoDePlaysDaTarefa(taskId) {
 var LOG_PLAYS_RETENCAO_DIAS = 60;
 
 function limparLogDePlaysAntigo() {
+  // No banco isso é um comando só, sem apagar linha por linha de trás pra
+  // frente — e é a aba que mais cresce do Colmeia, então é onde essa
+  // diferença mais aparece.
+  if (supabaseConfigurado()) {
+    supabaseApagar('log_plays',
+      'quando=lt.' + (new Date().getTime() - LOG_PLAYS_RETENCAO_DIAS * 24 * 60 * 60 * 1000));
+  }
+
   try {
     var sheet = getLogPlaysSheet();
     var linhas = sheet.getDataRange().getValues();
@@ -1272,6 +1286,25 @@ function limparLogDePlaysAntigo() {
   } catch (err) {
     Logger.log('Erro ao limpar o Log de Plays antigo: ' + err.message);
   }
+}
+
+/** A cópia inicial do Log de Plays. Ver supabaseCopiaInicial (Supabase.gs). */
+function migrarLogPlaysParaSupabase() {
+  supabaseCopiaInicial(
+    'log_plays',
+    getLogPlaysSheet(),
+    new Date().getTime() - LOG_PLAYS_RETENCAO_DIAS * 24 * 60 * 60 * 1000,
+    3, // aqui o carimbo de tempo é a 4ª coluna, não a 1ª
+    function (linha) {
+      return {
+        task_id: String(linha[0] || ''),
+        titulo: String(linha[1] || ''),
+        designer: String(linha[2] || ''),
+        quando: Number(linha[3]) || 0,
+        data: String(linha[4] || '')
+      };
+    }
+  );
 }
 
 // ===========================================================================
@@ -1313,11 +1346,22 @@ function registrarPedidoDeAtencao(dados) {
   dados = dados || {};
   if (!dados.taskId) return { ok: false, error: 'Sem tarefa pra pedir atenção.' };
 
+  var agora = new Date().getTime();
+
+  if (supabaseConfigurado()) {
+    supabaseInserir('pedidos_atencao', {
+      quando: agora, task_id: String(dados.taskId), titulo: dados.titulo || '',
+      cliente: dados.cliente || '', publicacao: dados.publicacao || '',
+      quem_pediu: dados.quemPediu || '', designer: dados.designer || '',
+      motivo: dados.motivo || ''
+    });
+  }
+
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
     getPedidosAtencaoSheet().appendRow([
-      new Date().getTime(),
+      agora,
       String(dados.taskId),
       dados.titulo || '',
       dados.cliente || '',
@@ -1336,9 +1380,35 @@ function registrarPedidoDeAtencao(dados) {
 
 /** Os pedidos dos últimos PEDIDOS_ATENCAO_RETENCAO_DIAS dias, mais novo primeiro. */
 function listarPedidosDeAtencao() {
+  var corte = new Date().getTime() - PEDIDOS_ATENCAO_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+
+  if (supabaseManda('pedidos_atencao')) {
+    var r = supabaseBuscar('pedidos_atencao',
+      'select=*&quando=gte.' + corte + '&order=quando.desc');
+    if (r.ok && Array.isArray(r.dados)) {
+      return {
+        ok: true,
+        pedidos: r.dados.map(function (p) {
+          return {
+            quando: Number(p.quando) || 0,
+            taskId: String(p.task_id || ''),
+            titulo: String(p.titulo || ''),
+            cliente: String(p.cliente || ''),
+            publicacao: String(p.publicacao || ''),
+            quemPediu: String(p.quem_pediu || ''),
+            designer: String(p.designer || ''),
+            motivo: String(p.motivo || '')
+          };
+        })
+      };
+    }
+    // Não deu pra perguntar: cai na planilha. Aqui isso importa mais que
+    // nos outros — uma lista vazia faria o atendimento cobrar de novo uma
+    // peça que já foi cobrada, que é exatamente o que essa aba evita.
+  }
+
   var sheet = getPedidosAtencaoSheet();
   var linhas = sheet.getDataRange().getValues();
-  var corte = new Date().getTime() - PEDIDOS_ATENCAO_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
   var pedidos = [];
   for (var i = 1; i < linhas.length; i++) {
     var quando = Number(linhas[i][0]) || 0;
@@ -1358,8 +1428,35 @@ function listarPedidosDeAtencao() {
   return { ok: true, pedidos: pedidos };
 }
 
+/** A cópia inicial dos Pedidos de Atenção. Ver supabaseCopiaInicial (Supabase.gs). */
+function migrarPedidosAtencaoParaSupabase() {
+  supabaseCopiaInicial(
+    'pedidos_atencao',
+    getPedidosAtencaoSheet(),
+    new Date().getTime() - PEDIDOS_ATENCAO_RETENCAO_DIAS * 24 * 60 * 60 * 1000,
+    0,
+    function (linha) {
+      return {
+        quando: Number(linha[0]) || 0,
+        task_id: String(linha[1] || ''),
+        titulo: String(linha[2] || ''),
+        cliente: String(linha[3] || ''),
+        publicacao: String(linha[4] || ''),
+        quem_pediu: String(linha[5] || ''),
+        designer: String(linha[6] || ''),
+        motivo: String(linha[7] || '')
+      };
+    }
+  );
+}
+
 /** Poda junto do backup diário, mesma ideia do FeedEventos. */
 function limparPedidosDeAtencaoAntigos() {
+  if (supabaseConfigurado()) {
+    supabaseApagar('pedidos_atencao',
+      'quando=lt.' + (new Date().getTime() - PEDIDOS_ATENCAO_RETENCAO_DIAS * 24 * 60 * 60 * 1000));
+  }
+
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {

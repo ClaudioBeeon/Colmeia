@@ -193,6 +193,73 @@ function supabaseApagar(tabela, filtros) {
 }
 
 /**
+ * A CÓPIA INICIAL de uma aba pro banco — a mesma para todas elas.
+ *
+ * Por que toda aba precisa disso: gravar nos dois lugares só vale dali
+ * pra frente. Sem copiar o que já está na aba, virar a chave faria a tela
+ * daquela aba aparecer vazia até o banco encher de novo.
+ *
+ * Apaga e recopia, então rodar duas vezes não duplica — enquanto a chave
+ * não virou, a planilha ainda é a fonte de verdade e essa é a direção
+ * certa de copiar.
+ *
+ * - `colunaQuando` é o índice (base 0) da coluna com o carimbo de tempo;
+ *   linhas mais velhas que `corte` ficam de fora (seriam podadas logo).
+ *   Passar `corte` 0 copia tudo.
+ * - `mapear(linha)` transforma a linha da aba no objeto da tabela.
+ */
+function supabaseCopiaInicial(tabela, sheet, corte, colunaQuando, mapear) {
+  if (!supabaseConfigurado()) {
+    Logger.log('❌ Faltam SUPABASE_URL e/ou SUPABASE_KEY.');
+    return null;
+  }
+  if (supabaseManda(tabela)) {
+    // Depois da virada quem manda é o banco e a planilha vira cópia:
+    // recopiar por cima aqui apagaria o que só existe no banco.
+    Logger.log('❌ "' + tabela + '" já está em SUPABASE_TABELAS — a cópia inicial já passou da hora.');
+    Logger.log('   Se for mesmo pra recomeçar, tire da lista primeiro.');
+    return null;
+  }
+
+  var limpeza = supabaseApagar(tabela, 'id=gte.0');
+  if (!limpeza.ok) {
+    Logger.log('❌ Não consegui limpar "' + tabela + '" antes de copiar: ' + limpeza.erro);
+    return null;
+  }
+
+  var linhas = sheet.getDataRange().getValues();
+  var lote = [];
+  var copiados = 0;
+  var pulados = 0;
+
+  for (var i = 1; i < linhas.length; i++) {
+    if (corte) {
+      var quando = Number(linhas[i][colunaQuando]) || 0;
+      if (quando < corte) { pulados++; continue; }
+    }
+    lote.push(mapear(linhas[i]));
+    // De 500 em 500: uma aba com milhares de linhas viraria um pedido
+    // gigante só, que estoura o prazo do UrlFetchApp.
+    if (lote.length >= 500) {
+      var r = supabaseInserir(tabela, lote);
+      if (!r.ok) { Logger.log('❌ Parou no meio: ' + r.erro); return null; }
+      copiados += lote.length;
+      lote = [];
+    }
+  }
+  if (lote.length) {
+    var ultimo = supabaseInserir(tabela, lote);
+    if (!ultimo.ok) { Logger.log('❌ Parou no fim: ' + ultimo.erro); return null; }
+    copiados += lote.length;
+  }
+
+  Logger.log('✅ Copiei ' + copiados + ' linha(s) pra tabela "' + tabela + '".');
+  if (pulados) Logger.log('   (' + pulados + ' ficaram de fora por já terem passado da validade.)');
+  Logger.log('   Agora dá pra virar a chave: acrescentar "' + tabela + '" em SUPABASE_TABELAS.');
+  return { copiados: copiados, pulados: pulados };
+}
+
+/**
  * Teste de bancada. Rodar direto no editor do Apps Script (escolher esta
  * função e clicar em Executar) pra confirmar que as chaves estão certas
  * ANTES de ligar qualquer tabela na lista. O resultado aparece no
