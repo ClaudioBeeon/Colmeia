@@ -876,6 +876,60 @@ Mais duas, da segunda leva:
   ⚠️ Continua **não sendo status** — o link segue `pendente` e o cliente pode aprovar ou pedir
   ajuste normalmente depois.
 
+## O check "já aprovou, por fora" chegou na Aprovações da Fila de repasse (2026-08-09)
+
+Já existia só dentro do pop-up dos grupos da Central (grupo "Com o cliente", ver a seção própria
+mais abaixo). O Cláudio pediu o mesmo na **Aprovações da Fila de repasse** — a página que só ele
+enxerga (`repasseNav.hidden = !souClaudio()`) — pra poder concluir uma peça que o cliente aprovou
+por fora (WhatsApp, e-mail, reunião) sem esperar ele clicar no link.
+
+**A lógica saiu do lugar duplicado e virou ponto único:** `aprovarPorFora(item, btn)`
+(js/pagina-repasse.js) — pergunta canal e quem aprovou, chama `aprovarAprovacaoPorFora` (Aprovacao.gs,
+já existia) e atualiza os DOIS caches (`aprovacoesCache` da Fila de repasse e
+`centralAprovacoesCache` da Central, que são os mesmos dados emprestados em duas telas).
+`centralMarcarAprovadaPorFora` (js/central-atendimento.js) hoje só chama essa função e cuida do
+redesenho que é específico do pop-up.
+
+- O botão (✅) só aparece na coluna **"Aguardando o cliente"** (`status === "pendente"`) do card
+  reaproveitado por `cardDeAprovacaoHTML`/`wireCardsDeAprovacao` — o MESMO card que a aba
+  "Aprovações" da Central também usa (`centralPreencherSecaoAprovacoes`), então o botão vale nos
+  dois lugares de graça. Em "ajuste" o cliente já respondeu (pediu mudança); marcar aprovado por
+  cima contradiria a resposta dele.
+- Ao marcar, o card só `.remove()` da tela (mesma simplificação que "excluir" já fazia) em vez de
+  recalcular a coluna inteira — reaparece certo (em "Aprovadas") na próxima vez que a aba abrir.
+
+## A "Aprovações" do menu do Cláudio virou só a Central (2026-08-09)
+
+O ícone "Aprovações do atendimento" (`data-page="aprovacao"`, a fila de conferência interna antes
+de mandar pro cliente) parou de aparecer no menu **do Cláudio especificamente**
+(`aprovacaoNav.hidden = !podeConferir || souClaudio()`, js/login-boot.js). Não é perda de função: a
+MESMA fila já abre pelos grupos "Esperando você" e "Prontas pra enviar" do pop-up da Central
+(`centralAbrirGrupo` → `apvAbrirConferencia`, a mesma tela de conferência de sempre) — era só um
+segundo caminho de entrada pra decidir entre. A rota `/aprovacoes` e a visibilidade pro papel
+"atendimento" continuam intactas — só o ícone dele some.
+
+## "Meus botões da esquerda" dentro da Central, só pro Cláudio (2026-08-09)
+
+Pedido dele: "quando vou pra Central, muda meus botões e opções da esquerda, tem como manter os
+mesmos?" A Central é `position: fixed; inset: 0`, cobrindo a sidebar normal do Colmeia por baixo —
+faz sentido pra quem tem papel "atendimento" (nunca viu essa sidebar, entra direto na Central), mas
+o Cláudio navega os dois mundos o tempo todo.
+
+`#centralSidebarExtraNav` (index.html) é um bloco a mais dentro do `.central-sidebar-nav`, com os
+MESMOS 8 destinos da sidebar normal (Kanban, Meus clientes, Clientes por atendimento, Tipos de
+tarefas, Runrun completo, Minhas horas, Fila de repasse, Bee) — mostrado só pra ele
+(`abrirCentralAtendimento`, js/central-atendimento.js), abaixo de um divisor, DEPOIS dos 4 tabs
+próprios da Central (Hoje/Radar/Aprovações/Métricas — esses continuam ali, isso não os substitui).
+
+- **`data-central-ir-pagina`, não `data-page`, de propósito** — reaproveitar `data-page` faria o
+  wiring genérico de `.nav-ic[data-page]` (js/pagina-repasse.js) também disparar `mostrarPagina`
+  sozinho, SEM fechar a Central: a página trocaria por baixo do overlay, escondida. O clique aqui
+  chama `fecharCentralAtendimento()` e SÓ DEPOIS `mostrarPagina()`.
+- ⚠️ **`.central-sidebar-nav` ganhou `min-height: 0; overflow-y: auto`** — com 12 itens (4 da
+  Central + 8 dele) ela passa da altura da tela em monitores mais baixos; sem isso o perfil e o
+  "Sair" do rodapé (que dependem de `margin-top: auto` lá embaixo) seriam empurrados pra fora,
+  invisíveis. Agora só a NAVEGAÇÃO rola por dentro dela mesma; perfil/sair ficam fixos.
+
 ## "Aprovar todas" na página do cliente (2026-08-09)
 
 Um link quase sempre traz **Feed + Stories da mesma campanha**, e desde que a resposta virou por

@@ -74,6 +74,12 @@ function abrirCentralAtendimento() {
     if (souCoord) centralPopularFiltroPessoa();
   }
 
+  // "Mesmos botões da esquerda" (2026-08-09, pedido do Cláudio) — só pra
+  // ele: quem tem papel "atendimento" nunca viu a sidebar normal (entra
+  // direto aqui), então esse atalho não faz sentido pra eles.
+  const extraNav = document.getElementById("centralSidebarExtraNav");
+  if (extraNav) extraNav.hidden = !(typeof souClaudio === "function" && souClaudio());
+
   centralLigarEventosUmaVez();
 
   overlay.hidden = false;
@@ -171,6 +177,21 @@ function centralLigarEventosUmaVez() {
   document.getElementById("centralFiltroPessoaSelect")?.addEventListener("change", e => {
     centralFiltroPessoa = e.target.value;
     centralRenderTudo();
+  });
+
+  // O bloco extra "mesmos botões da sidebar normal" (só pro Cláudio, ver
+  // #centralSidebarExtraNav no index.html): fecha a Central e abre a
+  // página de verdade, reaproveitando mostrarPagina (js/pagina-repasse.js)
+  // em vez de reimplementar navegação — data attribute PRÓPRIO
+  // (`data-central-ir-pagina`, não `data-page`) de propósito, pra não
+  // colidir com o wiring genérico de `.nav-ic[data-page]` que só chama
+  // mostrarPagina e não fecha a Central.
+  document.querySelectorAll("[data-central-ir-pagina]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const pagina = btn.dataset.centralIrPagina;
+      fecharCentralAtendimento();
+      if (typeof mostrarPagina === "function") mostrarPagina(pagina);
+    });
   });
 }
 
@@ -1755,50 +1776,12 @@ function centralRenderGrupo() {
  * de tudo.
  */
 async function centralMarcarAprovadaPorFora(item, btn) {
-  if (!item || !item.codigo) return;
-
-  const canal = prompt(
-    `Marcar "${item.tituloTarefa || "esta peça"}" como aprovada pelo cliente.\n\n` +
-    `Por onde ele aprovou? (WhatsApp, e-mail, reunião…)`,
-    "WhatsApp"
-  );
-  if (canal === null) return;                    // desistiu
-  const quemAprovou = prompt("Quem aprovou, do lado do cliente? (pode deixar em branco)", "") || "";
-
-  if (btn) btn.disabled = true;
-  const data = await chamarBackend({
-    acao: "aprovarAprovacaoPorFora",
-    dados: {
-      codigo: item.codigo,
-      canal: String(canal || "").trim(),
-      quemAprovou: String(quemAprovou || "").trim(),
-      quemRegistrou: DESIGNER_LOGADO || "",
-    },
-  });
-
-  if (!data || !data.ok) {
-    mostrarToast((data && data.error) || "Não consegui marcar como aprovada agora.", "erro");
-    if (btn) btn.disabled = false;
-    return;
-  }
-
-  // Move de "Com o cliente" pra "Concluídos" no cache local, sem rebuscar:
-  // são as mesmas colunas que a resposta pelo link grava, então o resto da
-  // Central já sabe ler isso.
-  centralAprovacoesCache = centralAprovacoesCache.map(a => a.codigo === item.codigo
-    ? { ...a, status: "aprovado", quemAprovou: data.quemAprovou || a.quemAprovou, respondidoEm: Date.now() }
-    : a);
-  if (typeof aprovacoesCache !== "undefined" && Array.isArray(aprovacoesCache)) {
-    aprovacoesCache = aprovacoesCache.map(a => a.codigo === item.codigo
-      ? { ...a, status: "aprovado", quemAprovou: data.quemAprovou || a.quemAprovou, respondidoEm: Date.now() }
-      : a);
-    if (typeof atualizarBadgeAprovacoes === "function") atualizarBadgeAprovacoes();
-  }
-
-  mostrarToast(data.avisoChegou
-    ? "Marcada como aprovada — o aviso foi pra tarefa no Runrun.it."
-    : "Marcada como aprovada. O aviso na tarefa não saiu agora e será reenviado.", "sucesso");
-
+  // A lógica de verdade (pergunta, chamada ao backend, os dois caches)
+  // mora em aprovarPorFora (js/pagina-repasse.js) — ponto único, também
+  // usado pelo card de "Aguardando o cliente" da Fila de repasse. Aqui só
+  // fica o redesenho que é específico do pop-up dos grupos.
+  const deuCerto = typeof aprovarPorFora === "function" && await aprovarPorFora(item, btn);
+  if (!deuCerto) return;
   centralRenderGrupo();
   centralRenderTudo();
 }

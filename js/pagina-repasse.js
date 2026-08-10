@@ -1205,7 +1205,15 @@ function cardDeAprovacaoHTML(a) {
       <div class="repasse-card-actions">
         ${status === "pendente"
           ? `<button type="button" class="repasse-btn ${tempo.alerta ? "repasse-btn-ficar" : ""}" data-acao="whats">💬 Cobrar no WhatsApp</button>
-             <button type="button" class="repasse-btn" data-acao="copiar">🔗 copiar link</button>`
+             <button type="button" class="repasse-btn" data-acao="copiar">🔗 copiar link</button>
+             <!-- "Já aprovou, por fora" (2026-08-09): o cliente respondeu no
+                  grupo do WhatsApp, no e-mail ou na reunião, e o link ficava
+                  pendente pra sempre cobrando uma resposta que já veio. Só
+                  em "pendente" — em "ajuste" a decisão já veio (pedir
+                  mudança), e marcar aprovado por cima seria contradizer o
+                  próprio cliente. -->
+             <button type="button" class="repasse-btn repasse-btn-icon" data-acao="aprovar-fora"
+                     title="Marcar como aprovada pelo cliente, por fora do link">✅</button>`
           : status === "ajuste"
             // "Conferir" (2026-08-07) substituiu "Abrir tarefa": abre a
             // MESMA tela de conferência interna, já no modo "pedido do
@@ -1229,6 +1237,65 @@ function cardDeAprovacaoHTML(a) {
       </div>
     </article>
   `;
+}
+
+/**
+ * "O cliente já aprovou, só que por fora" (2026-08-09, pedido do Cláudio).
+ * Ponto ÚNICO — chamado tanto daqui (card de "Aguardando o cliente" da
+ * Fila de repasse e da Central) quanto do pop-up dos grupos da Central
+ * (`centralMarcarAprovadaPorFora`, js/central-atendimento.js), que só
+ * cuida do redesenho específico dele depois.
+ *
+ * Pergunta o CANAL e quem aprovou (os dois opcionais) — uma aprovação que
+ * ninguém consegue rastrear depois é pior que nenhuma. Atualiza os DOIS
+ * caches que guardam aprovação (`aprovacoesCache` da Fila de repasse e
+ * `centralAprovacoesCache` da Central — são os mesmos dados, só
+ * emprestados em telas diferentes), pra tudo que já lê isso continuar
+ * funcionando sem saber que existe esse caminho.
+ */
+async function aprovarPorFora(item, btn) {
+  if (!item || !item.codigo) return false;
+
+  const canal = prompt(
+    `Marcar "${item.tituloTarefa || "esta peça"}" como aprovada pelo cliente.\n\n` +
+    `Por onde ele aprovou? (WhatsApp, e-mail, reunião…)`,
+    "WhatsApp"
+  );
+  if (canal === null) return false;                    // desistiu
+  const quemAprovou = prompt("Quem aprovou, do lado do cliente? (pode deixar em branco)", "") || "";
+
+  if (btn) btn.disabled = true;
+  const data = await chamarBackend({
+    acao: "aprovarAprovacaoPorFora",
+    dados: {
+      codigo: item.codigo,
+      canal: String(canal || "").trim(),
+      quemAprovou: String(quemAprovou || "").trim(),
+      quemRegistrou: DESIGNER_LOGADO || "",
+    },
+  });
+
+  if (!data || !data.ok) {
+    mostrarToast((data && data.error) || "Não consegui marcar como aprovada agora.", "erro");
+    if (btn) btn.disabled = false;
+    return false;
+  }
+
+  const atualiza = a => a.codigo === item.codigo
+    ? { ...a, status: "aprovado", quemAprovou: data.quemAprovou || a.quemAprovou, respondidoEm: Date.now() }
+    : a;
+  if (Array.isArray(aprovacoesCache)) aprovacoesCache = aprovacoesCache.map(atualiza);
+  if (typeof centralAprovacoesCache !== "undefined" && Array.isArray(centralAprovacoesCache)) {
+    centralAprovacoesCache = centralAprovacoesCache.map(atualiza);
+  }
+
+  mostrarToast(data.avisoChegou
+    ? "Marcada como aprovada — o aviso foi pra tarefa no Runrun.it."
+    : "Marcada como aprovada. O aviso na tarefa não saiu agora e será reenviado.", "sucesso");
+
+  atualizarBadgeAprovacoes();
+  if (typeof centralAtualizarBadges === "function") centralAtualizarBadges();
+  return true;
 }
 
 function urlDeAprovacao(codigo) {
@@ -1292,6 +1359,18 @@ function wireCardsDeAprovacao(board) {
           const titulo = card.querySelector(".repasse-card-title")?.textContent || "a peça";
           const texto = `Oi! Passando pra saber se conseguiu dar uma olhada em "${titulo}".\n\n${urlDeAprovacao(codigo)}`;
           window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank", "noopener");
+          return;
+        }
+
+        if (acao === "aprovar-fora") {
+          const a = (aprovacoesCache || []).find(x => x.codigo === codigo) ||
+            { codigo, tituloTarefa: card.querySelector(".repasse-card-title")?.textContent || "" };
+          const deuCerto = await aprovarPorFora(a, btn);
+          // A peça saiu de "Aguardando o cliente"; some do card também
+          // daqui — mesma simplificação que "excluir" já faz (card.remove()
+          // em vez de recalcular a coluna inteira). Reaparece certa (na
+          // coluna "Aprovadas") na próxima vez que a aba for aberta.
+          if (deuCerto) card.remove();
           return;
         }
 

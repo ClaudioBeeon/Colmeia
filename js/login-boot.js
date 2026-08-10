@@ -22,8 +22,15 @@ function iniciarAppPosLogin() {
   // Bee), não confere. O item nasce `hidden` no index.html de propósito,
   // então quem não se encaixa aqui simplesmente nunca vê a página.
   const podeConferir = PAPEL_LOGADO === "atendimento" || souClaudio();
+  // ⚠️ O Cláudio pediu (2026-08-09) pra tirar este ícone do menu dele: a
+  // MESMA fila de conferência já abre pelos grupos "Esperando você" e
+  // "Prontas pra enviar" da Central do Atendimento (centralAbrirGrupo →
+  // apvAbrirConferencia, a mesma tela) — não é uma perda de função, é um
+  // caminho de entrada a menos pra decidir entre. Continua funcionando
+  // por trás (a rota /aprovacoes e o papel "atendimento" seguem intactos)
+  // — só o ÍCONE some especificamente pro Cláudio.
   const aprovacaoNav = document.querySelector('.nav-ic[data-page="aprovacao"]');
-  if (aprovacaoNav) aprovacaoNav.hidden = !podeConferir;
+  if (aprovacaoNav) aprovacaoNav.hidden = !podeConferir || souClaudio();
   if (podeConferir && typeof atualizarBadgeAprovacao === "function") atualizarBadgeAprovacao();
 
   // A Central do Atendimento (2026-08-06) é uma área SEPARADA do resto do
