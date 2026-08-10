@@ -660,6 +660,78 @@ function buscarFeedEventos(designer) {
 }
 
 /**
+ * A CÓPIA INICIAL: leva pro Supabase o que já está na aba.
+ *
+ * Sem isso, virar a chave (pôr feed_eventos em SUPABASE_TABELAS) faria o
+ * feed de todo mundo aparecer vazio até o banco encher de novo — a
+ * gravação nos dois lugares só vale dali pra frente, e o histórico útil
+ * do feed é justamente os últimos 14 dias.
+ *
+ * Rodar direto no editor do Apps Script, uma vez, ANTES de virar a chave.
+ * Pode rodar de novo à vontade: apaga tudo que está no banco e recopia da
+ * planilha, então nunca duplica — enquanto a chave não virou, a planilha
+ * ainda é a fonte de verdade, e essa é a direção certa de copiar.
+ */
+function migrarFeedEventosParaSupabase() {
+  if (!supabaseConfigurado()) {
+    Logger.log('❌ Faltam SUPABASE_URL e/ou SUPABASE_KEY.');
+    return;
+  }
+  if (supabaseManda('feed_eventos')) {
+    // Depois da virada quem manda é o banco, e a planilha vira cópia:
+    // recopiar por cima aqui apagaria o que só existe no banco.
+    Logger.log('❌ feed_eventos já está em SUPABASE_TABELAS — a cópia inicial já passou da hora.');
+    Logger.log('   Se for mesmo pra recomeçar, tire da lista primeiro.');
+    return;
+  }
+
+  var limpeza = supabaseApagar('feed_eventos', 'id=gte.0');
+  if (!limpeza.ok) {
+    Logger.log('❌ Não consegui limpar a tabela antes de copiar: ' + limpeza.erro);
+    return;
+  }
+
+  var linhas = getFeedEventosSheet().getDataRange().getValues();
+  var corte = new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+  var lote = [];
+  var copiados = 0;
+  var pulados = 0;
+
+  for (var i = 1; i < linhas.length; i++) {
+    var quando = Number(linhas[i][0]) || 0;
+    // O que já passou da validade não vale a viagem: seria apagado na
+    // próxima limpeza diária de qualquer jeito.
+    if (quando < corte) { pulados++; continue; }
+    lote.push({
+      quando: quando,
+      dono: String(linhas[i][1] || ''),
+      tipo: String(linhas[i][2] || ''),
+      autor: String(linhas[i][3] || ''),
+      task_id: String(linhas[i][4] || ''),
+      titulo: String(linhas[i][5] || ''),
+      detalhe: String(linhas[i][6] || '')
+    });
+    // De 500 em 500: uma tabela com milhares de linhas viraria um pedido
+    // gigante só, que estoura o prazo do UrlFetchApp.
+    if (lote.length >= 500) {
+      var r = supabaseInserir('feed_eventos', lote);
+      if (!r.ok) { Logger.log('❌ Parou no meio: ' + r.erro); return; }
+      copiados += lote.length;
+      lote = [];
+    }
+  }
+  if (lote.length) {
+    var ultimo = supabaseInserir('feed_eventos', lote);
+    if (!ultimo.ok) { Logger.log('❌ Parou no fim: ' + ultimo.erro); return; }
+    copiados += lote.length;
+  }
+
+  Logger.log('✅ Copiei ' + copiados + ' evento(s) pro Supabase.');
+  Logger.log('   (' + pulados + ' ficaram de fora por já terem passado dos ' + FEED_RETENCAO_DIAS + ' dias.)');
+  Logger.log('   Agora dá pra virar a chave: propriedade SUPABASE_TABELAS = feed_eventos');
+}
+
+/**
  * A mesma busca de cima, feita pelo banco em vez de pelo laço.
  * Filtro e ordenação vão no pedido: o banco devolve só as linhas desta
  * pessoa, dentro da janela de 14 dias, já da mais nova pra mais velha.
