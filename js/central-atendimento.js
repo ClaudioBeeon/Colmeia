@@ -2224,8 +2224,13 @@ function centralRenderLadoDoGrupo(todos, itens) {
   el.querySelector("[data-central-radar-link]")?.addEventListener("click", ev => {
     const codigo = ev.currentTarget.dataset.centralRadarLink;
     if (codigo && typeof linkDeAprovacaoDoCliente === "function") {
-      navigator.clipboard?.writeText(linkDeAprovacaoDoCliente(codigo));
-      if (typeof mostrarToast === "function") mostrarToast("Link copiado.", "sucesso");
+      // Por copiarTexto (js/config.js), que tem plano B — ver apvEnviarPara.
+      const url = linkDeAprovacaoDoCliente(codigo);
+      copiarTexto(url, "Copie o link:").then(copiou => {
+        if (typeof mostrarToast !== "function") return;
+        mostrarToast(copiou ? "Link copiado." : "Não consegui copiar sozinho — o link é: " + url,
+          copiou ? "sucesso" : "erro");
+      });
     }
   });
   el.querySelector("[data-central-radar-cobrar]")?.addEventListener("click", () => {

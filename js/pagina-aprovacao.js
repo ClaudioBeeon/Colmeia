@@ -1824,9 +1824,15 @@ async function apvEnviarPara(canal) {
     const assunto = "Peça pra aprovação" + (apvPecaAberta && apvPecaAberta.cliente ? " — " + apvPecaAberta.cliente : "");
     window.open("mailto:?subject=" + encodeURIComponent(assunto) + "&body=" + encodeURIComponent(texto), "_blank");
   } else {
-    try {
-      await navigator.clipboard.writeText(texto);
-    } catch (err) {
+    // ⚠️ Passa por `copiarTexto` (js/config.js), NUNCA direto pelo
+    // `navigator.clipboard`: quando o link ainda não existe, esta função
+    // espera o Apps Script gerar — e nesse meio-tempo o navegador já
+    // fechou a janela de permissão de cópia que o clique tinha aberto.
+    // Era esse o bug do "copiar link" da pílula de cima: pela barra de
+    // baixo costumava funcionar (o link já tinha sido gerado no "Ver como
+    // o cliente vê"), pela pílula quase nunca.
+    const copiou = await copiarTexto(texto, "Copie o link pra mandar pro cliente:");
+    if (!copiou) {
       mostrarToast("Não consegui copiar sozinho — o link é: " + link, "erro");
       return;
     }
@@ -2005,12 +2011,9 @@ async function apvRenderLinksExistentes(taskId) {
   blocoAgora.querySelectorAll("[data-apv-link-copiar]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const url = linkDeAprovacaoDoCliente(links[Number(btn.dataset.apvLinkCopiar)].codigo);
-      try {
-        await navigator.clipboard.writeText(url);
-        mostrarToast("Link copiado.", "sucesso");
-      } catch (err) {
-        mostrarToast("Não consegui copiar sozinho — o link é: " + url, "erro");
-      }
+      // Sempre por copiarTexto (js/config.js) — ver o porquê em apvEnviarPara.
+      if (await copiarTexto(url, "Copie o link:")) mostrarToast("Link copiado.", "sucesso");
+      else mostrarToast("Não consegui copiar sozinho — o link é: " + url, "erro");
     });
   });
 
@@ -2689,12 +2692,8 @@ function apvLigarEventos() {
   liga("apvSairAlteracao", "click", apvVoltarParaConferencia);
 
   liga("apvStatusCopiar", "click", async () => {
-    try {
-      await navigator.clipboard.writeText(apvLinkGerado);
-      mostrarToast("Link copiado.", "sucesso");
-    } catch (err) {
-      mostrarToast("Não consegui copiar sozinho — o link está aí na tela.", "erro");
-    }
+    if (await copiarTexto(apvLinkGerado, "Copie o link:")) mostrarToast("Link copiado.", "sucesso");
+    else mostrarToast("Não consegui copiar sozinho — o link está aí na tela.", "erro");
   });
   liga("apvStatusWhatsapp", "click", () => {
     const texto = `Oi! Só passando pra saber se você já viu a arte que mandamos: ${apvLinkGerado}`;
@@ -2753,12 +2752,8 @@ function apvLigarEventos() {
   liga("apvCopiarLinkMae", "click", async () => {
     const url = document.getElementById("apvCopiarLinkMae").dataset.link || "";
     if (!url) { mostrarToast("Sem link do card mãe pra copiar.", "erro"); return; }
-    try {
-      await navigator.clipboard.writeText(url);
-      mostrarToast("Link do card mãe copiado.", "sucesso");
-    } catch (err) {
-      mostrarToast("Não consegui copiar sozinho — o link é: " + url, "erro");
-    }
+    if (await copiarTexto(url, "Copie o link do card mãe:")) mostrarToast("Link do card mãe copiado.", "sucesso");
+    else mostrarToast("Não consegui copiar sozinho — o link é: " + url, "erro");
   });
 
   // Esc só tem mais um nível aqui dentro (a confirmação de versão) — o

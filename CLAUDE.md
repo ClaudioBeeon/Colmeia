@@ -1297,6 +1297,24 @@ abrindo: `aprovar.html` lê `?c=` (novo) **e** `?codigo=` (antigo), `linkDeAprov
 cliente, fila de repasse e 3× na conferência) — um formato novo teria que ser lembrado nos cinco.
 Nunca montar essa URL na mão de novo.
 
+### ⚠️ Copiar link: sempre por `copiarTexto`, nunca por `navigator.clipboard` direto (2026-08-09)
+
+`navigator.clipboard.writeText` só funciona **logo depois de um clique** — o navegador dá uns 5
+segundos de permissão por interação e depois recusa **em silêncio** (promessa rejeitada, nada na
+tela). Isso quebra qualquer botão que precise ir ao SERVIDOR antes de copiar.
+
+Foi o bug do "copiar link" da pílula de cima da conferência: pela barra de baixo costumava
+funcionar (o link já tinha sido gerado no "Ver como o cliente vê", então a cópia era instantânea),
+pela pílula quase nunca — ali o link ainda não existia e `gerarLinkDeAprovacao` num Apps Script
+frio passa dos 5 segundos com folga.
+
+`copiarTexto(texto, rotuloDoPrompt)` (js/config.js) tenta o jeito moderno, cai pra
+`document.execCommand("copy")` (obsoleto, mas **não** depende dessa janela de tempo — é o que salva
+justamente esse caso) e, se nem isso, joga o texto num `prompt` pra dar pra copiar na mão. Devolve
+`true` só quando copiou sozinho. **Pré-gerar o link ao aprovar resolveria o atraso, mas está
+descartado de propósito:** o link vira uma linha `pendente` na planilha, e a peça apareceria em
+"Aguardando o cliente" sem ninguém ter mandado nada.
+
 **O `loteId` também encolheu** (32 → 6 caracteres, `pedirConferenciaInterna`): ele ia inteiro no link
 do comentário. É seguro porque `linhasDoLote` filtra por `taskId` **antes** de comparar o lote — só
 precisa ser único dentro de uma tarefa.

@@ -113,6 +113,58 @@ function abrirPainelDiagnostico() {
   });
 }
 
+/**
+ * COPIAR TEXTO QUE SEMPRE FUNCIONA (2026-08-09).
+ *
+ * ⚠️ `navigator.clipboard.writeText` só funciona LOGO DEPOIS de um clique:
+ * o navegador dá uns 5 segundos de "permissão" a cada interação, e depois
+ * disso a cópia é recusada em silêncio (uma promessa rejeitada, nada na
+ * tela). Isso quebra qualquer botão que precise IR AO SERVIDOR antes de
+ * copiar — foi exatamente o bug do "copiar link" da pílula de cima da
+ * conferência: gerar o link de aprovação no Apps Script frio passa dos 5
+ * segundos com folga, e aí a cópia não acontecia mais.
+ *
+ * Por isso o plano B com `document.execCommand("copy")`: é obsoleto, mas
+ * NÃO depende dessa janela de tempo, então salva justamente o caso em que
+ * o jeito moderno desiste. E se os dois falharem, o texto vai pra um
+ * `prompt` — feio, mas ali dá pra selecionar e copiar na mão, que é
+ * infinitamente melhor que um botão que não faz nada.
+ *
+ * Devolve true se copiou sozinho (pra quem chama saber se mostra
+ * "copiado!" ou uma saída manual).
+ */
+async function copiarTexto(texto, rotuloDoPrompt) {
+  const valor = String(texto == null ? "" : texto);
+  if (!valor) return false;
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(valor);
+      return true;
+    }
+  } catch (e) { /* sem permissão ou fora da janela de tempo: vai pro plano B */ }
+
+  try {
+    const campo = document.createElement("textarea");
+    campo.value = valor;
+    // Fora da vista, mas NÃO `display:none` nem `hidden`: o execCommand
+    // precisa de um campo de verdade, selecionável, dentro da página.
+    campo.setAttribute("readonly", "");
+    campo.style.cssText = "position:fixed;top:-1000px;left:-1000px;opacity:0;";
+    document.body.appendChild(campo);
+    campo.select();
+    campo.setSelectionRange(0, valor.length);
+    const deu = document.execCommand("copy");
+    campo.remove();
+    if (deu) return true;
+  } catch (e) { /* nem isso: cai pro prompt */ }
+
+  try {
+    window.prompt(rotuloDoPrompt || "Copie aqui (Ctrl+C):", valor);
+  } catch (e) { /* nem prompt: quem chama mostra o texto do seu jeito */ }
+  return false;
+}
+
 document.addEventListener("keydown", ev => {
   // Ctrl + Shift + D (ou Cmd + Shift + D no Mac) abre o diagnóstico.
   if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && (ev.key === "D" || ev.key === "d")) {
