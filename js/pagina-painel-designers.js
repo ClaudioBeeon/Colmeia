@@ -1172,7 +1172,11 @@ function pnlWireLinhasDoModal(corpo, st) {
 // card mãe) cai no neutro — o menu de etapa continua deixando mover pra
 // qualquer uma das 5 a partir daí.
 const PNL_ETAPA_CORES = {
-  pendentes: { bg: "var(--page-bg)", fg: "var(--text-secondary)" },
+  // ⚠️ "pendentes" NÃO pode usar var(--page-bg): a própria linha da tarefa
+  // (.pnl-tarefa-row) já é var(--page-bg) — a pastilha ficaria invisível
+  // em cima do próprio fundo. var(--border) é o tom seguinte, sempre
+  // diferente de --page-bg nos dois temas (ver css/01-base.css).
+  pendentes: { bg: "var(--border)", fg: "var(--text-secondary)" },
   prioridades: { bg: "var(--accent-soft)", fg: "var(--accent)" },
   fazendo: { bg: "var(--warning-soft)", fg: "var(--warning)" },
   revisao: { bg: "var(--purple-soft)", fg: "var(--purple)" },
@@ -1180,7 +1184,7 @@ const PNL_ETAPA_CORES = {
 };
 function pnlCorDaEtapa(t) {
   if (t.entregue) return { bg: "var(--pnl-sucesso-suave)", fg: "var(--success)" };
-  return PNL_ETAPA_CORES[t.status] || { bg: "var(--page-bg)", fg: "var(--text-secondary)" };
+  return PNL_ETAPA_CORES[t.status] || { bg: "var(--border)", fg: "var(--text-secondary)" };
 }
 
 function pnlLinhaTarefaHTML(t, mostrarDesigner) {
@@ -1191,6 +1195,7 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner) {
   const clienteCol = t.client ? pnlCorPorHash(t.client) : null;
   const etapaCor = pnlCorDaEtapa(t);
   const rotuloEtapa = typeof rotuloDaEtapa === "function" ? rotuloDaEtapa(t) : (t.runrunStage || "Sem etapa");
+  const publicacaoCurta = pnlFormatDataCurta(t.dataPublicacao);
 
   return `
     <div class="pnl-tarefa-row">
@@ -1199,6 +1204,7 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner) {
         <div class="pnl-tarefa-badges">
           ${designerCol ? `<span class="pnl-tag" style="background:${designerCol.bg};color:${designerCol.fg};">${escaparHTML(t.assignee)}</span>` : ""}
           ${clienteCol ? `<span class="pnl-tag" style="background:${clienteCol.bg};color:${clienteCol.fg};">${escaparHTML(t.client)}</span>` : ""}
+          ${publicacaoCurta ? `<span class="pnl-tag pnl-tag-publicacao" title="Data de Publicação (Runrun.it)">📅 ${escaparHTML(publicacaoCurta)}</span>` : ""}
         </div>
       </div>
       <div class="pnl-tarefa-right">
@@ -1209,6 +1215,19 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner) {
       </div>
     </div>
   `;
+}
+
+/**
+ * "AAAA-MM-DD" -> "10 ago". NUNCA usar `new Date(iso)` com uma data sem
+ * hora — em UTC-3 isso volta um dia (vira 21h do dia anterior em UTC), o
+ * mesmo bug já documentado no CLAUDE.md (calendário de postagens). Faz o
+ * mesmo split na mão que mapearTarefaDoBackend já faz pra `due`.
+ */
+function pnlFormatDataCurta(iso) {
+  if (!iso || typeof iso !== "string") return null;
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  if (!dia || !mes) return null;
+  return `${dia} ${MESES_ABREV[mes - 1]}`;
 }
 
 // ===== Ligar os controles fixos da página (uma vez só) =====
