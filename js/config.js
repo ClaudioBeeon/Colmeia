@@ -495,6 +495,11 @@ const ACOES_DEMORADAS = [
   "calendarioDePostagens",
   "baixarAnexo",          // o arquivo vem inteiro dentro da resposta
   "buscarImagemCheiaDrive", // idem, mas pra imagem do Drive ampliada (ver js/notificacoes-uploads.js)
+  // Devolve só ENDEREÇOS (é rápida pro que já está publicado), mas na
+  // primeira vez de uma lista grande ela publica até 12 imagens — cada uma
+  // é ler o arquivo no Drive e subir a cópia. Ver urlsPublicasDasPecas,
+  // Storage.gs.
+  "urlsPublicasDasPecas",
   "beeGerarImagem",       // gera imagem de verdade (Gemini, ver NanoBanana.gs)
   "subirArquivoNoCard",   // arquivo arrastado pro card, sobe pro Drive (ver js/detalhe-modal.js)
   // Painel de Designers (2026-08-10): o Colmeia repassa pro Apps Script

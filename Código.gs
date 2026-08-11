@@ -521,6 +521,8 @@ function handleRequest(e, method) {
         output = buscarThumbnailDrive(body.fileId);
       } else if (body.acao === 'buscarImagemCheiaDrive') {
         output = buscarImagemCheiaDrive(body.fileId);
+      } else if (body.acao === 'urlsPublicasDasPecas') {
+        output = urlsPublicasDasPecas(body.fileIds);
       } else if (body.acao === 'entrarEmFoco') {
         output = entrarEmFoco(body.designer, body.ateQuando);
       } else if (body.acao === 'sairDoFoco') {

@@ -1827,6 +1827,11 @@
             <span class="central-grupo-sub" id="centralGrupoSub"></span>
           </div>
           <div class="central-grupo-lista" id="centralGrupoLista"></div>
+          <!-- A barra preta de "N selecionadas · Agrupar · Excluir". Fica
+               VAZIA quando não há seleção — nasce e some pelo JS, sem
+               ocupar espaço no meio do caminho (ver
+               centralGrupoRenderBarraSelecao). -->
+          <div id="centralGrupoBarraSel"></div>
         </div>
         <div class="central-grupo-previa" id="centralGrupoPrevia"></div>
       </div>

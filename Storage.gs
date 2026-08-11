@@ -128,6 +128,81 @@ function guardarUrlPublicada(fileId, caminho, url) {
 }
 
 /**
+ * AS URLS DE UMA LISTA INTEIRA, DE UMA VEZ (2026-08-11).
+ *
+ * ---------------------------------------------------------------------
+ * O PROBLEMA QUE ISTO RESOLVE
+ *
+ * A lista de peças da Central (49 itens num dia normal) pedia a miniatura
+ * de cada uma por `buscarThumbnailDrive`: 49 idas ao Apps Script, cada uma
+ * abrindo o Drive e voltando com a imagem em base64. Some a latência de 49
+ * chamadas com o fato de que NADA disso o navegador consegue guardar (não
+ * é endereço, é texto no meio da resposta) — e a tela demorava tanto que o
+ * Cláudio relatou como inutilizável. Pior: cada filtro, troca de
+ * agrupamento ou clique refazia as 49.
+ *
+ * ---------------------------------------------------------------------
+ * COMO FICA
+ *
+ * Uma chamada só devolve `{fileId: url}`. Pra imagem JÁ publicada isso é
+ * uma consulta única na `arquivos_publicados` — instantânea, sem tocar no
+ * Drive. O navegador então usa `<img src="...">` normal: baixa tudo em
+ * paralelo direto do Supabase, e guarda em cache (o Storage manda um ano
+ * de validade), então a segunda visita não baixa nada.
+ *
+ * ⚠️ PUBLICAR custa: é ler o arquivo no Drive e subir a cópia. Por isso o
+ * teto de `STORAGE_MAX_PUBLICAR_POR_VEZ` — sem ele, a primeira abertura de
+ * uma lista grande estouraria o tempo da requisição e a pessoa não veria
+ * NADA, que é pior do que ver metade. O que não coube volta sem url e a
+ * tela cai no caminho antigo (miniatura em base64, só pra essas); a
+ * chamada seguinte publica mais um tanto, e em poucas visitas a lista
+ * inteira está publicada.
+ */
+var STORAGE_MAX_PUBLICAR_POR_VEZ = 12;
+
+function urlsPublicasDasPecas(fileIds) {
+  var saida = {};
+  if (!Array.isArray(fileIds) || !fileIds.length) return { ok: true, urls: saida };
+  if (!supabaseConfigurado()) return { ok: true, urls: saida };
+
+  // Sem repetidos: a mesma peça pode aparecer duas vezes na lista (um
+  // arquivo que está em dois lotes, por exemplo).
+  var unicos = [];
+  var visto = {};
+  fileIds.forEach(function (id) {
+    var s = String(id || '');
+    if (s && !visto[s]) { visto[s] = true; unicos.push(s); }
+  });
+
+  // UMA consulta pra todas as já publicadas. `in.(a,b,c)` é o "está nesta
+  // lista" do PostgREST; as aspas duplas em volta de cada id são
+  // obrigatórias porque id do Drive tem `-` e `_`.
+  try {
+    var lista = unicos.map(function (id) { return '"' + id + '"'; }).join(',');
+    var r = supabaseBuscar('arquivos_publicados',
+      'select=file_id,url&file_id=in.(' + encodeURIComponent(lista) + ')');
+    if (r.ok && Array.isArray(r.dados)) {
+      r.dados.forEach(function (linha) {
+        if (linha.file_id && linha.url) saida[linha.file_id] = linha.url;
+      });
+    }
+  } catch (err) {
+    // Sem a consulta, todas caem como "ainda não publicadas" — o pior caso
+    // é a tela usar o caminho antigo, nunca ficar sem imagem.
+  }
+
+  // As que faltam: publica algumas agora, dentro do teto.
+  var publicadas = 0;
+  for (var i = 0; i < unicos.length && publicadas < STORAGE_MAX_PUBLICAR_POR_VEZ; i++) {
+    if (saida[unicos[i]]) continue;
+    var url = urlPublicaDaPeca(unicos[i]);   // devolve null em vídeo e em falha
+    if (url) { saida[unicos[i]] = url; publicadas++; }
+  }
+
+  return { ok: true, urls: saida };
+}
+
+/**
  * Apaga as cópias velhas — do Storage E da tabela, nessa ordem, pra nunca
  * sobrar uma linha apontando pra um arquivo que já não existe (que faria
  * a tela mostrar uma imagem quebrada em vez de republicar).

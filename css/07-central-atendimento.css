@@ -1003,26 +1003,26 @@
    aparece em tamanho de olhar.
    ===================================================================== */
 .central-grupo-lista-col {
-  width: 288px; flex: 0 0 auto; min-height: 0;
-  display: flex; flex-direction: column; gap: 8px;
+  width: 350px; flex: 0 0 auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 12px;
 }
-.central-grupo-lista { flex: 1; min-height: 0; overflow-y: auto; padding: 2px; scrollbar-width: thin; }
+.central-grupo-lista {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 3px; scrollbar-width: thin;
+  display: flex; flex-direction: column; gap: 10px;
+}
 
 /* O cabeçalho de seção — a faixa de data, ou o cliente quando o
-   agrupamento está por cliente. `position: sticky` pra, rolando uma
-   seção longa (os 20 shows do Jarrão), continuar visível de qual grupo
-   são as linhas que estão passando. */
+   agrupamento está por cliente. É um RÓTULO, não um cartão: a data
+   ordena, quem esconde peça é o grupo feito à mão. */
+.central-grupo-sec { display: flex; flex-direction: column; gap: 10px; }
 .central-grupo-sec-cab {
-  position: sticky; top: 0; z-index: 2;
-  width: 100%; display: flex; align-items: center; gap: 8px;
-  border: none; background: var(--card-bg); cursor: pointer;
-  font-family: var(--font-body); text-align: left;
-  padding: 9px 6px 6px; margin-top: 4px;
+  width: 100%; display: flex; align-items: center; gap: 9px;
+  border: none; background: none; cursor: pointer;
+  font-family: var(--font-body); text-align: left; padding: 6px 4px 0;
 }
-.central-grupo-sec:first-child .central-grupo-sec-cab { margin-top: 0; }
 .central-grupo-sec-cab:hover .central-grupo-sec-t { color: var(--text-primary); }
 .central-grupo-sec-t {
-  flex: 1; min-width: 0; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  flex: 1; min-width: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .07em;
   color: var(--text-muted); text-transform: uppercase;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   transition: color var(--dur-fast) var(--ease-apple);
@@ -1031,94 +1031,193 @@
    dar. Nas outras o cabeçalho é neutro, senão o alerta perde o sentido. */
 .central-grupo-sec.atrasada .central-grupo-sec-t { color: var(--danger, #E5484D); }
 .central-grupo-sec-n {
-  flex: 0 0 auto; font-size: 10px; font-weight: 700; color: var(--text-muted);
-  background: var(--page-bg); border-radius: 999px; padding: 2px 7px;
+  flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--text-secondary);
+  background: var(--card-bg); border-radius: 999px; padding: 3px 9px; box-shadow: var(--shadow-card);
 }
 .central-grupo-sec-caret {
-  flex: 0 0 auto; color: var(--text-muted); font-size: 9px;
+  flex: 0 0 auto; color: var(--text-muted); font-size: 10px;
   transition: transform var(--dur-fast) var(--ease-apple);
 }
 .central-grupo-sec.fechada .central-grupo-sec-caret { transform: rotate(-90deg); }
 .central-grupo-sec.fechada .central-grupo-sec-corpo { display: none; }
+.central-grupo-sec-corpo { display: flex; flex-direction: column; gap: 10px; }
 
-/* A LINHA — uma peça. Sem botão nenhum dentro dela, de propósito: o
-   lixeirinha e o check "já aprovou por fora" moram na PRÉVIA agora. Numa
-   lista de 49 linhas, um par de botões em cada uma seria exatamente a
-   poluição que esta tela veio resolver — e a prévia já mostra de qual peça
-   se está falando, então não há ambiguidade sobre em que eles agem. */
+/* A PEÇA — um CARTÃO BRANCO com sombra, não uma linha colada (2026-08-11,
+   pedido do Cláudio: "tudo dentro de um box branco cada cardzinho, com uma
+   pequena sombra"). Sem botão nenhum dentro dele, de propósito: o
+   lixeirinha e o check "já aprovou por fora" moram na PRÉVIA. Numa lista
+   de 49, um par de botões em cada linha seria exatamente a poluição que
+   esta tela veio resolver. */
 .central-grupo-li {
-  width: 100%; display: flex; align-items: center; gap: 9px;
-  border: none; background: none; cursor: pointer; text-align: left;
+  width: 100%; display: flex; align-items: center; gap: 13px;
+  border: 1px solid transparent; background: var(--card-bg); cursor: pointer; text-align: left;
   font-family: var(--font-body); color: var(--text-primary);
-  padding: 6px 8px; border-radius: 11px;
-  transition: background var(--dur-fast) var(--ease-apple);
+  padding: 12px 14px; border-radius: 15px; box-shadow: var(--shadow-card);
+  transition: box-shadow var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple);
 }
-.central-grupo-li:hover { background: var(--page-bg); }
-/* A linha escolhida usa a COR DO GRUPO (--central-g), a mesma da aba
-   acesa lá em cima — é o que amarra "estou em Esperando você" com "esta é
-   a peça que estou vendo". */
-.central-grupo-li.ativa { background: var(--central-g); }
-.central-grupo-li.ativa .central-grupo-li-nome,
-.central-grupo-li.ativa .central-grupo-li-sub { color: var(--central-g-ink); }
-.central-grupo-li.ativa .central-grupo-li-sub { opacity: .72; }
+.central-grupo-li:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+/* A peça escolhida ganha CONTORNO na cor do grupo, não fundo cheio: com
+   cartão branco, pintar o fundo inteiro apagaria a miniatura e o texto. */
+.central-grupo-li.ativa,
+.central-grupo-gm-cab.ativa {
+  border-color: var(--central-g);
+  box-shadow: 0 0 0 2px var(--central-g), var(--shadow-card);
+}
+/* Marcada na seleção: contorno na cor da TINTA, pra não se confundir com
+   "esta é a que estou vendo" (que é a cor do grupo). */
+.central-grupo-li.marcada {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--text-primary), var(--shadow-card);
+}
+.central-grupo-cx {
+  flex: 0 0 auto; width: 21px; height: 21px; border-radius: 7px;
+  border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;
+  color: transparent; font-size: 12px; font-weight: 800;
+}
+.central-grupo-li.marcada .central-grupo-cx {
+  background: var(--text-primary); border-color: var(--text-primary); color: var(--card-bg);
+}
 .central-grupo-li-arte {
-  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 8px;
+  flex: 0 0 auto; width: 48px; height: 48px; border-radius: 11px;
   background: var(--apv-palco, var(--page-bg)) center/cover no-repeat;
 }
 [data-theme="dark"] .central-grupo-li-arte { background-color: rgba(255, 255, 255, .06); }
-.central-grupo-li-t { flex: 1; min-width: 0; }
+.central-grupo-li-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .central-grupo-li-nome {
-  display: block; font-size: 11.5px; font-weight: 650; letter-spacing: -.01em;
+  display: block; font-size: 15px; font-weight: 600; letter-spacing: -.01em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .central-grupo-li-sub {
-  display: block; font-size: 10px; color: var(--text-secondary);
+  display: block; font-size: 12.5px; color: var(--text-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .central-grupo-li-dias {
-  flex: 0 0 auto; font-size: 9.5px; font-weight: 700; color: var(--text-muted);
+  flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
-.central-grupo-li.ativa .central-grupo-li-dias { color: var(--central-g-ink); opacity: .8; }
 .central-grupo-li-dias.alerta { color: var(--danger, #E5484D); }
 
-/* ----- A PRÉVIA ----- */
+/* ----- O GRUPO FEITO À MÃO (2026-08-11) -----
+   Mesmo cartão branco da peça, com a fila de miniaturas por baixo — dá pra
+   saber o que tem dentro sem abrir. Nasce FECHADO: é o ponto de agrupar. */
+.central-grupo-gm { display: flex; flex-direction: column; gap: 10px; }
+.central-grupo-gm-cab {
+  width: 100%; border: 1px solid transparent; background: var(--card-bg); cursor: pointer;
+  font-family: var(--font-body); text-align: left; color: var(--text-primary);
+  padding: 13px 14px; border-radius: 15px; box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 11px;
+  transition: box-shadow var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-gm-cab:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.central-grupo-gm-linha { display: flex; align-items: center; gap: 10px; }
+.central-grupo-gm-ico {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px;
+  background: var(--central-g); color: var(--central-g-ink);
+  display: flex; align-items: center; justify-content: center;
+}
+.central-grupo-gm-ico svg { width: 14px; height: 14px; display: block; }
+.central-grupo-gm-nome {
+  flex: 1; min-width: 0; font-size: 15px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-grupo-gm-n { flex: 0 0 auto; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.central-grupo-gm-caret {
+  flex: 0 0 auto; font-size: 11px; color: var(--text-muted);
+  transition: transform var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-gm.fechado .central-grupo-gm-caret { transform: rotate(-90deg); }
+.central-grupo-gm-tiras { display: flex; gap: 5px; }
+.central-grupo-gm-tira {
+  flex: 1; height: 40px; border-radius: 8px;
+  background: var(--apv-palco, var(--page-bg)) center/cover no-repeat;
+}
+[data-theme="dark"] .central-grupo-gm-tira { background-color: rgba(255, 255, 255, .06); }
+.central-grupo-gm-mais {
+  flex: 1; height: 40px; border-radius: 8px; background: var(--page-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+}
+/* Aberto, as peças ficam recuadas — a hierarquia aparece sem borda nem
+   linha nenhuma. */
+.central-grupo-gm-filhos { display: flex; flex-direction: column; gap: 10px; padding-left: 16px; }
+.central-grupo-gm-pe { padding-left: 16px; }
+.central-grupo-gm-desfazer {
+  border: none; background: none; cursor: pointer; font-family: var(--font-body);
+  font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 4px 2px;
+  transition: color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-gm-desfazer:hover { color: var(--danger, #E5484D); }
+
+/* ----- A barra preta de seleção (2026-08-11) ----- */
+.central-grupo-barra-sel {
+  background: var(--text-primary); color: var(--card-bg); border-radius: 15px;
+  padding: 11px 12px 11px 16px; display: flex; align-items: center; gap: 9px;
+  animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
+}
+.central-grupo-quantas { flex: 1; font-size: 13.5px; font-weight: 600; }
+.central-grupo-barra-sel button {
+  border: none; cursor: pointer; font-family: var(--font-body);
+  font-size: 13px; font-weight: 700; border-radius: 999px; padding: 9px 15px;
+}
+.central-grupo-b-ok { background: var(--central-g); color: var(--central-g-ink); }
+.central-grupo-b-excluir { background: rgba(255, 255, 255, .16); color: #fff; }
+.central-grupo-b-excluir:hover { background: var(--danger, #E5484D); }
+.central-grupo-b-x { background: none; color: rgba(255, 255, 255, .6); padding: 9px 6px; font-size: 15px; }
+.central-grupo-b-x:hover { color: #fff; }
+.central-grupo-nome-input {
+  flex: 1; min-width: 0; background: rgba(255, 255, 255, .14); border: none; border-radius: 999px;
+  color: #fff; font-family: var(--font-body); font-size: 13px; padding: 9px 14px;
+}
+.central-grupo-nome-input::placeholder { color: rgba(255, 255, 255, .5); }
+
+/* ----- A PRÉVIA — um cartão branco só, com a arte e os botões dentro ----- */
 .central-grupo-previa {
   flex: 1; min-width: 0; min-height: 0;
-  display: flex; flex-direction: column; gap: 11px;
+  background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow-card); padding: 18px;
+  display: flex; flex-direction: column; gap: 16px;
 }
 .central-grupo-pv-arte {
-  flex: 1; min-height: 0; border-radius: 16px;
+  flex: 1; min-height: 0; border-radius: 14px;
   background: var(--apv-palco, var(--page-bg)) center/contain no-repeat;
 }
 [data-theme="dark"] .central-grupo-pv-arte { background-color: rgba(255, 255, 255, .06); }
-.central-grupo-pv-baixo { flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px; }
-.central-grupo-pv-linha { display: flex; align-items: center; gap: 10px; }
-.central-grupo-pv-t { flex: 1; min-width: 0; }
+.central-grupo-pv-baixo { flex: 0 0 auto; display: flex; flex-direction: column; gap: 14px; }
+/* A fila de peças de um grupo feito à mão — troca a arte sem voltar na lista. */
+.central-grupo-pv-tiras { display: flex; gap: 8px; flex-wrap: wrap; }
+.central-grupo-pv-tira {
+  width: 62px; height: 62px; border-radius: 10px; cursor: pointer; padding: 0;
+  border: 2px solid transparent; background: var(--apv-palco, var(--page-bg)) center/cover no-repeat;
+  transition: border-color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-pv-tira.on { border-color: var(--central-g); }
+.central-grupo-pv-linha { display: flex; align-items: center; gap: 14px; }
+.central-grupo-pv-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .central-grupo-pv-nome {
-  display: block; font-size: 14px; font-weight: 700; letter-spacing: -.02em;
+  display: block; font-size: 19px; font-weight: 700; letter-spacing: -.01em;
   color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .central-grupo-pv-sub {
-  display: block; font-size: 11px; color: var(--text-secondary);
+  display: block; font-size: 13.5px; color: var(--text-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .central-grupo-pv-selo {
-  flex: 0 0 auto; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 5px 10px;
+  flex: 0 0 auto; font-size: 12.5px; font-weight: 700; border-radius: 999px; padding: 8px 14px;
   background: var(--page-bg); color: var(--text-secondary);
 }
 .central-grupo-pv-selo.alerta { background: rgba(229, 72, 77, .16); color: var(--danger, #E5484D); }
 .central-grupo-pv-selo.ok { background: var(--central-sucesso-suave); color: var(--success); }
-.central-grupo-pv-acoes { display: flex; gap: 8px; }
+.central-grupo-pv-acoes { display: flex; gap: 10px; }
 .central-grupo-pv-btn {
-  flex: 1; border: none; border-radius: 999px; padding: 11px; cursor: pointer;
-  font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
+  flex: 1; border: none; border-radius: 999px; padding: 15px; cursor: pointer;
+  font-family: var(--font-body); font-size: 14.5px; font-weight: 700;
   background: var(--central-g); color: var(--central-g-ink);
   transition: filter var(--dur-fast) var(--ease-apple);
 }
 .central-grupo-pv-btn:hover { filter: brightness(1.06); }
 .central-grupo-pv-btn2 {
-  flex: 0 0 auto; border: none; border-radius: 999px; padding: 11px 15px; cursor: pointer;
-  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  flex: 0 0 auto; border: none; border-radius: 999px; padding: 15px 20px; cursor: pointer;
+  font-family: var(--font-body); font-size: 14.5px; font-weight: 600;
   background: var(--page-bg); color: var(--text-secondary);
   transition: color var(--dur-fast) var(--ease-apple), background var(--dur-fast) var(--ease-apple);
 }
@@ -1127,24 +1226,43 @@
 .central-grupo-pv-btn2:disabled, .central-grupo-pv-btn:disabled { opacity: .5; cursor: default; }
 .central-grupo-pv-vazio {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  font-size: 12.5px; color: var(--text-muted); text-align: center; padding: 20px;
+  font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;
 }
 
-/* O interruptor "por data / por cliente" (2026-08-11, pedido do Cláudio:
-   "dar opção de organizar ali dentro do painel, só de agrupar pra melhorar
-   a visualização"). É SÓ VISUAL — não junta peça nenhuma num link, não
-   mexe em nada gravado; agrupa por cliente pra que os 20 shows do Jarrão
-   virem uma linha só que abre e fecha. */
-.central-grupo-modo { display: flex; gap: 2px; background: var(--page-bg); border-radius: 999px; padding: 2px; }
-.central-grupo-modo button {
-  border: none; background: none; cursor: pointer; border-radius: 999px;
-  font-family: var(--font-body); font-size: 10.5px; font-weight: 650;
-  color: var(--text-muted); padding: 5px 10px;
+/* ----- Os controles acima da lista -----
+   ☑ (selecionar) · [Por data | Por cliente] · ordem. O ☑ vem PRIMEIRO a
+   pedido do Cláudio. Agrupar por cliente e agrupar à mão são os dois SÓ
+   VISUAIS: não geram link, não juntam arquivo, não gravam nada. */
+.central-grupo-modo { display: flex; align-items: center; gap: 8px; }
+.central-grupo-btn-sel {
+  flex: 0 0 auto; width: 38px; height: 38px; border: none; cursor: pointer; border-radius: 12px;
+  background: var(--card-bg); box-shadow: var(--shadow-card); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
   transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
 }
-.central-grupo-modo button:hover { color: var(--text-primary); }
-.central-grupo-modo button.on { background: var(--card-bg); color: var(--text-primary); }
-
+.central-grupo-btn-sel:hover { color: var(--text-primary); }
+.central-grupo-btn-sel.on { background: var(--text-primary); color: var(--card-bg); }
+.central-grupo-btn-sel svg { width: 18px; height: 18px; display: block; }
+.central-grupo-seg {
+  display: flex; gap: 3px; background: var(--card-bg); border-radius: 999px;
+  padding: 3px; box-shadow: var(--shadow-card);
+}
+.central-grupo-seg button {
+  border: none; background: none; cursor: pointer; border-radius: 999px;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  color: var(--text-muted); padding: 8px 13px;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-seg button:hover { color: var(--text-primary); }
+.central-grupo-seg button.on { background: var(--text-primary); color: var(--card-bg); }
+.central-grupo-ordem {
+  margin-left: auto; flex: 0 0 auto; border: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  background: var(--card-bg); box-shadow: var(--shadow-card); color: var(--text-secondary);
+  padding: 9px 13px; border-radius: 999px; display: flex; align-items: center; gap: 6px;
+  white-space: nowrap; transition: color var(--dur-fast) var(--ease-apple);
+}
+.central-grupo-ordem:hover { color: var(--text-primary); }
 
 /* ----- Filtro por cliente + coluna de contexto (2026-08-08) -----
    O pop-up com três cards era um cabeçalho e um vazio enorme. Estas duas
