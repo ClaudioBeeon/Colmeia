@@ -723,6 +723,7 @@ function fazerBackupDaPlanilha() {
   // que alguém abre a aba.
   try {
     limparFeedEventosAntigos();
+    limparMonitoramentoAntigo();
   } catch (err) {
     Logger.log('Erro ao limpar eventos antigos do feed: ' + err.message);
   }

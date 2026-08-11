@@ -1726,6 +1726,45 @@ uma conferência que ignorasse isso acusaria milhares de linhas "faltando" no ba
 **`testarSupabase()`** roda direto no editor do Apps Script e diz se as chaves estão certas — usar
 antes de pôr qualquer tabela na lista.
 
+## Monitoramento: erros e uso das telas (2026-08-10)
+
+`Monitoramento.gs` + o bloco no topo de `js/config.js` + `supabase/07-monitoramento.sql`.
+
+**O que mudou, e o que já existia:** `registrarNoDiagnostico` (js/config.js) já capturava erro de
+console, erro solto e promessa rejeitada — mas guardava no `localStorage`, ou seja, **no navegador
+daquela pessoa**. Erro que quebrava a tela de alguém numa terça de manhã nunca chegava em ninguém,
+ainda mais com o Colmeia publicando direto em produção sem revisão. A metade difícil já estava
+pronta; o que entrou foi mandar o mesmo registro pro banco.
+
+**As duas primeiras tabelas que nascem direto no Supabase, sem aba de planilha por trás** — e por
+isso **sem `pegarTravaDaPlanilha`**. São as gravações mais frequentes que o Colmeia pode ter; pô-las
+na fila que a migração inteira serviu pra esvaziar seria um contrassenso. Sem Supabase configurado,
+nada é anotado e nada quebra: monitoramento não pode derrubar o que está sendo monitorado.
+
+**Os três cuidados de `mandarErroProBanco`, todos obrigatórios:**
+1. **Não morder o próprio rabo** (`_mandandoErroProBanco`) — se mandar o erro falhar e esse fracasso
+   virar um `console.error`, ele cairia de volta aqui, e de novo, sem fim.
+2. **Não repetir** — cada mensagem diferente vai UMA vez por sessão, teto de 20 no total. Um erro
+   dentro de um laço ou de um relógio de 1s geraria centenas de gravações iguais.
+3. **Sem esperar e sem estourar** — a tela de quem está com problema não pode parar por causa do
+   relatório do problema.
+
+Aviso de rede **não** é mandado de propósito: quando a internet cai, tudo vira `console.error`, o
+envio seria impossível (a rede está fora) e a tabela encheria de ruído.
+
+**Uso das telas conta uma vez por tela por SESSÃO, não por clique** (`contarTelaAberta`, chamada de
+`mostrarPagina`): quem vai e volta do quadro dez vezes não deve fazer o quadro parecer dez vezes mais
+usado que uma página que a pessoa abriu e ficou. `listarUsoDasTelas` devolve aberturas **e quantas
+pessoas diferentes** — uma tela aberta 200 vezes por uma pessoa e outra por seis contam histórias
+opostas, e a segunda é a que diz que virou hábito do time.
+
+**Onde olhar:** o painel de diagnóstico de sempre (Ctrl+Shift+D) ganhou o botão **"Ver de todo
+mundo"**, que troca a lista local pelos erros do time (30 dias) + o ranking de telas. Reaproveita o
+painel que já existia em vez de criar página nova.
+
+**Privacidade, de propósito:** guarda QUEM e QUAL TELA. Não guarda o que a pessoa digitou, nem
+conteúdo de tarefa, nem endereço de rede. Existe pra achar defeito e decidir o que melhorar.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

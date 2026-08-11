@@ -1423,6 +1423,11 @@ function proximoDaSequencia(seq) {
 }
 
 function mostrarPagina(page) {
+  // Anota que esta tela foi usada (uma vez por sessão, ver contarTelaAberta
+  // em js/config.js). Fica aqui porque este é o ponto único por onde toda
+  // troca de página passa.
+  if (typeof contarTelaAberta === "function") contarTelaAberta(page);
+
   document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.toggle("active", l.dataset.page === page));
   document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
   document.getElementById("page-" + page).hidden = false;

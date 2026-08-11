@@ -410,6 +410,14 @@ function handleRequest(e, method) {
         output = buscarExtrasRunrunCompleto();
       } else if (body.acao === 'listarAprovacoesPendentes') {
         output = listarAprovacoesPendentes();
+      } else if (body.acao === 'registrarErroDoApp') {
+        output = registrarErroDoApp(body);
+      } else if (body.acao === 'registrarTelaAberta') {
+        output = registrarTelaAberta(body);
+      } else if (body.acao === 'listarErrosRecentes') {
+        output = listarErrosRecentes(body.limite);
+      } else if (body.acao === 'listarUsoDasTelas') {
+        output = listarUsoDasTelas(body.dias);
       } else if (body.acao === 'buscarFeedEventos') {
         output = buscarFeedEventos(body.designer);
       } else if (body.acao === 'listarRepasseIgnorados') {

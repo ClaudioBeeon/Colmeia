@@ -35,6 +35,90 @@ function registrarNoDiagnostico(tipo, texto) {
     }
     localStorage.setItem(DIAGNOSTICO_CHAVE, JSON.stringify(_diagnosticoLista));
   } catch (err) { /* aba privada / espaço cheio — segue sem anotar */ }
+  mandarErroProBanco(tipo, texto);
+}
+
+// ---------------------------------------------------------------------
+// Mandar o erro pro banco também (2026-08-10)
+//
+// A captura acima já existia e era boa — só que guardava no localStorage,
+// ou seja, no navegador daquela pessoa. Erro que quebra a tela de uma
+// designer numa terça de manhã nunca chegava em ninguém, ainda mais com o
+// Colmeia publicando direto em produção sem revisão.
+//
+// Daqui pra frente o mesmo registro vai pro Supabase. Três cuidados, e
+// todos são obrigatórios:
+// ---------------------------------------------------------------------
+
+// (1) NUNCA MORDER O PRÓPRIO RABO. Se mandar o erro falhar e esse
+//     fracasso virar um console.error, ele cairia aqui de novo, e de novo.
+//     Enquanto este sinalizador está ligado, nada é mandado.
+let _mandandoErroProBanco = false;
+
+// (2) NÃO REPETIR. Um erro dentro de um laço ou de um relógio de 1s
+//     dispararia centenas de gravações iguais. Cada mensagem diferente vai
+//     UMA vez por sessão, com teto de 20 no total — o que interessa é
+//     saber que aconteceu, não quantas.
+const _errosJaMandados = new Set();
+const ERROS_POR_SESSAO = 20;
+
+function mandarErroProBanco(tipo, texto) {
+  // Aviso de rede não é defeito do Colmeia: quando a internet cai, tudo
+  // vira console.error. Mandar isso pro banco é impossível (a rede está
+  // fora) e encheria a tabela de ruído no dia seguinte.
+  if (tipo !== "erro" && tipo !== "quebrou") return;
+  if (_mandandoErroProBanco) return;
+  if (_errosJaMandados.size >= ERROS_POR_SESSAO) return;
+
+  const mensagem = String(texto).slice(0, 800);
+  if (_errosJaMandados.has(mensagem)) return;
+  _errosJaMandados.add(mensagem);
+
+  _mandandoErroProBanco = true;
+  try {
+    // (3) SEM ESPERAR E SEM ESTOURAR. A tela de quem está com problema não
+    //     pode parar por causa do relatório do problema.
+    chamarBackend({
+      acao: "registrarErroDoApp",
+      tipo,
+      mensagem,
+      designer: typeof DESIGNER_LOGADO !== "undefined" ? DESIGNER_LOGADO : "",
+      tela: telaAtualParaMonitoramento(),
+      navegador: navigator.userAgent
+    }).catch(() => { /* não deu: o registro local acima continua valendo */ });
+  } catch (err) {
+    /* chamarBackend ainda não existe (erro no primeiro instante da carga) */
+  }
+  _mandandoErroProBanco = false;
+}
+
+/** Em que tela a pessoa estava — vale mais que a linha do arquivo pra reproduzir. */
+function telaAtualParaMonitoramento() {
+  try {
+    const aberta = document.querySelector(".app-page:not([hidden])");
+    return aberta ? aberta.id.replace(/^page-/, "") : "(carregando)";
+  } catch (err) { return ""; }
+}
+
+/**
+ * Anota que uma tela foi aberta — o que responde "vale melhorar isso ou
+ * já é hora de tirar?". Chamada de `mostrarPagina` (js/pagina-repasse.js).
+ *
+ * Só conta UMA vez por tela por sessão: quem vai e volta do quadro dez
+ * vezes num dia não deve fazer o quadro parecer dez vezes mais usado que
+ * uma página que a pessoa abriu e ficou. O que se quer medir é "esta tela
+ * fez parte do dia de alguém", não quantos cliques ela levou.
+ */
+const _telasJaContadas = new Set();
+
+function contarTelaAberta(tela) {
+  if (!tela || _telasJaContadas.has(tela)) return;
+  if (typeof DESIGNER_LOGADO === "undefined" || !DESIGNER_LOGADO) return;
+  _telasJaContadas.add(tela);
+  try {
+    chamarBackend({ acao: "registrarTelaAberta", tela, designer: DESIGNER_LOGADO })
+      .catch(() => { /* medir uso nunca pode atrapalhar usar */ });
+  } catch (err) { /* segue */ }
 }
 
 (function ligarCapturaDeErros() {
@@ -72,12 +156,13 @@ function abrirPainelDiagnostico() {
       <div class="diagnostico-head">
         <h3>Diagnóstico — últimos erros</h3>
         <div class="diagnostico-head-acoes">
+          <button type="button" class="diagnostico-todos">Ver de todo mundo</button>
           <button type="button" class="diagnostico-copiar">Copiar tudo</button>
           <button type="button" class="diagnostico-limpar">Limpar</button>
           <button type="button" class="diagnostico-fechar" aria-label="Fechar">✕</button>
         </div>
       </div>
-      <p class="diagnostico-dica">Isso fica só no seu navegador. Copie e me mande junto com o que você estava fazendo na hora.</p>
+      <p class="diagnostico-dica">Estes são os erros <strong>deste navegador</strong>. Em "Ver de todo mundo" aparecem os do time inteiro, dos últimos 30 dias.</p>
       ${(typeof tamanhoDaFilaOffline === "function" && tamanhoDaFilaOffline() > 0) ? `
         <p class="diagnostico-dica"><strong>${tamanhoDaFilaOffline()} ação(ões) esperando internet pra serem enviadas.</strong>
         Elas vão sozinhas quando a conexão voltar — não precisa refazer.</p>
@@ -110,6 +195,55 @@ function abrirPainelDiagnostico() {
       () => mostrarToast("Copiado. Cola aqui no chat pra eu ver."),
       () => mostrarToast("Não consegui copiar — dá pra selecionar o texto na mão.", "erro")
     );
+  });
+
+  overlay.querySelector(".diagnostico-todos").addEventListener("click", async ev => {
+    const botao = ev.currentTarget;
+    botao.disabled = true;
+    botao.textContent = "Buscando…";
+    const [erros, uso] = await Promise.all([
+      chamarBackend({ acao: "listarErrosRecentes", limite: 50 }),
+      chamarBackend({ acao: "listarUsoDasTelas", dias: 30 })
+    ]);
+    // O corpo é buscado de novo aqui, e não guardado antes do await: o
+    // painel pode ter sido fechado nesse meio-tempo, e escrever num
+    // elemento que saiu da tela não aparece pra ninguém (o cuidado que o
+    // CLAUDE.md descreve).
+    const corpo = overlay.querySelector(".diagnostico-corpo");
+    if (!corpo) return;
+    botao.disabled = false;
+    botao.textContent = "Ver de todo mundo";
+
+    if (!erros || !erros.ok) {
+      corpo.innerHTML = `<p class="quick-access-empty">${escaparHTML((erros && erros.error) || "Não consegui buscar agora.")}</p>`;
+      return;
+    }
+
+    const listaErros = erros.erros || [];
+    const telas = (uso && uso.ok) ? (uso.telas || []) : [];
+
+    corpo.innerHTML = `
+      <p class="diagnostico-dica" style="margin-top:0"><strong>Erros do time — últimos 30 dias</strong></p>
+      ${listaErros.length
+        ? listaErros.map(e => `
+            <div class="diagnostico-item">
+              <span class="diagnostico-hora">${new Date(e.quando).toLocaleString("pt-BR")}</span>
+              <span class="diagnostico-tipo ${escaparHTML(e.tipo)}">${escaparHTML(e.designer)}</span>
+              <span class="diagnostico-texto">${escaparHTML(e.mensagem)}${e.tela ? ` <em>(em ${escaparHTML(e.tela)})</em>` : ""}</span>
+            </div>
+          `).join("")
+        : `<p class="quick-access-empty">Nenhum erro no time nos últimos 30 dias. Ótimo sinal.</p>`}
+
+      <p class="diagnostico-dica"><strong>Telas usadas — últimos 30 dias</strong></p>
+      ${telas.length
+        ? telas.map(t => `
+            <div class="diagnostico-item">
+              <span class="diagnostico-tipo">${t.aberturas}×</span>
+              <span class="diagnostico-texto">${escaparHTML(t.tela)} — ${t.pessoas} pessoa${t.pessoas === 1 ? "" : "s"}</span>
+            </div>
+          `).join("")
+        : `<p class="quick-access-empty">Ainda não há uso registrado — isso começa a encher a partir de agora.</p>`}
+    `;
   });
 }
 
