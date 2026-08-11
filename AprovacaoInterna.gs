@@ -1812,6 +1812,20 @@ function limparConferenciasAntigas() {
       // Uma escrita só pro bloco inteiro, em vez de appendRow por linha —
       // a poda pode pegar dezenas de linhas de uma vez.
       hist.getRange(hist.getLastRow() + 1, 1, paraArquivar.length, 7).setValues(paraArquivar);
+
+      if (supabaseConfigurado()) {
+        // O bloco inteiro numa inserção só, pelo mesmo motivo da linha
+        // acima. Não estoura: arquivar é o último passo da poda, e falhar
+        // aqui não pode impedir a limpeza de terminar.
+        supabaseInserir('historico_conferencias', paraArquivar.map(function (l) {
+          return {
+            task_id: String(l[0] || ''), cliente: String(l[1] || ''),
+            titulo_tarefa: String(l[2] || ''), nome_peca: String(l[3] || ''),
+            decisao: String(l[4] || ''), quem: String(l[5] || ''),
+            quando: String(l[6] || '')
+          };
+        }));
+      }
     }
   } finally {
     lock.releaseLock();
@@ -1826,6 +1840,30 @@ function limparConferenciasAntigas() {
  */
 function buscarNoHistoricoDeConferencias(termo) {
   var alvo = normalizarNomeParaComparar(termo || '');
+
+  if (supabaseManda('historico_conferencias')) {
+    // O filtro continua sendo feito aqui, não no banco: a comparação usa
+    // normalizarNomeParaComparar (tira acento, minúsculo, etc.), e repetir
+    // essa regra em SQL abriria a porta pros dois lados divergirem. Como é
+    // busca rara e o histórico é enxuto, ler tudo sai barato.
+    var doBanco = supabaseBuscarTudo('historico_conferencias');
+    if (doBanco) {
+      var achadosBanco = [];
+      doBanco.forEach(function (l) {
+        var tudo = normalizarNomeParaComparar([l.cliente, l.titulo_tarefa, l.nome_peca].join(' '));
+        if (alvo && tudo.indexOf(alvo) === -1) return;
+        achadosBanco.push({
+          taskId: l.task_id, cliente: l.cliente, tituloTarefa: l.titulo_tarefa,
+          nomePeca: l.nome_peca, decisao: l.decisao, quem: l.quem, quando: l.quando
+        });
+      });
+      return { ok: true, itens: achadosBanco };
+    }
+    // Não deu pra perguntar: cai na planilha. Essa busca só é feita quando
+    // já deu problema — devolver "não achei nada" na hora errada mandaria
+    // alguém pro caminho errado.
+  }
+
   var linhas = getHistoricoConferenciasSheet().getDataRange().getValues();
   var achados = [];
   for (var i = 1; i < linhas.length; i++) {
@@ -1838,6 +1876,49 @@ function buscarNoHistoricoDeConferencias(termo) {
     });
   }
   return { ok: true, itens: achados };
+}
+
+// ---------------------------------------------------------------------
+// A ida do histórico pro Supabase (etapa 1 de 4 do fluxo de aprovação).
+// As duas funções abaixo rodam à mão no editor do Apps Script, nesta
+// ordem, ANTES de pôr "historico_conferencias" em SUPABASE_TABELAS.
+// Ver a seção da migração no CLAUDE.md.
+// ---------------------------------------------------------------------
+
+/** Como o histórico é lido nas duas pontas — um lugar só, pra não divergirem. */
+function historicoConferenciaDaLinha(l) {
+  return {
+    task_id: String(l[0] || ''), cliente: String(l[1] || ''),
+    titulo_tarefa: String(l[2] || ''), nome_peca: String(l[3] || ''),
+    decisao: String(l[4] || ''), quem: String(l[5] || ''),
+    quando: String(l[6] || '')
+  };
+}
+
+/** A cópia inicial. Ver supabaseCopiaInicial (Supabase.gs). */
+function migrarHistoricoConferenciasParaSupabase() {
+  supabaseCopiaInicial(
+    'historico_conferencias',
+    getHistoricoConferenciasSheet(),
+    0, // sem corte: este arquivo nunca é podado, vai inteiro
+    0,
+    historicoConferenciaDaLinha
+  );
+}
+
+/**
+ * A CONFERÊNCIA — rodar depois da cópia e antes de virar a chave.
+ * Compara linha a linha e diz se bateu. É a proteção nova desta fase:
+ * daqui pra frente, "abri a tela e pareceu certo" não basta mais.
+ */
+function conferirHistoricoConferencias() {
+  supabaseConferir(
+    'historico_conferencias',
+    getHistoricoConferenciasSheet(),
+    0,
+    0,
+    historicoConferenciaDaLinha
+  );
 }
 
 /**

@@ -260,6 +260,114 @@ function supabaseCopiaInicial(tabela, sheet, corte, colunaQuando, mapear) {
 }
 
 /**
+ * Busca TODAS as linhas de uma tabela, virando página quando precisa.
+ *
+ * O PostgREST devolve no máximo 1.000 linhas por pedido, calado — sem
+ * avisar que cortou. Quem conta linha pra conferir (supabaseConferir)
+ * concluiria "faltam 4.000 no banco" quando na verdade só não pediu o
+ * resto. Devolve null se algum pedaço falhar: meia lista aqui seria pior
+ * que nenhuma, porque viraria um relatório de diferença mentiroso.
+ */
+function supabaseBuscarTudo(tabela, filtros) {
+  var pagina = 1000;
+  var todas = [];
+  for (var inicio = 0; ; inicio += pagina) {
+    var r = supabaseBuscar(tabela, (filtros || 'select=*') +
+      '&limit=' + pagina + '&offset=' + inicio);
+    if (!r.ok || !Array.isArray(r.dados)) return null;
+    todas = todas.concat(r.dados);
+    if (r.dados.length < pagina) return todas;
+  }
+}
+
+/**
+ * A CONFERÊNCIA: os dois lados batem?
+ *
+ * As abas migradas até aqui foram conferidas de olho — abrir a tela e ver
+ * se parecia certo. Isso deixa de bastar no fluxo de aprovação: uma linha
+ * errada ali não aparece numa tela, aparece num cliente reclamando dias
+ * depois. Aqui a máquina compara linha a linha e diz o que não bate.
+ *
+ * Como compara, já que essas abas não têm uma coluna de identidade: monta
+ * uma "impressão digital" de cada linha (todos os campos juntos, em texto)
+ * e conta quantas vezes cada uma aparece de cada lado. Linha repetida de
+ * verdade continua contando certo, e a ordem não importa.
+ *
+ * Recebe os MESMOS argumentos de supabaseCopiaInicial, de propósito: a
+ * conferência de uma aba é uma linha de código depois da cópia dela.
+ */
+function supabaseConferir(tabela, sheet, corte, colunaQuando, mapear) {
+  if (!supabaseConfigurado()) {
+    Logger.log('❌ Faltam SUPABASE_URL e/ou SUPABASE_KEY.');
+    return null;
+  }
+
+  var doBanco = supabaseBuscarTudo(tabela);
+  if (doBanco === null) {
+    Logger.log('❌ Não consegui ler a tabela "' + tabela + '" inteira — conferência cancelada.');
+    return null;
+  }
+
+  // Impressão digital: os campos que a cópia leva, em ordem fixa, virados
+  // em texto. Texto dos dois lados porque o banco devolve número onde a
+  // planilha tinha texto (e vice-versa) sem isso significar diferença.
+  function digital(obj, chaves) {
+    return chaves.map(function (k) { return String(obj[k] === undefined || obj[k] === null ? '' : obj[k]); }).join('␟');
+  }
+
+  var linhas = sheet.getDataRange().getValues();
+  var daPlanilha = {};
+  var totalPlanilha = 0;
+  var chaves = null;
+  for (var i = 1; i < linhas.length; i++) {
+    if (corte && (Number(linhas[i][colunaQuando]) || 0) < corte) continue;
+    var obj = mapear(linhas[i]);
+    if (!chaves) chaves = Object.keys(obj).sort();
+    var d = digital(obj, chaves);
+    daPlanilha[d] = (daPlanilha[d] || 0) + 1;
+    totalPlanilha++;
+  }
+  if (!chaves) {
+    Logger.log('A aba está vazia (fora do corte) — nada pra conferir.');
+    Logger.log('   No banco: ' + doBanco.length + ' linha(s).');
+    return null;
+  }
+
+  var soNoBanco = [];
+  doBanco.forEach(function (linha) {
+    var d = digital(linha, chaves);
+    if (daPlanilha[d]) daPlanilha[d]--; else soNoBanco.push(d);
+  });
+  var soNaPlanilha = [];
+  Object.keys(daPlanilha).forEach(function (d) {
+    for (var n = 0; n < daPlanilha[d]; n++) soNaPlanilha.push(d);
+  });
+
+  Logger.log('=== CONFERÊNCIA DE "' + tabela + '" ===');
+  Logger.log('Planilha: ' + totalPlanilha + ' linha(s)   |   Banco: ' + doBanco.length + ' linha(s)');
+
+  if (!soNaPlanilha.length && !soNoBanco.length) {
+    Logger.log('✅ Bateu tudo, linha por linha. Dá pra virar a chave.');
+    return { ok: true, soNaPlanilha: 0, soNoBanco: 0 };
+  }
+
+  Logger.log('❌ NÃO bateu — não virar a chave ainda.');
+  if (soNaPlanilha.length) {
+    Logger.log('   ' + soNaPlanilha.length + ' linha(s) só na PLANILHA (não chegaram no banco):');
+    soNaPlanilha.slice(0, 5).forEach(function (d) { Logger.log('     · ' + d); });
+    if (soNaPlanilha.length > 5) Logger.log('     ... e mais ' + (soNaPlanilha.length - 5) + '.');
+  }
+  if (soNoBanco.length) {
+    Logger.log('   ' + soNoBanco.length + ' linha(s) só no BANCO (sobrando ou diferentes):');
+    soNoBanco.slice(0, 5).forEach(function (d) { Logger.log('     · ' + d); });
+    if (soNoBanco.length > 5) Logger.log('     ... e mais ' + (soNoBanco.length - 5) + '.');
+  }
+  Logger.log('   O conserto quase sempre é rodar a cópia inicial de novo');
+  Logger.log('   (ela apaga e recopia, então não duplica).');
+  return { ok: false, soNaPlanilha: soNaPlanilha.length, soNoBanco: soNoBanco.length };
+}
+
+/**
  * Teste de bancada. Rodar direto no editor do Apps Script (escolher esta
  * função e clicar em Executar) pra confirmar que as chaves estão certas
  * ANTES de ligar qualquer tabela na lista. O resultado aparece no

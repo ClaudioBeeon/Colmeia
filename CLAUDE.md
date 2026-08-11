@@ -1650,8 +1650,22 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
    poderem divergir.
 3. `BeeChat` — hoje a conversa inteira mora dentro de UMA célula por tarefa; vira uma linha por
    mensagem, e a conversa passa a poder ser buscada.
-4. `Aprovacoes`, `ConferenciaInterna`, `Devolucoes` — **o prêmio**: onde mais gente escreve ao mesmo
-   tempo (designer, atendimento e o cliente pelo link público), e onde a trava única mais dói.
+4. O fluxo de aprovação — **o prêmio**: onde mais gente escreve ao mesmo tempo (designer,
+   atendimento e o cliente pelo link público), e onde a trava única mais dói. São **quatro** abas,
+   não três, migradas em quatro etapas separadas e ordenadas por QUEM mexe em cada uma:
+   `HistoricoConferencias` ✅ (ninguém: é arquivo) → `ConferenciaInterna` (atendimento e designers)
+   → `Devolucoes` (atendimento) → `Aprovacoes` (**o cliente**, na página sem login — por último, com
+   as outras três já rodando).
+   **Uma aba vira uma tabela, com as mesmas colunas — sem redesenhar o modelo.** É tentador
+   aproveitar a viagem pra separar as peças de um lote em tabela própria ou transformar o
+   `fileId1|fileId2` numa lista de verdade; reformar o fluxo junto multiplicaria o risco justo onde
+   menos se pode errar. Depois de estar no banco, essas melhorias ficam baratas. As duas únicas
+   exceções não mudam comportamento: os campos que hoje guardam JSON em texto (`pins`, `pecas_json`,
+   `respostasPecas`) viram `jsonb`, e as colunas penduradas depois entram como colunas normais.
+   ⚠️ **O cabeçalho da aba `Aprovacoes` mente:** ela é criada com 13 colunas (A:M) e o código lê até
+   a 17ª — `aviso_pendente`, `quemAprovou`, `respostasPecas` e `consultandoEm` foram penduradas
+   depois, cada uma com um remendo `if (getLastColumn() < N)`. Ao migrar, tirar as colunas de
+   `linhaParaObjetoDeAprovacao`, **nunca do cabeçalho**.
 5. Login com sessão de verdade — hoje a senha sozinha identifica a PESSOA.
 6. As abas de cadastro (LinksClientes, Pessoas, AcessoRapido) — **talvez nunca**: quase não têm
    escrita concorrente, e vale muito poder abrir a planilha e corrigir uma linha na mão.
@@ -1662,6 +1676,18 @@ banco encher de novo. `supabaseCopiaInicial` (Supabase.gs) é a função comum; 
 `migrar<Aba>ParaSupabase()` de três linhas por cima dela. Apaga e recopia (rodar duas vezes não
 duplica) e **se recusa a rodar depois da virada** — aí quem manda é o banco, e recopiar por cima
 apagaria o que só existe lá.
+
+**A partir do fluxo de aprovação, conferir de olho não basta mais.** Nas abas anteriores, validar era
+abrir a tela e ver se parecia certo; uma linha errada numa aprovação não aparece em tela nenhuma,
+aparece num cliente reclamando dias depois. `supabaseConferir` (Supabase.gs) compara os dois lados
+linha a linha e diz o que não bate — recebe os MESMOS argumentos de `supabaseCopiaInicial`, então a
+conferência de uma aba é uma linha depois da cópia dela. Como essas abas não têm coluna de
+identidade, ela compara por "impressão digital" (todos os campos juntos, em texto) contando
+repetições, então linha repetida de verdade continua batendo e a ordem não importa. **Rodar sempre
+entre a cópia e a virada da chave.**
+
+**`supabaseBuscarTudo`** existe porque o PostgREST corta em 1.000 linhas por pedido **sem avisar** —
+uma conferência que ignorasse isso acusaria milhares de linhas "faltando" no banco.
 
 **`testarSupabase()`** roda direto no editor do Apps Script e diz se as chaves estão certas — usar
 antes de pôr qualquer tabela na lista.
