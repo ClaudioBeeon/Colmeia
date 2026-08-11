@@ -112,6 +112,25 @@ var RUNRUN_TOKENS_POR_EMAIL = {
 // AUTORIA no Runrun.it sai como a do Cláudio, que é o comportamento de
 // sempre pra quem não tem token (ver "TOKEN POR PESSOA" acima). Pra
 // corrigir, é só criar a propriedade correspondente.
+/**
+ * Os tokens do atendimento — quem aparece na lista "Quem é você?" e com
+ * qual conta do Runrun.it cada uma escreve.
+ *
+ * A LISTA DE BAIXO É SÓ O COMEÇO. `tokensDoAtendimento()` junta ela com
+ * TODA propriedade de script chamada `RUNRUN_TOKEN_ATEND_<Nome>` — e é
+ * por aí que entra gente nova (2026-08-10).
+ *
+ * Por que isso importa: antes, cada pessoa nova exigia mexer no código e
+ * publicar. Quando a Giovanna sai e entra outra pessoa na carteira dela,
+ * ninguém quer esperar deploy — e ninguém deveria precisar abrir o
+ * Código.gs pra isso. Agora é adicionar UMA propriedade:
+ *
+ *     RUNRUN_TOKEN_ATEND_Beatriz  →  o token dela no Runrun.it
+ *
+ * O nome sai do que vem depois do prefixo, com "_" virando espaço
+ * (`RUNRUN_TOKEN_ATEND_Joao_Paulo` → "Joao Paulo"). As linhas escritas à
+ * mão aqui embaixo continuam valendo pra não quebrar nada do que já existe.
+ */
 var RUNRUN_TOKENS_ATENDIMENTO = {
   'Laura': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_LAURA'),
   'Manu': PropertiesService.getScriptProperties().getProperty('RUNRUN_USER_TOKEN_MANU'),
@@ -123,6 +142,32 @@ var RUNRUN_TOKENS_ATENDIMENTO = {
   // lista de "Quem é você?" junto com o resto.
   'Cláudio': RUNRUN_USER_TOKEN
 };
+
+var PREFIXO_TOKEN_ATENDIMENTO = 'RUNRUN_TOKEN_ATEND_';
+
+/**
+ * O mapa de verdade: o escrito no código + o que estiver nas propriedades.
+ *
+ * Uma pessoa que apareça nos dois lugares fica com o valor da PROPRIEDADE
+ * — assim dá pra corrigir o token de alguém sem publicar código, que é
+ * justamente o caso urgente (token vencido, pessoa trocou de conta).
+ */
+function tokensDoAtendimento() {
+  var mapa = {};
+  for (var nome in RUNRUN_TOKENS_ATENDIMENTO) {
+    if (RUNRUN_TOKENS_ATENDIMENTO[nome]) mapa[nome] = RUNRUN_TOKENS_ATENDIMENTO[nome];
+  }
+  try {
+    var props = PropertiesService.getScriptProperties().getProperties();
+    for (var chave in props) {
+      if (chave.indexOf(PREFIXO_TOKEN_ATENDIMENTO) !== 0) continue;
+      if (!props[chave]) continue;
+      var nomeDaChave = chave.slice(PREFIXO_TOKEN_ATENDIMENTO.length).replace(/_/g, ' ').trim();
+      if (nomeDaChave) mapa[nomeDaChave] = props[chave];
+    }
+  } catch (e) { /* sem propriedades: fica só o que está no código */ }
+  return mapa;
+}
 
 // URL do Web App do painel-designers-beeon (o outro painel, já publicado).
 // O Colmeia só faz LEITURA aqui — nunca escreve nada nesse painel. Usado
@@ -410,6 +455,14 @@ function handleRequest(e, method) {
         output = buscarExtrasRunrunCompleto();
       } else if (body.acao === 'listarAprovacoesPendentes') {
         output = listarAprovacoesPendentes();
+      } else if (body.acao === 'listarPessoasDoLogin') {
+        output = listarPessoasDoLogin();
+      } else if (body.acao === 'salvarPessoaDoLogin') {
+        output = salvarPessoaDoLogin(body);
+      } else if (body.acao === 'removerPessoaDoLogin') {
+        output = removerPessoaDoLogin(body.nome);
+      } else if (body.acao === 'substituirPessoaDoLogin') {
+        output = substituirPessoaDoLogin(body.nomeAntigo, body.novos);
       } else if (body.acao === 'loginComGoogle') {
         output = loginComGoogle(body.credential);
       } else if (body.acao === 'registrarErroDoApp') {

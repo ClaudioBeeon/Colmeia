@@ -882,6 +882,174 @@ function acharPessoaPorEmail(email) {
   return null;
 }
 
+// =====================================================================
+// QUEM ENTRA NO COLMEIA — o cadastro de acessos (2026-08-10)
+//
+// Fica na aba Login: nome, chave, papel e e-mail. Até aqui só dava pra
+// mexer nisso abrindo a planilha na mão; agora tem tela (Configurações →
+// Acessos), porque entrar e sair gente é rotina de agência, não exceção.
+//
+// ⚠️ O QUE ESTAS FUNÇÕES **NÃO** FAZEM, e precisa continuar claro:
+//
+// 1. NÃO dão acesso ao Runrun.it. Pra alguém do atendimento comentar e
+//    aprovar com a PRÓPRIA conta, o token dela tem que existir numa
+//    propriedade `RUNRUN_TOKEN_ATEND_<Nome>` (ver tokensDoAtendimento,
+//    Código.gs). Sem isso ela entra no Colmeia, mas escreveria no
+//    Runrun.it com a conta de outra pessoa — por isso `substituirPessoa`
+//    avisa disso alto e claro em vez de deixar passar em silêncio.
+//
+// 2. NÃO transferem a carteira de clientes. Quem cliente é de quem mora
+//    no painel-designers-beeon, que é outro projeto — o Colmeia só LÊ
+//    (ver mapaClienteParaAtendimento). A troca tem que ser feita lá.
+// =====================================================================
+
+/** Quem pode entrar hoje. A chave nunca sai daqui — só se ela existe. */
+function listarPessoasDoLogin() {
+  var linhas = getLoginSheet().getDataRange().getValues();
+  var pessoas = [];
+  for (var i = 1; i < linhas.length; i++) {
+    var nome = String(linhas[i][0] || '').trim();
+    if (!nome) continue;
+    pessoas.push({
+      nome: nome,
+      papel: String(linhas[i][2] || 'designer'),
+      email: String(linhas[i][3] || ''),
+      temChave: !!String(linhas[i][1] || '').trim()
+    });
+  }
+  pessoas.sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+  return { ok: true, pessoas: pessoas };
+}
+
+/**
+ * Cria ou atualiza uma pessoa.
+ *
+ * `chave` vazia numa pessoa NOVA é permitido de propósito: quem entra só
+ * pelo Google não precisa de chave nenhuma. Numa pessoa que já existe,
+ * chave vazia significa "não mexe na que ela já tem" — assim editar o
+ * papel de alguém não apaga o acesso dela sem querer.
+ */
+function salvarPessoaDoLogin(dados) {
+  dados = dados || {};
+  var nome = String(dados.nome || '').trim();
+  if (!nome) return { ok: false, error: 'Falta o nome.' };
+
+  var papel = String(dados.papel || 'designer').trim().toLowerCase();
+  if (['designer', 'atendimento', 'coordenador'].indexOf(papel) === -1) {
+    return { ok: false, error: 'Papel inválido: use designer, atendimento ou coordenador.' };
+  }
+  var email = String(dados.email || '').trim().toLowerCase();
+  var chave = String(dados.chave || '').trim();
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getLoginSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var alvo = normalizarNomeLogin(nome);
+
+    // O e-mail é a identidade de quem entra pelo Google — deixar dois
+    // cadastros com o mesmo faria a entrada cair sempre no primeiro, sem
+    // ninguém entender por quê.
+    for (var v = 1; v < linhas.length; v++) {
+      if (!email) break;
+      if (normalizarNomeLogin(linhas[v][0]) === alvo) continue;
+      if (String(linhas[v][3] || '').toLowerCase().trim() === email) {
+        return { ok: false, error: 'Esse e-mail já é de ' + linhas[v][0] + '.' };
+      }
+    }
+
+    for (var i = 1; i < linhas.length; i++) {
+      if (normalizarNomeLogin(linhas[i][0]) !== alvo) continue;
+      sheet.getRange(i + 1, 3).setValue(papel);
+      sheet.getRange(i + 1, 4).setValue(email);
+      if (chave) sheet.getRange(i + 1, 2).setValue(gerarHashSenha(chave));
+      return { ok: true, criada: false };
+    }
+
+    sheet.appendRow([nome, chave ? gerarHashSenha(chave) : '', papel, email]);
+    return { ok: true, criada: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Tira o acesso de alguém. Não apaga nada do trabalho dela. */
+function removerPessoaDoLogin(nome) {
+  if (!nome) return { ok: false, error: 'Falta o nome.' };
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getLoginSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var alvo = normalizarNomeLogin(nome);
+    for (var i = 1; i < linhas.length; i++) {
+      if (normalizarNomeLogin(linhas[i][0]) === alvo) {
+        sheet.deleteRow(i + 1);
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: 'Não achei "' + nome + '" no cadastro.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * SUBSTITUIR: alguém saiu e outra pessoa assume o lugar.
+ *
+ * Tira o acesso de quem saiu e cria quem entrou com o MESMO papel — que é
+ * a parte que o Colmeia sabe fazer sozinho.
+ *
+ * E devolve, em `pendencias`, o que ele NÃO tem como fazer. Isso não é
+ * enfeite: uma substituição pela metade é pior que nenhuma. Sem o token,
+ * a pessoa nova comenta no Runrun.it com a conta de quem saiu; sem trocar
+ * a carteira no painel, a fila de conferência dela chega vazia.
+ */
+function substituirPessoaDoLogin(nomeAntigo, dadosNovos) {
+  dadosNovos = dadosNovos || {};
+  var nomeNovo = String(dadosNovos.nome || '').trim();
+  if (!nomeAntigo || !nomeNovo) return { ok: false, error: 'Falta quem sai ou quem entra.' };
+
+  var lista = listarPessoasDoLogin();
+  var antiga = (lista.pessoas || []).filter(function (p) {
+    return normalizarNomeLogin(p.nome) === normalizarNomeLogin(nomeAntigo);
+  })[0];
+  if (!antiga) return { ok: false, error: 'Não achei "' + nomeAntigo + '" no cadastro.' };
+
+  var criada = salvarPessoaDoLogin({
+    nome: nomeNovo,
+    papel: dadosNovos.papel || antiga.papel, // herda o papel de quem saiu
+    email: dadosNovos.email || '',
+    chave: dadosNovos.chave || ''
+  });
+  if (!criada.ok) return criada;
+
+  var saiu = removerPessoaDoLogin(antiga.nome);
+  if (!saiu.ok) {
+    return { ok: false, error: 'Criei ' + nomeNovo + ', mas não consegui tirar ' + antiga.nome + ': ' + saiu.error };
+  }
+
+  var pendencias = [];
+  if (antiga.papel === 'atendimento') {
+    pendencias.push(
+      'Crie a propriedade de script RUNRUN_TOKEN_ATEND_' + nomeNovo.replace(/\s+/g, '_') +
+      ' com o token de ' + nomeNovo + ' no Runrun.it — sem isso ela entra no Colmeia, ' +
+      'mas comentaria no Runrun.it com a conta de ' + antiga.nome + '.'
+    );
+    pendencias.push(
+      'Apague a propriedade RUNRUN_TOKEN_ATEND_' + antiga.nome.replace(/\s+/g, '_') +
+      ' (ou a linha de ' + antiga.nome + ' em RUNRUN_TOKENS_ATENDIMENTO, no Código.gs).'
+    );
+  }
+  pendencias.push(
+    'Troque a carteira de clientes de ' + antiga.nome + ' para ' + nomeNovo +
+    ' no painel-designers-beeon — o Colmeia só lê esse vínculo, não escreve.'
+  );
+
+  return { ok: true, saiu: antiga.nome, entrou: nomeNovo, papel: antiga.papel, pendencias: pendencias };
+}
+
 // ---------------------------------------------------------------------
 // VINCULAR OS E-MAILS PELO RUNRUN.IT (2026-08-10)
 //

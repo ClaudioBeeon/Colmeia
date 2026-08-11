@@ -1878,6 +1878,39 @@ secret* — que não é usado em lugar nenhum deste fluxo.
 um que não funciona. E o script do Google no index.html fica **fora da montagem** (async, do servidor
 deles): se demorar ou não carregar, a tela de login segue funcionando com a chave de sempre.
 
+## Acessos: quem entra no Colmeia (2026-08-10)
+
+`listarPessoasDoLogin`/`salvarPessoaDoLogin`/`removerPessoaDoLogin`/`substituirPessoaDoLogin`
+(Planilha.gs) + a aba **Acessos** em Configurações (js/painel-pessoas-clientes.js, só pro
+coordenador). Entrar e sair gente é rotina de agência; até aqui a única forma era abrir a planilha e
+editar a aba Login na mão.
+
+**Pessoa nova do atendimento não precisa mais de deploy.** `RUNRUN_TOKENS_ATENDIMENTO` (Código.gs)
+tinha os nomes escritos no código. Agora `tokensDoAtendimento()` junta aquilo com **toda propriedade
+de script `RUNRUN_TOKEN_ATEND_<Nome>`** (`_` vira espaço). Quem aparecer nos dois lugares fica com o
+valor da **propriedade** — é o que permite corrigir o token de alguém sem publicar, que é o caso
+urgente (token vencido, pessoa trocou de conta). `entrarComoAtendimento` e `tokenRunrunDoAutor`
+passaram a ler dessa função.
+
+**`substituirPessoaDoLogin` devolve `pendencias`, e isso não é enfeite.** Ela faz o que o Colmeia
+sabe fazer sozinho (tira quem saiu, cria quem entrou herdando o papel) e **diz em voz alta** o que
+ele não pode fazer — porque uma substituição pela metade é pior que nenhuma:
+- **o token do Runrun.it** — sem ele a pessoa nova entra no Colmeia mas **comentaria no Runrun.it com
+  a conta de quem saiu**;
+- **a carteira de clientes**, que mora no **painel-designers-beeon** (outro projeto — o Colmeia só lê,
+  ver `mapaClienteParaAtendimento`). Sem trocar lá, a fila de conferência dela chega vazia.
+
+**Chave vazia tem dois significados, de propósito:** em pessoa NOVA é "só entra pelo Google"; em
+pessoa que já existe é "não mexe na chave dela" — assim editar o papel de alguém não apaga o acesso
+sem querer. E o mesmo e-mail não pode ficar em dois cadastros: a entrada pelo Google cairia sempre no
+primeiro, sem ninguém entender por quê.
+
+**A entrada compartilhada do atendimento continua existindo** (`CODIGO_ATENDIMENTO` +
+`entrarComoAtendimento`, que devolve a lista pra pessoa escolher quem é). Ela não foi tirada — mas
+note que ali o nome é **declarado, não provado**: qualquer um com o código escolhe qualquer nome da
+lista. Pra quem tem e-mail cadastrado, o "Entrar com o Google" é ao mesmo tempo mais seguro e **um
+passo a menos** (não digita código nem escolhe nome).
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

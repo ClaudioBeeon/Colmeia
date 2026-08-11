@@ -1086,7 +1086,7 @@ function entrarComoAtendimento(codigo) {
   // mesmo lugar que decide com qual conta do Runrun.it cada uma escreve.
   // Duas listas separadas viravam a chance de alguém aparecer aqui e não
   // ter token lá — entrando, mas comentando no nome do Cláudio.
-  return { ok: true, pessoas: Object.keys(RUNRUN_TOKENS_ATENDIMENTO) };
+  return { ok: true, pessoas: Object.keys(tokensDoAtendimento()) };
 }
 
 // ---------------------------------------------------------------------

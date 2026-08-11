@@ -14,7 +14,18 @@ function atualizarAbasConfig() {
   if (abaMemorias) abaMemorias.classList.toggle("active", configTabAtiva === "memorias");
   const abaVinculos = document.getElementById("configTabVinculos");
   if (abaVinculos) abaVinculos.classList.toggle("active", configTabAtiva === "vinculos");
+  const abaAcessos = document.getElementById("configTabAcessos");
+  if (abaAcessos) {
+    // Só o coordenador vê: é a tela que decide quem entra no Colmeia.
+    abaAcessos.hidden = PAPEL_LOGADO !== "coordenador";
+    abaAcessos.classList.toggle("active", configTabAtiva === "acessos");
+  }
   const hint = document.getElementById("configHint");
+  if (configTabAtiva === "acessos") {
+    hint.textContent = "Quem entra no Colmeia. O e-mail é o que libera o \"Entrar com o Google\" — a chave de acesso continua funcionando pra quem preferir.";
+    renderPainelAcessos();
+    return;
+  }
   if (configTabAtiva === "vinculos") {
     hint.textContent = "Liga nomes do mesmo cliente que aparecem diferentes no painel, no Runrun.it e no Drive — sem isso o Colmeia trata como clientes separados.";
     if (typeof renderConfigVinculosClientes === "function") renderConfigVinculosClientes();
@@ -994,4 +1005,155 @@ function iniciarRelogioDoPerfil() {
 function pararRelogioDoPerfil() {
   clearInterval(_relogioDoPerfil);
   _relogioDoPerfil = null;
+}
+
+// =====================================================================
+// ACESSOS — quem entra no Colmeia (2026-08-10)
+//
+// Entrar e sair gente é rotina de agência, não exceção: até aqui a única
+// forma era abrir a planilha e editar a aba Login na mão. Esta aba faz o
+// que o Colmeia consegue fazer sozinho — e DIZ, em vez de esconder, o que
+// ele não consegue (o token do Runrun.it e a carteira de clientes, que
+// mora no painel-designers-beeon).
+//
+// Só o coordenador vê (ver atualizarAbasConfig).
+// =====================================================================
+
+let acessosLista = null;      // null = ainda não buscou
+let acessosSubstituindo = ""; // nome de quem está sendo substituído
+
+async function renderPainelAcessos() {
+  const corpo = document.getElementById("peopleModalBody");
+  if (!corpo) return;
+
+  if (acessosLista === null) {
+    corpo.innerHTML = `<p class="quick-access-empty">Carregando quem tem acesso…</p>`;
+    const data = await chamarBackend({ acao: "listarPessoasDoLogin" });
+    // A aba pode ter mudado enquanto a lista vinha — o cuidado de sempre
+    // (ver o "bug recorrente" no CLAUDE.md).
+    if (configTabAtiva !== "acessos") return;
+    if (!data || !data.ok) {
+      corpo.innerHTML = `<p class="quick-access-empty">${escaparHTML((data && data.error) || "Não consegui carregar o cadastro.")}</p>`;
+      return;
+    }
+    acessosLista = data.pessoas || [];
+  }
+
+  const corpoAgora = document.getElementById("peopleModalBody");
+  if (!corpoAgora || configTabAtiva !== "acessos") return;
+
+  corpoAgora.innerHTML = `
+    <div class="acessos-lista">
+      ${acessosLista.map(p => acessoLinhaHTML(p)).join("")}
+    </div>
+    <div class="acessos-nova">
+      <h4>Adicionar pessoa</h4>
+      ${acessoFormHTML("novo", { nome: "", papel: "designer", email: "" })}
+    </div>
+  `;
+  wireAcessos(corpoAgora);
+}
+
+function acessoLinhaHTML(p) {
+  const id = encodeURIComponent(p.nome);
+  return `
+    <div class="acesso-item" data-nome="${escaparHTML(p.nome)}">
+      <div class="acesso-cabeca">
+        <strong>${escaparHTML(p.nome)}</strong>
+        <span class="acesso-papel">${escaparHTML(p.papel)}</span>
+        ${p.email
+          ? `<span class="acesso-email">${escaparHTML(p.email)}</span>`
+          : `<span class="acesso-email acesso-sem">sem e-mail — só entra pela chave</span>`}
+        ${p.temChave ? "" : `<span class="acesso-email acesso-sem">sem chave — só entra pelo Google</span>`}
+      </div>
+      ${acessoFormHTML(id, p)}
+      <div class="acesso-acoes">
+        <button type="button" class="repasse-btn" data-acao="salvar" data-nome="${escaparHTML(p.nome)}">Salvar</button>
+        <button type="button" class="repasse-btn" data-acao="substituir" data-nome="${escaparHTML(p.nome)}">Substituir pessoa</button>
+        <button type="button" class="repasse-btn acesso-perigo" data-acao="remover" data-nome="${escaparHTML(p.nome)}">Tirar acesso</button>
+      </div>
+    </div>`;
+}
+
+function acessoFormHTML(id, p) {
+  return `
+    <div class="acesso-campos" data-form="${id}">
+      <input type="text" data-campo="nome" placeholder="Nome" value="${escaparHTML(p.nome || "")}">
+      <select data-campo="papel">
+        ${["designer", "atendimento", "coordenador"].map(v =>
+          `<option value="${v}"${(p.papel || "designer") === v ? " selected" : ""}>${v}</option>`).join("")}
+      </select>
+      <input type="email" data-campo="email" placeholder="e-mail do Google (opcional)" value="${escaparHTML(p.email || "")}">
+      <input type="text" data-campo="chave" placeholder="${p.nome ? "nova chave (deixe vazio pra manter)" : "chave (opcional)"}">
+    </div>`;
+}
+
+function lerCamposDoAcesso(raiz, id) {
+  const bloco = raiz.querySelector(`[data-form="${CSS.escape(id)}"]`);
+  if (!bloco) return null;
+  const pega = campo => (bloco.querySelector(`[data-campo="${campo}"]`) || {}).value || "";
+  return { nome: pega("nome").trim(), papel: pega("papel"), email: pega("email").trim(), chave: pega("chave").trim() };
+}
+
+function wireAcessos(raiz) {
+  raiz.querySelectorAll("[data-acao]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const nome = btn.dataset.nome;
+      const acao = btn.dataset.acao;
+
+      if (acao === "remover") {
+        if (!confirm(`Tirar o acesso de ${nome}?\n\nO trabalho dela continua tudo lá — ela só deixa de conseguir entrar.`)) return;
+        await acessoChamar({ acao: "removerPessoaDoLogin", nome }, `${nome} não entra mais.`);
+        return;
+      }
+
+      if (acao === "substituir") {
+        // Reaproveita o formulário da própria linha: quem substitui já
+        // está com os campos na frente, e o papel vem herdado sozinho.
+        const dados = lerCamposDoAcesso(raiz, encodeURIComponent(nome));
+        if (!dados || !dados.nome || dados.nome === nome) {
+          mostrarToast("Escreva o nome de quem ENTRA no campo de cima, depois clique em Substituir.", "erro");
+          return;
+        }
+        if (!confirm(`${nome} sai e ${dados.nome} entra no lugar, com o mesmo papel.\n\nConfirma?`)) return;
+        const r = await chamarBackend({
+          acao: "substituirPessoaDoLogin", nomeAntigo: nome,
+          novos: { nome: dados.nome, email: dados.email, chave: dados.chave, papel: dados.papel }
+        });
+        if (!r || !r.ok) { mostrarToast((r && r.error) || "Não consegui substituir.", "erro"); return; }
+        acessosLista = null;
+        renderPainelAcessos();
+        // As pendências não são detalhe: uma substituição pela metade é
+        // pior que nenhuma, então elas aparecem num aviso que fica.
+        alert(`${r.saiu} saiu e ${r.entrou} entrou.\n\nFalta fazer à mão:\n\n• ${r.pendencias.join("\n\n• ")}`);
+        return;
+      }
+
+      const dados = lerCamposDoAcesso(raiz, nome ? encodeURIComponent(nome) : "novo");
+      if (!dados || !dados.nome) { mostrarToast("Falta o nome.", "erro"); return; }
+      await acessoChamar({ acao: "salvarPessoaDoLogin", ...dados }, `${dados.nome} salvo.`);
+    });
+  });
+
+  const formNovo = raiz.querySelector('[data-form="novo"]');
+  if (formNovo) {
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "repasse-btn";
+    botao.textContent = "Adicionar";
+    botao.addEventListener("click", async () => {
+      const dados = lerCamposDoAcesso(raiz, "novo");
+      if (!dados || !dados.nome) { mostrarToast("Falta o nome.", "erro"); return; }
+      await acessoChamar({ acao: "salvarPessoaDoLogin", ...dados }, `${dados.nome} agora tem acesso.`);
+    });
+    formNovo.parentElement.appendChild(botao);
+  }
+}
+
+async function acessoChamar(corpo, mensagemBoa) {
+  const r = await chamarBackend(corpo);
+  if (!r || !r.ok) { mostrarToast((r && r.error) || "Não consegui salvar.", "erro"); return; }
+  mostrarToast(mensagemBoa);
+  acessosLista = null; // força buscar de novo: a lista mudou de verdade
+  renderPainelAcessos();
 }

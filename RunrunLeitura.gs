@@ -36,9 +36,10 @@ function tokenRunrunDoAutor(nomeAutor) {
   // O atendimento não tem quadro, então não está em RUNRUN_USUARIOS — mas
   // escreve de verdade no Runrun.it (o comentário do pedido de alteração,
   // a reatribuição do card). Ver RUNRUN_TOKENS_ATENDIMENTO, Código.gs.
-  for (var nome in RUNRUN_TOKENS_ATENDIMENTO) {
-    if (normalizarNomeParaComparar(nome) === alvo && RUNRUN_TOKENS_ATENDIMENTO[nome]) {
-      return RUNRUN_TOKENS_ATENDIMENTO[nome];
+  var tokens = tokensDoAtendimento();
+  for (var nome in tokens) {
+    if (normalizarNomeParaComparar(nome) === alvo && tokens[nome]) {
+      return tokens[nome];
     }
   }
   return RUNRUN_USER_TOKEN;
