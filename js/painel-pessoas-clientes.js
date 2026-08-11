@@ -20,27 +20,31 @@ function atualizarAbasConfig() {
     abaAcessos.hidden = PAPEL_LOGADO !== "coordenador";
     abaAcessos.classList.toggle("active", configTabAtiva === "acessos");
   }
+  // Uma linha por aba, não um parágrafo (2026-08-11). A explicação longa
+  // que ficava aqui em cima ninguém lia — e o que ela explicava era o
+  // CAMPO, não a aba. Esse texto detalhado virou a dica embaixo de cada
+  // campo, que é onde ele é lido na hora de preencher.
   const hint = document.getElementById("configHint");
   if (configTabAtiva === "acessos") {
-    hint.textContent = "Quem entra no Colmeia. O e-mail é o que libera o \"Entrar com o Google\" — a chave de acesso continua funcionando pra quem preferir.";
+    hint.textContent = "Quem pode entrar no Colmeia.";
     renderPainelAcessos();
     return;
   }
   if (configTabAtiva === "vinculos") {
-    hint.textContent = "Liga nomes do mesmo cliente que aparecem diferentes no painel, no Runrun.it e no Drive — sem isso o Colmeia trata como clientes separados.";
+    hint.textContent = "Junta nomes diferentes do mesmo cliente.";
     if (typeof renderConfigVinculosClientes === "function") renderConfigVinculosClientes();
     return;
   }
   if (configTabAtiva === "memorias") {
-    hint.textContent = "O que a Bee sabe sobre cada cliente. O que você escrever aqui ela usa em toda conversa sobre esse cliente — manias, o que evitar, o que faz aprovar mais rápido.";
+    hint.textContent = "O que a Bee sabe sobre cada cliente.";
     renderPainelMemoriasBee();
     return;
   }
   if (configTabAtiva === "pessoas") {
-    hint.textContent = "Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.";
+    hint.textContent = "Quem o Colmeia conhece — foto, apelidos e e-mails de cada pessoa.";
     renderPainelPessoas();
   } else {
-    hint.textContent = "Cadastre os links de cada cliente (Drive, banco de imagens etc) — eles aparecem no Hub do Cliente pros designers.";
+    hint.textContent = "Links de cada cliente, que aparecem no Hub do Cliente.";
     renderPainelClientes();
     carregarPastasDriveSeNecessario().then(() => {
       if (configTabAtiva === "clientes") renderPainelClientes();
@@ -90,52 +94,137 @@ function nomesConhecidosOuVistos() {
   return Array.from(mapa.entries()).sort((a, b) => a[1].nomeOriginal.localeCompare(b[1].nomeOriginal));
 }
 
+// Texto digitado na busca da aba Pessoas. Uma equipe cresce e a lista
+// fica longa — antes só dava pra rolar.
+let pessoasConfigFiltro = "";
+
+const chevronConfigSVG = `<svg class="people-row-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+/**
+ * As etiquetas da linha fechada: o que essa pessoa já tem configurado.
+ * É o que dá pra ler varrendo a lista, sem abrir ninguém — e é por isso
+ * que a linha pode nascer fechada sem esconder informação útil.
+ */
+function tagsDaPessoaHTML(salvo, fotoAtual) {
+  const tags = [];
+  if (fotoAtual) tags.push(`<span class="cfg-tag ok">foto</span>`);
+  else tags.push(`<span class="cfg-tag falta">sem foto</span>`);
+
+  const apelidos = (salvo && salvo.aliases) || [];
+  if (apelidos.length) {
+    tags.push(`<span class="cfg-tag">${apelidos.length} apelido${apelidos.length > 1 ? "s" : ""}</span>`);
+  }
+  const emails = (salvo && salvo.emails) || [];
+  if (emails.length) {
+    tags.push(`<span class="cfg-tag ok">${emails.length} e-mail${emails.length > 1 ? "s" : ""}</span>`);
+  } else {
+    tags.push(`<span class="cfg-tag falta">sem e-mail</span>`);
+  }
+  return tags.join("");
+}
+
 function renderPainelPessoas() {
   const body = document.getElementById("peopleModalBody");
-  const nomes = nomesConhecidosOuVistos();
+  const todos = nomesConhecidosOuVistos();
 
-  if (nomes.length === 0) {
-    body.innerHTML = `<p class="workflow-seq-empty">Nenhum nome visto ainda nessa sessão — navegue pelo Colmeia (abra tarefas, veja clientes) e volte aqui.</p>`;
+  if (todos.length === 0) {
+    body.innerHTML = `<p class="cfg-vazio">Ninguém por aqui ainda — navegue pelo Colmeia e volte.</p>`;
     return;
   }
 
-  body.innerHTML = nomes.map(([chave, info]) => {
+  const filtro = normalizarParaComparar(pessoasConfigFiltro);
+  const nomes = filtro
+    ? todos.filter(([, info]) => normalizarParaComparar(info.nomeOriginal).includes(filtro))
+    : todos;
+
+  // O bloco de sugestões de e-mail nasce vazio e é preenchido por
+  // renderSugestoesDeVinculo(), logo abaixo — ele depende de uma consulta
+  // ao backend e não pode segurar a lista de pessoas esperando por ela.
+  body.innerHTML = `
+    <div id="pessoasSugestoes"></div>
+    <input type="search" class="cfg-busca" id="pessoasBusca"
+           placeholder="Buscar pessoa" value="${escaparHTML(pessoasConfigFiltro)}">
+    <div class="cfg-lista">
+      ${nomes.length === 0
+        ? `<p class="cfg-vazio">Ninguém com esse nome.</p>`
+        : nomes.map(([chave, info]) => {
     const salvo = pessoasSalvas.find(p => normalizarParaComparar(p.nome) === chave);
     const fotoAtual = resolverFotoManual(info.nomeOriginal) || info.fotoAtual || "";
     const aliasesTexto = salvo ? salvo.aliases.join(", ") : "";
     const discordAtual = salvo ? salvo.discord || "" : "";
+    const emailsTexto = salvo ? (salvo.emails || []).join(", ") : "";
     const vinculos = salvo ? salvo.aliases : [];
     const aberto = pessoasVinculadasExpandido.has(chave);
     return `
-      <div class="people-row" data-chave="${chave}" data-nome-original="${info.nomeOriginal}">
-        <div class="people-row-top">
+      <div class="people-row${aberto ? " aberta" : ""}" data-chave="${chave}" data-nome-original="${escaparHTML(info.nomeOriginal)}">
+        <button type="button" class="people-row-top" data-chave-toggle="${chave}"
+                aria-expanded="${aberto ? "true" : "false"}">
           <div class="people-row-avatar">${avatarPreviewHTML(info.nomeOriginal, fotoAtual)}</div>
-          <span class="people-row-name">${info.nomeOriginal}</span>
+          <span class="people-row-name">${escaparHTML(info.nomeOriginal)}</span>
+          <span class="people-row-tags">${tagsDaPessoaHTML(salvo, fotoAtual)}</span>
+          ${chevronConfigSVG}
+        </button>
+        ${!aberto ? "" : `
+        <div class="people-row-form">
           ${vinculos.length ? `
-            <button type="button" class="people-row-vinculos-toggle" data-chave-toggle="${chave}">
-              ${vinculos.length} vinculado${vinculos.length > 1 ? "s" : ""} ${aberto ? "▴" : "▾"}
-            </button>
-          ` : ""}
-        </div>
-        ${vinculos.length && aberto ? `
-          <div class="people-row-vinculos">
-            ${vinculos.map(a => `<span class="people-row-vinculo-chip">${escaparHTML(a)}</span>`).join("")}
+            <div class="cfg-campo">
+              <label>Já vinculados a essa pessoa</label>
+              <div class="people-row-vinculos">
+                ${vinculos.map(a => `<span class="people-row-vinculo-chip">${escaparHTML(a)}</span>`).join("")}
+              </div>
+            </div>` : ""}
+          <div class="cfg-campo">
+            <label for="cfg-foto-${chave}">Foto</label>
+            <input type="text" id="cfg-foto-${chave}" class="people-row-input" data-campo="foto"
+                   placeholder="https://..." value="${escaparHTML(fotoAtual)}">
           </div>
-        ` : ""}
-        <input type="text" class="people-row-input" data-campo="foto" placeholder="URL da foto" value="${fotoAtual}">
-        <input type="text" class="people-row-input" data-campo="aliases" placeholder="Apelidos, separados por vírgula (ex: Manu, Manuela)" value="${aliasesTexto}">
-        <input type="text" class="people-row-input" data-campo="discord" placeholder="Link do Discord (DM dessa pessoa)" value="${discordAtual}">
-        <button type="button" class="people-row-save" data-chave="${chave}">Salvar</button>
-        <span class="people-row-saved" data-chave-saved="${chave}"></span>
+          <div class="cfg-campo">
+            <label for="cfg-apelidos-${chave}">Apelidos</label>
+            <span class="cfg-ajuda">Outros nomes dessa mesma pessoa, separados por vírgula. Ex: Manu, Manuela</span>
+            <input type="text" id="cfg-apelidos-${chave}" class="people-row-input" data-campo="aliases"
+                   value="${escaparHTML(aliasesTexto)}">
+          </div>
+          <div class="cfg-campo">
+            <label for="cfg-emails-${chave}">E-mails</label>
+            <span class="cfg-ajuda">É o que liga essa pessoa ao login do Google e ao Runrun.it, mesmo quando o nome vem escrito diferente.</span>
+            <input type="text" id="cfg-emails-${chave}" class="people-row-input" data-campo="emails"
+                   value="${escaparHTML(emailsTexto)}">
+          </div>
+          <div class="cfg-campo">
+            <label for="cfg-discord-${chave}">Discord</label>
+            <input type="text" id="cfg-discord-${chave}" class="people-row-input" data-campo="discord"
+                   placeholder="Link da DM" value="${escaparHTML(discordAtual)}">
+          </div>
+          <div class="people-row-rodape">
+            <button type="button" class="people-row-save" data-chave="${chave}">Salvar</button>
+            <span class="people-row-saved" data-chave-saved="${chave}"></span>
+          </div>
+        </div>`}
       </div>
     `;
-  }).join("");
+  }).join("")}
+    </div>
+  `;
 
-  body.querySelectorAll(".people-row-vinculos-toggle").forEach(btn => {
+  const busca = document.getElementById("pessoasBusca");
+  if (busca) {
+    busca.addEventListener("input", () => {
+      pessoasConfigFiltro = busca.value;
+      renderPainelPessoas();
+      // Redesenhar troca o campo por um novo — sem devolver o foco, a
+      // pessoa perde o cursor a cada letra digitada.
+      const novo = document.getElementById("pessoasBusca");
+      if (novo) { novo.focus(); novo.setSelectionRange(novo.value.length, novo.value.length); }
+    });
+  }
+
+  body.querySelectorAll(".people-row-top").forEach(btn => {
     btn.addEventListener("click", () => {
       const chave = btn.dataset.chaveToggle;
       if (pessoasVinculadasExpandido.has(chave)) pessoasVinculadasExpandido.delete(chave);
-      else pessoasVinculadasExpandido.add(chave);
+      // Uma linha aberta por vez: com várias abertas a lista vira de novo
+      // a pilha de campos que essa tela deixou de ser.
+      else { pessoasVinculadasExpandido.clear(); pessoasVinculadasExpandido.add(chave); }
       renderPainelPessoas();
     });
   });
@@ -148,16 +237,20 @@ function renderPainelPessoas() {
       const aliasesTexto = row.querySelector('[data-campo="aliases"]').value.trim();
       const aliases = aliasesTexto ? aliasesTexto.split(",").map(s => s.trim()).filter(Boolean) : [];
       const discord = row.querySelector('[data-campo="discord"]').value.trim();
+      const emailsTexto = row.querySelector('[data-campo="emails"]').value.trim();
+      const emails = emailsTexto
+        ? emailsTexto.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+        : [];
 
       btn.disabled = true;
       btn.textContent = "Salvando...";
-      const ok = await salvarPessoaNoBackend(nomeOriginal, foto, aliases, discord);
+      const ok = await salvarPessoaNoBackend(nomeOriginal, foto, aliases, discord, emails);
       btn.disabled = false;
       btn.textContent = "Salvar";
 
       if (ok) {
         const idxSalvo = pessoasSalvas.findIndex(p => normalizarParaComparar(p.nome) === normalizarParaComparar(nomeOriginal));
-        const novoRegistro = { nome: nomeOriginal, foto, aliases, discord };
+        const novoRegistro = { nome: nomeOriginal, foto, aliases, discord, emails };
         if (idxSalvo !== -1) pessoasSalvas[idxSalvo] = novoRegistro;
         else pessoasSalvas.push(novoRegistro);
 
@@ -195,6 +288,91 @@ function renderPainelPessoas() {
       } else {
         row.querySelector(".people-row-saved").textContent = "Erro ao salvar";
       }
+    });
+  });
+
+  renderSugestoesDeVinculo();
+}
+
+/**
+ * "De quem é este e-mail?" — os e-mails que o Colmeia conhece (da aba
+ * Acessos e do Runrun.it) e que ainda não estão em nenhum perfil.
+ *
+ * Vincular é o que faz a foto e o nome cadastrados aqui valerem em TODO
+ * lugar do app, mesmo quando o nome chega escrito diferente de cada
+ * fonte — é o e-mail que amarra as pontas.
+ *
+ * ⚠️ NADA É VINCULADO SOZINHO. O backend só sugere (ver
+ * sugerirVinculosDeEmail, Planilha.gs); quem grava é o clique daqui. Um
+ * vínculo errado gruda a foto e o nome de uma pessoa em outra pelo app
+ * inteiro, e não teria como desconfiar de onde veio — por isso a sugestão
+ * mostra de onde tirou o palpite e o quanto confia nele.
+ */
+// As sugestões já buscadas. `renderPainelPessoas` roda de novo a cada
+// letra digitada na busca — sem guardar isso aqui, cada tecla viraria
+// uma consulta ao backend (que ainda por cima varre o Runrun.it inteiro).
+// `null` = ainda não buscou nessa sessão; vira `null` de novo quando um
+// vínculo é confirmado, porque aí a lista mudou de verdade.
+let sugestoesVinculoCache = null;
+
+async function renderSugestoesDeVinculo() {
+  if (sugestoesVinculoCache === null) {
+    const data = await chamarBackend({ acao: "sugerirVinculosDeEmail" });
+    if (!data || !data.ok) return; // sem sugestões a lista de pessoas segue inteira
+    sugestoesVinculoCache = data.sugestoes || [];
+  }
+  const bloco = document.getElementById("pessoasSugestoes");
+  // A aba pode ter mudado enquanto a resposta vinha — o cuidado de sempre.
+  if (!bloco || configTabAtiva !== "pessoas") return;
+
+  const sugestoes = sugestoesVinculoCache;
+  if (!sugestoes.length) return;
+
+  bloco.innerHTML = `
+    <div class="cfg-aviso">
+      <div>
+        <div class="cfg-aviso-titulo">${sugestoes.length} e-mail${sugestoes.length > 1 ? "s" : ""} pra vincular</div>
+        <div class="cfg-aviso-sub">Vincular faz a foto e o nome valerem em todo lugar do app.</div>
+      </div>
+      ${sugestoes.map((s, i) => `
+        <div class="cfg-sugestao">
+          <div class="cfg-sugestao-texto">
+            <div class="cfg-sugestao-email">${escaparHTML(s.email)}</div>
+            <div class="cfg-sugestao-de">
+              ${s.certeza === "exata" ? "é" : "parece ser"}
+              <strong>${escaparHTML(s.pessoa)}</strong> ·
+              vem ${s.fontes.includes("acesso") && s.fontes.includes("runrun")
+                    ? "do acesso e do Runrun.it"
+                    : s.fontes.includes("acesso") ? "do acesso" : "do Runrun.it"}
+              como “${escaparHTML(s.nomeNaFonte)}”
+            </div>
+          </div>
+          <button type="button" class="cfg-btn-mini" data-vincular="${i}">Vincular</button>
+        </div>`).join("")}
+    </div>
+  `;
+
+  bloco.querySelectorAll("[data-vincular]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const s = sugestoes[Number(btn.dataset.vincular)];
+      btn.disabled = true;
+      btn.textContent = "Vinculando...";
+      const r = await chamarBackend({
+        acao: "vincularEmailAPessoa", pessoa: s.pessoa, email: s.email,
+      });
+      if (!r || !r.ok) {
+        btn.disabled = false;
+        btn.textContent = "Vincular";
+        alert((r && r.error) || "Não consegui vincular agora.");
+        return;
+      }
+      // Recarrega os perfis antes de redesenhar: é o que faz a foto já
+      // aparecer certa na hora, em vez de só no próximo F5. E zera o
+      // cache das sugestões, porque essa acabou de sair da lista.
+      sugestoesVinculoCache = null;
+      await carregarPessoasSalvas();
+      renderPainelPessoas();
+      render();
     });
   });
 }
@@ -1043,17 +1221,16 @@ async function renderPainelAcessos() {
   if (!corpoAgora || configTabAtiva !== "acessos") return;
 
   corpoAgora.innerHTML = `
-    <div class="acessos-lista">
+    <div id="acessosDoRunrun"></div>
+    <div class="cfg-lista">
       ${acessosLista.map(p => acessoLinhaHTML(p)).join("")}
     </div>
-    <div class="acessos-nova" id="acessosDoRunrun">
-      <h4>Gente do Runrun.it que ainda não tem acesso</h4>
-      <p class="quick-access-empty" style="margin:0 0 10px">Procurando…</p>
-    </div>
-    <div class="acessos-nova">
-      <h4>Adicionar na mão</h4>
-      ${acessoFormHTML("novo", { nome: "", papel: "designer", email: "" })}
-    </div>
+    <details class="cfg-bloco-extra">
+      <summary>Adicionar na mão</summary>
+      <div class="cfg-bloco-extra-corpo">
+        ${acessoFormHTML("novo", { nome: "", papel: "designer", email: "" })}
+      </div>
+    </details>
   `;
   wireAcessos(corpoAgora);
   renderSugestoesDoRunrun();
@@ -1073,44 +1250,38 @@ async function renderSugestoesDoRunrun() {
   const bloco = document.getElementById("acessosDoRunrun");
   if (!bloco || configTabAtiva !== "acessos") return;
 
-  if (!data || !data.ok) {
-    bloco.innerHTML = `<h4>Gente do Runrun.it que ainda não tem acesso</h4>
-      <p class="quick-access-empty">${escaparHTML((data && data.error) || "Não consegui consultar o Runrun.it agora.")}</p>`;
-    return;
-  }
+  // Sem ninguém pra sugerir (ou com o Runrun.it fora do ar), o bloco
+  // simplesmente não existe — antes ele ficava ali dizendo "todo mundo já
+  // tem acesso", ocupando espaço pra informar que não havia nada a fazer.
+  if (!data || !data.ok) { bloco.innerHTML = ""; return; }
   const pessoas = data.pessoas || [];
-  if (!pessoas.length) {
-    bloco.innerHTML = `<h4>Gente do Runrun.it que ainda não tem acesso</h4>
-      <p class="quick-access-empty">Todo mundo do Runrun.it já tem acesso.</p>`;
-    return;
-  }
+  if (!pessoas.length) { bloco.innerHTML = ""; return; }
 
   bloco.innerHTML = `
-    <h4>Gente do Runrun.it que ainda não tem acesso</h4>
-    <p class="quick-access-empty" style="margin:0 0 10px">
-      Nome e e-mail já vêm do Runrun.it — escolha o papel e clique em Adicionar.
-      Quem entra por aqui usa o Google, sem chave de acesso.
-    </p>
-    ${pessoas.map((p, i) => `
-      <div class="acesso-item" data-sugestao="${i}">
-        <div class="acesso-cabeca">
-          <strong>${escaparHTML(p.nome)}</strong>
-          <span class="acesso-email">${escaparHTML(p.email)}</span>
-        </div>
-        <div class="acesso-campos">
-          <select data-campo="papel">
+    <div class="cfg-aviso">
+      <div>
+        <div class="cfg-aviso-titulo">${pessoas.length} do Runrun.it sem acesso</div>
+        <div class="cfg-aviso-sub">Escolha o papel e adicione. Quem entra por aqui usa o Google, sem chave.</div>
+      </div>
+      ${pessoas.map((p, i) => `
+        <div class="cfg-sugestao" data-sugestao="${i}">
+          <div class="cfg-sugestao-texto">
+            <div class="cfg-sugestao-email">${escaparHTML(p.nome)}</div>
+            <div class="cfg-sugestao-de">${escaparHTML(p.email)}</div>
+          </div>
+          <select data-campo="papel" class="cfg-select-mini">
             ${["atendimento", "designer", "coordenador"].map(v =>
               `<option value="${v}">${v}</option>`).join("")}
           </select>
-          <button type="button" class="repasse-btn" data-sugestao-add="${i}">Adicionar</button>
-        </div>
-      </div>`).join("")}
+          <button type="button" class="cfg-btn-mini" data-sugestao-add="${i}">Adicionar</button>
+        </div>`).join("")}
+    </div>
   `;
 
   bloco.querySelectorAll("[data-sugestao-add]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const p = pessoas[Number(btn.dataset.sugestaoAdd)];
-      const item = btn.closest(".acesso-item");
+      const item = btn.closest(".cfg-sugestao");
       const papel = item.querySelector('[data-campo="papel"]').value;
       btn.disabled = true;
       await acessoChamar(
@@ -1121,37 +1292,77 @@ async function renderSugestoesDoRunrun() {
   });
 }
 
+// Quem está com a linha aberta na aba Acessos (mesmo padrão da aba
+// Pessoas: fechada por padrão, uma aberta por vez).
+let acessoAberto = "";
+
 function acessoLinhaHTML(p) {
   const id = encodeURIComponent(p.nome);
+  const aberto = acessoAberto === p.nome;
+  // A foto aqui não é enfeite: é a prova de que esta linha de acesso está
+  // ligada a um perfil da aba Pessoas. Se aparecerem só as iniciais, é
+  // porque o Colmeia ainda não sabe que esta pessoa é aquele perfil — e a
+  // foto cadastrada não vai aparecer pra ela em lugar nenhum do app.
+  const perfil = resolverPessoa({ nome: p.nome, email: p.email });
+  const tags = [
+    `<span class="cfg-tag">${escaparHTML(p.papel)}</span>`,
+    p.email ? `<span class="cfg-tag ok">Google</span>` : "",
+    p.temChave ? `<span class="cfg-tag">chave</span>` : "",
+    perfil ? "" : `<span class="cfg-tag falta">sem perfil</span>`,
+  ].join("");
+
   return `
-    <div class="acesso-item" data-nome="${escaparHTML(p.nome)}">
-      <div class="acesso-cabeca">
-        <strong>${escaparHTML(p.nome)}</strong>
-        <span class="acesso-papel">${escaparHTML(p.papel)}</span>
+    <div class="people-row${aberto ? " aberta" : ""}" data-nome="${escaparHTML(p.nome)}">
+      <button type="button" class="people-row-top" data-acesso-toggle="${escaparHTML(p.nome)}"
+              aria-expanded="${aberto ? "true" : "false"}">
+        ${avatarHTML(p.nome, "avatar-sm", null, { email: p.email })}
+        <span class="people-row-name">${escaparHTML(p.nome)}</span>
+        <span class="people-row-tags">${tags}</span>
+        ${chevronConfigSVG}
+      </button>
+      ${!aberto ? "" : `
+      <div class="people-row-form">
         ${p.email
-          ? `<span class="acesso-email">${escaparHTML(p.email)}</span>`
-          : `<span class="acesso-email acesso-sem">sem e-mail — só entra pela chave</span>`}
-        ${p.temChave ? "" : `<span class="acesso-email acesso-sem">sem chave — só entra pelo Google</span>`}
-      </div>
-      ${acessoFormHTML(id, p)}
-      <div class="acesso-acoes">
-        <button type="button" class="repasse-btn" data-acao="salvar" data-nome="${escaparHTML(p.nome)}">Salvar</button>
-        <button type="button" class="repasse-btn" data-acao="substituir" data-nome="${escaparHTML(p.nome)}">Substituir pessoa</button>
-        <button type="button" class="repasse-btn acesso-perigo" data-acao="remover" data-nome="${escaparHTML(p.nome)}">Tirar acesso</button>
-      </div>
+          ? ""
+          : `<p class="cfg-ajuda">Sem e-mail, essa pessoa só entra pela chave de acesso.</p>`}
+        ${perfil
+          ? ""
+          : `<p class="cfg-ajuda">Sem perfil na aba Pessoas — a foto dela não aparece em lugar nenhum do app.</p>`}
+        ${acessoFormHTML(id, p)}
+        <div class="acesso-acoes">
+          <button type="button" class="people-row-save" data-acao="salvar" data-nome="${escaparHTML(p.nome)}">Salvar</button>
+          <button type="button" class="cfg-btn-secundario" data-acao="substituir" data-nome="${escaparHTML(p.nome)}">Substituir pessoa</button>
+          <button type="button" class="cfg-btn-secundario acesso-perigo" data-acao="remover" data-nome="${escaparHTML(p.nome)}">Tirar acesso</button>
+        </div>
+      </div>`}
     </div>`;
 }
 
 function acessoFormHTML(id, p) {
   return `
     <div class="acesso-campos" data-form="${id}">
-      <input type="text" data-campo="nome" placeholder="Nome" value="${escaparHTML(p.nome || "")}">
-      <select data-campo="papel">
-        ${["designer", "atendimento", "coordenador"].map(v =>
-          `<option value="${v}"${(p.papel || "designer") === v ? " selected" : ""}>${v}</option>`).join("")}
-      </select>
-      <input type="email" data-campo="email" placeholder="e-mail do Google (opcional)" value="${escaparHTML(p.email || "")}">
-      <input type="text" data-campo="chave" placeholder="${p.nome ? "nova chave (deixe vazio pra manter)" : "chave (opcional)"}">
+      <div class="cfg-campo">
+        <label>Nome</label>
+        <input type="text" class="people-row-input" data-campo="nome" value="${escaparHTML(p.nome || "")}">
+      </div>
+      <div class="cfg-campo">
+        <label>Papel</label>
+        <span class="cfg-ajuda">É o que decide o que a pessoa enxerga no Colmeia.</span>
+        <select class="people-row-input" data-campo="papel">
+          ${["designer", "atendimento", "coordenador"].map(v =>
+            `<option value="${v}"${(p.papel || "designer") === v ? " selected" : ""}>${v}</option>`).join("")}
+        </select>
+      </div>
+      <div class="cfg-campo">
+        <label>E-mail do Google</label>
+        <span class="cfg-ajuda">Libera o “Entrar com o Google”. Opcional.</span>
+        <input type="email" class="people-row-input" data-campo="email" value="${escaparHTML(p.email || "")}">
+      </div>
+      <div class="cfg-campo">
+        <label>Chave de acesso</label>
+        <input type="text" class="people-row-input" data-campo="chave"
+               placeholder="${p.nome ? "deixe vazio pra manter a atual" : "opcional"}">
+      </div>
     </div>`;
 }
 
@@ -1163,6 +1374,14 @@ function lerCamposDoAcesso(raiz, id) {
 }
 
 function wireAcessos(raiz) {
+  raiz.querySelectorAll("[data-acesso-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const nome = btn.dataset.acessoToggle;
+      acessoAberto = acessoAberto === nome ? "" : nome;
+      renderPainelAcessos();
+    });
+  });
+
   raiz.querySelectorAll("[data-acao]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const nome = btn.dataset.nome;
@@ -1206,7 +1425,8 @@ function wireAcessos(raiz) {
   if (formNovo) {
     const botao = document.createElement("button");
     botao.type = "button";
-    botao.className = "repasse-btn";
+    botao.className = "people-row-save";
+    botao.style.marginTop = "14px";
     botao.textContent = "Adicionar";
     botao.addEventListener("click", async () => {
       const dados = lerCamposDoAcesso(raiz, "novo");

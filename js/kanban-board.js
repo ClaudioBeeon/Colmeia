@@ -101,7 +101,7 @@ function cardHTML(task, idx) {
       </div>
       <div class="card-bottom">
         <div class="assignee-wrap" data-idx="${idx}">
-          ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl)}
+          ${avatarHTML(task.assignee, "avatar-sm", task.assigneeAvatarUrl, { runrunId: task.assigneeId })}
           ${task.assigneeEmFocoAte && task.assigneeEmFocoAte > Date.now() ? `
             <span class="assignee-foco-badge" title="${escaparHTML(task.assignee)} está em modo foco até ${new Date(task.assigneeEmFocoAte).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}">🧠</span>
           ` : ""}
@@ -444,7 +444,7 @@ function attachCardDragHandlers() {
       }
       listaContainer.outerHTML = usuarios.map(u => `
         <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}">
-          ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
+          ${avatarHTML(u.nome, "avatar-sm", u.foto, { runrunId: u.id, email: u.email })} <span>${escaparHTML(nomeOficialDe({ nome: u.nome, runrunId: u.id, email: u.email }))}</span>
         </button>
       `).join("");
       menu.querySelectorAll("button:not(.assignee-advance-btn)").forEach(opt => {

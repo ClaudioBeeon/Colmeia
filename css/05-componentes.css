@@ -1596,66 +1596,14 @@ body.com-aviso-runrun .page { padding-top: 46px; }
 }
 
 
-/* ===== Configurações → Acessos (2026-08-10) =====
-   Quem entra no Colmeia. Lista simples, sem cartão nem sombra: é uma tela
-   de cadastro que o coordenador abre de vez em quando, não algo que
-   precise chamar atenção. */
-.acessos-lista { display: flex; flex-direction: column; gap: 10px; }
+/* ===== Configurações → Acessos =====
+   O visual desta aba mudou no redesenho de 2026-08-11: ela agora usa as
+   mesmas peças da aba Pessoas (.people-row fechada que abre no clique,
+   .cfg-*), definidas em css/04-paginas.css. As classes que existiam só
+   aqui (.acesso-item, .acesso-cabeca, .acesso-papel, .acesso-email,
+   .acesso-sem, .acessos-nova, .acessos-lista) saíram junto com a marcação
+   que as usava. Só sobreviveram as três abaixo, que a marcação nova ainda
+   usa — e elas moraram lá, perto do resto do sistema das Configurações.
 
-.acesso-item {
-  border: 1px solid var(--linha, rgba(255, 255, 255, 0.12));
-  border-radius: 10px;
-  padding: 12px 14px;
-}
-
-.acesso-cabeca {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.acesso-papel {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.7;
-}
-.acesso-email { font-size: 12.5px; opacity: 0.75; }
-/* Sem e-mail ou sem chave não é erro — é uma escolha de como a pessoa
-   entra. Por isso fica discreto, nunca em vermelho. */
-.acesso-sem { font-style: italic; opacity: 0.5; }
-
-/* Os campos se acomodam sozinhos: em tela estreita viram uma coluna, sem
-   precisar de media query. */
-.acesso-campos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.acesso-campos input,
-.acesso-campos select {
-  flex: 1 1 170px;
-  min-width: 0;
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--linha, rgba(255, 255, 255, 0.14));
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13.5px;
-}
-
-.acesso-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
-/* "Tirar acesso" some visualmente do resto: é a única ação daqui que
-   alguém não quer clicar sem querer. */
-.acesso-perigo { opacity: 0.65; }
-.acesso-perigo:hover { opacity: 1; color: #E5695F; }
-
-.acessos-nova {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--linha, rgba(255, 255, 255, 0.12));
-}
-.acessos-nova h4 { margin: 0 0 10px; font-size: 13.5px; }
+   "Tirar acesso" continua sendo a única ação daqui que ninguém quer
+   clicar sem querer: ver .cfg-btn-secundario.acesso-perigo. */

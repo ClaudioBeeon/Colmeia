@@ -488,9 +488,13 @@ function handleRequest(e, method) {
       } else if (body.acao === 'listarPessoas') {
         output = listarPessoasSalvas();
       } else if (body.acao === 'salvarPessoa') {
-        output = salvarPessoa(body.nome, body.foto, body.aliases, body.discord);
+        output = salvarPessoa(body.nome, body.foto, body.aliases, body.discord, body.emails);
       } else if (body.acao === 'excluirPessoasPorNomes') {
         output = excluirPessoasPorNomes(body.nomes);
+      } else if (body.acao === 'sugerirVinculosDeEmail') {
+        output = sugerirVinculosDeEmail();
+      } else if (body.acao === 'vincularEmailAPessoa') {
+        output = vincularEmailAPessoa(body.pessoa, body.email);
       } else if (body.acao === 'listarLinksClientes') {
         output = listarLinksClientes();
       } else if (body.acao === 'salvarLinksCliente') {

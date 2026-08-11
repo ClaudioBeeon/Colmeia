@@ -137,12 +137,16 @@ function lerSessaoSalva() {
   }
 }
 
-function salvarSessao(nome, papel, runrunId) {
+function salvarSessao(nome, papel, runrunId, email) {
   try {
     // Guarda também o ID no Runrun.it, pra "essa tarefa é minha?" continuar
     // sendo decidido por ID (e não por nome parecido) quando a pessoa
     // reabrir o Colmeia sem digitar a senha de novo. Ver ehMinhaTarefa.
-    localStorage.setItem(SESSAO_CHAVE, JSON.stringify({ nome, papel, runrunId: runrunId || null }));
+    // E o e-mail (quando a entrada foi pelo Google), pra a foto e o nome do
+    // perfil continuarem certos ao reabrir sem logar. Ver resolverPessoa.
+    localStorage.setItem(SESSAO_CHAVE, JSON.stringify({
+      nome, papel, runrunId: runrunId || null, email: email || "",
+    }));
   } catch (err) {
     console.error("Não consegui salvar a sessão:", err);
   }
@@ -263,7 +267,8 @@ async function entrarComCredencialDoGoogle(resposta) {
   DESIGNER_LOGADO = data.nome;
   PAPEL_LOGADO = data.papel;
   DESIGNER_ID_LOGADO = data.runrunId || null;
-  salvarSessao(data.nome, data.papel, data.runrunId);
+  EMAIL_LOGADO = data.email || "";
+  salvarSessao(data.nome, data.papel, data.runrunId, data.email);
   iniciarAppPosLogin();
 }
 
@@ -393,8 +398,10 @@ if (sessaoSalva && sessaoSalva.nome && sessaoSalva.papel) {
   DESIGNER_LOGADO = sessaoSalva.nome;
   PAPEL_LOGADO = sessaoSalva.papel;
   // Sessão salva antes dessa mudança não tem o id — aí ehMinhaTarefa volta
-  // a comparar por nome, como antes, até a pessoa logar de novo.
+  // a comparar por nome, como antes, até a pessoa logar de novo. Mesma
+  // coisa pro e-mail: sem ele, o perfil é achado pelo nome, como sempre foi.
   DESIGNER_ID_LOGADO = sessaoSalva.runrunId || null;
+  EMAIL_LOGADO = sessaoSalva.email || "";
   iniciarAppPosLogin();
 } else {
   buscarFraseDoDia();

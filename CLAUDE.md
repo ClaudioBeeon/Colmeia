@@ -1878,6 +1878,71 @@ secret* — que não é usado em lugar nenhum deste fluxo.
 um que não funciona. E o script do Google no index.html fica **fora da montagem** (async, do servidor
 deles): se demorar ou não carregar, a tela de login segue funcionando com a chave de sempre.
 
+## Configurações: o visual (redesenho de 2026-08-11)
+
+Classes `.cfg-*` e `.people-row*` em **css/04-paginas.css**, usadas pelas abas Pessoas e Acessos
+(js/painel-pessoas-clientes.js).
+
+**O problema antigo, em uma frase: tudo estava aberto ao mesmo tempo.** Cada pessoa da lista era um
+formulário com quatro campos nus — vinte pessoas viravam oitenta caixas de texto empilhadas — e em
+cima de cada aba, um parágrafo de explicação que ninguém lia.
+
+As regras que valem daqui pra frente nessa tela:
+
+- **A linha nasce fechada.** Mostra foto, nome e etiquetas (`.cfg-tag`) do que já está preenchido —
+  "sem foto", "2 apelidos", "1 e-mail", "sem perfil". É o que deixa varrer a lista e ver quem falta
+  configurar sem abrir ninguém, e é o que justifica fechar por padrão sem esconder nada útil.
+- **Uma aberta por vez.** Com várias abertas a lista vira de novo a pilha de campos que ela deixou
+  de ser.
+- **Label em cima do campo, nunca placeholder fazendo papel de label** — o placeholder some quando
+  você digita, e aí ninguém mais sabe o que aquele campo era. Explicação longa vira `.cfg-ajuda`
+  embaixo do label, que é onde ela é lida na hora de preencher.
+- **O texto da aba (`#configHint`) é UMA linha.** O detalhe mora no campo que ele explica.
+- **Cores pelas variáveis do tema**, nunca `#0000FB`/`#2F9E44` escritos na mão (era isso que dava
+  contraste ruim no modo escuro), e espaçamento numa escala só: 8 / 12 / 16 / 20.
+- **Ação principal e secundária não competem:** `.people-row-save` (azul, cheio) vs
+  `.cfg-btn-secundario` (contorno). "Tirar acesso" só fica vermelho no hover.
+
+As abas viraram um **controle segmentado** (`.config-tabs` com fundo e pílula), não mais uma linha
+de 2px embaixo do texto.
+
+## Quem é esta pessoa? — a identidade única (2026-08-11)
+
+`resolverPessoa`/`nomeOficialDe` (js/pessoas-fotos.js) + a coluna **`emails`** (E) da aba Pessoas +
+`sugerirVinculosDeEmail`/`vincularEmailAPessoa`/`pessoaProvavelPeloNome` (Planilha.gs).
+
+**O problema que isso resolve:** o Colmeia conhece o mesmo ser humano por três listas — a aba
+**Login** (quem entra, com o e-mail do Google), o **Runrun.it** (quem executa) e a aba **Pessoas**
+(foto e apelidos). Elas só se falavam pelo **nome escrito igual**, e cada canto do código resolvia
+isso do seu jeito: `resolverFotoManual` olhava apelidos, `getDiscordDaPessoa` **não** olhava,
+`fotoDoDesigner` comparava nome puro. Na prática, a foto cadastrada aparecia num lugar e sumia no
+outro sem padrão que desse pra explicar.
+
+**Agora existe uma pergunta só.** `resolverPessoa` aceita a pista que você tiver — `{nome, email,
+runrunId}` ou só o nome — e devolve sempre a mesma pessoa. A ordem vai **da certeza pro palpite**:
+
+1. **e-mail** — não erra, e-mail é de uma pessoa só (o `runrunId` vira e-mail pelo `usuariosRunrunCache`);
+2. **nome/apelido igual** — o cadastro explícito do coordenador;
+3. **nome parecido** (`nomesCorrespondem`) — o último recurso, o único passo que pode errar.
+
+Quem quiser a foto ou o nome certos passa a pista adiante: `avatarHTML(nome, tamanho, fotoDireta,
+{runrunId, email})`. Sem pista nenhuma tudo continua funcionando como antes, pelo nome.
+
+**O e-mail sobrevive ao login:** `loginComGoogle` devolve o `email`, que vira `EMAIL_LOGADO`
+(js/paginas-designers.js) e entra na sessão salva — é o que faz a foto e o nome de quem está logado
+ficarem certos mesmo quando o nome da linha de acesso não bate com o do perfil.
+
+**⚠️ O vínculo é sempre em DOIS PASSOS**, mesmo cuidado de `verEmailsDoRunrun`:
+`sugerirVinculosDeEmail` **só mostra** ("este e-mail parece ser desta pessoa"), quem grava é o
+clique do coordenador. E o palpite é conservador: nome/apelido igual = `certeza: 'exata'`; primeiro
+nome que aponta pra **uma** pessoa só = `'palpite'`; primeiro nome ambíguo **não vira sugestão
+nenhuma**. Um vínculo errado gruda a foto e o nome de alguém em outra pessoa pelo app inteiro, e
+ninguém desconfiaria de onde veio.
+
+**Um e-mail só pode ser de uma pessoa:** `salvarPessoa` recusa e-mail que já é de outro perfil
+(mesma regra que a aba Login já tinha). Sem isso, de quem é o e-mail dependeria da ordem das linhas
+da planilha — ou seja, mudaria sozinho um dia desses.
+
 ## Acessos: quem entra no Colmeia (2026-08-10)
 
 `listarPessoasDoLogin`/`salvarPessoaDoLogin`/`removerPessoaDoLogin`/`substituirPessoaDoLogin`

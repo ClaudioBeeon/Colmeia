@@ -606,18 +606,44 @@ body.card-aberto .quick-access-panel { display: none; }
   to { opacity: 1; }
 }
 
-/* ===== Modal "Pessoas conhecidas" ===== */
-.people-modal { width: 560px; }
+/* ===== Configurações (redesenhado em 2026-08-11) =====
+   O problema antigo, em uma frase: tudo estava aberto ao mesmo tempo.
+   Cada pessoa da lista era um formulário com quatro campos nus, então
+   vinte pessoas viravam oitenta caixas de texto empilhadas — e no meio
+   disso, um parágrafo de explicação por aba que ninguém lia.
+
+   O que mudou:
+   - a linha nasce FECHADA (foto, nome e etiquetas do que já está
+     preenchido) e só vira formulário quando você clica nela;
+   - as abas viraram um controle segmentado, que mostra onde você está
+     sem depender de uma linha fina de 2px embaixo do texto;
+   - todo espaçamento saiu de uma escala só (8 / 12 / 16 / 20), em vez de
+     um valor diferente por regra;
+   - as cores agora são as variáveis do tema — antes eram #0000FB e
+     #2F9E44 escritos na mão, que no modo escuro davam contraste ruim. */
+.people-modal { width: 660px; max-width: calc(100vw - 32px); }
+.cfg-header { padding-bottom: 14px; border-bottom: none; }
 
 .config-tabs {
-  display: flex; gap: 4px; padding: 0 20px; margin-top: -4px;
+  display: flex; gap: 2px; padding: 4px; margin: 0 20px 16px;
+  background: var(--page-bg); border-radius: 12px;
+  overflow-x: auto; scrollbar-width: none;
 }
+.config-tabs::-webkit-scrollbar { display: none; }
 .config-tab {
-  border: none; background: transparent; cursor: pointer;
-  font-family: inherit; font-size: 13px; font-weight: 600;
-  color: var(--text-muted); padding: 8px 4px; border-bottom: 2px solid transparent;
+  border: none; background: transparent; cursor: pointer; white-space: nowrap;
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--text-secondary); padding: 8px 14px; border-radius: 9px;
+  transition: background var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple);
 }
-.config-tab.active { color: #0000FB; border-bottom-color: #0000FB; }
+.config-tab:hover:not(.active) { color: var(--text-primary); }
+.config-tab.active {
+  color: var(--text-primary); background: var(--card-bg);
+  box-shadow: 0 1px 2px rgba(20,20,30,0.08);
+}
+[data-theme="dark"] .config-tabs { background: rgba(255,255,255,0.05); }
+[data-theme="dark"] .config-tab.active { background: rgba(255,255,255,0.12); }
 
 .config-clientes-list { display: flex; flex-direction: column; gap: 8px; }
 .cliente-links-form {
@@ -650,48 +676,183 @@ body.card-aberto .quick-access-panel { display: none; }
 }
 .cliente-links-footer { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 .people-modal-hint {
-  font-size: 12px; opacity: 0.65;
-  padding: 0 20px 14px;
+  font-size: 12.5px; color: var(--text-secondary);
+  padding: 0 20px 16px; margin: -4px 0 0;
 }
-.people-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  padding: 12px; margin-bottom: 8px;
-  background: var(--page-bg); border-radius: 12px;
-}
-.people-row-top {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%;
-}
-.people-row-name { font-size: 13px; font-weight: 600; }
-.people-row-input {
-  flex: 1; min-width: 140px;
-  border: 1px solid var(--border); border-radius: 8px;
-  padding: 6px 10px; font-family: inherit; font-size: 12.5px;
-  background: var(--card-bg); color: var(--text-primary);
-}
-.people-row-save {
-  border: none; border-radius: 8px; padding: 7px 14px;
-  background: #0000FB; color: #fff; font-weight: 600; font-size: 12.5px;
-  cursor: pointer;
-}
-.people-row-save:disabled { opacity: 0.6; cursor: default; }
-.people-row-saved { font-size: 12px; color: #2F9E44; font-weight: 600; }
 
-.people-row-vinculos-toggle {
-  margin-left: auto; border: none; background: var(--card-bg); color: var(--text-secondary);
-  font-family: inherit; font-size: 11.5px; font-weight: 600; padding: 5px 10px;
-  border-radius: 999px; cursor: pointer; white-space: nowrap;
+/* Campo de busca — uma lista de gente/cliente fica longa rápido, e antes
+   a única forma de achar alguém era rolar tudo. */
+.cfg-busca {
+  width: 100%; border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px; font-family: inherit; font-size: 13px;
+  background: var(--page-bg); color: var(--text-primary);
+  transition: border-color var(--dur-fast) var(--ease-apple);
 }
-.people-row-vinculos-toggle:hover { background: var(--border); color: var(--text-primary); }
-.people-row-vinculos {
-  width: 100%; display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 2px 0 2px 40px;
+.cfg-busca::placeholder { color: var(--text-muted); }
+.cfg-busca:focus {
+  outline: none; border-color: var(--accent); background: var(--card-bg);
 }
+[data-theme="dark"] .cfg-busca { background: rgba(255,255,255,0.05); }
+
+.cfg-lista { display: flex; flex-direction: column; gap: 6px; }
+.cfg-vazio {
+  font-size: 12.5px; color: var(--text-muted);
+  padding: 24px 0; text-align: center;
+}
+
+/* ===== Linha de pessoa: fechada por padrão, vira formulário no clique ===== */
+.people-row {
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--card-bg); overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease-apple);
+}
+.people-row.aberta { border-color: var(--accent); }
+
+/* A parte sempre visível: é um botão de verdade (o clique abre a linha),
+   então tem que parecer clicável e responder ao teclado. */
+.people-row-top {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 10px 14px;
+  background: transparent; border: none; cursor: pointer;
+  font-family: inherit; text-align: left; color: inherit;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.people-row-top:hover { background: var(--page-bg); }
+[data-theme="dark"] .people-row-top:hover { background: rgba(255,255,255,0.04); }
+.people-row-name { font-size: 13.5px; font-weight: 600; }
+
+/* Etiquetas do que já está preenchido — é o que faz a linha fechada
+   valer alguma coisa: dá pra varrer a lista e ver quem falta configurar
+   sem abrir ninguém. */
+.people-row-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-left: auto; }
+.cfg-tag {
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+  padding: 3px 9px; border-radius: 999px;
+  background: var(--page-bg); color: var(--text-secondary);
+}
+.cfg-tag.ok { background: var(--accent-soft); color: var(--accent); }
+.cfg-tag.falta { background: transparent; color: var(--text-muted); border: 1px dashed var(--border); }
+[data-theme="dark"] .cfg-tag { background: rgba(255,255,255,0.07); }
+[data-theme="dark"] .cfg-tag.ok { background: rgba(120,120,255,0.18); color: #A9A9FF; }
+
+.people-row-chevron {
+  width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted);
+  transition: transform var(--dur-base) var(--ease-apple);
+}
+.people-row.aberta .people-row-chevron { transform: rotate(180deg); }
+
+/* O formulário: labels em cima do campo, não placeholder fazendo papel
+   de label (o placeholder some quando você digita, e aí ninguém mais
+   sabe o que aquele campo era). */
+.people-row-form {
+  padding: 4px 14px 14px;
+  display: flex; flex-direction: column; gap: 14px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+.cfg-campo { display: flex; flex-direction: column; gap: 5px; }
+.cfg-campo label {
+  font-size: 12px; font-weight: 600; color: var(--text-primary);
+}
+.cfg-campo .cfg-ajuda { font-size: 11.5px; color: var(--text-muted); }
+.people-row-input {
+  width: 100%;
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 9px 12px; font-family: inherit; font-size: 13px;
+  background: var(--page-bg); color: var(--text-primary);
+  transition: border-color var(--dur-fast) var(--ease-apple);
+}
+.people-row-input:focus {
+  outline: none; border-color: var(--accent); background: var(--card-bg);
+}
+[data-theme="dark"] .people-row-input { background: rgba(255,255,255,0.05); }
+
+.people-row-rodape { display: flex; align-items: center; gap: 12px; }
+.people-row-save {
+  border: none; border-radius: 9px; padding: 9px 18px;
+  background: var(--accent); color: #fff; font-family: inherit;
+  font-weight: 600; font-size: 12.5px; cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-apple);
+}
+.people-row-save:hover:not(:disabled) { opacity: 0.88; }
+.people-row-save:disabled { opacity: 0.5; cursor: default; }
+.people-row-saved { font-size: 12.5px; color: var(--success); font-weight: 600; }
+
+.people-row-vinculos { display: flex; flex-wrap: wrap; gap: 6px; }
 .people-row-vinculo-chip {
   font-size: 11.5px; font-weight: 600; color: var(--text-secondary);
-  background: var(--card-bg); border: 1px solid var(--border);
-  padding: 3px 9px; border-radius: 999px;
+  background: var(--page-bg); border: 1px solid var(--border);
+  padding: 4px 10px; border-radius: 999px;
 }
+[data-theme="dark"] .people-row-vinculo-chip { background: rgba(255,255,255,0.06); }
+
+/* ===== Aviso destacado (as sugestões de vínculo de e-mail) ===== */
+.cfg-aviso {
+  border: 1px solid var(--accent-soft); background: var(--accent-soft);
+  border-radius: 14px; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+[data-theme="dark"] .cfg-aviso {
+  background: rgba(120,120,255,0.10); border-color: rgba(120,120,255,0.25);
+}
+.cfg-aviso-titulo { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.cfg-aviso-sub { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+.cfg-sugestao {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card-bg); border-radius: 10px; padding: 10px 12px;
+}
+.cfg-sugestao-texto { min-width: 0; flex: 1; }
+.cfg-sugestao-email {
+  font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cfg-sugestao-de { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.cfg-btn-mini {
+  border: none; border-radius: 8px; padding: 7px 14px; flex-shrink: 0;
+  background: var(--accent); color: #fff; font-family: inherit;
+  font-weight: 600; font-size: 12px; cursor: pointer;
+}
+.cfg-btn-mini:hover:not(:disabled) { opacity: 0.88; }
+.cfg-btn-mini:disabled { opacity: 0.5; cursor: default; }
+.cfg-select-mini {
+  border: 1px solid var(--border); border-radius: 8px; flex-shrink: 0;
+  padding: 6px 8px; font-family: inherit; font-size: 12px;
+  background: var(--card-bg); color: var(--text-primary);
+}
+
+/* Botão de ação que não é a principal da tela (substituir, tirar acesso):
+   mesma altura do botão azul, peso visual bem menor — sem isso as três
+   ações competiam entre si como se tivessem a mesma importância. */
+.cfg-btn-secundario {
+  border: 1px solid var(--border); border-radius: 9px; padding: 8px 14px;
+  background: transparent; color: var(--text-secondary);
+  font-family: inherit; font-weight: 600; font-size: 12.5px; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-apple),
+              color var(--dur-fast) var(--ease-apple);
+}
+.cfg-btn-secundario:hover { background: var(--page-bg); color: var(--text-primary); }
+[data-theme="dark"] .cfg-btn-secundario:hover { background: rgba(255,255,255,0.07); }
+.cfg-btn-secundario.acesso-perigo:hover {
+  background: var(--danger-soft); color: var(--danger); border-color: transparent;
+}
+.acesso-acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.acesso-campos { display: flex; flex-direction: column; gap: 14px; }
+
+/* "Adicionar na mão": existe, mas não precisa estar aberto o tempo todo —
+   o caminho normal é a sugestão vinda do Runrun.it, logo acima. */
+.cfg-bloco-extra {
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--card-bg);
+}
+.cfg-bloco-extra > summary {
+  padding: 12px 14px; cursor: pointer; list-style: none;
+  font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+}
+.cfg-bloco-extra > summary::-webkit-details-marker { display: none; }
+.cfg-bloco-extra > summary::before { content: "+ "; color: var(--text-muted); }
+.cfg-bloco-extra[open] > summary::before { content: "− "; }
+.cfg-bloco-extra > summary:hover { color: var(--text-primary); }
+.cfg-bloco-extra-corpo { padding: 0 14px 14px; }
 
 /* ===== Ver regra: remover, status, animação de adicionar ===== */
 .rule-row-remove {

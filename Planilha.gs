@@ -848,7 +848,13 @@ function loginComGoogle(idToken) {
 
   return {
     ok: true, nome: pessoa.nome, papel: pessoa.papel,
-    runrunId: runrunIdDoDesigner(pessoa.nome)
+    runrunId: runrunIdDoDesigner(pessoa.nome),
+    // O e-mail volta junto (2026-08-11) porque ele é a identificação mais
+    // firme que o Colmeia tem dessa pessoa: com ele o app acha o perfil
+    // dela (foto, apelidos, nome oficial) sem depender do nome da linha de
+    // acesso estar escrito igual ao do perfil. Ver resolverPessoa,
+    // js/pessoas-fotos.js.
+    email: email
   };
 }
 
@@ -1369,9 +1375,23 @@ function getPessoasSheet() {
   var sheet = ss.getSheetByName('Pessoas');
   if (!sheet) {
     sheet = ss.insertSheet('Pessoas');
-    sheet.getRange('A1:D1').setValues([['nome', 'foto', 'aliases', 'discord']]);
+    sheet.getRange('A1:E1').setValues([['nome', 'foto', 'aliases', 'discord', 'emails']]);
   }
+  // Coluna E: os e-mails dessa pessoa (2026-08-11). É a mesma ideia da
+  // coluna `aliases` — outro jeito de chamar a mesma pessoa — só que um
+  // jeito que não erra: "Manu" pode ser duas pessoas, um e-mail não.
+  // Nasce sozinha na primeira leitura depois desta versão, igual à coluna
+  // de e-mail da aba Login. Vazia significa "essa pessoa só é reconhecida
+  // pelo nome/apelido", que é exatamente como tudo funcionava antes.
+  if (sheet.getLastColumn() < 5) sheet.getRange(1, 5).setValue('emails');
   return sheet;
+}
+
+/** Quebra uma célula "a|b|c" na lista dela, sem sobras vazias. */
+function separarPorBarra(valor) {
+  return valor
+    ? String(valor).split('|').map(function (s) { return s.trim(); }).filter(Boolean)
+    : [];
 }
 
 function listarPessoasSalvas() {
@@ -1383,14 +1403,15 @@ function listarPessoasSalvas() {
     pessoas.push({
       nome: linhas[i][0],
       foto: linhas[i][1] || '',
-      aliases: linhas[i][2] ? String(linhas[i][2]).split('|').map(function (s) { return s.trim(); }).filter(Boolean) : [],
-      discord: linhas[i][3] || ''
+      aliases: separarPorBarra(linhas[i][2]),
+      discord: linhas[i][3] || '',
+      emails: separarPorBarra(linhas[i][4]).map(function (e) { return e.toLowerCase(); })
     });
   }
   return { ok: true, pessoas: pessoas };
 }
 
-function salvarPessoa(nome, foto, aliases, discord) {
+function salvarPessoa(nome, foto, aliases, discord, emails) {
   if (!nome) return { ok: false, error: 'Nome não informado.' };
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
@@ -1398,13 +1419,33 @@ function salvarPessoa(nome, foto, aliases, discord) {
     var sheet = getPessoasSheet();
     var linhas = sheet.getDataRange().getValues();
     var aliasesTexto = (aliases || []).join('|');
+    var emailsLimpos = (emails || [])
+      .map(function (e) { return String(e || '').toLowerCase().trim(); })
+      .filter(Boolean);
+
+    // Um e-mail só pode apontar pra uma pessoa. Se dois cadastros
+    // tivessem o mesmo, a foto (e o nome oficial) de quem entrasse por ele
+    // dependeria da ordem das linhas da planilha — ou seja, mudaria
+    // sozinho um dia desses, sem ninguém entender por quê. Mesma regra que
+    // já vale na aba Login (ver salvarPessoaDoLogin).
+    for (var v = 1; v < linhas.length; v++) {
+      if (String(linhas[v][0]) === String(nome)) continue;
+      var emailsDaOutra = separarPorBarra(linhas[v][4]).map(function (e) { return e.toLowerCase(); });
+      for (var e = 0; e < emailsLimpos.length; e++) {
+        if (emailsDaOutra.indexOf(emailsLimpos[e]) !== -1) {
+          return { ok: false, error: 'O e-mail ' + emailsLimpos[e] + ' já é de ' + linhas[v][0] + '.' };
+        }
+      }
+    }
+
+    var emailsTexto = emailsLimpos.join('|');
     for (var i = 1; i < linhas.length; i++) {
       if (String(linhas[i][0]) === String(nome)) {
-        sheet.getRange(i + 1, 2, 1, 3).setValues([[foto || '', aliasesTexto, discord || '']]);
+        sheet.getRange(i + 1, 2, 1, 4).setValues([[foto || '', aliasesTexto, discord || '', emailsTexto]]);
         return { ok: true };
       }
     }
-    sheet.appendRow([nome, foto || '', aliasesTexto, discord || '']);
+    sheet.appendRow([nome, foto || '', aliasesTexto, discord || '', emailsTexto]);
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -1433,6 +1474,158 @@ function excluirPessoasPorNomes(nomes) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---------------------------------------------------------------------
+// DE QUEM É ESTE E-MAIL? — as sugestões de vínculo (2026-08-11)
+//
+// O Colmeia conhece a mesma pessoa por três listas diferentes: a aba
+// Login (quem entra, e com qual e-mail do Google), o Runrun.it (quem
+// executa) e a aba Pessoas (a foto e os apelidos). Até aqui as três só se
+// falavam pelo NOME escrito igual — e é por isso que a foto cadastrada
+// sumia justamente quando o nome vinha diferente de uma fonte pra outra.
+//
+// A coluna `emails` da aba Pessoas conserta isso na raiz: o e-mail vira
+// mais um jeito de chamar a pessoa, só que um jeito que não erra.
+//
+// ⚠️ ESTA FUNÇÃO NÃO GRAVA NADA, e isso é de propósito — o mesmo cuidado
+// de `verEmailsDoRunrun` mais acima. Ela só diz "este e-mail PARECE ser
+// desta pessoa"; quem confirma é o coordenador, clicando. Um vínculo
+// errado aqui gruda a foto e o nome de alguém em outra pessoa pelo app
+// inteiro, e ninguém desconfiaria de onde veio.
+// ---------------------------------------------------------------------
+
+/**
+ * Os e-mails que o Colmeia conhece (da aba Login e do Runrun.it) e que
+ * ainda não estão vinculados a nenhum perfil da aba Pessoas.
+ *
+ * `certeza` diz o quanto dá pra confiar em cada palpite:
+ *   'exata'   — o nome bate igualzinho com a pessoa ou com um apelido dela
+ *   'palpite' — só o primeiro nome bate, e bate com UMA pessoa só
+ * Quando o primeiro nome bate com mais de uma pessoa, não vira sugestão
+ * nenhuma: é exatamente o caso em que um palpite entregaria a foto de uma
+ * pessoa pra outra.
+ */
+function sugerirVinculosDeEmail() {
+  var pessoas = listarPessoasSalvas().pessoas || [];
+
+  // Todo e-mail que já está vinculado a alguém — não vira sugestão.
+  var jaVinculados = {};
+  pessoas.forEach(function (p) {
+    (p.emails || []).forEach(function (e) { jaVinculados[e] = p.nome; });
+  });
+
+  // Junta os e-mails das duas fontes. Um mesmo e-mail costuma aparecer nas
+  // duas (o e-mail do Google normalmente é o mesmo do Runrun.it) — nesse
+  // caso as fontes vão somadas no MESMO item, pra virar uma linha só na
+  // tela em vez de duas iguais.
+  var candidatos = {}; // email -> { email, nomeNaFonte, fontes: [] }
+  function anotar(email, nome, fonte) {
+    email = String(email || '').toLowerCase().trim();
+    nome = String(nome || '').trim();
+    if (!email || !nome || jaVinculados[email]) return;
+    if (!candidatos[email]) {
+      candidatos[email] = { email: email, nomeNaFonte: nome, fontes: [] };
+    }
+    if (candidatos[email].fontes.indexOf(fonte) === -1) {
+      candidatos[email].fontes.push(fonte);
+    }
+  }
+
+  var linhasLogin = getLoginSheet().getDataRange().getValues();
+  for (var i = 1; i < linhasLogin.length; i++) {
+    anotar(linhasLogin[i][3], linhasLogin[i][0], 'acesso');
+  }
+
+  var usuarios = buscarUsuariosRunrunComCache();
+  var runrunFora = !Array.isArray(usuarios);
+  if (!runrunFora) {
+    usuarios.forEach(function (u) {
+      // Só gente da casa, mesma regra de listarPessoasDoRunrunSemAcesso: o
+      // Runrun.it tem convidado e conta de cliente, e nada disso é pessoa
+      // do Colmeia pra ganhar perfil.
+      var email = String(u.email || '').toLowerCase().trim();
+      if (email.indexOf('@beeon.com.br') === -1) return;
+      anotar(email, u.name, 'runrun');
+    });
+  }
+
+  var sugestoes = [];
+  Object.keys(candidatos).forEach(function (email) {
+    var c = candidatos[email];
+    var achado = pessoaProvavelPeloNome(pessoas, c.nomeNaFonte);
+    if (!achado) return;
+    sugestoes.push({
+      email: c.email,
+      nomeNaFonte: c.nomeNaFonte,
+      fontes: c.fontes,
+      pessoa: achado.pessoa.nome,
+      foto: achado.pessoa.foto || '',
+      certeza: achado.certeza
+    });
+  });
+
+  // Os vínculos certos primeiro: são os que o coordenador confirma
+  // batendo o olho, sem precisar parar pra pensar em cada um.
+  sugestoes.sort(function (a, b) {
+    if (a.certeza !== b.certeza) return a.certeza === 'exata' ? -1 : 1;
+    return a.pessoa.localeCompare(b.pessoa, 'pt-BR');
+  });
+
+  return { ok: true, sugestoes: sugestoes, runrunFora: runrunFora };
+}
+
+/**
+ * Qual perfil da aba Pessoas é provavelmente deste nome? Devolve null
+ * quando não dá pra ter certeza — que é a resposta certa sempre que a
+ * alternativa seria chutar.
+ */
+function pessoaProvavelPeloNome(pessoas, nome) {
+  var alvo = normalizarNomeLogin(nome);
+  if (!alvo) return null;
+
+  for (var i = 0; i < pessoas.length; i++) {
+    var p = pessoas[i];
+    if (normalizarNomeLogin(p.nome) === alvo) return { pessoa: p, certeza: 'exata' };
+    for (var a = 0; a < (p.aliases || []).length; a++) {
+      if (normalizarNomeLogin(p.aliases[a]) === alvo) return { pessoa: p, certeza: 'exata' };
+    }
+  }
+
+  // Nada igual: tenta pelo primeiro nome, e só aceita se apontar pra UMA
+  // pessoa. Um "Lucas" que serve pra dois Lucas não é sugestão — é cara ou
+  // coroa com a identidade de alguém.
+  var primeiro = alvo.split(' ')[0];
+  if (!primeiro || primeiro.length < 3) return null;
+  var candidatas = pessoas.filter(function (p) {
+    if (normalizarNomeLogin(p.nome).split(' ')[0] === primeiro) return true;
+    return (p.aliases || []).some(function (a) {
+      return normalizarNomeLogin(a).split(' ')[0] === primeiro;
+    });
+  });
+  return candidatas.length === 1 ? { pessoa: candidatas[0], certeza: 'palpite' } : null;
+}
+
+/**
+ * Confirma um vínculo: acrescenta o e-mail à pessoa, sem mexer em mais
+ * nada dela (foto, apelidos e discord ficam como estão). É o passo 2 —
+ * chamado pelo clique do coordenador, nunca sozinho.
+ */
+function vincularEmailAPessoa(nomePessoa, email) {
+  nomePessoa = String(nomePessoa || '').trim();
+  email = String(email || '').toLowerCase().trim();
+  if (!nomePessoa || !email) return { ok: false, error: 'Falta o nome ou o e-mail.' };
+
+  var pessoas = listarPessoasSalvas().pessoas || [];
+  var alvo = null;
+  for (var i = 0; i < pessoas.length; i++) {
+    if (String(pessoas[i].nome) === nomePessoa) { alvo = pessoas[i]; break; }
+  }
+  if (!alvo) return { ok: false, error: 'Não achei o perfil de ' + nomePessoa + '.' };
+
+  var emails = (alvo.emails || []).slice();
+  if (emails.indexOf(email) === -1) emails.push(email);
+  return salvarPessoa(alvo.nome, alvo.foto, alvo.aliases, alvo.discord, emails);
 }
 
 // ============ PRIORIDADE ============

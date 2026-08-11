@@ -365,7 +365,7 @@ function renderRepasseSeqHTML(t) {
   if (seq.length === 0) {
     return `
       <div class="repasse-seq-dots">
-        <div class="wf-dot current" title="${t.assignee}">${avatarHTML(t.assignee, "avatar-xs", t.assigneeAvatarUrl)}</div>
+        <div class="wf-dot current" title="${t.assignee}">${avatarHTML(t.assignee, "avatar-xs", t.assigneeAvatarUrl, { runrunId: t.assigneeId })}</div>
         <span class="repasse-seq-empty-label">sem regra ainda</span>
       </div>
       <button type="button" class="repasse-seq-btn add" data-action="add" title="Criar sequência de responsáveis">

@@ -1523,6 +1523,12 @@ function listarTodosUsuariosRunrun() {
     return {
       id: u.id,
       nome: u.name,
+      // O e-mail vai junto desde 2026-08-11: é ele que liga essa pessoa do
+      // Runrun.it ao perfil dela no Colmeia (foto e apelidos) sem depender
+      // do nome estar escrito igual dos dois lados — ver resolverPessoa,
+      // js/pessoas-fotos.js. O Runrun.it sempre devolveu esse campo; o
+      // Colmeia é que estava jogando ele fora aqui.
+      email: String(u.email || '').toLowerCase(),
       foto: u.avatar_url || u.avatar || u.picture_url || null
     };
   });

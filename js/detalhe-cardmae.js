@@ -659,7 +659,7 @@ async function abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, btn) {
   if (!menu.isConnected) return; // fechou enquanto carregava
   menu.innerHTML = usuarios.map(u => `
     <button type="button" data-user-id="${u.id}" data-user-nome="${u.nome}" data-user-foto="${u.foto || ""}">
-      ${avatarHTML(u.nome, "avatar-sm", u.foto)} <span>${u.nome}</span>
+      ${avatarHTML(u.nome, "avatar-sm", u.foto, { runrunId: u.id, email: u.email })} <span>${escaparHTML(nomeOficialDe({ nome: u.nome, runrunId: u.id, email: u.email }))}</span>
     </button>
   `).join("");
   posicionarPopupFixo(menu, btn); // recalcula já com a altura real da lista

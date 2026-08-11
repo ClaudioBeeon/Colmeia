@@ -346,17 +346,23 @@
       </div>
     </div>
 
+    <!-- Configurações (redesenhadas em 2026-08-11) — antes era uma pilha
+         de campos abertos com um parágrafo de explicação em cima de cada
+         aba. Agora: abas como controle segmentado, cada pessoa/cliente
+         numa linha fechada que só abre quando você clica, e a explicação
+         reduzida a uma linha (o resto do texto virou dica dentro do campo
+         que ele explica, que é onde ela é lida de verdade). -->
     <div class="rule-modal-overlay" id="peopleModalOverlay" hidden>
       <div class="rule-modal people-modal">
-        <div class="rule-modal-header">
-          <h3>Configurações do coordenador</h3>
+        <div class="rule-modal-header cfg-header">
+          <h3>Configurações</h3>
           <button type="button" id="peopleModalClose" aria-label="Fechar">
             <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
         </div>
-        <div class="config-tabs">
+        <div class="config-tabs" role="tablist">
           <button type="button" class="config-tab active" id="configTabPessoas">Pessoas</button>
-          <button type="button" class="config-tab" id="configTabClientes">Links de clientes</button>
+          <button type="button" class="config-tab" id="configTabClientes">Clientes</button>
           <button type="button" class="config-tab" id="configTabMemorias">Memórias da Bee</button>
           <!-- "Vincular clientes duplicados" (2026-08-10) — veio do painel
                de designers junto com a tela principal dele. Mesmo dado de
@@ -371,7 +377,7 @@
                a planilha na mão. -->
           <button type="button" class="config-tab" id="configTabAcessos" hidden>Acessos</button>
         </div>
-        <p class="people-modal-hint" id="configHint">Todo nome que o Colmeia encontrar (no painel-designers-beeon, no Runrun.it, em subtarefas etc) aparece aqui. Troque a foto ou vincule apelidos à mesma pessoa.</p>
+        <p class="people-modal-hint" id="configHint">Quem o Colmeia conhece — foto, apelidos e e-mails de cada pessoa.</p>
         <div class="rule-modal-body" id="peopleModalBody"></div>
       </div>
     </div>

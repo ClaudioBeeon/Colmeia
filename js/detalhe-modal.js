@@ -146,7 +146,7 @@ function renderSequenciaHTML(task) {
     // fazer o quê.
     const responsavelAtualHTML = `
       <div class="wf-dot current wf-dot-sem-sequencia" title="${task.assignee}">
-        ${avatarHTML(task.assignee, "avatar-xs", task.assigneeAvatarUrl)}
+        ${avatarHTML(task.assignee, "avatar-xs", task.assigneeAvatarUrl, { runrunId: task.assigneeId })}
       </div>
     `;
     if (task.entregue) {

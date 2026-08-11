@@ -20,6 +20,11 @@ let PAPEL_LOGADO = null; // 'coordenador' ou 'designer'
 // ID de quem está logado no Runrun.it (vem do login). Pode ser null — nesse
 // caso tudo continua funcionando pelo nome, como antes. Ver ehMinhaTarefa.
 let DESIGNER_ID_LOGADO = null;
+// E-mail de quem entrou pelo Google. Vazio quando a entrada foi pela chave
+// de acesso ou pelo código do atendimento — nesses casos a identificação
+// segue pelo nome, como sempre. Serve pra achar o perfil da pessoa (foto,
+// apelidos, nome oficial) sem depender de grafia. Ver resolverPessoa.
+let EMAIL_LOGADO = "";
 
 // Mesma equipe configurada no backend (RUNRUN_USUARIOS) — usado só pra
 // montar as opções do seletor "ver o Kanban de quem" do coordenador.

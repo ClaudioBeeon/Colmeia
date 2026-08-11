@@ -16,9 +16,9 @@ const ATENDIMENTO_PHOTOS_BEEON = {
   "Lucas": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833905/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_laranja_bem_claro_mantendo_as_372247_sdfav1.png",
 };
 
-// Pessoas cadastradas manualmente pelo coordenador (foto customizada e
-// apelidos vinculados), carregadas do backend do Colmeia.
-let pessoasSalvas = []; // [{nome, foto, aliases: [...]}]
+// Pessoas cadastradas manualmente pelo coordenador (foto customizada,
+// apelidos e e-mails vinculados), carregadas do backend do Colmeia.
+let pessoasSalvas = []; // [{nome, foto, aliases: [...], discord, emails: [...]}]
 
 // Todo nome que o código encontra e mostra um avatar, guardado aqui pra
 // alimentar a tela de configuração de Pessoas. Chave = nome normalizado.
@@ -35,17 +35,91 @@ function registrarNomeVisto(nome, foto) {
   });
 }
 
+// =====================================================================
+// QUEM É ESTA PESSOA? — a única resposta do Colmeia (2026-08-11)
+//
+// O mesmo ser humano chega até aqui por três portas diferentes, e cada
+// uma escreve o nome dele do seu jeito: a aba Login (quem entra, com o
+// e-mail do Google), o Runrun.it (quem executa a tarefa) e a aba Pessoas
+// (a foto e os apelidos que o coordenador cadastrou).
+//
+// Antes, cada canto do app resolvia isso por conta própria — e resolvia
+// diferente. `resolverFotoManual` olhava apelidos, `getDiscordDaPessoa`
+// não olhava, `fotoDoDesigner` comparava nome puro. O resultado prático
+// era a foto cadastrada aparecer num lugar e sumir no outro, sem padrão
+// nenhum que desse pra explicar.
+//
+// Agora existe uma pergunta só, feita num lugar só: você entrega a pista
+// que tiver em mãos — nome, apelido, e-mail ou id do Runrun.it — e sempre
+// volta a MESMA pessoa.
+//
+// A ordem importa e vai da certeza pro palpite:
+//   1. e-mail        — não erra: e-mail é de uma pessoa só
+//   2. nome/apelido igual — o cadastro explícito do coordenador
+//   3. nome parecido — o `nomesCorrespondem` de sempre, o último recurso
+// =====================================================================
+
 /**
- * Confere se o coordenador já cadastrou manualmente uma foto pra esse
- * nome (ou um apelido dele). Tem prioridade sobre qualquer outra fonte.
+ * Acha o perfil cadastrado de alguém a partir de qualquer pista.
+ *
+ * @param {string|{nome?:string, email?:string, runrunId?:(string|number)}} pista
+ * @returns {{nome, foto, aliases, discord, emails}|null}
  */
-function resolverFotoManual(nome) {
-  const alvo = normalizarParaComparar(nome);
-  for (const p of pessoasSalvas) {
-    if (normalizarParaComparar(p.nome) === alvo) return p.foto || null;
-    if (p.aliases.some(a => normalizarParaComparar(a) === alvo)) return p.foto || null;
+function resolverPessoa(pista) {
+  if (!pista) return null;
+  const dados = typeof pista === "string" ? { nome: pista } : pista;
+
+  // O id do Runrun.it não fica guardado no perfil — o que liga os dois é o
+  // e-mail. A lista de usuários já veio com ele (ver listarTodosUsuariosRunrun).
+  let email = (dados.email || "").toLowerCase().trim();
+  if (!email && dados.runrunId && typeof usuariosRunrunCache !== "undefined" && usuariosRunrunCache) {
+    const u = usuariosRunrunCache.find(x => String(x.id) === String(dados.runrunId));
+    if (u && u.email) email = String(u.email).toLowerCase().trim();
   }
-  return null;
+
+  if (email) {
+    const porEmail = pessoasSalvas.find(p => (p.emails || []).includes(email));
+    if (porEmail) return porEmail;
+  }
+
+  const alvo = normalizarParaComparar(dados.nome);
+  if (!alvo) return null;
+
+  const exata = pessoasSalvas.find(p =>
+    normalizarParaComparar(p.nome) === alvo
+    || (p.aliases || []).some(a => normalizarParaComparar(a) === alvo));
+  if (exata) return exata;
+
+  // Último recurso: "Manu" batendo com "Manuela". É o que já valia antes
+  // em quase todo lugar — fica por último de propósito, porque é o único
+  // passo daqui que pode errar.
+  return pessoasSalvas.find(p =>
+    nomesCorrespondem(p.nome, dados.nome)
+    || (p.aliases || []).some(a => nomesCorrespondem(a, dados.nome))) || null;
+}
+
+/**
+ * O nome que o Colmeia deve MOSTRAR pra essa pessoa — o cadastrado no
+ * perfil dela, não o que veio da fonte da vez. Sem isso a mesma pessoa
+ * aparece "Maria Eduarda" no card (nome do Runrun.it), "Manu" no
+ * comentário (apelido) e "Manuela" na sidebar (nome do login).
+ *
+ * Sem perfil cadastrado, devolve o nome que chegou — ou seja, quem ainda
+ * não foi cadastrado continua aparecendo exatamente como antes.
+ */
+function nomeOficialDe(pista) {
+  const p = resolverPessoa(pista);
+  if (p) return p.nome;
+  return typeof pista === "string" ? pista : (pista && pista.nome) || "";
+}
+
+/**
+ * Confere se o coordenador já cadastrou manualmente uma foto pra essa
+ * pessoa. Tem prioridade sobre qualquer outra fonte.
+ */
+function resolverFotoManual(pista) {
+  const p = resolverPessoa(pista);
+  return (p && p.foto) || null;
 }
 
 async function carregarPessoasSalvas() {
@@ -83,12 +157,24 @@ function atualizarAvatarDaSidebar() {
   const el = document.getElementById("sidebarAvatarIniciais");
   if (!el || !DESIGNER_LOGADO) return;
 
-  const foto = resolverFotoManual(DESIGNER_LOGADO) || fotoDoDesigner(DESIGNER_LOGADO);
+  // Quem está logado é a pessoa que o Colmeia conhece melhor: quando a
+  // entrada foi pelo Google, temos o e-mail dela — e aí a identificação
+  // não depende do nome do login estar escrito igual ao do perfil.
+  const quem = { nome: DESIGNER_LOGADO, email: typeof EMAIL_LOGADO !== "undefined" ? EMAIL_LOGADO : "" };
+
+  // O nome mostrado é o do perfil, não o da linha de acesso — é o mesmo
+  // que aparece nos cards e comentários, então a pessoa se vê escrita do
+  // mesmo jeito no app inteiro. Só muda quando existe perfil cadastrado;
+  // sem perfil, continua o nome do login, como sempre foi.
+  const nomeEl = document.getElementById("sidebarNomeUsuario");
+  if (nomeEl) nomeEl.textContent = nomeOficialDe(quem);
+
+  const foto = resolverFotoManual(quem) || fotoDoDesigner(DESIGNER_LOGADO);
   if (!foto) {
     // Sem foto cadastrada: volta pro círculo com as iniciais.
     el.style.backgroundImage = "";
     el.classList.remove("com-foto");
-    el.textContent = initials(DESIGNER_LOGADO);
+    el.textContent = initials(nomeOficialDe(quem));
     return;
   }
 
@@ -109,7 +195,7 @@ function atualizarAvatarDaSidebar() {
   teste.onerror = () => {
     el.style.backgroundImage = "";
     el.classList.remove("com-foto");
-    el.textContent = initials(DESIGNER_LOGADO);
+    el.textContent = initials(nomeOficialDe(quem));
   };
   teste.src = foto;
 }
@@ -151,10 +237,14 @@ function precarregarFotosConhecidas() {
   });
 }
 
-async function salvarPessoaNoBackend(nome, foto, aliases, discord) {
+async function salvarPessoaNoBackend(nome, foto, aliases, discord, emails) {
   if (!COLMEIA_API_URL || !nome) return false;
   try {
-    const data = await chamarBackend({ acao: "salvarPessoa", nome, foto, aliases, discord });
+    const data = await chamarBackend({ acao: "salvarPessoa", nome, foto, aliases, discord, emails });
+    // O backend recusa e-mail que já é de outra pessoa (ver salvarPessoa,
+    // Planilha.gs) — sem mostrar o motivo, o coordenador só veria o
+    // "Salvar" não fazer nada e não teria como saber por quê.
+    if (!data.ok && data.error) alert(data.error);
     return !!data.ok;
   } catch (err) {
     console.error("Falha ao salvar pessoa no backend:", err);
@@ -181,21 +271,34 @@ function fotoDoAtendimento(nomeAtendimento) {
   return chave ? ATENDIMENTO_PHOTOS_BEEON[chave] : null;
 }
 
-function avatarAtendimentoHTML(nome, sizeClass) {
-  const foto = resolverFotoManual(nome) || fotoDoAtendimento(nome) || fotoDoDesigner(nome);
+function avatarAtendimentoHTML(nome, sizeClass, pista) {
+  const quem = { nome, ...(pista || {}) };
+  const oficial = nomeOficialDe(quem);
+  const foto = resolverFotoManual(quem)
+    || fotoDoAtendimento(oficial) || fotoDoAtendimento(nome)
+    || fotoDoDesigner(oficial) || fotoDoDesigner(nome);
+  // Registra o nome CRU (não o oficial) de propósito: é assim que uma
+  // grafia ainda não vinculada aparece na aba Pessoas pra ser linkada. Se
+  // registrássemos o oficial, a variante nunca apareceria — e o
+  // coordenador nunca ficaria sabendo que ela existe.
   registrarNomeVisto(nome, foto);
   if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${escaparHTML(nome)}" alt="${escaparHTML(nome)}" title="${escaparHTML(nome)}" onerror="handleAvatarImgError(this)">`;
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${escaparHTML(oficial)}" alt="${escaparHTML(oficial)}" title="${escaparHTML(oficial)}" onerror="handleAvatarImgError(this)">`;
   }
-  return `<div class="avatar ${sizeClass || ""}" title="${escaparHTML(nome)}">${initials(nome)}</div>`;
+  return `<div class="avatar ${sizeClass || ""}" title="${escaparHTML(oficial)}">${initials(oficial)}</div>`;
 }
 
 /**
  * Busca o link do Discord (DM) de uma pessoa, cadastrado manualmente
  * no painel "Pessoas conhecidas".
+ *
+ * Passa pelo resolvedor como todo o resto desde 2026-08-11 — antes isso
+ * comparava só o nome principal, então o link simplesmente não era achado
+ * quando a pessoa aparecia pelo apelido (que é o caso mais comum, já que
+ * é o apelido que vem do Runrun.it).
  */
-function getDiscordDaPessoa(nome) {
-  const p = pessoasSalvas.find(x => nomesCorrespondem(x.nome, nome));
+function getDiscordDaPessoa(pista) {
+  const p = resolverPessoa(pista);
   return (p && p.discord) || null;
 }
 
@@ -239,15 +342,25 @@ function handleAvatarImgError(img) {
   img.replaceWith(div);
 }
 
-function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto) {
+/**
+ * @param {object} [pista] e-mail e/ou id do Runrun.it de quem é esse
+ *   avatar, quando quem chama souber — é o que faz a foto certa aparecer
+ *   mesmo quando o nome vem escrito diferente do cadastrado.
+ */
+function avatarHTML(nomeDesigner, sizeClass, avatarUrlDireto, pista) {
+  const quem = { nome: nomeDesigner, ...(pista || {}) };
+  const oficial = nomeOficialDe(quem);
   // Prioridade: 1) foto cadastrada manualmente pelo coordenador, 2) foto
   // do painel-designers-beeon, 3) foto que veio do Runrun.it.
-  const foto = resolverFotoManual(nomeDesigner) || fotoDoDesigner(nomeDesigner) || avatarUrlDireto;
+  const foto = resolverFotoManual(quem)
+    || fotoDoDesigner(oficial) || fotoDoDesigner(nomeDesigner)
+    || avatarUrlDireto;
+  // Nome CRU aqui — ver o porquê em avatarAtendimentoHTML.
   registrarNomeVisto(nomeDesigner, foto);
   if (foto) {
-    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${escaparHTML(nomeDesigner)}" alt="${escaparHTML(nomeDesigner)}" title="${escaparHTML(nomeDesigner)}" onerror="handleAvatarImgError(this)">`;
+    return `<img class="avatar ${sizeClass || ""}" src="${foto}" data-nome="${escaparHTML(oficial)}" alt="${escaparHTML(oficial)}" title="${escaparHTML(oficial)}" onerror="handleAvatarImgError(this)">`;
   }
-  return `<div class="avatar ${sizeClass || ""}" title="${escaparHTML(nomeDesigner)}">${initials(nomeDesigner)}</div>`;
+  return `<div class="avatar ${sizeClass || ""}" title="${escaparHTML(oficial)}">${initials(oficial)}</div>`;
 }
 
 // Frases divertidas do tema colmeia, mostradas em rodízio na tela de
