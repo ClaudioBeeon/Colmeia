@@ -882,10 +882,140 @@ function acharPessoaPorEmail(email) {
   return null;
 }
 
+// ---------------------------------------------------------------------
+// VINCULAR OS E-MAILS PELO RUNRUN.IT (2026-08-10)
+//
+// Todo mundo do time já usa o e-mail da Beeon no Runrun.it, e o `/users`
+// de lá devolve nome e e-mail juntos — então dá pra preencher a coluna D
+// sem ninguém digitar nada.
+//
+// ⚠️ POR QUE ISSO É EM DOIS PASSOS, E NÃO UM BOTÃO SÓ
+//
+// Casar por NOME é arriscado, e aqui o erro é grave de um jeito
+// específico: um vínculo errado faz uma pessoa **entrar como outra**. É o
+// mesmo cuidado que o CLAUDE.md pede em "essa tarefa é minha?", só que
+// com uma consequência pior.
+//
+// Por isso:
+//   1. `verEmailsDoRunrun()`      — só MOSTRA o que faria. Não grava nada.
+//   2. `vincularEmailsDoRunrun()` — grava, depois de você conferir.
+//
+// E o casamento é conservador de propósito: só aceita nome IGUAL, ou um
+// primeiro nome que aponte pra UMA pessoa só. Qualquer dúvida vira um
+// aviso pra você resolver na mão, nunca um palpite gravado.
+// ---------------------------------------------------------------------
+
+/** Só mostra o que o vínculo automático faria. Não grava nada. */
+function verEmailsDoRunrun() {
+  relatorioDeEmailsDoRunrun(false);
+}
+
+/** Grava os vínculos seguros. Rode `verEmailsDoRunrun()` antes. */
+function vincularEmailsDoRunrun() {
+  relatorioDeEmailsDoRunrun(true);
+}
+
+function relatorioDeEmailsDoRunrun(gravar) {
+  var usuarios = buscarUsuariosRunrunComCache();
+  if (!Array.isArray(usuarios)) {
+    Logger.log('❌ Não consegui ler os usuários do Runrun.it agora. Tente de novo em instantes.');
+    return;
+  }
+
+  var sheet = getLoginSheet();
+  var linhas = sheet.getDataRange().getValues();
+
+  var vaiGravar = [];   // { linha, nome, email }
+  var jaTinha = [];
+  var duvidosos = [];
+  var semEmail = [];
+
+  for (var i = 1; i < linhas.length; i++) {
+    var nome = String(linhas[i][0] || '').trim();
+    if (!nome) continue;
+    if (String(linhas[i][3] || '').trim()) { jaTinha.push(nome); continue; }
+
+    var achados = usuariosDoRunrunQueBatem(usuarios, nome);
+    if (achados.length === 1 && achados[0].email) {
+      vaiGravar.push({ linha: i + 1, nome: nome, email: String(achados[0].email).toLowerCase().trim() });
+    } else if (achados.length > 1) {
+      duvidosos.push(nome + ' → ' + achados.map(function (u) { return u.email || '(sem e-mail)'; }).join(' OU '));
+    } else {
+      semEmail.push(nome);
+    }
+  }
+
+  Logger.log(gravar ? '=== VINCULANDO ===' : '=== PRÉVIA (nada foi gravado) ===');
+
+  if (vaiGravar.length) {
+    Logger.log(gravar ? 'Vinculados:' : 'Seriam vinculados:');
+    vaiGravar.forEach(function (v) { Logger.log('  ✅ ' + v.nome + ' → ' + v.email); });
+  } else {
+    Logger.log('Nada novo pra vincular.');
+  }
+
+  if (duvidosos.length) {
+    Logger.log('');
+    Logger.log('⚠️ Mais de uma pessoa possível — NÃO vinculei, resolva na mão:');
+    duvidosos.forEach(function (d) { Logger.log('  ? ' + d); });
+    Logger.log("  Use: vincularEmailDeLogin('Nome', 'email@beeon.com.br')");
+  }
+  if (semEmail.length) {
+    Logger.log('');
+    Logger.log('Sem correspondente no Runrun.it (seguem só com a chave de acesso): ' + semEmail.join(', '));
+  }
+  if (jaTinha.length) {
+    Logger.log('');
+    Logger.log('Já tinham e-mail (não toquei): ' + jaTinha.join(', '));
+  }
+
+  if (!gravar) {
+    Logger.log('');
+    Logger.log('Conferiu e está tudo certo? Rode vincularEmailsDoRunrun() pra gravar.');
+    return;
+  }
+
+  if (!vaiGravar.length) return;
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    vaiGravar.forEach(function (v) { sheet.getRange(v.linha, 4).setValue(v.email); });
+    Logger.log('');
+    Logger.log('✅ ' + vaiGravar.length + ' pessoa(s) agora entram com o Google.');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /**
- * Vincula um e-mail a uma pessoa que já existe na aba Login — é o que
- * libera o "Entrar com o Google" pra ela. Roda à mão no editor do Apps
- * Script: é coisa rara, feita uma vez por pessoa, e não vale uma tela.
+ * Quem, no Runrun.it, pode ser esta pessoa.
+ *
+ * Duas tentativas, da mais segura pra menos:
+ *   1. nome INTEIRO igual (sem acento, sem maiúscula) — é o caso normal;
+ *   2. primeiro nome igual — só serve se apontar pra UMA pessoa só.
+ *
+ * Devolver a lista inteira (em vez de "o melhor palpite") é o que permite
+ * a quem chama recusar quando há mais de um. "Manu" batendo em "Manuel" e
+ * "Manuela" tem que virar pergunta, nunca escolha.
+ */
+function usuariosDoRunrunQueBatem(usuarios, nome) {
+  var alvo = normalizarNomeLogin(nome);
+
+  var iguais = usuarios.filter(function (u) {
+    return normalizarNomeLogin(u.name || '') === alvo;
+  });
+  if (iguais.length) return iguais;
+
+  var primeiro = alvo.split(' ')[0];
+  if (!primeiro) return [];
+  return usuarios.filter(function (u) {
+    return normalizarNomeLogin(u.name || '').split(' ')[0] === primeiro;
+  });
+}
+
+/**
+ * Vincula UM e-mail a uma pessoa que já existe na aba Login — o conserto
+ * manual pros casos que o automático recusou por dúvida.
  *
  * Ex: vincularEmailDeLogin('Laura', 'laura@beeon.com.br')
  */
