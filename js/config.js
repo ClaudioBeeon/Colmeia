@@ -382,7 +382,7 @@ const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xm
  * O mesmo valor precisa estar em GOOGLE_CLIENT_ID nas propriedades do
  * script do Apps Script: um lado mostra o botão, o outro confere o crachá.
  */
-const GOOGLE_CLIENT_ID = "";
+const GOOGLE_CLIENT_ID = "901491709741-vumtam7n8sg8v6im5l2893b66p6k3jsd.apps.googleusercontent.com";
 
 // URL do Web App do painel-designers-beeon (o outro painel, já publicado).
 // O Colmeia só faz leitura aqui — nunca escreve nada nesse painel.
