@@ -2211,6 +2211,25 @@ function centralGrupoEntradas(itens) {
 }
 
 /** O cartão de UMA peça. `dentroDeGrupo` só muda o recuo, via CSS. */
+/**
+ * "imagem", "video" ou "html" — decide o que aparece quando não há
+ * miniatura pra mostrar.
+ *
+ * Vídeo nunca vai pro Storage (ver Storage.gs), então no modo cards ele
+ * ficaria como um retângulo cinza vazio, indistinguível de "não carregou".
+ * Com um degradê e a palavra no meio, o quadrado passa a DIZER o que é.
+ *
+ * O HTML de e-mail tem prévia sim — mas ela demora mais que uma imagem, e
+ * até chegar o degradê já conta do que se trata em vez de piscar vazio.
+ */
+function centralTipoDaPeca(it) {
+  const tipo = String((it && (it.mimeType || it.mime_type)) || "").toLowerCase();
+  const nome = String((it && (it.nomeArquivo || it.nome_arquivo || it.nomePeca)) || "").toLowerCase();
+  if (tipo.indexOf("video/") === 0 || /\.(mp4|mov|webm|m4v)$/.test(nome)) return "video";
+  if (tipo.indexOf("text/html") === 0 || /\.html?$/.test(nome)) return "html";
+  return "imagem";
+}
+
 function centralGrupoCartaoPecaHTML(it, i, daFila) {
   const chave = centralGrupoChaveDoItem(it);
   const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
@@ -2230,7 +2249,7 @@ function centralGrupoCartaoPecaHTML(it, i, daFila) {
     <button type="button" class="central-grupo-li ${ativa ? "ativa" : ""} ${marcada ? "marcada" : ""}"
             data-central-li="${i}">
       ${centralGrupoSelecionando ? `<span class="central-grupo-cx" aria-hidden="true">✓</span>` : ""}
-      <span class="central-grupo-li-arte" ${arte ? `data-central-li-thumb="${escaparHTML(arte)}"` : ""}></span>
+      <span class="central-grupo-li-arte tipo-${centralTipoDaPeca(it)}" ${arte ? `data-central-li-thumb="${escaparHTML(arte)}"` : ""}></span>
       <span class="central-grupo-li-t">
         <span class="central-grupo-li-nome">${escaparHTML(centralGrupoNomeDoItem(it, daFila))}</span>
         <span class="central-grupo-li-sub">${escaparHTML(sub)}</span>
@@ -2239,9 +2258,74 @@ function centralGrupoCartaoPecaHTML(it, i, daFila) {
     </button>`;
 }
 
+// ===================================================================
+// OS DOIS MODOS DE VER A LISTA (2026-08-11, pedido do Cláudio)
+//
+// "Enfileirado" é a lista fina de sempre — a que aguenta 49 peças sem
+// virar parede. "Cards" é o cartão branco com a arte grande, pra quando o
+// grupo tem poucas peças e olhar a arte importa mais que varrer a fila.
+//
+// A troca é SÓ VISUAL, e de propósito: é a MESMA marcação nos dois modos
+// (ver centralGrupoCartaoPecaHTML), só com CSS diferente por cima. Assim
+// clique, seleção, agrupamento e teclado continuam valendo letra por
+// letra nos dois — um segundo desenho em JS seria um segundo lugar pra
+// dar errado.
+//
+// Preferência VISUAL por pessoa, então vive no localStorage (a convenção
+// do CLAUDE.md): perder isso custa um clique, não um trabalho.
+// ===================================================================
+
+const CENTRAL_MODO_VIS_CHAVE = "colmeia_central_modo_visual_v1";
+
+let centralGrupoModoVis = (() => {
+  try {
+    return localStorage.getItem(CENTRAL_MODO_VIS_CHAVE + "_" + (DESIGNER_LOGADO || "")) || "lista";
+  } catch (e) { return "lista"; }
+})();
+
+function centralGrupoTrocarModoVis(modo) {
+  centralGrupoModoVis = modo;
+  try {
+    localStorage.setItem(CENTRAL_MODO_VIS_CHAVE + "_" + (DESIGNER_LOGADO || ""), modo);
+  } catch (e) { /* aba privada: vale só nesta sessão */ }
+  centralRenderGrupo();
+}
+
+/**
+ * O botãozinho de trocar de modo, na mesma barra do "por data / por
+ * cliente" — as duas perguntas são sobre a lista de baixo, não sobre qual
+ * grupo você está vendo (aquilo é a pílula preta lá em cima).
+ */
+function centralGrupoRenderModoVis() {
+  const barra = document.querySelector(".central-grupo-barra");
+  if (!barra) return;
+  let caixa = document.getElementById("centralGrupoModoVis");
+  if (!caixa) {
+    caixa = document.createElement("div");
+    caixa.id = "centralGrupoModoVis";
+    caixa.className = "central-grupo-modovis";
+    barra.appendChild(caixa);
+  }
+  const botao = (modo, rotulo, svg) => `
+    <button type="button" class="central-grupo-mv ${centralGrupoModoVis === modo ? "ativa" : ""}"
+            data-central-modovis="${modo}" title="${rotulo}" aria-label="${rotulo}"
+            aria-pressed="${centralGrupoModoVis === modo}">${svg}</button>`;
+  caixa.innerHTML =
+    botao("lista", "Ver enfileirado",
+      `<svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`) +
+    botao("cards", "Ver em cards",
+      `<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="7" rx="2" stroke="currentColor" stroke-width="2"/><rect x="4" y="14" width="16" height="6" rx="2" stroke="currentColor" stroke-width="2"/></svg>`);
+
+  caixa.querySelectorAll("[data-central-modovis]").forEach(b => {
+    b.addEventListener("click", () => centralGrupoTrocarModoVis(b.dataset.centralModovis));
+  });
+}
+
 function centralGrupoRenderLista(itens, daFila) {
   const lista = document.getElementById("centralGrupoLista");
   if (!lista) return;
+  centralGrupoRenderModoVis();
+  lista.classList.toggle("modo-cards", centralGrupoModoVis === "cards");
 
   const entradas = centralGrupoEntradas(itens);
   const secoes = centralGrupoSecoes(entradas);

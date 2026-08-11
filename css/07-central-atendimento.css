@@ -2011,3 +2011,157 @@ body.central-atencao-revisando .bee-fab { opacity: 0; pointer-events: none; }
   font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
   vertical-align: 1px;
 }
+
+/* ===================================================================
+   OS DOIS MODOS DE VER A LISTA DO GRUPO (2026-08-11)
+
+   "Enfileirado" é o de sempre (a lista fina que aguenta 49 peças).
+   "Cards" é o protótipo 3 aprovado pelo Cláudio: cartão branco, a arte
+   como uma janela dentro dele e a informação embaixo, sem sobrepor nada.
+
+   ⚠️ É A MESMA MARCAÇÃO nos dois modos — só muda o CSS. Ao mexer em
+   .central-grupo-li lá em cima, conferir se a regra nova também precisa
+   de um par aqui embaixo; do contrário o modo cards herda algo pensado
+   pra linha fina (foi assim que a arte quase virou um quadradinho de
+   40px dentro do cartão).
+   =================================================================== */
+
+.central-grupo-modovis { display: flex; gap: 4px; margin-left: auto; }
+.central-grupo-mv {
+  width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
+  display: grid; place-items: center;
+  background: transparent; border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.55);
+}
+.central-grupo-mv svg { width: 15px; height: 15px; }
+.central-grupo-mv:hover { color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.central-grupo-mv.ativa {
+  background: var(--central-g, var(--kanban-yellow));
+  border-color: transparent; color: #16181D;
+}
+
+/* ---------- o modo CARDS ---------- */
+.central-grupo-lista.modo-cards {
+  display: grid;
+  /* Se um dia a coluna alargar, vira duas colunas sozinha — sem media
+     query e sem número de colunas escrito na mão. */
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+/* A seção (a faixa de data) tem que atravessar a grade inteira, senão
+   viraria mais um "card" do tamanho de uma coluna. */
+.central-grupo-lista.modo-cards .central-grupo-sec,
+.central-grupo-lista.modo-cards .central-grupo-gm { grid-column: 1 / -1; }
+.central-grupo-lista.modo-cards .central-grupo-sec-corpo,
+.central-grupo-lista.modo-cards .central-grupo-gm-filhos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.central-grupo-lista.modo-cards .central-grupo-li {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  height: auto;
+  padding: 8px;
+  border-radius: 16px;
+  background: #fff;
+  border: none;
+  text-align: left;
+  /* Sombra só nos cards — a pílula de cima continua sem nenhuma. */
+  box-shadow: 0 8px 22px rgba(12, 14, 20, 0.16);
+  transition: box-shadow var(--dur-base, .2s) ease, transform var(--dur-base, .2s) ease;
+}
+.central-grupo-lista.modo-cards .central-grupo-li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(12, 14, 20, 0.24);
+}
+.central-grupo-lista.modo-cards .central-grupo-li.ativa {
+  outline: 2px solid var(--central-g, var(--kanban-yellow));
+  outline-offset: 1px;
+}
+
+/* A arte vira a janela do cartão. `position: relative` ancora a etiqueta
+   de dias, que no modo lista fica solta à direita. */
+.central-grupo-lista.modo-cards .central-grupo-li-arte {
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border-radius: 11px;
+  flex: 0 0 auto;
+  background-size: cover;
+  background-position: center;
+}
+
+/* Vídeo e HTML não têm miniatura (vídeo nem vai pro Storage): em vez de
+   um retângulo cinza que parece "não carregou", um degradê com a palavra
+   no meio, que DIZ o que é. As cores puxam o roxo/rosa das artes pra não
+   parecer um erro no meio da grade. */
+.central-grupo-lista.modo-cards .central-grupo-li-arte.tipo-video,
+.central-grupo-lista.modo-cards .central-grupo-li-arte.tipo-html {
+  display: grid;
+  place-items: center;
+}
+.central-grupo-lista.modo-cards .central-grupo-li-arte.tipo-video {
+  background-image: linear-gradient(135deg, #6A5BFF 0%, #B45BFF 55%, #FF5EA8 100%);
+}
+.central-grupo-lista.modo-cards .central-grupo-li-arte.tipo-html {
+  background-image: linear-gradient(135deg, #2BB6C4 0%, #4A7BFF 55%, #7B5BFF 100%);
+}
+.central-grupo-lista.modo-cards .central-grupo-li-arte.tipo-video::after { content: "VÍDEO"; }
+.central-grupo-lista.modo-cards .central-grupo-li-arte.tipo-html::after { content: "HTML"; }
+.central-grupo-lista.modo-cards .central-grupo-li-arte.tipo-video::after,
+.central-grupo-lista.modo-cards .central-grupo-li-arte.tipo-html::after {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px; font-weight: 800; letter-spacing: 0.18em;
+}
+/* Quando a miniatura chega de verdade (o HTML tem prévia), ela entra como
+   imagem de fundo e tem que ganhar do degradê — daí o par de regras. */
+.central-grupo-lista.modo-cards .central-grupo-li-arte[style*="background-image"]::after { content: none; }
+
+.central-grupo-lista.modo-cards .central-grupo-li-t {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 11px 6px 5px;
+  min-width: 0;
+}
+.central-grupo-lista.modo-cards .central-grupo-li-nome {
+  font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
+  color: #16181D; white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.central-grupo-lista.modo-cards .central-grupo-li-sub {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #8A909B; font-weight: 650;
+}
+
+/* A etiqueta de dias sobe pra cima da arte: no cartão ela não tem mais a
+   coluna da direita onde morava na lista fina. */
+.central-grupo-lista.modo-cards .central-grupo-li-dias {
+  position: absolute; top: 8px; left: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 999px; padding: 3px 9px;
+  font-size: 11px; font-weight: 700; color: #16181D;
+}
+.central-grupo-lista.modo-cards .central-grupo-li-dias.alerta { color: #B3352E; }
+
+/* A caixinha de seleção também precisa sair de cima da arte. */
+.central-grupo-lista.modo-cards .central-grupo-cx {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+}
+.central-grupo-lista.modo-cards .central-grupo-li { position: relative; }
+
+@media (max-width: 700px) {
+  /* Numa tela estreita o cartão grande vira uma coluna só — dois deles
+     ficariam menores que a miniatura da lista fina, que é o oposto do
+     motivo de existir este modo. */
+  .central-grupo-lista.modo-cards,
+  .central-grupo-lista.modo-cards .central-grupo-sec-corpo,
+  .central-grupo-lista.modo-cards .central-grupo-gm-filhos {
+    grid-template-columns: 1fr;
+  }
+}
