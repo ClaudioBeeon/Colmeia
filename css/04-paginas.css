@@ -854,6 +854,26 @@ body.card-aberto .quick-access-panel { display: none; }
 .cfg-bloco-extra > summary:hover { color: var(--text-primary); }
 .cfg-bloco-extra-corpo { padding: 0 14px 14px; }
 
+/* ===== Escolher quais peças o cliente vê (2026-08-11) =====
+   Ver abrirEscolhaDePecas, js/pagina-repasse.js. A linha desmarcada fica
+   apagada de propósito: é o estado "não vai pro cliente", e ele tem que
+   ser visível de longe, sem ler. */
+.pecas-linha {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card-bg); cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple);
+}
+.pecas-linha:hover { border-color: var(--linha-forte, var(--text-muted)); }
+.pecas-linha.oculta { opacity: .45; }
+.pecas-linha input { width: 17px; height: 17px; flex-shrink: 0; accent-color: var(--accent); cursor: pointer; }
+.pecas-nome {
+  flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pecas-linha.oculta .pecas-nome { text-decoration: line-through; }
+
 /* ===== Ver regra: remover, status, animação de adicionar ===== */
 .rule-row-remove {
   border: none; background: transparent; cursor: pointer;

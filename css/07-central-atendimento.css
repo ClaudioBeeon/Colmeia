@@ -299,7 +299,15 @@
 
 .central-hoje-foto { grid-area: foto; padding: 0; justify-content: flex-end; }
 .central-hoje-foto-img {
-  position: absolute; inset: 0; background-size: cover; background-position: center top;
+  position: absolute; inset: 0; background-size: cover;
+  /* 38%, não `top` (corrigido em 2026-08-11). Este quadro mede ~358x144
+     — proporção 2,5:1 — desde que a foto encolheu pra uma linha só. As
+     fotos de perfil são QUADRADAS (1024x1024), então com `cover` só
+     40% da altura delas cabe aqui. Com `top`, os 40% que apareciam eram
+     os de cima: cabelo e testa, sem rosto nenhum. Ancorar em 38% mostra
+     a faixa de 23% a 63% da foto, que é onde o rosto está.
+     Não é chute: foi medido com as fotos de verdade da equipe. */
+  background-position: center 38%;
 }
 .central-hoje-foto-img.sem-foto {
   display: flex; align-items: center; justify-content: center; background: var(--page-bg);

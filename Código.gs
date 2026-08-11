@@ -455,6 +455,10 @@ function handleRequest(e, method) {
         output = buscarExtrasRunrunCompleto();
       } else if (body.acao === 'listarAprovacoesPendentes') {
         output = listarAprovacoesPendentes();
+      } else if (body.acao === 'listarPecasDaAprovacao') {
+        output = listarPecasDaAprovacao(body.codigo);
+      } else if (body.acao === 'definirPecasOcultas') {
+        output = definirPecasOcultas(body.codigo, body.indices);
       } else if (body.acao === 'listarPessoasDoRunrunSemAcesso') {
         output = listarPessoasDoRunrunSemAcesso();
       } else if (body.acao === 'listarPessoasDoLogin') {

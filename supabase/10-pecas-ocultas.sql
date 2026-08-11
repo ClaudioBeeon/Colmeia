@@ -1,0 +1,27 @@
+-- ============================================================
+-- PASSO 10 — Peças escondidas do cliente
+-- ============================================================
+--
+-- COMO RODAR: Supabase → SQL Editor → New query → colar → Run.
+--
+-- Às vezes entra na pasta do card um arquivo que não devia ir pro
+-- cliente (o PSD de trabalho, um TIFF), ou o atendimento decide mandar só
+-- uma das peças DEPOIS que o link já foi enviado. Antes, a única saída
+-- era gerar um link novo — e aí o cliente ficava com dois links, e as
+-- respostas que ele já tinha dado no primeiro viravam órfãs.
+--
+-- Esta coluna guarda os ÍNDICES (base 0, separados por "|") das peças que
+-- o atendimento tirou da vista do cliente. Vazio = nenhuma escondida, que
+-- é como toda aprovação que já existe começa.
+--
+-- ⚠️ POR QUE ÍNDICE, E NÃO O ID DO ARQUIVO
+--
+-- `respostas_pecas` é uma lista POSICIONAL: um item por peça, na ordem de
+-- `file_id`. Se esconder apagasse o id de `file_id`, todas as respostas
+-- seguintes escorregariam uma casa e passariam a pertencer à peça errada
+-- — silenciosamente, e num registro que a agência usa pra saber o que o
+-- cliente aprovou. Escondendo por índice, as posições nunca se mexem: a
+-- peça some da tela e a resposta dela fica guardada, esperando caso ela
+-- volte a aparecer. É por isso que este recurso ESCONDE e não APAGA.
+
+alter table aprovacoes add column if not exists pecas_ocultas text not null default '';

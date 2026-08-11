@@ -61,6 +61,19 @@ function getAprovacoesSheet() {
   // cliente falou que está andando", que era invisível: ele fechava a aba e
   // do nosso lado parecia silêncio igual a quem nem abriu.
   if (sheet.getLastColumn() < 17) sheet.getRange(1, 17).setValue('consultando_em');
+  // Coluna R: peças escondidas do cliente (2026-08-11). Guarda os ÍNDICES
+  // (base 0, separados por "|") das peças que o atendimento tirou do link
+  // depois de mandado — o PSD que entrou sem querer, ou a peça que a
+  // cliente ainda não devia ver.
+  //
+  // ⚠️ ÍNDICE, e não id do arquivo, de propósito: `respostas_pecas`
+  // (coluna P) é uma lista POSICIONAL, um item por peça na ordem de
+  // `idsDaLinhaDeAprovacao(fileId)`. Se esconder apagasse o id da coluna
+  // E, todas as respostas seguintes escorregariam uma casa e passariam a
+  // pertencer à peça errada. Escondendo por índice, as posições não se
+  // mexem — a peça some da tela e a resposta dela continua guardada,
+  // esperando caso ela volte a aparecer.
+  if (sheet.getLastColumn() < 18) sheet.getRange(1, 18).setValue('pecas_ocultas');
   return sheet;
 }
 
@@ -87,7 +100,8 @@ var COLUNAS_APROVACAO = [
   'aviso_pendente',  // N — "1" enquanto o recado não entrou na tarefa
   'quem_aprovou',    // O — o nome que o CLIENTE digitou
   'respostas_pecas', // P — resposta por peça, quando o link tem várias
-  'consultando_em'   // Q — "vou consultar e te falo"
+  'consultando_em',  // Q — "vou consultar e te falo"
+  'pecas_ocultas'    // R — índices das peças tiradas do link pelo atendimento
 ];
 
 /** Linha da planilha (array) → objeto do banco. */
@@ -166,9 +180,26 @@ function parsearRespostasPecas(json, quantasPecas) {
  * AprovacaoInterna.gs) — mesmo espírito de nomeBaseDaPeca/versaoDoArquivo
  * logo abaixo.
  */
+// As imagens que um NAVEGADOR realmente desenha. Vídeo e HTML entram à
+// parte, logo abaixo.
+//
+// ⚠️ Por que uma lista fechada, e não `começa com image/` (corrigido em
+// 2026-08-11): o Drive marca PSD como `image/vnd.adobe.photoshop`, TIFF
+// como `image/tiff` e foto de iPhone como `image/heic`. Os três começam
+// com "image/" e passavam no filtro antigo — mas navegador nenhum exibe
+// nenhum dos três. Resultado: o arquivo de trabalho do designer virava
+// "peça" sozinho e chegava no cliente como um quadro quebrado no meio da
+// aprovação. Era esse o PSD que aparecia do nada.
+var IMAGENS_QUE_O_NAVEGADOR_ABRE = [
+  'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+  'image/webp', 'image/avif', 'image/svg+xml', 'image/bmp'
+];
+
 function ehTipoDePecaAceito(mimeType) {
-  var tipo = String(mimeType || '');
-  return tipo.indexOf('image/') === 0 || tipo.indexOf('video/') === 0 || tipo === 'text/html';
+  var tipo = String(mimeType || '').toLowerCase().split(';')[0].trim();
+  return IMAGENS_QUE_O_NAVEGADOR_ABRE.indexOf(tipo) !== -1
+    || tipo.indexOf('video/') === 0
+    || tipo === 'text/html';
 }
 
 /**
@@ -568,7 +599,24 @@ function buscarAprovacaoPublica(codigo) {
     return { ok: false, error: 'Esse link não tem nenhuma peça vinculada.' };
   }
 
+  // Peças que o atendimento tirou do link (ver definirPecasOcultas). O
+  // cliente não vê nem sinal delas — nem quadro vazio, nem contagem. Do
+  // lado dele, o link simplesmente tem menos peças.
+  var ocultas = indicesOcultosDaAprovacao(linha.pecasOcultas);
+  if (ocultas.length) {
+    var sobraram = ids.filter(function (_, i) { return ocultas.indexOf(i) === -1; });
+    if (!sobraram.length) {
+      // Não deveria acontecer (definirPecasOcultas recusa esconder tudo),
+      // mas se acontecer é melhor um recado honesto que uma tela vazia.
+      return { ok: false, error: 'Esse link está sem peças pra mostrar no momento. Fala com a agência.' };
+    }
+  }
+
   var pecas = ids.map(function (id, i) {
+    // Marcada como oculta: nem busca o arquivo no Drive. Some da lista
+    // logo abaixo, depois do map (o índice precisa ser o original aqui,
+    // porque é ele que casa com respostas_pecas).
+    if (ocultas.indexOf(i) !== -1) return null;
     var nomeFallback = nomes[i] || linha.nomeArquivo || '';
     var arquivo;
     try {
@@ -626,7 +674,37 @@ function buscarAprovacaoPublica(codigo) {
     }
   });
 
-  var primeira = pecas[0];
+  // ===== A TRADUÇÃO =====
+  // Daqui pra frente o cliente enxerga uma lista SEM buracos: se a peça 2
+  // de 4 está escondida, pra ele o link tem 3 peças, numeradas 1, 2 e 3.
+  //
+  // A tradução acontece toda AQUI, no servidor, por um motivo prático: o
+  // aprovar.html usa a posição no array como identidade da peça em tudo
+  // (navegação, pinos, resposta). Traduzir aqui e de volta em
+  // `responderPecaAprovacaoPublica` deixa aquele arquivo — 90 KB que
+  // roda sem login, na frente do cliente — intocado.
+  var visiveis = [];
+  var deVisivelParaOriginal = [];
+  pecas.forEach(function (p, i) {
+    if (p === null) return;
+    visiveis.push(p);
+    deVisivelParaOriginal.push(i);
+  });
+
+  var respostasTodas = parsearRespostasPecas(linha.respostasPecas, pecas.length);
+  var respostasVisiveis = deVisivelParaOriginal.map(function (orig) {
+    return respostasTodas[orig] || null;
+  });
+
+  // Os pinos são gravados com o índice ORIGINAL. Renumera pros que o
+  // cliente vai ver e joga fora os das peças escondidas — senão um pino
+  // de peça oculta apareceria em cima de outra peça.
+  var pinsVisiveis = parsearPins(linha.pins).map(function (p) {
+    var nova = deVisivelParaOriginal.indexOf(Number(p.peca));
+    return nova === -1 ? null : { x: p.x, y: p.y, texto: p.texto, peca: nova };
+  }).filter(function (p) { return !!p; });
+
+  var primeira = visiveis[0] || {};
   return {
     ok: true,
     cliente: linha.cliente,
@@ -636,14 +714,14 @@ function buscarAprovacaoPublica(codigo) {
     respostaTexto: linha.respostaTexto,
     respondidoEm: linha.respondidoEm || null,
     quemAprovou: linha.quemAprovou,
-    pins: parsearPins(linha.pins),
-    pecas: pecas,
+    pins: pinsVisiveis,
+    pecas: visiveis,
     // M5 (2026-08-05): resposta POR PEÇA — um item por peça, na mesma
     // ordem de `pecas` (null = essa peça ainda não foi respondida). Com
     // uma peça só isso sempre bate com o `status`/`respostaTexto` de cima;
     // é o que faz o front continuar funcionando sem checar isso quando o
-    // link é de peça única.
-    respostasPorPeca: parsearRespostasPecas(linha.respostasPecas, pecas.length),
+    // link é de peça única. Já traduzido pras peças visíveis (2026-08-11).
+    respostasPorPeca: respostasVisiveis,
     // "Preciso consultar antes" já foi clicado alguma vez? Sem isto, quem
     // clicava e recarregava a página via o botão do jeito normal de novo,
     // e clicava outra vez achando que não tinha funcionado (auditoria de
@@ -655,6 +733,105 @@ function buscarAprovacaoPublica(codigo) {
     base64: primeira.base64 || null,
     mimeType: primeira.mimeType || null
   };
+}
+
+// =====================================================================
+// TIRAR UMA PEÇA DO LINK JÁ ENVIADO (2026-08-11)
+//
+// Pedido do Cláudio: às vezes entra um arquivo que não devia ir pro
+// cliente, ou o atendimento decide mandar só uma das peças depois do link
+// pronto. Antes disso a única saída era gerar um link novo — e aí o
+// cliente recebia dois links e as respostas que ele já tinha dado no
+// primeiro ficavam órfãs.
+//
+// ESCONDE, NÃO APAGA. A peça sai da vista do cliente; o arquivo continua
+// na aprovação e a resposta que ele já tenha dado nela continua guardada.
+// Mostrar de volta traz a resposta junto. Ver o comentário da coluna R em
+// getAprovacoesSheet pra entender por que isso é feito por índice.
+//
+// Fica atrás do login, na Central do Atendimento — a página do cliente
+// não pode nem sugerir que esse controle existe.
+// =====================================================================
+
+/** As peças de uma aprovação, com o estado de cada uma, pro atendimento. */
+function listarPecasDaAprovacao(codigo) {
+  if (!codigo) return { ok: false, error: 'Código não informado.' };
+  var linha = acharLinhaDeAprovacao(codigo);
+  if (!linha) return { ok: false, error: 'Não encontrei essa aprovação.' };
+
+  var ids = idsDaLinhaDeAprovacao(linha.fileId);
+  var nomes = String(linha.nomeArquivo || '').split('|');
+  var tipos = String(linha.mimeType || '').split('|');
+  var ocultas = indicesOcultosDaAprovacao(linha.pecasOcultas);
+  var respostas = parsearRespostasPecas(linha.respostasPecas, ids.length);
+
+  var pecas = ids.map(function (id, i) {
+    var r = respostas[i];
+    return {
+      indice: i,
+      fileId: id,
+      nome: nomes[i] || ('Peça ' + (i + 1)),
+      mimeType: tipos[i] || '',
+      // O que o cliente já disse sobre ela — é o que deixa o atendimento
+      // pensar duas vezes antes de esconder uma peça já respondida.
+      respondida: !!r,
+      statusResposta: r ? r.status : '',
+      oculta: ocultas.indexOf(i) !== -1
+    };
+  });
+
+  return { ok: true, codigo: codigo, cliente: linha.cliente,
+    tituloTarefa: linha.tituloTarefa, pecas: pecas };
+}
+
+/**
+ * Define QUAIS peças ficam escondidas (lista completa, não incremental —
+ * o que a tela mandar passa a ser a verdade).
+ */
+function definirPecasOcultas(codigo, indices) {
+  if (!codigo) return { ok: false, error: 'Código não informado.' };
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    // A planilha INTEIRA, não `linhasDeAprovacao` filtrado — mesmo padrão
+    // dos outros gravadores daqui, e o motivo é a gravação lá embaixo:
+    // `indiceLinha` precisa ser o número da linha DE VERDADE na aba. Com o
+    // Supabase mandando, a versão filtrada devolveria uma linha só e todo
+    // salvamento cairia na linha 2 da planilha, em cima de outra aprovação.
+    var sheet = getAprovacoesSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var indiceLinha = -1;
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]) === String(codigo)) { indiceLinha = i; break; }
+    }
+    if (indiceLinha === -1) return { ok: false, error: 'Não encontrei essa aprovação.' };
+
+    var linha = linhaParaObjetoDeAprovacao(linhas[indiceLinha]);
+    var quantas = idsDaLinhaDeAprovacao(linha.fileId).length;
+
+    var limpos = (indices || [])
+      .map(function (n) { return parseInt(n, 10); })
+      .filter(function (n) { return !isNaN(n) && n >= 0 && n < quantas; });
+    // Sem repetidos, senão a contagem de "quantas sobram" mente.
+    limpos = limpos.filter(function (n, k) { return limpos.indexOf(n) === k; });
+
+    // Esconder TODAS deixaria o cliente com um link que abre e não mostra
+    // nada — pior que um link com uma peça errada, porque não dá nem pra
+    // entender o que aconteceu. Quem quer cancelar a aprovação inteira
+    // tem outro caminho.
+    if (quantas && limpos.length >= quantas) {
+      return { ok: false, error: 'Precisa sobrar pelo menos uma peça no link. Pra cancelar a aprovação toda, gere um link novo.' };
+    }
+
+    var texto = limpos.sort(function (a, b) { return a - b; }).join('|');
+    atualizarAprovacaoNoBanco(codigo, { pecas_ocultas: texto });
+    sheet.getRange(indiceLinha + 1, 18).setValue(texto);
+
+    return { ok: true, ocultas: limpos, quantas: quantas, visiveis: quantas - limpos.length };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function parsearPins(json) {
@@ -799,6 +976,24 @@ function responderPecaAprovacaoPublica(codigo, indicePeca, aprovado, respostaTex
     linha = linhaParaObjetoDeAprovacao(linhas[indiceLinha]);
 
     quantasPecas = idsDaLinhaDeAprovacao(linha.fileId).length || 1;
+
+    // O cliente conta as peças que ELE vê (ver a tradução em
+    // buscarAprovacaoPublica). Aqui volta pro índice de verdade, que é o
+    // que `respostas_pecas` e os pinos usam. Sem esta linha, esconder a
+    // peça 1 faria a resposta da primeira peça visível ser gravada em
+    // cima da peça escondida — silenciosamente, e no arquivo errado.
+    var ocultasAgora = indicesOcultosDaAprovacao(linha.pecasOcultas);
+    if (ocultasAgora.length) {
+      var visiveisAgora = [];
+      for (var iv = 0; iv < quantasPecas; iv++) {
+        if (ocultasAgora.indexOf(iv) === -1) visiveisAgora.push(iv);
+      }
+      if (indicePeca < 0 || indicePeca >= visiveisAgora.length) {
+        lock.releaseLock(); return { ok: false, error: 'Peça inválida.' };
+      }
+      indicePeca = visiveisAgora[indicePeca];
+    }
+
     if (indicePeca < 0 || indicePeca >= quantasPecas) { lock.releaseLock(); return { ok: false, error: 'Peça inválida.' }; }
 
     respostas = parsearRespostasPecas(linha.respostasPecas, quantasPecas);
@@ -832,11 +1027,18 @@ function responderPecaAprovacaoPublica(codigo, indicePeca, aprovado, respostaTex
     sheet.getRange(indiceLinha + 1, 16).setValue(JSON.stringify(respostas));
     sheet.getRange(indiceLinha + 1, 13).setValue(pinsTexto);
 
-    todasRespondidas = respostas.every(function (r) { return !!r; });
+    // Só as peças que o cliente PODE responder contam pro fechamento —
+    // uma peça escondida nunca vai receber resposta, e sem esta distinção
+    // a aprovação ficaria pendente pra sempre, cobrando algo impossível.
+    var respostasQueContam = respostas.filter(function (_, idx) {
+      return ocultasAgora.indexOf(idx) === -1;
+    });
+    todasRespondidas = respostasQueContam.length > 0
+      && respostasQueContam.every(function (r) { return !!r; });
     if (todasRespondidas) {
-      var todasAprovadas = respostas.every(function (r) { return r.status === 'aprovado'; });
-      var primeiroAprovador = respostas.filter(function (r) { return r.quemAprovou; })[0];
-      var textoAgregado = respostas
+      var todasAprovadas = respostasQueContam.every(function (r) { return r.status === 'aprovado'; });
+      var primeiroAprovador = respostasQueContam.filter(function (r) { return r.quemAprovou; })[0];
+      var textoAgregado = respostasQueContam
         .map(function (r, idx) { return r.texto ? '(' + (idx + 1) + ') ' + r.texto : ''; })
         .filter(function (t) { return !!t; }).join(' · ');
       // O AGREGADO, escrito só quando todas as peças já responderam — é o
@@ -993,8 +1195,15 @@ function linhaParaObjetoDeAprovacao(linha) {
     fileId: linha[4], nomeArquivo: linha[5], mimeType: linha[6], criadoEm: linha[7],
     status: linha[8], respostaTexto: linha[9], respondidoEm: linha[10], autor: linha[11],
     pins: linha[12] || '', quemAprovou: linha[14] || '', respostasPecas: linha[15] || '',
-    consultandoEm: linha[16] || ''
+    consultandoEm: linha[16] || '', pecasOcultas: linha[17] || ''
   };
+}
+
+/** Os índices escondidos da linha, como números. Vazio = nada escondido. */
+function indicesOcultosDaAprovacao(valor) {
+  return String(valor || '').split('|')
+    .map(function (x) { return parseInt(x, 10); })
+    .filter(function (n) { return !isNaN(n) && n >= 0; });
 }
 
 /**

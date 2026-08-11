@@ -676,6 +676,14 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
   color: #fff; font-family: var(--font-display); font-size: 12px; font-weight: 600;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  /* `.avatar` é usado tanto num <div> com as iniciais quanto num <img>
+     com a foto (ver avatarHTML, js/pessoas-fotos.js). No <img>, sem
+     object-fit, uma foto que não seja quadrada é ESTICADA pra caber no
+     círculo, não cortada — rosto achatado ou espichado. Passava
+     despercebido porque as fotos cadastradas da equipe são quadradas;
+     quem aparece com a foto do Runrun.it é que saía deformado.
+     Em foto quadrada isto não muda nada. (2026-08-11) */
+  object-fit: cover;
 }
 
 .avatar-sm { width: 22px; height: 22px; font-size: 9.5px; }

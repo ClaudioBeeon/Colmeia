@@ -1206,6 +1206,13 @@ function cardDeAprovacaoHTML(a) {
         ${status === "pendente"
           ? `<button type="button" class="repasse-btn ${tempo.alerta ? "repasse-btn-ficar" : ""}" data-acao="whats">💬 Cobrar no WhatsApp</button>
              <button type="button" class="repasse-btn" data-acao="copiar">🔗 copiar link</button>
+             <!-- "Peças" só aparece quando o link tem mais de uma: com uma
+                  peça só não há o que escolher (esconder a única deixaria
+                  o link vazio, e definirPecasOcultas recusa isso). -->
+             ${a.quantasPecas > 1
+               ? `<button type="button" class="repasse-btn repasse-btn-icon" data-acao="pecas"
+                          title="Escolher quais peças o cliente vê">🖼️</button>`
+               : ""}
              <!-- "Já aprovou, por fora" (2026-08-09): o cliente respondeu no
                   grupo do WhatsApp, no e-mail ou na reunião, e o link ficava
                   pendente pra sempre cobrando uma resposta que já veio. Só
@@ -1304,6 +1311,109 @@ function urlDeAprovacao(codigo) {
   return linkDeAprovacaoDoCliente(codigo);
 }
 
+// =====================================================================
+// QUAIS PEÇAS O CLIENTE VÊ (2026-08-11)
+//
+// Pedido do Cláudio: às vezes entra na pasta um arquivo que não devia ir
+// pro cliente, ou o atendimento decide mandar só uma das peças depois do
+// link pronto. Antes a única saída era gerar um link novo — e o cliente
+// ficava com dois, com as respostas do primeiro órfãs.
+//
+// ESCONDE, NÃO APAGA: a peça some da vista do cliente e a resposta que
+// ele já tenha dado nela continua guardada (ver definirPecasOcultas,
+// Aprovacao.gs). Por isso o painel MOSTRA quando uma peça já foi
+// respondida — esconder uma dessas é uma decisão diferente de esconder
+// uma que ninguém viu ainda, e o atendimento precisa enxergar isso antes
+// de clicar.
+//
+// Fica aqui, atrás do login. A página do cliente não pode nem sugerir que
+// este controle existe.
+// =====================================================================
+
+async function abrirEscolhaDePecas(codigo) {
+  const fundo = document.createElement("div");
+  fundo.className = "rule-modal-overlay";
+  fundo.innerHTML = `
+    <div class="rule-modal">
+      <div class="rule-modal-header">
+        <h3>Peças deste link</h3>
+        <button type="button" data-fechar aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="rule-modal-body" data-corpo>
+        <p class="quick-access-empty">Carregando as peças…</p>
+      </div>
+    </div>`;
+  document.body.appendChild(fundo);
+
+  const fechar = () => fundo.remove();
+  fundo.querySelector("[data-fechar]").addEventListener("click", fechar);
+  fundo.addEventListener("click", e => { if (e.target === fundo) fechar(); });
+
+  const corpo = fundo.querySelector("[data-corpo]");
+  const dados = await chamarBackend({ acao: "listarPecasDaAprovacao", codigo });
+  if (!dados || !dados.ok) {
+    corpo.innerHTML = `<p class="quick-access-empty">${escaparHTML((dados && dados.error) || "Não consegui carregar as peças.")}</p>`;
+    return;
+  }
+
+  // O estado vive aqui até você salvar — dá pra desmarcar, olhar o
+  // resultado e desistir sem ter mexido no link que o cliente tem aberto.
+  const ocultas = new Set(dados.pecas.filter(p => p.oculta).map(p => p.indice));
+
+  function desenhar() {
+    const visiveis = dados.pecas.length - ocultas.size;
+    corpo.innerHTML = `
+      <p class="cfg-ajuda" style="margin:0 0 14px">
+        Desmarque o que o cliente <b>não</b> deve ver. A peça não é apagada — se
+        ela já tinha resposta, a resposta fica guardada.
+      </p>
+      <div class="cfg-lista">
+        ${dados.pecas.map(p => `
+          <label class="pecas-linha${ocultas.has(p.indice) ? " oculta" : ""}">
+            <input type="checkbox" data-peca="${p.indice}" ${ocultas.has(p.indice) ? "" : "checked"}>
+            <span class="pecas-nome">${escaparHTML(p.nome)}</span>
+            ${p.respondida
+              ? `<span class="cfg-tag ${p.statusResposta === "aprovado" ? "ok" : ""}">${p.statusResposta === "aprovado" ? "já aprovada" : "já respondida"}</span>`
+              : ""}
+          </label>`).join("")}
+      </div>
+      <div class="people-row-rodape" style="margin-top:16px">
+        <button type="button" class="people-row-save" data-salvar ${visiveis === 0 ? "disabled" : ""}>Salvar</button>
+        <span class="cfg-ajuda">${visiveis === 0
+          ? "Precisa sobrar pelo menos uma peça."
+          : `O cliente vai ver ${visiveis} de ${dados.pecas.length}.`}</span>
+      </div>`;
+
+    corpo.querySelectorAll("[data-peca]").forEach(cx => {
+      cx.addEventListener("change", () => {
+        const i = Number(cx.dataset.peca);
+        if (cx.checked) ocultas.delete(i); else ocultas.add(i);
+        desenhar();
+      });
+    });
+
+    const btn = corpo.querySelector("[data-salvar]");
+    if (btn) btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Salvando...";
+      const r = await chamarBackend({
+        acao: "definirPecasOcultas", codigo, indices: Array.from(ocultas),
+      });
+      if (!r || !r.ok) {
+        btn.disabled = false;
+        btn.textContent = "Salvar";
+        mostrarToast((r && r.error) || "Não consegui salvar.", "erro");
+        return;
+      }
+      mostrarToast(`Pronto — o cliente vê ${r.visiveis} de ${r.quantas}.`, "sucesso");
+      fechar();
+    });
+  }
+  desenhar();
+}
+
 function wireCardsDeAprovacao(board) {
   board.querySelectorAll(".aprov-card").forEach(card => {
     const codigo = card.dataset.codigo;
@@ -1325,6 +1435,11 @@ function wireCardsDeAprovacao(board) {
           // apvAbrirParaAlteracaoDoCliente, js/pagina-aprovacao.js.
           const a = (aprovacoesCache || []).find(x => x.codigo === codigo);
           if (a && typeof apvAbrirParaAlteracaoDoCliente === "function") apvAbrirParaAlteracaoDoCliente(a);
+          return;
+        }
+
+        if (acao === "pecas") {
+          abrirEscolhaDePecas(codigo);
           return;
         }
 
