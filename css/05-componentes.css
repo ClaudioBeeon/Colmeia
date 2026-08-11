@@ -1509,13 +1509,25 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
   min-width: 220px; max-width: 280px; padding: 8px; border-radius: 16px;
   background: #FFFFFF; box-shadow: 0 8px 30px rgba(0,0,0,.18);
   display: flex; flex-direction: column; gap: 2px;
+  /* Teto de altura (2026-08-11, bug relatado pelo Cláudio: com várias
+     peças marcáveis, o menu crescia até passar do fim da tela e o botão
+     de confirmar ficava impossível de alcançar). Só a LISTA
+     (`.pecas-escolha-item`s, dentro de `.pecas-escolha-lista`) rola por
+     dentro — título e botão de confirmar ficam sempre visíveis, fora do
+     scroll. `min-height:0` é o que deixa a lista encolher menor que o
+     próprio conteúdo dentro do flex column; sem ele o flex item nunca
+     fica menor que o conteúdo, e o `overflow-y` da lista nunca entraria
+     em ação. Ver o ajuste de posição em abrirEscolhaDePeca,
+     js/detalhe-modal.js — o teto aqui e a conta de lá andam juntos. */
+  max-height: min(70vh, 420px); overflow: hidden;
   font-family: var(--font-body); animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
 }
 [data-theme="dark"] .pecas-escolha-menu { background: #242430; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
 .pecas-escolha-titulo {
   font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;
-  letter-spacing: .02em; padding: 6px 9px 8px;
+  letter-spacing: .02em; padding: 6px 9px 8px; flex-shrink: 0;
 }
+.pecas-escolha-lista { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
 .pecas-escolha-item {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
   border: none; background: transparent; color: var(--text-primary); cursor: pointer;
@@ -1533,7 +1545,7 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
   width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--kanban-yellow); cursor: pointer;
 }
 .pecas-escolha-confirmar {
-  margin-top: 6px; border: none; border-radius: 10px; padding: 9px;
+  margin-top: 6px; border: none; border-radius: 10px; padding: 9px; flex-shrink: 0;
   background: var(--kanban-yellow); color: #16181D; cursor: pointer;
   font-family: inherit; font-size: 12.5px; font-weight: 700;
 }

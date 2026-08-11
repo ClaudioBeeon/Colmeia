@@ -2046,25 +2046,43 @@ function abrirEscolhaDePeca(task, btn, pecas, opcoes) {
   const menu = document.createElement("div");
   menu.id = "pecasEscolhaMenu";
   menu.className = "pecas-escolha-menu";
-  menu.style.top = Math.round(rect.bottom + 6) + "px";
   menu.style.left = Math.round(Math.max(8, rect.right - 240)) + "px";
   // Dá pra marcar VÁRIAS peças e mandar todas no MESMO link (pedido do
   // Cláudio, 2026-08-04: "são dois vídeos"). Antes era escolha única —
   // clicava numa e o menu fechava, então não tinha como mandar as duas.
   // Começa com todas marcadas: quem abriu esse menu quase sempre quer
   // mandar tudo que subiu; desmarcar é o caso raro.
+  // A lista fica num `<div>` PRÓPRIO (`.pecas-escolha-lista`) que rola por
+  // dentro quando passa do teto de altura do CSS — título e botão de
+  // confirmar ficam de fora do scroll, sempre visíveis. Sem essa divisão,
+  // com muitas peças o botão de confirmar saía pela borda de baixo da
+  // tela, sem jeito de rolar até ele (bug relatado pelo Cláudio).
   menu.innerHTML = `
     <div class="pecas-escolha-titulo">${escaparHTML(titulo)}</div>
-    ${pecas.map((p, i) => `
-      <label class="pecas-escolha-item">
-        <input type="checkbox" data-idx="${i}" checked>
-        <span>${p.mimeType.indexOf("video/") === 0 ? "🎬" : p.mimeType === "text/html" ? "🌐" : "🖼️"}</span>
-        <span>${escaparHTML(p.nome)}</span>
-      </label>
-    `).join("")}
+    <div class="pecas-escolha-lista">
+      ${pecas.map((p, i) => `
+        <label class="pecas-escolha-item">
+          <input type="checkbox" data-idx="${i}" checked>
+          <span>${p.mimeType.indexOf("video/") === 0 ? "🎬" : p.mimeType === "text/html" ? "🌐" : "🖼️"}</span>
+          <span>${escaparHTML(p.nome)}</span>
+        </label>
+      `).join("")}
+    </div>
     <button type="button" class="pecas-escolha-confirmar" id="pecasEscolhaOk">${escaparHTML(rotuloBotao)}</button>
   `;
   document.body.appendChild(menu);
+
+  // Encosta embaixo do botão que abriu, mas nunca deixa o menu passar do
+  // fim da tela: mede a altura DEPOIS de já estar no DOM (o teto de
+  // `max-height` do CSS já valeu nessa hora), e sobe o suficiente pra
+  // caber inteiro. `Math.max(8, ...)` é o piso — numa tela bem baixa, cola
+  // 8px do topo em vez de subir pra fora dela.
+  const alturaMenu = menu.getBoundingClientRect().height;
+  const topIdeal = rect.bottom + 6;
+  const top = (topIdeal + alturaMenu > window.innerHeight - 8)
+    ? Math.max(8, window.innerHeight - 8 - alturaMenu)
+    : topIdeal;
+  menu.style.top = Math.round(top) + "px";
 
   menu.querySelector("#pecasEscolhaOk").addEventListener("click", () => {
     const escolhidas = Array.from(menu.querySelectorAll("input[type=checkbox]"))
