@@ -1346,14 +1346,15 @@ function centralPreencherFotoAtendimento(prefixo, nome, comValor) {
   const foto = (typeof resolverFotoManual === "function" && resolverFotoManual(nome))
     || (typeof fotoDoAtendimento === "function" && fotoDoAtendimento(nome))
     || (typeof fotoDoDesigner === "function" && fotoDoDesigner(nome));
+  // Cor pastel fixa por pessoa (pdCorPor, js/paginas-designers.js) —
+  // preenche a sobra ao redor da foto sem cortar ela e sem precisar
+  // ninguém escolher nada.
+  if (fundo) fundo.style.background = (typeof pdCorPor === "function" && pdCorPor(nome || "").bg) || "";
   if (foto) {
-    const url = `url("${foto}")`;
-    if (fundo) fundo.style.backgroundImage = url;
-    if (nitida) nitida.style.backgroundImage = url;
+    if (nitida) nitida.style.backgroundImage = `url("${foto}")`;
     img.classList.remove("sem-foto");
     if (iniciais) iniciais.textContent = "";
   } else {
-    if (fundo) fundo.style.backgroundImage = "";
     if (nitida) nitida.style.backgroundImage = "";
     img.classList.add("sem-foto");
     if (iniciais) iniciais.textContent = typeof initials === "function" ? initials(nome) : "";

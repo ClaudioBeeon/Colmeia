@@ -298,25 +298,22 @@
 .central-hoje-tile.clicavel:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
 
 .central-hoje-foto { grid-area: foto; padding: 0; justify-content: flex-end; }
-/* Segunda passada nesta foto (2026-08-11). A primeira tentativa (`cover` +
-   `background-position: center 38%`) foi calibrada medindo um quadro de
-   ~358x144 (proporção 2,5:1) — mas esse quadro é feito de `fr` numa grade
-   que cresce com a altura da JANELA, não um tamanho fixo. Numa tela mais
-   alta a proporção muda, e uma posição fixa em % passa a cortar hora o
-   cabelo, hora o queixo — foi exatamente o corte que o Cláudio via.
-   Solução: a foto de verdade NUNCA é cortada. `.central-hoje-foto-img-nitida`
-   mostra ela INTEIRA e centralizada (`background-size: contain`), e o
-   espaço que sobra nas laterais é preenchido pela MESMA foto, ampliada e
-   borrada, atrás dela (`.central-hoje-foto-img-fundo`) — só pra não deixar
-   barra vazia. As duas são IRMÃS, nunca uma dentro da outra: `filter: blur()`
-   borra tudo que está DENTRO do elemento, então se a nítida fosse filha da
-   borrada ela saía borrada junto. */
+/* Terceira passada nesta foto (2026-08-11). A primeira tentativa (`cover` +
+   `background-position: center 38%`) cortava cabelo ou queixo dependendo da
+   altura da janela (o quadro é feito de `fr`, não tem tamanho fixo). A
+   segunda trocou o corte por letterbox com a própria foto borrada atrás —
+   funcionava, mas o Cláudio achou que não ficava bom (borrão em volta do
+   rosto). Agora o fundo é uma cor PASTEL sólida, não a foto: mais limpo, e
+   resolve o mesmo problema (a foto nunca precisa ser cortada pra caber em
+   qualquer proporção de card). A cor é fixa POR PESSOA — `pdCorPor(nome)`
+   (js/paginas-designers.js, carregado antes deste arquivo), a mesma função
+   que já dá cor a cada designer no painel — então ninguém escolhe nada e a
+   cor nunca muda de sessão pra sessão.
+   As duas camadas continuam IRMÃS, nunca uma dentro da outra: era assim que
+   evitava o filtro de borrão vazar pra cima da foto nítida; hoje não tem
+   mais filtro nenhum, mas a estrutura ficou a mesma por simplicidade. */
 .central-hoje-foto-img { position: absolute; inset: 0; overflow: hidden; background: var(--page-bg); }
-.central-hoje-foto-img-fundo {
-  position: absolute; inset: -12%;
-  background-size: cover; background-position: center;
-  filter: blur(24px) brightness(.7);
-}
+.central-hoje-foto-img-fundo { position: absolute; inset: 0; }
 .central-hoje-foto-img-nitida {
   position: absolute; inset: 0;
   background-size: contain; background-repeat: no-repeat; background-position: center;
