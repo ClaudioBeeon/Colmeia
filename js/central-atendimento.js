@@ -1675,6 +1675,23 @@ let centralGrupoForaDoFiltro = new Set();
 // O que foi digitado na busca da pílula.
 let centralGrupoBusca = "";
 
+// ===== A lista fina + prévia (2026-08-11, protótipo 3) =====
+// Qual peça está selecionada, guardada pela CHAVE dela (não pelo índice):
+// a lista é redesenhada a cada filtro, busca e troca de agrupamento, e o
+// índice de uma peça muda em todos esses casos — a chave não.
+let centralGrupoSelecionado = null;
+// "data" (padrão) ou "cliente". SÓ VISUAL: agrupar por cliente não junta
+// peça nenhuma num link, não gera link e não grava nada (pedido do
+// Cláudio, 2026-08-11: "só de agrupar pra melhorar a visualização sem
+// gerar link"). Serve pros casos como os 20 shows do Jarrão, que são 20
+// tarefas separadas e ocupavam 20 linhas soltas no meio das outras.
+let centralGrupoAgrupamento = "data";
+// Seções fechadas na hora (por rótulo). Some ao trocar de grupo/modo —
+// é estado de olhar, não decisão de trabalho, então não vai pra lugar
+// nenhum (ver a regra de localStorage × planilha no CLAUDE.md: isto não
+// é nem uma coisa nem outra, é só o que está aberto neste instante).
+let centralGrupoSecoesFechadas = new Set();
+
 function centralAbrirGrupo(chave) {
   if (!CENTRAL_GRUPOS[chave]) return;
   centralGrupoAtual = chave;
@@ -1704,9 +1721,9 @@ function centralFecharGrupo() {
 function centralRenderGrupo() {
   if (!centralGrupoAtual) return;
   const seg = document.getElementById("centralGrupoSeg");
-  const grade = document.getElementById("centralGrupoGrade");
+  const lista = document.getElementById("centralGrupoLista");
   const sub = document.getElementById("centralGrupoSub");
-  if (!seg || !grade) return;
+  if (!seg || !lista) return;
 
   seg.innerHTML = Object.keys(CENTRAL_GRUPOS).map(chave => {
     const g = CENTRAL_GRUPOS[chave];
@@ -1746,53 +1763,359 @@ function centralRenderGrupo() {
   // sumiu do sistema.
   const itens = todos.filter(it => centralGrupoPassaNoFiltro(it));
   if (sub) sub.innerHTML = itens.length ? grupo.sub(itens.length) : "";
+  centralGrupoRenderModo();
 
   // A coluna da direita segue o filtro: um cliente sozinho vira o radar
   // dele; mais de um (ou todos) volta pro ranking de espera.
   centralRenderLadoDoGrupo(todos, itens);
 
+  const daFila = centralGrupoAtual === "esperando" || centralGrupoAtual === "prontas";
+
   if (!itens.length) {
     const filtrando = centralGrupoBusca || centralGrupoForaDoFiltro.size;
-    grade.innerHTML = `<div class="central-grupo-vazio">${escaparHTML(
+    lista.innerHTML = `<div class="central-grupo-vazio">${escaparHTML(
       filtrando ? "Nada aqui com esse filtro." : grupo.vazio
     )}</div>`;
+    centralGrupoSelecionado = null;
+    centralGrupoRenderPrevia(null, daFila);
     return;
   }
 
-  const daFila = centralGrupoAtual === "esperando" || centralGrupoAtual === "prontas";
-  grade.innerHTML = itens.map((it, i) => centralCardDoGrupoHTML(it, i, daFila)).join("");
+  // A peça escolhida tem que continuar sendo a mesma depois de filtrar,
+  // buscar ou trocar o agrupamento — e, quando ela sai da lista (foi
+  // conferida, ou o filtro a excluiu), cai na primeira em vez de deixar a
+  // prévia vazia sem explicação.
+  if (!itens.some(it => centralGrupoChaveDoItem(it) === centralGrupoSelecionado)) {
+    centralGrupoSelecionado = centralGrupoChaveDoItem(itens[0]);
+  }
 
-  // A miniatura entra depois, uma a uma — cada uma é uma ida ao Drive, e
-  // segurar a grade inteira esperando por elas atrasaria o que importa
-  // mais rápido (mesmo padrão da Timeline e de apvCarregarMiniatura).
-  grade.querySelectorAll("[data-central-gc-thumb]").forEach(el => {
-    const fileId = el.dataset.centralGcThumb;
+  centralGrupoRenderLista(itens, daFila);
+  const escolhido = itens.find(it => centralGrupoChaveDoItem(it) === centralGrupoSelecionado);
+  centralGrupoRenderPrevia(escolhido, daFila);
+}
+
+/**
+ * O interruptor "por data / por cliente" (2026-08-11, pedido do Cláudio).
+ * Desenhado dentro da barra, ao lado do subtítulo, e não na pílula preta
+ * lá em cima: aquela é sobre QUAL grupo você está vendo; este é sobre
+ * como a lista abaixo dele se organiza.
+ *
+ * ⚠️ É SÓ VISUAL. Agrupar por cliente não junta as peças em link nenhum,
+ * não gera link e não grava nada — a pedido do Cláudio ("só de agrupar
+ * pra melhorar a visualização sem gerar link"), depois de descobrir que
+ * os 20 shows do Jarrão são 20 tarefas de verdade, cada uma com o link
+ * dela pelo método antigo.
+ */
+function centralGrupoRenderModo() {
+  const barra = document.querySelector(".central-grupo-barra");
+  if (!barra) return;
+  let caixa = document.getElementById("centralGrupoModo");
+  if (!caixa) {
+    caixa = document.createElement("div");
+    caixa.className = "central-grupo-modo";
+    caixa.id = "centralGrupoModo";
+    barra.appendChild(caixa);
+  }
+  caixa.innerHTML = `
+    <button type="button" data-central-modo="data" class="${centralGrupoAgrupamento === "data" ? "on" : ""}">Por data</button>
+    <button type="button" data-central-modo="cliente" class="${centralGrupoAgrupamento === "cliente" ? "on" : ""}">Por cliente</button>`;
+  caixa.querySelectorAll("[data-central-modo]").forEach(b => {
+    b.addEventListener("click", () => {
+      if (centralGrupoAgrupamento === b.dataset.centralModo) return;
+      centralGrupoAgrupamento = b.dataset.centralModo;
+      // As seções fechadas são de OUTRO agrupamento (as chaves nem são as
+      // mesmas): guardá-las faria uma seção nascer fechada sem motivo.
+      centralGrupoSecoesFechadas = new Set();
+      centralRenderGrupo();
+    });
+  });
+}
+
+/**
+ * A identidade de uma peça na lista. São dois tipos de item bem
+ * diferentes: a fila de conferência (tarefa + lote) e o link de aprovação
+ * (o código dele). Nenhum dos dois tem um "id" só — daí esta função.
+ */
+function centralGrupoChaveDoItem(it) {
+  if (!it) return null;
+  return it.codigo ? `apv:${it.codigo}` : `fila:${it.taskId}::${it.loteId}`;
+}
+
+/**
+ * Quando essa peça começou a esperar. Cada grupo conta a partir de um
+ * momento diferente — é a mesma escolha que o selo do card antigo já
+ * fazia, agora num lugar só porque a lista e a prévia precisam dela.
+ */
+function centralGrupoQuandoDoItem(it) {
+  if (!it) return 0;
+  if (centralGrupoAtual === "esperando" || centralGrupoAtual === "prontas") {
+    return Date.parse(it.pedidoEm) || 0;
+  }
+  if (centralGrupoAtual === "concluidos") return Number(it.respondidoEm) || 0;
+  return Number(it.respondidoEm) || Number(it.criadoEm) || 0;
+}
+
+/** O nome da peça, que sai de lugares diferentes nos dois tipos de item. */
+function centralGrupoNomeDoItem(it, daFila) {
+  const pecas = it.pecas || [];
+  const primeira = pecas[0] || {};
+  if (daFila) {
+    return pecas.length > 1
+      ? `${pecas.length} peças`
+      : (primeira.nomePeca || it.tituloTarefa || "Peça");
+  }
+  return it.tituloTarefa || String(it.nomeArquivo || "").split("|")[0] || "Peça";
+}
+
+/** O fileId da miniatura — vazio em vídeo, que não tem o que mostrar. */
+function centralGrupoArteDoItem(it, daFila) {
+  const primeira = (it.pecas || [])[0] || {};
+  const ehVideo = daFila
+    ? String(primeira.mimeType || "").indexOf("video/") === 0
+    : !!it.ehVideo;
+  if (ehVideo) return "";
+  return daFila ? (primeira.fileId || "") : (it.fileId || "");
+}
+
+/**
+ * Separa as peças em seções, do jeito que o interruptor pedir.
+ *
+ * POR DATA (padrão) — uma seção por quantidade de dias esperando, das
+ * mais antigas pras mais novas. É o que responde "o que está parado há
+ * mais tempo", a pergunta que a tela existe pra responder e que a grade
+ * de cartões não respondia de jeito nenhum.
+ *
+ * POR CLIENTE — uma seção por cliente, ordenadas pela peça mais antiga de
+ * cada um. Puramente visual: junta as 20 linhas do Jarrão numa seção que
+ * abre e fecha, sem tocar em link nenhum.
+ */
+function centralGrupoSecoes(itens) {
+  const secoes = [];
+  const porChave = {};
+
+  itens.forEach(it => {
+    let chave, rotulo, ordem;
+    if (centralGrupoAgrupamento === "cliente") {
+      chave = centralChaveCliente(it.cliente || "");
+      rotulo = it.cliente || "Sem cliente";
+      ordem = centralGrupoQuandoDoItem(it) || Infinity;   // sem data vai pro fim
+    } else {
+      const dias = centralDiasDesde(centralGrupoQuandoDoItem(it));
+      chave = `d${dias}`;
+      rotulo = dias === 0 ? "Hoje" : dias === 1 ? "Ontem" : `Há ${dias} dias`;
+      ordem = -dias;   // mais dias primeiro
+    }
+    if (!porChave[chave]) {
+      porChave[chave] = { chave, rotulo, ordem, itens: [] };
+      secoes.push(porChave[chave]);
+    }
+    // Por cliente, a seção herda a data da peça MAIS ANTIGA dele — é ela
+    // que decide a posição do cliente na lista e se ele acende o alerta.
+    if (ordem < porChave[chave].ordem) porChave[chave].ordem = ordem;
+    porChave[chave].itens.push(it);
+  });
+
+  secoes.sort((a, b) => a.ordem - b.ordem);
+  return secoes;
+}
+
+function centralGrupoRenderLista(itens, daFila) {
+  const lista = document.getElementById("centralGrupoLista");
+  if (!lista) return;
+
+  const secoes = centralGrupoSecoes(itens);
+  const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
+  // Índice global pra ligar o clique de volta ao item certo — a lista é
+  // desenhada por seção, então a posição dentro da seção não serve.
+  let n = 0;
+  const mapa = [];
+
+  lista.innerHTML = secoes.map(sec => {
+    const fechada = centralGrupoSecoesFechadas.has(sec.chave);
+    const diasSec = centralDiasDesde(Math.min(...sec.itens.map(centralGrupoQuandoDoItem).filter(Boolean)) || 0);
+    // O vermelho é só pro que já passou do limite, e só nos grupos de
+    // trabalho em aberto: em "Concluídos" o tempo não é cobrança nenhuma.
+    const atrasada = !CENTRAL_GRUPOS[centralGrupoAtual].historico && diasSec >= limite;
+
+    const linhas = sec.itens.map(it => {
+      const i = n++;
+      mapa.push(it);
+      const chave = centralGrupoChaveDoItem(it);
+      const dias = centralDiasDesde(centralGrupoQuandoDoItem(it));
+      const arte = centralGrupoArteDoItem(it, daFila);
+      // O subtítulo diz o que a seção NÃO está dizendo: agrupado por data
+      // mostra o cliente; agrupado por cliente, o cliente já está no
+      // cabeçalho, então mostra o designer (que some no outro modo).
+      const sub = centralGrupoAgrupamento === "cliente"
+        ? (it.designer || "sem designer")
+        : (it.cliente || "Sem cliente");
+      const rotuloDias = dias === 0 ? "hoje" : `${dias}d`;
+      return `
+        <button type="button" class="central-grupo-li ${chave === centralGrupoSelecionado ? "ativa" : ""}"
+                data-central-li="${i}">
+          <span class="central-grupo-li-arte" ${arte ? `data-central-li-thumb="${escaparHTML(arte)}"` : ""}></span>
+          <span class="central-grupo-li-t">
+            <span class="central-grupo-li-nome">${escaparHTML(centralGrupoNomeDoItem(it, daFila))}</span>
+            <span class="central-grupo-li-sub">${escaparHTML(sub)}</span>
+          </span>
+          <span class="central-grupo-li-dias ${!CENTRAL_GRUPOS[centralGrupoAtual].historico && dias >= limite ? "alerta" : ""}">${escaparHTML(rotuloDias)}</span>
+        </button>`;
+    }).join("");
+
+    return `
+      <div class="central-grupo-sec ${fechada ? "fechada" : ""} ${atrasada ? "atrasada" : ""}">
+        <button type="button" class="central-grupo-sec-cab" data-central-sec="${escaparHTML(sec.chave)}">
+          <span class="central-grupo-sec-caret" aria-hidden="true">▾</span>
+          <span class="central-grupo-sec-t">${escaparHTML(sec.rotulo)}</span>
+          <span class="central-grupo-sec-n">${sec.itens.length}</span>
+        </button>
+        <div class="central-grupo-sec-corpo">${linhas}</div>
+      </div>`;
+  }).join("");
+
+  lista.querySelectorAll("[data-central-li]").forEach(btn => {
+    const item = mapa[Number(btn.dataset.centralLi)];
+    btn.addEventListener("click", () => centralGrupoEscolher(item, daFila));
+  });
+
+  lista.querySelectorAll("[data-central-sec]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const chave = btn.dataset.centralSec;
+      if (centralGrupoSecoesFechadas.has(chave)) centralGrupoSecoesFechadas.delete(chave);
+      else centralGrupoSecoesFechadas.add(chave);
+      centralRenderGrupo();
+    });
+  });
+
+  // As miniaturas entram uma a uma, depois — cada uma é uma ida ao Drive,
+  // e segurar a lista inteira esperando por elas atrasaria justamente o
+  // que aparece rápido (mesmo padrão da Timeline e de apvCarregarMiniatura).
+  lista.querySelectorAll("[data-central-li-thumb]").forEach(el => {
+    const fileId = el.dataset.centralLiThumb;
     if (fileId) centralCarregarMiniaturaGrupo(fileId, el);
   });
+}
 
-  grade.querySelectorAll("[data-central-gc]").forEach(btn => {
-    const item = itens[Number(btn.dataset.centralGc)];
-    btn.addEventListener("click", () => centralAbrirDoGrupo(item, daFila));
+/**
+ * Escolher uma linha: no desktop só troca a prévia (a peça aparece grande
+ * ao lado, sem sair da lista). No celular a prévia não existe — a coluna
+ * é uma só, ver o media query — então o toque abre a conferência direto,
+ * que é o comportamento que a grade de cartões já tinha lá.
+ */
+function centralGrupoEscolher(item, daFila) {
+  const semPrevia = window.matchMedia && window.matchMedia("(max-width: 900px)").matches;
+  if (semPrevia) { centralAbrirDoGrupo(item, daFila); return; }
+  centralGrupoSelecionado = centralGrupoChaveDoItem(item);
+  centralRenderGrupo();
+}
+
+function centralGrupoRenderPrevia(it, daFila) {
+  const alvo = document.getElementById("centralGrupoPrevia");
+  if (!alvo) return;
+
+  if (!it) {
+    alvo.innerHTML = `<div class="central-grupo-pv-vazio">Escolha uma peça na lista pra ver ela aqui.</div>`;
+    return;
+  }
+
+  const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
+  const dias = centralDiasDesde(centralGrupoQuandoDoItem(it));
+  const grupo = CENTRAL_GRUPOS[centralGrupoAtual];
+
+  // O selo responde a pergunta DAQUELE grupo, e só ela — mesma divisão que
+  // o card antigo fazia.
+  let selo = "", classeSelo = "";
+  if (centralGrupoAtual === "esperando") {
+    selo = typeof apvTempoDeEspera === "function" ? apvTempoDeEspera(it.pedidoEm) : "";
+    if (dias >= 1) classeSelo = "alerta";
+  } else if (centralGrupoAtual === "prontas") {
+    selo = it.aprovadoPor ? `conferida por ${it.aprovadoPor}` : "conferida";
+    classeSelo = "ok";
+  } else if (centralGrupoAtual === "concluidos") {
+    selo = it.quemAprovou ? `${it.quemAprovou} aprovou` : "aprovada";
+    classeSelo = "ok";
+  } else {
+    selo = dias >= 1 ? `há ${dias} dia${dias === 1 ? "" : "s"}` : "hoje";
+    if (dias >= limite) classeSelo = "alerta";
+  }
+
+  // O DIA DE POSTAR — informação que não existia em lugar nenhum desta
+  // tela e que muda a urgência de tudo. Sai de `centralPostagens`, o mesmo
+  // array que o calendário já buscou uma vez por sessão: custo zero, e
+  // simplesmente não aparece se o calendário ainda não chegou.
+  let posta = "";
+  if (Array.isArray(centralPostagens) && it.taskId) {
+    const p = centralPostagens.find(x => String(x.id) === String(it.taskId));
+    if (p && p.publicacao) posta = `posta ${centralCalCurta(p.publicacao)}`;
+  }
+
+  // A contagem de peças NÃO entra aqui quando o nome já é ela: com mais de
+  // uma peça, `centralGrupoNomeDoItem` devolve "2 peças" — repetir viraria
+  // "2 peças · Cliente · Designer · 2 peças".
+  const sub = [
+    it.cliente || "Sem cliente",
+    daFila ? (it.designer || "") : "",
+    posta,
+  ].filter(Boolean).join(" · ");
+
+  const rotuloAbrir = centralGrupoAtual === "concluidos"
+    ? "Ver o que o cliente viu"
+    : centralGrupoAtual === "comCliente" ? "Abrir a aprovação"
+    : centralGrupoAtual === "ajuste" ? "Ver o pedido do cliente"
+    : centralGrupoAtual === "prontas" ? "Abrir pra enviar" : "Abrir conferência";
+  const rotuloExcluir = daFila ? "Tirar da fila" : "Excluir o link";
+
+  alvo.innerHTML = `
+    <div class="central-grupo-pv-arte" id="centralGrupoPvArte"></div>
+    <div class="central-grupo-pv-baixo">
+      <div class="central-grupo-pv-linha">
+        <span class="central-grupo-pv-t">
+          <span class="central-grupo-pv-nome">${escaparHTML(centralGrupoNomeDoItem(it, daFila))}</span>
+          <span class="central-grupo-pv-sub">${escaparHTML(sub)}</span>
+        </span>
+        ${selo ? `<span class="central-grupo-pv-selo ${classeSelo}">${escaparHTML(selo)}</span>` : ""}
+      </div>
+      <div class="central-grupo-pv-acoes">
+        <button type="button" class="central-grupo-pv-btn" id="centralGrupoPvAbrir">${escaparHTML(rotuloAbrir)}</button>
+        ${centralGrupoAtual === "comCliente" ? `
+          <button type="button" class="central-grupo-pv-btn2" id="centralGrupoPvAprovar"
+                  title="O cliente já aprovou por fora (WhatsApp, e-mail, reunião)">Já aprovou</button>` : ""}
+        ${grupo.historico ? "" : `
+          <button type="button" class="central-grupo-pv-btn2 perigo" id="centralGrupoPvExcluir">${escaparHTML(rotuloExcluir)}</button>`}
+      </div>
+    </div>`;
+
+  document.getElementById("centralGrupoPvAbrir")?.addEventListener("click", () => centralAbrirDoGrupo(it, daFila));
+  document.getElementById("centralGrupoPvExcluir")?.addEventListener("click", ev => {
+    centralExcluirDoGrupo(it, daFila, ev.currentTarget);
+  });
+  document.getElementById("centralGrupoPvAprovar")?.addEventListener("click", ev => {
+    centralMarcarAprovadaPorFora(it, ev.currentTarget);
   });
 
-  grade.querySelectorAll("[data-central-gc-excluir]").forEach(btn => {
-    const item = itens[Number(btn.dataset.centralGcExcluir)];
-    btn.addEventListener("click", ev => {
-      // O lixeirinha fica POR CIMA do card, que também é clicável: sem parar
-      // a propagação, o mesmo clique abriria a conferência por trás da
-      // confirmação.
-      ev.stopPropagation();
-      centralExcluirDoGrupo(item, daFila, btn);
-    });
-  });
+  centralGrupoCarregarArteGrande(centralGrupoArteDoItem(it, daFila));
+}
 
-  grade.querySelectorAll("[data-central-gc-aprovar]").forEach(btn => {
-    const item = itens[Number(btn.dataset.centralGcAprovar)];
-    btn.addEventListener("click", ev => {
-      ev.stopPropagation();   // mesmo motivo do lixeirinha
-      centralMarcarAprovadaPorFora(item, btn);
-    });
-  });
+/**
+ * A arte da prévia. Usa `buscarImagemCheiaDrive` (e não a miniatura da
+ * lista) porque aqui ela aparece grande — a miniatura do Drive é um JPEG
+ * baixinho, feito pros 32px da linha, e esticado vira borrão. Desde o
+ * Storage (2026-08-10) essa ação devolve uma URL de verdade na maioria
+ * dos casos, então o navegador ainda guarda em cache entre uma peça e
+ * outra; o base64 continua como reserva (ver Drive.gs).
+ */
+async function centralGrupoCarregarArteGrande(fileId) {
+  const el = document.getElementById("centralGrupoPvArte");
+  if (!el) return;
+  if (!fileId) return;   // vídeo ou peça sem arte: fica o cinza do palco
+  const alvoDe = centralGrupoSelecionado;
+  const data = await chamarBackend({ acao: "buscarImagemCheiaDrive", fileId });
+  // Trocou de peça enquanto esta vinha: a resposta é de outra arte agora.
+  if (alvoDe !== centralGrupoSelecionado) return;
+  const atual = document.getElementById("centralGrupoPvArte");
+  if (!atual || !data || !data.ok) return;
+  const src = data.url || (data.base64 ? `data:${data.mimeType || "image/jpeg"};base64,${data.base64}` : "");
+  if (src) atual.style.backgroundImage = `url("${src}")`;
 }
 
 /**
@@ -1898,87 +2221,6 @@ function centralQuandoCurto(quandoMs) {
   if (d <= 0) return "hoje";
   if (d === 1) return "ontem";
   return `há ${d} dias`;
-}
-
-/** O card. Um desenho só pros cinco grupos; o que muda é o texto. */
-function centralCardDoGrupoHTML(it, i, daFila) {
-  const pecas = it.pecas || [];
-  const primeira = pecas[0] || {};
-
-  // Nome, cliente e miniatura saem de lugares diferentes nos dois tipos de
-  // item (fila de conferência × link de aprovação), mas o card é o mesmo.
-  const nome = daFila
-    ? (pecas.length > 1 ? `${pecas.length} peças` : (primeira.nomePeca || it.tituloTarefa || "Peça"))
-    : (it.tituloTarefa || String(it.nomeArquivo || "").split("|")[0] || "Peça");
-  const cliente = it.cliente || "Sem cliente";
-  const ehVideo = daFila
-    ? String(primeira.mimeType || "").indexOf("video/") === 0
-    : !!it.ehVideo;
-  const fileId = ehVideo ? "" : (daFila ? (primeira.fileId || "") : (it.fileId || ""));
-
-  // O selo do canto responde a pergunta daquele grupo, e só ela.
-  let selo = "", classeSelo = "";
-  if (centralGrupoAtual === "esperando") {
-    selo = typeof apvTempoDeEspera === "function" ? apvTempoDeEspera(it.pedidoEm) : "";
-    const dias = typeof centralDiasDesde === "function" ? centralDiasDesde(Date.parse(it.pedidoEm)) : 0;
-    if (dias >= 1) classeSelo = "alerta";
-  } else if (centralGrupoAtual === "prontas") {
-    selo = it.aprovadoPor ? `conferida por ${it.aprovadoPor}` : "conferida";
-    classeSelo = "ok";
-  } else if (centralGrupoAtual === "concluidos") {
-    // Quem aprovou é do lado do CLIENTE (o nome que ele digitou na
-    // caixinha da página de aprovação), não alguém da Beeon — é a única
-    // informação que essa aba tem e que nenhuma outra tem.
-    selo = it.quemAprovou ? `${it.quemAprovou} aprovou` : "aprovada";
-    classeSelo = "ok";
-  } else {
-    const base = Number(it.respondidoEm) || Number(it.criadoEm) || 0;
-    const dias = typeof centralDiasDesde === "function" ? centralDiasDesde(base) : 0;
-    const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
-    selo = dias >= 1 ? `há ${dias} dia${dias === 1 ? "" : "s"}` : "hoje";
-    if (dias >= limite) classeSelo = "alerta";
-  }
-
-  // O lixeirinha mora FORA do <button> do card (um botão dentro de outro é
-  // HTML inválido — o navegador desmonta a estrutura sozinho), por isso o
-  // card inteiro vive dentro de um `.central-gc-wrap` que só existe pra
-  // ancorar os dois. Ver centralExcluirDoGrupo pro que ele apaga em cada
-  // grupo (fila de conferência × link de aprovação).
-  const rotuloExcluir = daFila ? "Tirar da fila" : "Excluir o link de aprovação";
-
-  // O CHECK só existe em "Com o cliente" (2026-08-09, pedido do Cláudio):
-  // é o único grupo em que a peça está esperando uma resposta que pode ter
-  // chegado por outro caminho — WhatsApp, e-mail, reunião. Nos outros a
-  // decisão é nossa e tem tela própria pra ela, então um check ali seria
-  // um atalho pra aprovar sem olhar a arte.
-  const podeMarcarAprovada = centralGrupoAtual === "comCliente";
-
-  return `
-    <div class="central-gc-wrap">
-    <button type="button" class="central-gc" data-central-gc="${i}">
-      <span class="central-gc-arte" ${fileId ? `data-central-gc-thumb="${escaparHTML(fileId)}"` : ""}></span>
-      <span class="central-gc-cima">
-        ${selo ? `<span class="central-gc-selo ${classeSelo}">${escaparHTML(selo)}</span>` : ""}
-        ${daFila && pecas.length > 1 ? `<span class="central-gc-selo">${pecas.length} peças</span>` : ""}
-        ${centralGrupoAtual === "concluidos" ? `<span class="central-gc-selo">${escaparHTML(centralQuandoCurto(it.respondidoEm))}</span>` : ""}
-      </span>
-      <span class="central-gc-prat">
-        <span class="central-gc-t">
-          <span class="central-gc-nome">${escaparHTML(nome)}</span>
-          <span class="central-gc-cli">${escaparHTML(cliente)}</span>
-        </span>
-        <span class="central-gc-seta" aria-hidden="true">›</span>
-      </span>
-    </button>
-    <button type="button" class="central-gc-lixo" data-central-gc-excluir="${i}"
-            title="${escaparHTML(rotuloExcluir)}" aria-label="${escaparHTML(rotuloExcluir)}">🗑️</button>
-    ${podeMarcarAprovada ? `
-      <button type="button" class="central-gc-ok" data-central-gc-aprovar="${i}"
-              title="Marcar como aprovada pelo cliente" aria-label="Marcar como aprovada pelo cliente">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m20 6-11 11-5-5" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>` : ""}
-    </div>
-  `;
 }
 
 async function centralCarregarMiniaturaGrupo(fileId, el) {
@@ -2104,6 +2346,13 @@ document.addEventListener("keydown", ev => {
 function centralGrupoLimparFiltros() {
   centralGrupoForaDoFiltro = new Set();
   centralGrupoBusca = "";
+  // A peça escolhida e as seções fechadas são do grupo ANTERIOR: sem
+  // zerar, a prévia continuaria mostrando uma peça que não está mais na
+  // lista (e as chaves de seção nem existem no grupo novo). O agrupamento
+  // (por data / por cliente) NÃO é zerado de propósito — é preferência de
+  // como olhar, e trocar de aba não devia desfazer a escolha da pessoa.
+  centralGrupoSelecionado = null;
+  centralGrupoSecoesFechadas = new Set();
   const campo = document.getElementById("centralGrupoBusca");
   if (campo) campo.value = "";
   const menu = document.getElementById("centralGrupoCliMenu");
