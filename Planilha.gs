@@ -665,23 +665,34 @@ function buscarFeedEventos(designer) {
  * Linha mais velha que a validade fica de fora: seria podada logo.
  */
 function migrarFeedEventosParaSupabase() {
-  supabaseCopiaInicial(
-    'feed_eventos',
-    getFeedEventosSheet(),
-    new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000,
-    0, // a coluna do carimbo de tempo
-    function (linha) {
-      return {
-        quando: Number(linha[0]) || 0,
-        dono: String(linha[1] || ''),
-        tipo: String(linha[2] || ''),
-        autor: String(linha[3] || ''),
-        task_id: String(linha[4] || ''),
-        titulo: String(linha[5] || ''),
-        detalhe: String(linha[6] || '')
-      };
-    }
-  );
+  supabaseCopiaInicial('feed_eventos', getFeedEventosSheet(), corteDoFeed(), 0, feedEventoDaLinha);
+}
+
+/**
+ * Confere se os dois lados do feed ainda batem. Ver supabaseConferir.
+ * Vale rodar de vez em quando mesmo depois da virada: enquanto a gravação
+ * é nos dois lugares, os dois TÊM que continuar iguais — se um dia
+ * pararem, é sinal de que alguma gravação está falhando calada de um lado.
+ */
+function conferirFeedEventos() {
+  supabaseConferir('feed_eventos', getFeedEventosSheet(), corteDoFeed(), 0, feedEventoDaLinha);
+}
+
+function corteDoFeed() {
+  return new Date().getTime() - FEED_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+}
+
+/** Como uma linha do feed é lida — um lugar só, pra cópia e conferência não divergirem. */
+function feedEventoDaLinha(linha) {
+  return {
+    quando: Number(linha[0]) || 0,
+    dono: String(linha[1] || ''),
+    tipo: String(linha[2] || ''),
+    autor: String(linha[3] || ''),
+    task_id: String(linha[4] || ''),
+    titulo: String(linha[5] || ''),
+    detalhe: String(linha[6] || '')
+  };
 }
 
 /**
@@ -1290,21 +1301,27 @@ function limparLogDePlaysAntigo() {
 
 /** A cópia inicial do Log de Plays. Ver supabaseCopiaInicial (Supabase.gs). */
 function migrarLogPlaysParaSupabase() {
-  supabaseCopiaInicial(
-    'log_plays',
-    getLogPlaysSheet(),
-    new Date().getTime() - LOG_PLAYS_RETENCAO_DIAS * 24 * 60 * 60 * 1000,
-    3, // aqui o carimbo de tempo é a 4ª coluna, não a 1ª
-    function (linha) {
-      return {
-        task_id: String(linha[0] || ''),
-        titulo: String(linha[1] || ''),
-        designer: String(linha[2] || ''),
-        quando: Number(linha[3]) || 0,
-        data: String(linha[4] || '')
-      };
-    }
-  );
+  // 3 = aqui o carimbo de tempo é a 4ª coluna, não a 1ª.
+  supabaseCopiaInicial('log_plays', getLogPlaysSheet(), corteDoLogPlays(), 3, playDaLinha);
+}
+
+/** Confere se os dois lados do Log de Plays ainda batem. Ver supabaseConferir. */
+function conferirLogPlays() {
+  supabaseConferir('log_plays', getLogPlaysSheet(), corteDoLogPlays(), 3, playDaLinha);
+}
+
+function corteDoLogPlays() {
+  return new Date().getTime() - LOG_PLAYS_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+}
+
+function playDaLinha(linha) {
+  return {
+    task_id: String(linha[0] || ''),
+    titulo: String(linha[1] || ''),
+    designer: String(linha[2] || ''),
+    quando: Number(linha[3]) || 0,
+    data: String(linha[4] || '')
+  };
 }
 
 // ===========================================================================
@@ -1430,24 +1447,29 @@ function listarPedidosDeAtencao() {
 
 /** A cópia inicial dos Pedidos de Atenção. Ver supabaseCopiaInicial (Supabase.gs). */
 function migrarPedidosAtencaoParaSupabase() {
-  supabaseCopiaInicial(
-    'pedidos_atencao',
-    getPedidosAtencaoSheet(),
-    new Date().getTime() - PEDIDOS_ATENCAO_RETENCAO_DIAS * 24 * 60 * 60 * 1000,
-    0,
-    function (linha) {
-      return {
-        quando: Number(linha[0]) || 0,
-        task_id: String(linha[1] || ''),
-        titulo: String(linha[2] || ''),
-        cliente: String(linha[3] || ''),
-        publicacao: String(linha[4] || ''),
-        quem_pediu: String(linha[5] || ''),
-        designer: String(linha[6] || ''),
-        motivo: String(linha[7] || '')
-      };
-    }
-  );
+  supabaseCopiaInicial('pedidos_atencao', getPedidosAtencaoSheet(), corteDosPedidos(), 0, pedidoDeAtencaoDaLinha);
+}
+
+/** Confere se os dois lados dos Pedidos de Atenção ainda batem. Ver supabaseConferir. */
+function conferirPedidosAtencao() {
+  supabaseConferir('pedidos_atencao', getPedidosAtencaoSheet(), corteDosPedidos(), 0, pedidoDeAtencaoDaLinha);
+}
+
+function corteDosPedidos() {
+  return new Date().getTime() - PEDIDOS_ATENCAO_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
+}
+
+function pedidoDeAtencaoDaLinha(linha) {
+  return {
+    quando: Number(linha[0]) || 0,
+    task_id: String(linha[1] || ''),
+    titulo: String(linha[2] || ''),
+    cliente: String(linha[3] || ''),
+    publicacao: String(linha[4] || ''),
+    quem_pediu: String(linha[5] || ''),
+    designer: String(linha[6] || ''),
+    motivo: String(linha[7] || '')
+  };
 }
 
 /** Poda junto do backup diário, mesma ideia do FeedEventos. */
