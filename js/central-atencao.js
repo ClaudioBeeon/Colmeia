@@ -247,6 +247,12 @@ function centralAtencaoPararCarrossel() {
   centralAtencaoCarrosselIdx = 0;
 }
 
+// Altura de UMA linha do carrossel — tem que bater com `.central-atencao-
+// carrossel-item` (css/07-central-atendimento.css). Existe como constante
+// porque o deslocamento do JS e a altura do CSS precisam ser o MESMO
+// número; se um dia mudar o tamanho da fonte lá, mudar aqui também.
+const CENTRAL_ATENCAO_CARROSSEL_ALTURA = 13;
+
 function centralAtencaoIniciarCarrossel(total) {
   // Com 1 pedido só não tem o que girar; e quem pediu menos movimento na
   // tela (prefers-reduced-motion) fica só com o primeiro, parado.
@@ -259,8 +265,16 @@ function centralAtencaoIniciarCarrossel(total) {
     // ninguém tenha parado o intervalo antes — pára aqui em vez de deixar
     // rodando escrevendo em nada.
     if (!trilho) { centralAtencaoPararCarrossel(); return; }
-    trilho.style.transform = `translateY(-${centralAtencaoCarrosselIdx * 100}%)`;
-  }, 2600);
+    // EM PIXELS, nunca em `%` (bug corrigido em 2026-08-11, relatado pelo
+    // Cláudio: "aparece o primeiro, sobe e some"). `translateY(N%)` usa a
+    // altura do PRÓPRIO elemento como referência — e o trilho é alto
+    // quanto a SOMA de todas as linhas empilhadas, não uma linha só. Com
+    // 30 pedidos, `-100%` pulava a largura de 30 linhas de uma vez,
+    // arrastando o trilho pra bem depois da última — por isso sumia e
+    // nunca mais voltava a mostrar nada. Em pixels o deslocamento é sempre
+    // do tamanho de UMA linha, não importa quantas existam ao todo.
+    trilho.style.transform = `translateY(-${centralAtencaoCarrosselIdx * CENTRAL_ATENCAO_CARROSSEL_ALTURA}px)`;
+  }, 5000);
 }
 
 // ===== A revisão (o card preto vira a tela de decidir) =====
