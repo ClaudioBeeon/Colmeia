@@ -206,6 +206,72 @@ document.getElementById("loginForm").addEventListener("submit", async e => {
   }
 });
 
+// ===== ENTRAR COM O GOOGLE (2026-08-10) =====
+//
+// É uma ADIÇÃO, não uma troca: a chave de acesso continua igual, e quem
+// preferir seguir com ela não precisa mudar nada. O ganho é que este
+// caminho identifica a PESSOA — a chave sozinha não faz isso (duas
+// pessoas com a mesma chave entram uma como a outra, tanto que existe um
+// diagnóstico no backend caçando chaves repetidas).
+//
+// O CRACHÁ NÃO É CONFERIDO AQUI. O navegador só recebe do Google e
+// repassa; quem confere pra quem ele foi emitido é o backend
+// (`loginComGoogle`, Planilha.gs). Conferir no navegador não valeria nada
+// — qualquer um pode mandar o que quiser daqui.
+
+function ligarEntrarComGoogle() {
+  // Sem o identificador configurado, o bloco continua escondido: melhor
+  // não ter botão do que ter um botão que não funciona.
+  if (typeof GOOGLE_CLIENT_ID === "undefined" || !GOOGLE_CLIENT_ID) return;
+  if (typeof google === "undefined" || !google.accounts || !google.accounts.id) return;
+
+  const bloco = document.getElementById("loginGoogleBloco");
+  const alvo = document.getElementById("loginGoogleBtn");
+  if (!bloco || !alvo) return;
+
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: entrarComCredencialDoGoogle
+  });
+  google.accounts.id.renderButton(alvo, {
+    theme: "filled_black", size: "large", shape: "pill",
+    text: "signin_with", locale: "pt-BR", width: 260
+  });
+  bloco.hidden = false;
+}
+
+async function entrarComCredencialDoGoogle(resposta) {
+  const erroEl = document.getElementById("loginErro");
+  if (erroEl) erroEl.hidden = true;
+
+  const data = await chamarBackend({
+    acao: "loginComGoogle",
+    credential: resposta && resposta.credential
+  });
+
+  if (!data || !data.ok) {
+    if (erroEl) {
+      // A mensagem do backend é específica de propósito ("o e-mail X não
+      // está vinculado a ninguém") — repeti-la é o que diz pra pessoa o
+      // que fazer, em vez de um "não deu" que não ajuda ninguém.
+      erroEl.textContent = (data && data.error) || "Não consegui entrar com o Google.";
+      erroEl.hidden = false;
+    }
+    return;
+  }
+
+  DESIGNER_LOGADO = data.nome;
+  PAPEL_LOGADO = data.papel;
+  DESIGNER_ID_LOGADO = data.runrunId || null;
+  salvarSessao(data.nome, data.papel, data.runrunId);
+  iniciarAppPosLogin();
+}
+
+// O script do Google carrega sozinho (async, no index.html) e pode chegar
+// antes ou depois deste arquivo — daí tentar nos dois momentos.
+window.addEventListener("load", ligarEntrarComGoogle);
+ligarEntrarComGoogle();
+
 // ===== A entrada do ATENDIMENTO =====
 //
 // Elas não têm conta no Colmeia: chegam por um link de conferência colado

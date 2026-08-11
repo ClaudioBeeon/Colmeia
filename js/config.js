@@ -365,6 +365,25 @@ const columnsDef = [
 //   - ajuste.html
 const COLMEIA_API_URL = "https://script.google.com/macros/s/AKfycbxSKcto3u-463xmhUm2xGUIylkWzYyeU-L-QHEz0bnFPImsl7Vlum5bZJU5vDT-5gOI/exec";
 
+/**
+ * O identificador do Colmeia no Google, pro botão "Entrar com o Google"
+ * (2026-08-10). Enquanto estiver vazio, o botão nem aparece na tela de
+ * login — a chave de acesso continua sendo o único caminho, e ninguém vê
+ * um botão que não funciona.
+ *
+ * ISSO NÃO É SEGREDO, e é por isso que pode morar aqui num arquivo
+ * público: um "client ID" só diz QUEM está pedindo a entrada, e é feito
+ * pra ficar à vista no navegador. Quem decide se a entrada vale é o
+ * backend (`loginComGoogle`, Planilha.gs), conferindo com o próprio
+ * Google se o crachá foi emitido pra este identificador. O que nunca pode
+ * sair do backend é o "client secret" — e ele não é usado em lugar nenhum
+ * deste fluxo.
+ *
+ * O mesmo valor precisa estar em GOOGLE_CLIENT_ID nas propriedades do
+ * script do Apps Script: um lado mostra o botão, o outro confere o crachá.
+ */
+const GOOGLE_CLIENT_ID = "";
+
 // URL do Web App do painel-designers-beeon (o outro painel, já publicado).
 // O Colmeia só faz leitura aqui — nunca escreve nada nesse painel.
 const PAINEL_BEEON_API_URL = "https://script.google.com/macros/s/AKfycbzzWtG4jkVpLvPwOAHaj-h9KK9k_8N6YWGUXfFtUDSXRiCj7ILDPvuSy9VJXhglTrzEQQ/exec";

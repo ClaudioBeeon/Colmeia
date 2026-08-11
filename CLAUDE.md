@@ -1844,6 +1844,40 @@ Isso aposenta a chatice de trocar o `?v=` em todas as tags a cada mudança — a
 **`aprovar.html` e `ajuste.html` NÃO passam pela montagem**, de propósito: cada uma é um arquivo
 único e completo, feito pra abrir sem login e sem depender do resto do app.
 
+## Entrar com o Google (2026-08-10)
+
+`loginComGoogle`/`acharPessoaPorEmail`/`vincularEmailDeLogin` (Planilha.gs) +
+`ligarEntrarComGoogle` (js/login-boot.js) + o bloco `.login-google` no fim de css/01-base.css.
+
+**É uma ADIÇÃO, não uma troca** (decisão do Cláudio): a chave de acesso continua exatamente como
+era, e quem preferir seguir com ela não precisa fazer nada. O ganho é existir um segundo caminho
+que identifica a **pessoa** — `verificarLogin` reconhece alguém só pela senha, e duas pessoas com a
+mesma chave entram uma como a outra (tanto que `diagnosticoSenhasRepetidas` existe pra caçar isso).
+
+**O crachá é conferido no BACKEND, nunca no navegador.** O front só recebe do Google e repassa;
+`loginComGoogle` pergunta ao próprio Google (`tokeninfo`) e checa três coisas: que o crachá foi
+emitido **pra este app** (`aud` == `GOOGLE_CLIENT_ID`), que o e-mail é confirmado, e que não venceu.
+Conferir no navegador não valeria nada — de lá qualquer um manda o que quiser.
+
+**Ninguém é criado por aqui.** O e-mail precisa já estar na **coluna D da aba Login** (nasce sozinha,
+mesmo padrão de `getLinksClientesSheet`). E-mail desconhecido é recusado com um recado que diz o que
+fazer, em vez de virar conta nova — é um app interno com lista fechada de pessoas.
+`acharPessoaPorEmail` também aceita o `RUNRUN_USUARIOS` (Código.gs) como segunda fonte, o que faz
+Cláudio/Gustavo/Erick entrarem sem ninguém preencher nada — **mas só se já tiverem linha na aba
+Login**, porque é de lá que sai o papel (designer/atendimento/coordenador).
+
+**`vincularEmailDeLogin('Laura', 'laura@beeon.com.br')`** roda à mão no editor do Apps Script: é
+coisa rara, uma vez por pessoa, e não vale uma tela.
+
+**Duas configurações, o mesmo valor:** `GOOGLE_CLIENT_ID` em js/config.js (mostra o botão) e nas
+propriedades do script (confere o crachá). **O client ID não é segredo** e pode morar num arquivo
+público: ele só diz QUEM está pedindo a entrada. O que nunca pode sair do backend é o *client
+secret* — que não é usado em lugar nenhum deste fluxo.
+
+**Enquanto `GOOGLE_CLIENT_ID` estiver vazio, o botão nem aparece** — melhor não ter botão do que ter
+um que não funciona. E o script do Google no index.html fica **fora da montagem** (async, do servidor
+deles): se demorar ou não carregar, a tela de login segue funcionando com a chave de sempre.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

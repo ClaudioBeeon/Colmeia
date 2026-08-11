@@ -410,6 +410,8 @@ function handleRequest(e, method) {
         output = buscarExtrasRunrunCompleto();
       } else if (body.acao === 'listarAprovacoesPendentes') {
         output = listarAprovacoesPendentes();
+      } else if (body.acao === 'loginComGoogle') {
+        output = loginComGoogle(body.credential);
       } else if (body.acao === 'registrarErroDoApp') {
         output = registrarErroDoApp(body);
       } else if (body.acao === 'registrarTelaAberta') {

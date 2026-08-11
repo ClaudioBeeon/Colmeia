@@ -764,7 +764,155 @@ function getLoginSheet() {
     sheet = ss.insertSheet('Login');
     sheet.getRange('A1:C1').setValues([['nome', 'senhaHash', 'papel']]);
   }
+  // Coluna D: o e-mail Google da pessoa, pro "Entrar com o Google"
+  // (2026-08-10). Nasce sozinha na primeira leitura depois desta versão —
+  // mesmo padrão de getLinksClientesSheet e getAprovacoesSheet. Vazia
+  // significa "essa pessoa só entra pela chave de acesso", não erro.
+  if (sheet.getLastColumn() < 4) sheet.getRange(1, 4).setValue('email');
   return sheet;
+}
+
+// ---------------------------------------------------------------------
+// ENTRAR COM O GOOGLE (2026-08-10)
+//
+// Some ADIÇÃO: a chave de acesso continua exatamente como era, e quem
+// preferir seguir usando ela não precisa fazer nada. O que muda é existir
+// um segundo caminho — e um caminho que, ao contrário do primeiro,
+// identifica a PESSOA de verdade.
+//
+// Por que isso importa: `verificarLogin` reconhece alguém só pela senha.
+// Duas pessoas com a mesma chave entram uma como a outra — tanto que já
+// existe `diagnosticoSenhasRepetidas` pra caçar isso na mão. Com o
+// Google, quem entra é dono de um e-mail, e não há como confundir.
+//
+// NINGUÉM É CRIADO AQUI. O e-mail precisa já estar na coluna D da aba
+// Login. Um e-mail desconhecido é recusado com um recado claro, em vez de
+// virar uma conta nova — este é um app interno com uma lista fechada de
+// pessoas, e é assim que ele deve continuar.
+// ---------------------------------------------------------------------
+
+/**
+ * Confere o crachá que o Google devolveu ao navegador e entra.
+ *
+ * O `idToken` é assinado pelo Google; quem confere é o próprio Google
+ * (endereço `tokeninfo`). Fazer essa conferência no BACKEND, e não no
+ * navegador, é o ponto todo: um token colado por qualquer um não passa,
+ * porque é aqui que se checa pra QUEM ele foi emitido.
+ */
+function loginComGoogle(idToken) {
+  if (!idToken) return { ok: false, error: 'Faltou o crachá do Google.' };
+
+  var clientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID');
+  if (!clientId) {
+    return { ok: false, error: 'A entrada pelo Google ainda não foi configurada.' };
+  }
+
+  var dados;
+  try {
+    var resposta = UrlFetchApp.fetch(
+      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
+      { muteHttpExceptions: true }
+    );
+    if (resposta.getResponseCode() !== 200) {
+      return { ok: false, error: 'O Google não reconheceu essa entrada. Tente de novo.' };
+    }
+    dados = JSON.parse(resposta.getContentText());
+  } catch (e) {
+    return { ok: false, error: 'Não consegui falar com o Google agora.' };
+  }
+
+  // As três checagens que fazem isso valer alguma coisa:
+  // 1. o crachá foi emitido PRA ESTE app (sem isso, um token de qualquer
+  //    outro site entraria aqui);
+  if (String(dados.aud || '') !== String(clientId)) {
+    return { ok: false, error: 'Essa entrada não foi emitida pro Colmeia.' };
+  }
+  // 2. o e-mail é confirmado pelo Google;
+  if (String(dados.email_verified) !== 'true') {
+    return { ok: false, error: 'Esse e-mail não está confirmado no Google.' };
+  }
+  // 3. e o crachá não venceu (o Google já recusaria, mas custa uma linha).
+  if (Number(dados.exp || 0) * 1000 < new Date().getTime()) {
+    return { ok: false, error: 'Essa entrada expirou. Tente de novo.' };
+  }
+
+  var email = String(dados.email || '').toLowerCase().trim();
+  var pessoa = acharPessoaPorEmail(email);
+  if (!pessoa) {
+    return {
+      ok: false,
+      error: 'O e-mail ' + email + ' não está vinculado a ninguém no Colmeia. ' +
+             'Peça pro Cláudio vincular e tente de novo.'
+    };
+  }
+
+  return {
+    ok: true, nome: pessoa.nome, papel: pessoa.papel,
+    runrunId: runrunIdDoDesigner(pessoa.nome)
+  };
+}
+
+/**
+ * De quem é este e-mail? Procura na coluna D da aba Login e, se não
+ * achar, no RUNRUN_USUARIOS (Código.gs) — que já mapeia e-mail pra nome
+ * pra ler a agenda. Essa segunda fonte faz o Cláudio, o Gustavo e o Erick
+ * conseguirem entrar pelo Google sem ninguém precisar preencher nada.
+ */
+function acharPessoaPorEmail(email) {
+  if (!email) return null;
+  var linhas = getLoginSheet().getDataRange().getValues();
+
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][3] || '').toLowerCase().trim() === email) {
+      return { nome: linhas[i][0], papel: linhas[i][2] || 'designer' };
+    }
+  }
+
+  var nomeConhecido = RUNRUN_USUARIOS[email];
+  if (nomeConhecido) {
+    // Ainda assim só entra quem já tem linha na aba Login: o papel
+    // (designer / atendimento / coordenador) sai de lá, e sem ele não dá
+    // pra saber o que a pessoa pode ver.
+    for (var j = 1; j < linhas.length; j++) {
+      if (String(linhas[j][0]).toLowerCase().trim() === String(nomeConhecido).toLowerCase().trim()) {
+        return { nome: linhas[j][0], papel: linhas[j][2] || 'designer' };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Vincula um e-mail a uma pessoa que já existe na aba Login — é o que
+ * libera o "Entrar com o Google" pra ela. Roda à mão no editor do Apps
+ * Script: é coisa rara, feita uma vez por pessoa, e não vale uma tela.
+ *
+ * Ex: vincularEmailDeLogin('Laura', 'laura@beeon.com.br')
+ */
+function vincularEmailDeLogin(nome, email) {
+  if (!nome || !email) {
+    Logger.log("Use assim: vincularEmailDeLogin('Laura', 'laura@beeon.com.br')");
+    return;
+  }
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    var sheet = getLoginSheet();
+    var linhas = sheet.getDataRange().getValues();
+    var alvo = String(nome).toLowerCase().trim();
+    for (var i = 1; i < linhas.length; i++) {
+      if (String(linhas[i][0]).toLowerCase().trim() === alvo) {
+        sheet.getRange(i + 1, 4).setValue(String(email).toLowerCase().trim());
+        Logger.log('✅ ' + linhas[i][0] + ' agora entra com ' + email + '.');
+        return;
+      }
+    }
+    Logger.log('❌ Não achei ninguém chamado "' + nome + '" na aba Login.');
+    Logger.log('   Os nomes cadastrados são: ' +
+      linhas.slice(1).map(function (l) { return l[0]; }).filter(String).join(', '));
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function normalizarNomeLogin(s) {

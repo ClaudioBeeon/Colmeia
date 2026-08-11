@@ -686,3 +686,36 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
 
 .user-name { font-size: 13.5px; font-weight: 600; }
 
+
+/* ===== "Entrar com o Google" na tela de login (2026-08-10) =====
+   Nasce escondido no HTML e só aparece quando GOOGLE_CLIENT_ID está
+   preenchido — por isso não há estado "vazio" pra estilizar aqui.
+   O botão em si é desenhado pelo Google (não dá pra estilizar por fora,
+   é um iframe deles), então o que se faz aqui é só dar o espaço e o
+   separador em volta dele. */
+.login-google {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* O "ou" com um risquinho de cada lado, feito com borda em pseudo-elemento
+   pra não precisar de markup a mais. */
+.login-google-ou {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.55);
+}
+.login-google-ou::before,
+.login-google-ou::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+}
