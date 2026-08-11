@@ -1878,6 +1878,46 @@ secret* — que não é usado em lugar nenhum deste fluxo.
 um que não funciona. E o script do Google no index.html fica **fora da montagem** (async, do servidor
 deles): se demorar ou não carregar, a tela de login segue funcionando com a chave de sempre.
 
+## A foto do quadro (2026-08-11)
+
+`guardarFotoDoQuadro`/`lerFotoDoQuadro` (Código.gs) + a tabela `foto_do_quadro`
+(supabase/09-foto-do-quadro.sql) + o campo `daFoto` no caminho de leitura do quadro
+(js/pessoas-fotos.js) + a faixa em `mostrarAvisoRunrunFora` (js/config.js).
+
+**O que é:** a última foto conhecida do quadro, num lugar só que todo mundo alcança. O Colmeia já
+guardava esse retrato no localStorage de cada navegador (`salvarSnapshotDoQuadro`), mas ele só
+existia pra quem **já tinha aberto naquele aparelho** — quem entrava de um computador novo, do
+celular ou depois de limpar o navegador continuava esperando o Apps Script acordar, e quando o
+Runrun.it caía ninguém tinha o que ver.
+
+O backend guarda a foto depois de cada varredura boa (no máximo a cada 2 min — a varredura acontece
+a cada 45s e gravar em todas seria escrita à toa) e, **quando o Runrun.it não responde**, devolve
+ela no lugar do erro, com `daFoto: true` e `fotoQuando`.
+
+**⚠️ ISTO NÃO É A "CÓPIA LOCAL DAS TAREFAS", e a diferença é a decisão inteira.** A cópia completa
+— tabela de tarefas sincronizada, quadro lendo dela — foi **avaliada e adiada** em 2026-08-11, com
+um gatilho explícito: *vale quando o quadro lento virar reclamação real do time; hoje é aceitável*.
+O motivo não é esforço (o Supabase já está todo plumbado), é que ela cria **dois lugares com a mesma
+informação e a chance de discordarem em silêncio**.
+
+A foto evita esse problema por construção, e três regras a mantêm assim — **quebrar qualquer uma
+transforma isto naquilo**:
+
+1. **Nunca é lida quando o Runrun.it responde.** Só existe no caminho de erro.
+2. **Nunca se passa por atual.** Vai sempre com a hora em que foi tirada, e a faixa na tela diz
+   "você está vendo o quadro de 7 min atrás" — texto que se atualiza sozinho enquanto o Runrun.it
+   não volta.
+3. **Nunca vira novidade.** `atualizarKanbanEmBackground` desliga a detecção de "você recebeu uma
+   tarefa" / "entrou em Ajustes" quando `daFoto` (`podeAvisarDeMudanca`). Essa detecção compara "o
+   que mudou de um instante pro outro", e a foto é de minutos atrás: comparar com ela **inverteria o
+   sentido das mudanças** e avisaria que você recebeu uma tarefa que na verdade já passou adiante.
+   Pelo mesmo motivo, uma resposta `daFoto` **não** regrava o snapshot local — carimbaria a hora de
+   agora num quadro velho.
+
+Foto de mais de 24h é descartada dos dois lados (mostraria tarefa já entregue como aberta).
+`guardarFotoDoQuadro` nunca estoura e nunca atrasa a resposta: sem Supabase configurado, ou com ele
+fora, o quadro funciona exatamente como antes desta função existir.
+
 ## Configurações: o visual (redesenho de 2026-08-11)
 
 Classes `.cfg-*` e `.people-row*` em **css/04-paginas.css**, usadas pelas abas Pessoas e Acessos

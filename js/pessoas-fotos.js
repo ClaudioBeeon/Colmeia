@@ -557,8 +557,18 @@ async function carregarTarefasReais() {
       render();
       return;
     }
-    if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(false);
-    salvarSnapshotDoQuadro(data.tarefas); // pra próxima abertura ser instantânea
+    // `daFoto` = o Runrun.it não respondeu e o backend devolveu a última
+    // foto conhecida no lugar (ver lerFotoDoQuadro, Código.gs). Vem com
+    // ok:true porque tem quadro pra mostrar — mas NÃO é o quadro de
+    // agora, e as duas coisas abaixo dependem dessa diferença.
+    if (typeof mostrarAvisoRunrunFora === "function") {
+      mostrarAvisoRunrunFora(!!data.daFoto || !!data.runrunFora, data.fotoQuando);
+    }
+    // Só guarda foto de varredura de verdade. Guardar uma foto vinda de
+    // outra foto carimbaria a hora de agora num quadro velho — e aí ele
+    // se passaria por atual na próxima abertura, que é exatamente o que
+    // essa arquitetura foi desenhada pra nunca deixar acontecer.
+    if (!data.daFoto) salvarSnapshotDoQuadro(data.tarefas);
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
     tasksTodas = todasMapeadas;
     tasks = todasMapeadas.filter(t => !t.isOutraEtapa);
@@ -595,9 +605,12 @@ async function atualizarKanbanEmBackground() {
       if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(data.runrunFora);
       return;
     }
-    if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(false);
+    // Mesma distinção da carga inicial: foto não é quadro de agora.
+    if (typeof mostrarAvisoRunrunFora === "function") {
+      mostrarAvisoRunrunFora(!!data.daFoto || !!data.runrunFora, data.fotoQuando);
+    }
 
-    salvarSnapshotDoQuadro(data.tarefas); // mantém a foto do quadro sempre fresca
+    if (!data.daFoto) salvarSnapshotDoQuadro(data.tarefas); // mantém a foto do quadro sempre fresca
     const todasMapeadas = data.tarefas.map(mapearTarefaDoBackend);
 
     // Preserva o cache da "Sequência de responsáveis" (usado na aba de
@@ -618,6 +631,13 @@ async function atualizarKanbanEmBackground() {
     // primeira carga (tasksTodas começa vazio no load inicial, então
     // antiga nunca existe ali, e por sorte isso já evita disparar aviso
     // pra toda a fila de uma vez só quando o Colmeia abre).
+    //
+    // ⚠️ Nunca a partir de uma FOTO. Toda essa detecção é "o que mudou de
+    // um instante pro outro", e a foto é de vários minutos ATRÁS: comparar
+    // com ela inverteria o sentido das mudanças e avisaria que você
+    // recebeu uma tarefa que na verdade você já tinha passado adiante.
+    // Mostrar o quadro velho ajuda; inventar novidade a partir dele, não.
+    const podeAvisarDeMudanca = !data.daFoto;
     const recebidasAgora = [];
     const emAjustesAgora = [];
     todasMapeadas.forEach(nova => {
@@ -643,12 +663,12 @@ async function atualizarKanbanEmBackground() {
         nova.entregue = true;
         nova._entregueEm = antiga._entregueEm;
       }
-      if (antiga && DESIGNER_LOGADO
+      if (podeAvisarDeMudanca && antiga && DESIGNER_LOGADO
         && !ehMinhaTarefa(antiga)
         && ehMinhaTarefa(nova)) {
         recebidasAgora.push(nova);
       }
-      if (DESIGNER_LOGADO && nova.status === "ajustes"
+      if (podeAvisarDeMudanca && DESIGNER_LOGADO && nova.status === "ajustes"
         && ehMinhaTarefa(nova)
         && (!antiga || antiga.status !== "ajustes")) {
         emAjustesAgora.push(nova);

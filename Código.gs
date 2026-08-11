@@ -717,8 +717,27 @@ function getTarefasColmeia() {
     // varredura (nunca guarda resposta de erro — senão o erro ficaria
     // "grudado" por 45s pra todo mundo).
     guardarNoCacheEmFatias(cache, CACHE_QUADRO_CHAVE, JSON.stringify(resultado), CACHE_QUADRO_SEGUNDOS);
+    guardarFotoDoQuadro(resultado);
     return resultado;
   } catch (err) {
+    // O Runrun.it não respondeu. Antes isso era o fim da linha — tela de
+    // erro e pronto. Agora tenta a última foto conhecida: um quadro de
+    // alguns minutos atrás, avisando que é isso, é muito mais útil do que
+    // nada (ver foto_do_quadro, supabase/09-foto-do-quadro.sql).
+    var foto = lerFotoDoQuadro();
+    if (foto) {
+      return {
+        ok: true,
+        tarefas: foto.tarefas,
+        colunas: foto.colunas,
+        // O front usa estes dois pra dizer, na tela, que o que está ali é
+        // retrato e de quando — sem isso a foto se passaria por atual, que
+        // é justamente o risco que essa escolha de arquitetura evita.
+        daFoto: true,
+        fotoQuando: foto.quando,
+        runrunFora: runrunPareceForaDoAr()
+      };
+    }
     // `runrunFora` separa "o Runrun.it caiu" de "deu algum outro erro" —
     // é o que deixa o front mostrar a faixa explicando a situação em vez
     // de uma mensagem técnica que ninguém entende (ver
@@ -728,6 +747,90 @@ function getTarefasColmeia() {
       runrunFora: runrunPareceForaDoAr(),
       error: 'Erro ao buscar tarefas do Runrun.it: ' + err.message
     };
+  }
+}
+
+// ---------------------------------------------------------------------
+// A FOTO DO QUADRO (2026-08-11)
+//
+// O Colmeia já guardava um retrato do quadro no localStorage de cada
+// navegador, pra abrir instantâneo em vez de esperar o Apps Script
+// acordar (salvarSnapshotDoQuadro, js/pessoas-fotos.js). O problema é que
+// essa foto só existia pra quem JÁ tinha aberto naquele aparelho: quem
+// entrava de um computador novo, do celular, ou depois de limpar o
+// navegador, continuava esperando — e quando o Runrun.it caía, ninguém
+// tinha o que ver.
+//
+// Agora ela também mora no Supabase, num lugar só, que todo mundo
+// alcança. É a MESMA foto, com o mesmo papel: aparece antes do dado real
+// e sai de cena assim que ele chega.
+//
+// ⚠️ ISTO NÃO É UMA CÓPIA DAS TAREFAS. A diferença importa: uma cópia
+// seria lida no lugar do Runrun.it e poderia discordar dele sem ninguém
+// perceber. Esta foto nunca é lida quando o Runrun.it responde, e quando
+// é lida vai sempre marcada com a hora em que foi tirada.
+// ---------------------------------------------------------------------
+
+var FOTO_QUADRO_TABELA = 'foto_do_quadro';
+var FOTO_QUADRO_ID = 'quadro';
+// De quanto em quanto tempo vale regravar. A varredura acontece a cada
+// 45s (o cache acima); gravar em todas seria uma escrita por varredura
+// pra uma foto que quase não mudou. Dois minutos é fino: é muito menos
+// que o tempo em que uma foto ainda é útil.
+var FOTO_QUADRO_INTERVALO_MS = 2 * 60 * 1000;
+
+/**
+ * Guarda o retrato da varredura que acabou de dar certo.
+ *
+ * Nunca estoura e nunca atrasa a resposta de propósito: se o Supabase
+ * estiver fora, ou nem configurado, o quadro tem que continuar
+ * funcionando exatamente como funcionava antes desta função existir.
+ */
+function guardarFotoDoQuadro(resultado) {
+  try {
+    if (!supabaseConfigurado()) return;
+    if (!resultado || !resultado.tarefas || !resultado.tarefas.length) return;
+
+    var props = PropertiesService.getScriptProperties();
+    var ultima = Number(props.getProperty('FOTO_QUADRO_ULTIMA') || 0);
+    var agora = new Date().getTime();
+    if (agora - ultima < FOTO_QUADRO_INTERVALO_MS) return;
+    // Marca ANTES de gravar: se a gravação demorar ou falhar, o que não
+    // pode acontecer é toda requisição seguinte tentar de novo em fila.
+    props.setProperty('FOTO_QUADRO_ULTIMA', String(agora));
+
+    supabaseSalvar(FOTO_QUADRO_TABELA, {
+      id: FOTO_QUADRO_ID,
+      quando: agora,
+      tarefas: resultado.tarefas,
+      colunas: resultado.colunas || []
+    });
+  } catch (e) {
+    // Guardar a foto é um extra. Falhar aqui não pode tirar o quadro do ar.
+  }
+}
+
+/**
+ * A última foto conhecida, ou null se não houver nenhuma (ou se ela for
+ * velha demais pra ajudar alguém).
+ */
+function lerFotoDoQuadro() {
+  try {
+    if (!supabaseConfigurado()) return null;
+    var r = supabaseBuscar(FOTO_QUADRO_TABELA,
+      'select=quando,tarefas,colunas&id=eq.' + FOTO_QUADRO_ID);
+    if (!r.ok || !r.dados || !r.dados.length) return null;
+
+    var foto = r.dados[0];
+    if (!foto.tarefas || !foto.tarefas.length) return null;
+    // Quadro de ontem não ajuda ninguém e atrapalha: mostraria tarefas já
+    // entregues como se estivessem abertas. Mesma validade da foto que
+    // mora no navegador (SNAPSHOT_QUADRO_VALIDADE_MS, js/pessoas-fotos.js).
+    if (new Date().getTime() - Number(foto.quando || 0) > 24 * 60 * 60 * 1000) return null;
+
+    return { quando: Number(foto.quando), tarefas: foto.tarefas, colunas: foto.colunas || [] };
+  } catch (e) {
+    return null;
   }
 }
 

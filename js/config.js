@@ -835,7 +835,23 @@ const JANELA_NOTIFICACAO_UPLOAD_MS = 30 * 60 * 1000;
  * Some sozinha assim que a próxima varredura do quadro (a cada 60s)
  * conseguir falar com eles de novo (ver atualizarKanbanEmBackground).
  */
-function mostrarAvisoRunrunFora(estaFora) {
+/** "agora", "4 min atrás", "2 h atrás" — só pro texto desta faixa. */
+function idadeDaFotoDoQuadro(quandoMs) {
+  const min = Math.max(0, Math.round((Date.now() - quandoMs) / 60000));
+  if (min < 1) return "de agora há pouco";
+  if (min < 60) return `de ${min} min atrás`;
+  const h = Math.round(min / 60);
+  return h < 24 ? `de ${h} h atrás` : "de mais de um dia atrás";
+}
+
+/**
+ * @param {boolean} estaFora
+ * @param {number} [fotoQuando] Quando a foto do quadro que está na tela
+ *   foi tirada (epoch ms), se o que a pessoa está vendo for uma foto e
+ *   não o quadro de agora. Dizer a idade dela é o que impede o retrato
+ *   de se passar por atual — ver guardarFotoDoQuadro, Código.gs.
+ */
+function mostrarAvisoRunrunFora(estaFora, fotoQuando) {
   const existente = document.getElementById("avisoRunrunFora");
 
   if (!estaFora) {
@@ -843,7 +859,18 @@ function mostrarAvisoRunrunFora(estaFora) {
     document.body.classList.remove("com-aviso-runrun");
     return;
   }
-  if (existente) return; // já está na tela, não precisa redesenhar
+
+  const linhaDaFoto = fotoQuando
+    ? `Você está vendo o quadro ${idadeDaFotoDoQuadro(fotoQuando)}.`
+    : "Você continua vendo suas tarefas,";
+
+  if (existente) {
+    // Já está na tela — mas a idade da foto envelhece enquanto o
+    // Runrun.it não volta, então o texto precisa acompanhar.
+    const alvo = existente.querySelector(".aviso-runrun-quando");
+    if (alvo && alvo.textContent !== linhaDaFoto) alvo.textContent = linhaDaFoto;
+    return;
+  }
 
   const faixa = document.createElement("div");
   faixa.id = "avisoRunrunFora";
@@ -852,7 +879,8 @@ function mostrarAvisoRunrunFora(estaFora) {
     <span class="aviso-runrun-ico">🐝</span>
     <span class="aviso-runrun-txt">
       <b>O Runrun.it está fora do ar.</b>
-      Você continua vendo suas tarefas, mas dar play, comentar e entregar não vão funcionar até eles voltarem.
+      <span class="aviso-runrun-quando">${linhaDaFoto}</span>
+      Dar play, comentar e entregar não vão funcionar até eles voltarem.
       O Colmeia tenta sozinho de tempos em tempos.
     </span>
     <button type="button" class="aviso-runrun-x" title="Esconder este aviso" aria-label="Esconder">
