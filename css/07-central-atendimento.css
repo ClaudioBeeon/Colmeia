@@ -144,6 +144,24 @@
 }
 .central-date-pill svg { width: 14px; height: 14px; flex-shrink: 0; }
 
+/* As 4 abas (Hoje/Radar/Aprovações/Métricas), SUBIRAM da sidebar branca
+   pra dentro da barra preta (2026-08-11). Reaproveitam a MESMA classe
+   `.central-nav-ic` que a sidebar ainda usa (pro bloco extra do Cláudio,
+   `#centralSidebarExtraNav`) — por isso as regras aqui são escopadas por
+   `.central-topbar-tabs`, pra não mudar a aparência daquele outro lugar. */
+.central-topbar-tabs { display: flex; align-items: center; gap: 2px; flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
+.central-topbar-tabs::-webkit-scrollbar { display: none; }
+.central-topbar-tabs .central-nav-ic {
+  width: auto; height: auto; padding: 9px 15px; border-radius: 999px;
+  gap: 6px; color: rgba(255, 255, 255, .6); font-size: 12.5px; font-weight: 650; flex-shrink: 0;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-topbar-tabs .central-nav-ic:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+.central-topbar-tabs .central-nav-ic.active { color: #16181D; background: var(--kanban-yellow); }
+.central-topbar-tabs .central-nav-badge {
+  position: static; border: none; margin-left: 2px; vertical-align: 1px;
+}
+
 /* Seletor "ver como" — só pro coordenador (ver o comentário no index.html).
    Mesma pílula escura do date-pill, com um <select> nativo dentro (sem
    dropdown custom: é um controle raro de usar, não vale a complexidade). */
@@ -1403,6 +1421,11 @@
   .central-atencao-pill { padding: 5px 12px 5px 5px; }
   .central-atencao-pill-txt span { display: none; }
   .central-atencao-pop { height: min(560px, calc(100vh - 120px)); }
+  /* Barra estreita: o título por extenso perde pras abas, que são a
+     navegação de verdade — sem ele, sobra espaço pras abas não precisarem
+     rolar tão cedo. */
+  .central-topbar-title { display: none; }
+  .central-topbar-tabs .central-nav-ic { padding: 8px 11px; font-size: 12px; }
 }
 
 /* ===================================================================
@@ -1427,10 +1450,17 @@
 .central-atencao-wrap { position: relative; flex-shrink: 0; }
 .central-atencao-wrap[hidden] { display: none; }
 
+/* Maior, e com o carrossel dentro dela (2026-08-11, protótipo aprovado
+   pelo Cláudio): antes o texto era só "N pedindo atenção" + uma linha
+   estática ("2 atrasadas · 1 hoje"). Agora o número fica em destaque
+   ("N pedidos de atenção") e a linha de baixo virou um CARROSSEL que
+   desliza, uma peça de cada vez, no mesmo espírito visual da pílula
+   "tocando" do quadro (.now-playing) — mesmo amarelo, mesmo formato de
+   pílula grande e arredondada. */
 .central-atencao-pill {
-  display: flex; align-items: center; gap: 9px; cursor: pointer;
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
   font: inherit; font-family: var(--font-body); text-align: left;
-  border: none; border-radius: 999px; padding: 5px 15px 5px 5px;
+  border: none; border-radius: 999px; padding: 6px 22px 6px 6px;
   background: var(--kanban-yellow); color: #16181D;
   box-shadow: 0 4px 14px rgba(255, 199, 0, .32);
   transition: background var(--dur-fast) var(--ease-apple), filter var(--dur-fast) var(--ease-apple);
@@ -1443,7 +1473,7 @@
   box-shadow: 0 4px 14px rgba(229, 72, 77, .36);
 }
 .central-atencao-pill.tem-atrasada .central-atencao-bee { background: rgba(255, 255, 255, .92); color: #16181D; }
-.central-atencao-pill.tem-atrasada .central-atencao-pill-txt span { color: rgba(255, 255, 255, .8); }
+.central-atencao-pill.tem-atrasada .central-atencao-carrossel-item { color: rgba(255, 255, 255, .8); }
 .central-atencao-ponto {
   position: absolute; top: -1px; right: -1px;
   width: 9px; height: 9px; border-radius: 50%; background: var(--danger);
@@ -1455,18 +1485,30 @@
   70%  { box-shadow: 0 0 0 7px rgba(229,72,77,0); }
   100% { box-shadow: 0 0 0 0 rgba(229,72,77,0); }
 }
-.central-atencao-pill-txt { min-width: 0; display: flex; flex-direction: column; gap: 0; }
-.central-atencao-pill-txt b { font-size: 12.5px; font-weight: 750; line-height: 1.2; white-space: nowrap; }
-.central-atencao-pill-txt span { font-size: 10.5px; font-weight: 600; color: rgba(22, 24, 29, .62); white-space: nowrap; }
+.central-atencao-pill-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.central-atencao-pill-txt b { font-size: 15.5px; font-weight: 800; line-height: 1.15; white-space: nowrap; }
+/* A "janela" do carrossel: SEMPRE a altura de uma linha só (`overflow:
+   hidden`), com as linhas empilhadas por dentro (`.central-atencao-
+   carrossel-trilho`) e o JS (centralAtencaoIniciarCarrossel,
+   js/central-atencao.js) deslizando pra cima uma de cada vez, em loop —
+   mesma ideia do sobe/desce de `.now-playing-wrap` (css/01-base.css), só
+   que contínua em vez de responder a um evento. Com 1 pedido só o JS nem
+   inicia o intervalo: não tem o que girar. */
+.central-atencao-carrossel { height: 13px; overflow: hidden; }
+.central-atencao-carrossel-trilho { display: flex; flex-direction: column; transition: transform .5s var(--ease-apple-spring); }
+.central-atencao-carrossel-item {
+  height: 13px; line-height: 13px; font-size: 10.5px; font-weight: 600;
+  color: rgba(22, 24, 29, .62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* A Bee no lugar do sino genérico: é ELA que alerta, e é a mesma carinha
    que já avisa de arquivo novo dentro do card (beeIcon, js/bee.js). */
 .central-atencao-bee {
   position: relative; flex-shrink: 0;
-  width: 30px; height: 30px; border-radius: 50%;
+  width: 38px; height: 38px; border-radius: 50%;
   background: rgba(22, 24, 29, .12); color: #16181D;
   display: flex; align-items: center; justify-content: center;
 }
-.central-atencao-bee svg { width: 17px; height: 17px; display: block; }
+.central-atencao-bee svg { width: 20px; height: 20px; display: block; }
 .central-atencao-pill .central-atencao-ponto { border-color: var(--kanban-yellow); }
 .central-atencao-pill.tem-atrasada .central-atencao-ponto { border-color: var(--danger, #E5484D); background: #16181D; }
 
@@ -1634,6 +1676,7 @@
 @media (prefers-reduced-motion: reduce) {
   .central-atencao-pill, .central-atencao-pop { animation: none; }
   .central-atencao-ponto { animation: none; }
+  .central-atencao-carrossel-trilho { transition: none; }
 }
 
 /* A bolinha flutuante da Bee fica no canto de baixo à direita da tela e o

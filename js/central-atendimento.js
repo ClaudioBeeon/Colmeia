@@ -152,6 +152,7 @@ function centralAbrirParaClienteDaPeca(nomeCliente) {
 
 function fecharCentralAtendimento() {
   document.getElementById("centralAtendimento").hidden = true;
+  if (typeof centralAtencaoPararCarrossel === "function") centralAtencaoPararCarrossel();
 }
 
 /** A Central está aberta na tela agora? Ver o gancho em carregarDadosPainelBeeon (js/notificacoes-uploads.js). */

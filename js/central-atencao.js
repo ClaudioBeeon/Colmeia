@@ -166,6 +166,7 @@ function centralRenderPilulaAtencao() {
   if (!wrap || !pill) return;
 
   const fila = centralAtencaoFila();
+  centralAtencaoPararCarrossel();
   if (!fila.length) {
     wrap.hidden = true;
     pill.innerHTML = "";
@@ -176,17 +177,24 @@ function centralRenderPilulaAtencao() {
   }
   wrap.hidden = false;
 
-  const { atrasadas, hoje, amanha } = centralAtencaoContas(fila);
+  const { atrasadas } = centralAtencaoContas(fila);
   const beeSvg = typeof beeIcon === "string" ? beeIcon : CENTRAL_ATENCAO_ICONES.raio;
+  const hoje = centralCalChave(new Date());
 
-  // O resumo cita ATRASADAS primeiro e sempre: é o caso grave, e enterrá-lo
-  // depois de "3 hoje" faria a informação mais séria ser a menos vista.
-  const partes = [
-    atrasadas ? `${atrasadas} atrasada${atrasadas === 1 ? "" : "s"}` : "",
-    hoje ? `${hoje} hoje` : "",
-    amanha ? `${amanha} amanhã` : "",
-  ].filter(Boolean);
-  const linhaDeBaixo = partes.join(" · ");
+  // Uma linha por pedido (cliente + formato + prazo), pro carrossel que
+  // desliza embaixo do número (2026-08-11, protótipo aprovado pelo
+  // Cláudio) — antes era uma linha ESTÁTICA resumindo em contagem
+  // ("2 atrasadas · 1 hoje"). Reaproveita centralAtencaoFormato/
+  // centralAtencaoDiasDeAtraso, as mesmas contas que já montam o cartão
+  // da revisão — nenhum dado novo, só um jeito novo de mostrar.
+  const linhas = fila.map(p => {
+    const atraso = centralAtencaoDiasDeAtraso(p.publicacao);
+    const formato = centralAtencaoFormato(p.titulo) || "peça";
+    const quando = atraso
+      ? `atrasada há ${atraso === 1 ? "1 dia" : atraso + " dias"}`
+      : (p.publicacao === hoje ? "pra hoje" : "pra amanhã");
+    return `${p.cliente || "Sem cliente"} — ${formato} ${quando}`;
+  });
 
   // A BEE É QUEM ALERTA (pedido do Cláudio): a carinha dela no lugar do
   // sino genérico do protótipo. É a mesma que já avisa de arquivo novo no
@@ -201,8 +209,12 @@ function centralRenderPilulaAtencao() {
   pill.innerHTML = `
     <span class="central-atencao-bee">${beeSvg}<i class="central-atencao-ponto"></i></span>
     <span class="central-atencao-pill-txt">
-      <b>${fila.length} pedindo atenção</b>
-      <span>${escaparHTML(linhaDeBaixo)}</span>
+      <b>${fila.length} pedido${fila.length === 1 ? "" : "s"} de atenção</b>
+      <span class="central-atencao-carrossel">
+        <span class="central-atencao-carrossel-trilho" id="centralAtencaoTrilho">
+          ${linhas.map(l => `<span class="central-atencao-carrossel-item">${escaparHTML(l)}</span>`).join("")}
+        </span>
+      </span>
     </span>`;
 
   // Religa o clique a cada desenho: o innerHTML acima troca o conteúdo,
@@ -216,6 +228,39 @@ function centralRenderPilulaAtencao() {
       else centralAbrirRevisaoAtencao();
     });
   }
+
+  centralAtencaoIniciarCarrossel(linhas.length);
+}
+
+// ===== O carrossel dentro da pílula (2026-08-11) =====
+// Sobe uma linha por vez, em loop contínuo — mesmo espírito visual do
+// sobe/desce de `.now-playing-wrap` (css/01-base.css), só que sem esperar
+// nenhum evento. Reinicia a cada `centralRenderPilulaAtencao` (a fila pode
+// ter mudado de tamanho), por isso mora em variáveis de módulo, não presas
+// a nenhum elemento.
+let centralAtencaoCarrosselTimer = null;
+let centralAtencaoCarrosselIdx = 0;
+
+function centralAtencaoPararCarrossel() {
+  clearInterval(centralAtencaoCarrosselTimer);
+  centralAtencaoCarrosselTimer = null;
+  centralAtencaoCarrosselIdx = 0;
+}
+
+function centralAtencaoIniciarCarrossel(total) {
+  // Com 1 pedido só não tem o que girar; e quem pediu menos movimento na
+  // tela (prefers-reduced-motion) fica só com o primeiro, parado.
+  if (total <= 1) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  centralAtencaoCarrosselTimer = setInterval(() => {
+    centralAtencaoCarrosselIdx = (centralAtencaoCarrosselIdx + 1) % total;
+    const trilho = document.getElementById("centralAtencaoTrilho");
+    // O elemento pode ter sumido (aba trocada, Central fechada) sem que
+    // ninguém tenha parado o intervalo antes — pára aqui em vez de deixar
+    // rodando escrevendo em nada.
+    if (!trilho) { centralAtencaoPararCarrossel(); return; }
+    trilho.style.transform = `translateY(-${centralAtencaoCarrosselIdx * 100}%)`;
+  }, 2600);
 }
 
 // ===== A revisão (o card preto vira a tela de decidir) =====
