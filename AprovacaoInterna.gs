@@ -57,6 +57,109 @@ function getConferenciasSheet() {
   return sheet;
 }
 
+// =====================================================================
+// A CONFERÊNCIA NO SUPABASE (etapa 2 de 4 do fluxo de aprovação)
+//
+// A ideia que faz essa migração caber sem reescrever as telas: o banco
+// devolve as linhas no MESMO FORMATO da planilha — um array por linha, na
+// ordem das colunas, com uma linha falsa de cabeçalho na frente. Assim
+// `loteIdDaLinha`, `linhasDoLote`, `acharLinhaDaConferencia` e todos os
+// leitores continuam valendo letra por letra; o que muda é só de onde as
+// linhas vêm.
+//
+// O que MUDA de verdade é a escrita. Na planilha, mexer numa peça era
+// "descobre que ela é a linha 7 (varrendo tudo) e escreve na linha 7". No
+// banco a peça tem identidade — (task_id, nome_peca) — então dá pra dizer
+// "muda a peça X da tarefa Y" direto, sem procurar e sem trava.
+// =====================================================================
+
+// A ordem exata das colunas da aba. É o contrato entre os dois lados —
+// mexer aqui exige mexer no 04-conferencia-interna.sql junto.
+var COLUNAS_CONFERENCIA = [
+  'task_id', 'cliente', 'titulo_tarefa', 'nome_peca', 'designer', 'designer_id',
+  'file_id', 'nome_arquivo', 'mime_type', 'versao_pedida',
+  'pedido_em', 'status', 'decidido_por', 'decidido_em', 'motivo', 'lote_id'
+];
+
+/** Linha da planilha (array) → objeto do banco. Usado pela cópia e pela conferência. */
+function conferenciaDaLinha(l) {
+  var obj = {};
+  COLUNAS_CONFERENCIA.forEach(function (nome, i) {
+    obj[nome] = (l[i] === undefined || l[i] === null) ? '' : String(l[i]);
+  });
+  return obj;
+}
+
+/** Objeto do banco → linha no formato da planilha (o caminho de volta). */
+function conferenciaParaLinha(obj) {
+  return COLUNAS_CONFERENCIA.map(function (nome) {
+    return (obj[nome] === undefined || obj[nome] === null) ? '' : String(obj[nome]);
+  });
+}
+
+/**
+ * TODAS as linhas da conferência, da fonte que estiver mandando — sempre
+ * no formato da planilha (com o cabeçalho na posição 0, porque todo leitor
+ * daqui começa o laço no 1).
+ *
+ * Se o banco não responder, cai na planilha: uma fila vazia faria o
+ * atendimento achar que não há nada pra conferir: peça parada é peça que
+ * não vai pro cliente.
+ */
+function linhasDaConferencia() {
+  if (supabaseManda('conferencia_interna')) {
+    var doBanco = supabaseBuscarTudo('conferencia_interna', 'select=*&order=id.asc');
+    if (doBanco) {
+      var linhas = [COLUNAS_CONFERENCIA.slice()]; // cabeçalho de mentira
+      doBanco.forEach(function (o) { linhas.push(conferenciaParaLinha(o)); });
+      return linhas;
+    }
+  }
+  return getConferenciasSheet().getDataRange().getValues();
+}
+
+/**
+ * Grava uma peça no banco: atualiza se ela já existe, cria se não —
+ * em um comando só, graças ao índice único (task_id, nome_peca). É o que
+ * substitui o "acha a linha e escreve nela, senão appendRow".
+ */
+function salvarConferenciaNoBanco(valores) {
+  if (!supabaseConfigurado()) return;
+  supabaseSalvar('conferencia_interna', conferenciaDaLinha(valores));
+}
+
+/**
+ * Muda alguns campos de TODAS as peças de um lote (aprovar, enviar,
+ * devolver, descartar — todas fazem isso).
+ *
+ * Resolve quais peças são do lote com `loteIdDaLinha`, a mesma função de
+ * sempre, em vez de filtrar por lote_id no banco. Não é preguiça: linha
+ * antiga tem lote_id VAZIO e o lote dela é "taskId::nomePeca" — repetir
+ * essa regra em SQL abriria a porta pros dois lados discordarem sobre o
+ * que é um lote, e aí uma aprovação pegaria peça a menos (ou a mais).
+ */
+function atualizarLoteNoBanco(linhas, taskId, loteId, campos) {
+  atualizarPecasNoBanco(linhas, linhasDoLote(linhas, taskId, loteId), campos);
+}
+
+/**
+ * Muda alguns campos das peças indicadas por número de linha.
+ * Existe separada porque `marcarConferenciaDevolvida` monta a lista dela
+ * de um jeito próprio (por nome de peça, quando o lote não aparece) — e
+ * essa lista precisa valer no banco também.
+ */
+function atualizarPecasNoBanco(linhas, numeros, campos) {
+  if (!supabaseConfigurado()) return;
+  numeros.forEach(function (n) {
+    var l = linhas[n - 1];
+    if (!l) return;
+    supabaseAtualizar('conferencia_interna',
+      'task_id=eq.' + encodeURIComponent(String(l[0])) +
+      '&nome_peca=eq.' + encodeURIComponent(String(l[3])),
+      campos);
+  });
+}
+
 /**
  * A identidade do LOTE de uma linha — o que agrupa várias peças mandadas
  * juntas numa conferência só (pedido do Cláudio, 2026-08-05: "13 posts
@@ -295,6 +398,10 @@ function pedirConferenciaInterna(dados) {
         ultima.fileId, ultima.nome, ultima.mimeType, ultima.versao === null ? ultima.ordem : ultima.versao,
         agora, 'pendente', '', '', '', loteId
       ];
+      // No banco é um comando só (o índice único resolve "existe ou não").
+      // Na planilha continua sendo procurar a linha e escrever nela.
+      salvarConferenciaNoBanco(valores);
+
       var existente = acharLinhaDaConferencia(linhas, dados.taskId, peca.nomePeca);
       if (existente) sheet.getRange(existente, 1, 1, valores.length).setValues([valores]);
       else sheet.appendRow(valores);
@@ -345,9 +452,13 @@ function listarConferenciasPendentes() {
   // LEMBRAR de mandar pra revisão do zero — o pedido de alteração saía
   // daqui e nunca mais voltava por conta própria, então "conferir se o
   // ajuste ficou bom" dependia de alguém não esquecer.
+  // Lê a PLANILHA de propósito, mesmo depois da virada: ela continua sendo
+  // escrita sempre, então está completa, e é ela que essa função precisa
+  // pra saber em qual linha escrever de volta. Quem manda no que a fila
+  // MOSTRA é a leitura de baixo.
   reabrirDevolvidasComVersaoNova(sheet, cachePastas);
 
-  var linhas = sheet.getDataRange().getValues();
+  var linhas = linhasDaConferencia();
 
   // Agrupa por LOTE: cada linha é uma peça, mas o item da fila é o lote
   // inteiro — é o que faz 13 peças mandadas juntas aparecerem como UMA
@@ -498,7 +609,11 @@ function reabrirDevolvidasComVersaoNova(sheet, cachePastas) {
       var ultima = lista.pecas[p].ultima;
       if (!ultima) break;
       var versaoAtual = ultima.versao === null ? ultima.ordem : ultima.versao;
-      if (versaoAtual > versaoPedida) reabrir.push({ linha: i + 1, versao: versaoAtual });
+      // Guarda a identidade da peça junto do número da linha: o número
+      // serve pra escrever na planilha, a identidade pra escrever no banco.
+      if (versaoAtual > versaoPedida) {
+        reabrir.push({ linha: i + 1, versao: versaoAtual, taskId: taskId, nomePeca: nomePeca });
+      }
       break;
     }
   }
@@ -513,6 +628,16 @@ function reabrirDevolvidasComVersaoNova(sheet, cachePastas) {
       sheet.getRange(r.linha, 10).setValue(r.versao);        // versão que está valendo agora
       sheet.getRange(r.linha, 11).setValue(agora);           // "pedida" de novo agora
       sheet.getRange(r.linha, 12, 1, 3).setValues([['pendente', '', '']]);
+
+      if (supabaseConfigurado()) {
+        supabaseAtualizar('conferencia_interna',
+          'task_id=eq.' + encodeURIComponent(r.taskId) +
+          '&nome_peca=eq.' + encodeURIComponent(r.nomePeca),
+          {
+            versao_pedida: String(r.versao), pedido_em: agora,
+            status: 'pendente', decidido_por: '', decidido_em: ''
+          });
+      }
     });
   } finally {
     lock.releaseLock();
@@ -544,7 +669,7 @@ function buscarConferenciaDaTarefa(taskId, idsRelacionados) {
     idsRelacionados.forEach(function (id) { if (id) ids[String(id)] = true; });
   }
 
-  var linhas = getConferenciasSheet().getDataRange().getValues();
+  var linhas = linhasDaConferencia();
   var achada = null;
   for (var i = 1; i < linhas.length; i++) {
     if (!ids[String(linhas[i][0])]) continue;
@@ -586,7 +711,7 @@ function dadosDaConferencia(taskId, loteId) {
   var lista = listarVersoesDasPecas(taskId);
   if (!lista.ok) return lista;
 
-  var linhasSheet = getConferenciasSheet().getDataRange().getValues();
+  var linhasSheet = linhasDaConferencia();
   // As linhas do lote dizem QUAIS peças foram pedidas juntas (na ordem em
   // que foram pedidas). Sem loteId (link antigo, de antes desta
   // funcionalidade, que mandava o NOME da peça direto) ou lote vazio,
@@ -628,7 +753,10 @@ function dadosDaConferencia(taskId, loteId) {
   var aprovadoPor = '';
   var aprovadoEm = '';
   if (linhasDoGrupo.length) {
-    var valoresLinha = getConferenciasSheet().getRange(linhasDoGrupo[0], 1, 1, 16).getValues()[0];
+    // A linha já está na mão (`linhasSheet`), venha ela do banco ou da
+    // planilha — antes isso era uma segunda leitura da aba só pra reler
+    // uma linha que a função já tinha lido.
+    var valoresLinha = linhasSheet[linhasDoGrupo[0] - 1];
     statusConferencia = String(valoresLinha[11]) || 'pendente';
     aprovadoPor = valoresLinha[12] || '';
     aprovadoEm = valoresLinha[13] || '';
@@ -712,9 +840,12 @@ function aprovarInternamente(taskId, loteId, aprovadoPor) {
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
-    var linhas = linhasDoLote(sheet.getDataRange().getValues(), taskId, loteId);
+    var todas = sheet.getDataRange().getValues();
+    var linhas = linhasDoLote(todas, taskId, loteId);
     if (!linhas.length) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
     var agora = new Date().toISOString();
+    atualizarLoteNoBanco(todas, taskId, loteId,
+      { status: 'aprovada', decidido_por: aprovadoPor, decidido_em: agora });
     // Aprova TODAS as peças do lote de uma vez — é a decisão única que o
     // Cláudio pediu: quem confere um lote de várias peças aprova (ou pede
     // alteração) o lote inteiro, não peça por peça.
@@ -1552,8 +1683,10 @@ function marcarConferenciaEnviada(taskId, loteId) {
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
-    var linhas = linhasDoLote(sheet.getDataRange().getValues(), taskId, loteId);
+    var todas = sheet.getDataRange().getValues();
+    var linhas = linhasDoLote(todas, taskId, loteId);
     if (!linhas.length) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
+    atualizarLoteNoBanco(todas, taskId, loteId, { status: 'enviada' });
     linhas.forEach(function (linha) {
       sheet.getRange(linha, 12, 1, 1).setValues([['enviada']]);
     });
@@ -1582,8 +1715,13 @@ function marcarConferenciaDevolvida(taskId, loteId, quem, motivo, nomesPecas) {
         if (linha && alvo.indexOf(linha) === -1) alvo.push(linha);
       });
     }
+    var agora = new Date().toISOString();
+    // Pela lista `alvo`, não pelo lote: quando o lote não aparece, ela foi
+    // montada por NOME de peça logo acima, e o banco precisa da mesma lista.
+    atualizarPecasNoBanco(linhasTodas, alvo,
+      { status: 'devolvida', decidido_por: quem || '', decidido_em: agora, motivo: motivo || '' });
     alvo.forEach(function (linha) {
-      sheet.getRange(linha, 12, 1, 4).setValues([['devolvida', quem || '', new Date().toISOString(), motivo || '']]);
+      sheet.getRange(linha, 12, 1, 4).setValues([['devolvida', quem || '', agora, motivo || '']]);
     });
   } finally {
     lock.releaseLock();
@@ -1742,9 +1880,12 @@ function descartarConferencia(taskId, loteId, quem) {
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
-    var linhas = linhasDoLote(sheet.getDataRange().getValues(), taskId, loteId);
+    var todas = sheet.getDataRange().getValues();
+    var linhas = linhasDoLote(todas, taskId, loteId);
     if (!linhas.length) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
     var agora = new Date().toISOString();
+    atualizarLoteNoBanco(todas, taskId, loteId,
+      { status: 'descartada', decidido_por: quem || '', decidido_em: agora });
     linhas.forEach(function (linha) {
       sheet.getRange(linha, 12, 1, 3).setValues([['descartada', quem || '', agora]]);
     });
@@ -1804,6 +1945,13 @@ function limparConferenciasAntigas() {
       // é "isso não era pra estar na fila" (ver descartarConferencia).
       if (String(l[11]) !== 'descartada') {
         paraArquivar.push([l[0], l[1], l[2], l[3], l[11], l[12] || '', l[13] || l[10] || '']);
+      }
+      // Apaga a mesma peça no banco pela identidade dela, não pelo número
+      // da linha (que só existe na planilha).
+      if (supabaseConfigurado()) {
+        supabaseApagar('conferencia_interna',
+          'task_id=eq.' + encodeURIComponent(String(l[0])) +
+          '&nome_peca=eq.' + encodeURIComponent(String(l[3])));
       }
       sheet.deleteRow(i + 1);
     }
@@ -1895,7 +2043,21 @@ function historicoConferenciaDaLinha(l) {
   };
 }
 
-/** A cópia inicial. Ver supabaseCopiaInicial (Supabase.gs). */
+/** A cópia inicial da CONFERÊNCIA. Ver supabaseCopiaInicial (Supabase.gs). */
+function migrarConferenciaInternaParaSupabase() {
+  supabaseCopiaInicial('conferencia_interna', getConferenciasSheet(), 0, 0, conferenciaDaLinha);
+}
+
+/**
+ * A conferência da CONFERÊNCIA (o nome é infeliz, mas é isso mesmo):
+ * compara os dois lados linha a linha. Rodar depois da cópia e antes de
+ * virar a chave.
+ */
+function conferirConferenciaInterna() {
+  supabaseConferir('conferencia_interna', getConferenciasSheet(), 0, 0, conferenciaDaLinha);
+}
+
+/** A cópia inicial do histórico. Ver supabaseCopiaInicial (Supabase.gs). */
 function migrarHistoricoConferenciasParaSupabase() {
   supabaseCopiaInicial(
     'historico_conferencias',

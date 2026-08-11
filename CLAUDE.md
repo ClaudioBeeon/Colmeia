@@ -1653,7 +1653,7 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
 4. O fluxo de aprovação — **o prêmio**: onde mais gente escreve ao mesmo tempo (designer,
    atendimento e o cliente pelo link público), e onde a trava única mais dói. São **quatro** abas,
    não três, migradas em quatro etapas separadas e ordenadas por QUEM mexe em cada uma:
-   `HistoricoConferencias` ✅ (ninguém: é arquivo) → `ConferenciaInterna` (atendimento e designers)
+   `HistoricoConferencias` ✅ (ninguém: é arquivo) → `ConferenciaInterna` ✅ (atendimento e designers)
    → `Devolucoes` (atendimento) → `Aprovacoes` (**o cliente**, na página sem login — por último, com
    as outras três já rodando).
    **Uma aba vira uma tabela, com as mesmas colunas — sem redesenhar o modelo.** É tentador
@@ -1676,6 +1676,29 @@ banco encher de novo. `supabaseCopiaInicial` (Supabase.gs) é a função comum; 
 `migrar<Aba>ParaSupabase()` de três linhas por cima dela. Apaga e recopia (rodar duas vezes não
 duplica) e **se recusa a rodar depois da virada** — aí quem manda é o banco, e recopiar por cima
 apagaria o que só existe lá.
+
+**O truque que fez a `ConferenciaInterna` caber sem reescrever as telas:** o banco devolve as linhas
+no **mesmo formato da planilha** — um array por linha, na ordem das colunas (`COLUNAS_CONFERENCIA`,
+AprovacaoInterna.gs), com um cabeçalho de mentira na posição 0. Com isso `loteIdDaLinha`,
+`linhasDoLote`, `acharLinhaDaConferencia` e todos os leitores continuam valendo letra por letra;
+só muda de onde as linhas vêm (`linhasDaConferencia()`). **Vale repetir nas próximas etapas.**
+
+**O que muda de verdade é a ESCRITA, e é aí que está o ganho.** Essa é a primeira tabela que
+*atualiza* linha em vez de só anexar (pendente → aprovada → enviada; ou → devolvida → pendente de
+novo). Na planilha, mexer numa peça era "descubra que ela é a linha 7, varrendo a aba, e escreva na
+linha 7". No banco a peça tem identidade — `(task_id, nome_peca)`, com índice único — então
+`salvarConferenciaNoBanco` faz "atualiza se existe, cria se não" em um comando, sem procurar e sem
+trava.
+
+⚠️ **Quem é do lote continua sendo decidido por `loteIdDaLinha`, nunca por um filtro `lote_id` no
+banco.** Linha antiga tem `lote_id` VAZIO e o lote dela é `taskId::nomePeca`; repetir essa regra em
+SQL abriria a porta pros dois lados discordarem sobre o que é um lote — e aí uma aprovação pegaria
+peça a menos ou a mais. `marcarConferenciaDevolvida` tem uma lista própria (por NOME, quando o lote
+não aparece), e por isso usa `atualizarPecasNoBanco` direto em vez de `atualizarLoteNoBanco`.
+
+**`reabrirDevolvidasComVersaoNova` continua lendo a PLANILHA de propósito**, mesmo depois da virada:
+ela precisa do número da linha pra escrever de volta, e a planilha continua sendo escrita sempre
+(logo, está completa). O banco ela atualiza pela identidade da peça, não pelo número.
 
 **A partir do fluxo de aprovação, conferir de olho não basta mais.** Nas abas anteriores, validar era
 abrir a tela e ver se parecia certo; uma linha errada numa aprovação não aparece em tela nenhuma,
