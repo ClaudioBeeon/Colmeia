@@ -160,15 +160,42 @@ function limparArquivosPublicadosAntigos() {
 }
 
 /**
- * Teste de bancada — rodar no editor do Apps Script passando o id de um
- * arquivo de imagem qualquer do Drive, pra confirmar que o balde existe e
- * está com as permissões certas ANTES de depender disso numa tela.
+ * Uma peça qualquer que já esteve na conferência — só pra ter o que
+ * testar. Pega da fonte que estiver mandando (banco ou planilha), então
+ * funciona antes e depois da virada da chave.
+ */
+function umaImagemQualquerDaConferencia() {
+  try {
+    var linhas = linhasDaConferencia();
+    // De trás pra frente: as últimas peças são as que mais provavelmente
+    // ainda existem no Drive.
+    for (var i = linhas.length - 1; i >= 1; i--) {
+      var fileId = String(linhas[i][6] || '');   // coluna file_id
+      var tipo = String(linhas[i][8] || '');     // coluna mime_type
+      if (fileId && tipo.indexOf('image/') === 0) return fileId;
+    }
+  } catch (e) { /* sem fila ainda */ }
+  return '';
+}
+
+/**
+ * Teste de bancada — rodar no editor do Apps Script, SEM argumento
+ * nenhum, pra confirmar que o balde existe e está com as permissões
+ * certas ANTES de depender disso numa tela.
  */
 function testarStorage(fileId) {
+  // Sem argumento, acha uma imagem sozinha: o editor do Apps Script não
+  // tem onde digitar um argumento, e mandar alguém editar o código pra
+  // colar um id no meio da função é pedir pra quebrar alguma coisa.
   if (!fileId) {
-    Logger.log('Passe o id de uma imagem do Drive: testarStorage("1AbC...").');
-    Logger.log('O id é o trecho do endereço do arquivo entre /d/ e /view.');
-    return;
+    fileId = umaImagemQualquerDaConferencia();
+    if (!fileId) {
+      Logger.log('Não achei nenhuma imagem na fila de conferência pra testar.');
+      Logger.log('Mande uma peça pra revisão e rode isto de novo — ou passe');
+      Logger.log('um id na mão: testarStorage("1AbC...").');
+      return;
+    }
+    Logger.log('Testando com uma peça da fila de conferência (id ' + fileId + ').');
   }
   var url = urlPublicaDaPeca(fileId);
   if (url) {
