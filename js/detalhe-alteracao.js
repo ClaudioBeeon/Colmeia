@@ -330,7 +330,7 @@ async function carregarPecaDaDevolucao(d, pins, indice) {
   const palcoAgora = document.getElementById(id);
   if (!palcoAgora) return;
 
-  if (!img || !img.ok || !img.base64) {
+  if (!img || !img.ok || (!img.url && !img.base64)) {
     palcoAgora.innerHTML = `<p class="devolucao-carregando">Não consegui carregar a peça — ela pode ter sido movida ou renomeada no Drive. Os pontos estão descritos abaixo.</p>`;
     return;
   }
@@ -338,7 +338,7 @@ async function carregarPecaDaDevolucao(d, pins, indice) {
   // x/y estão em PORCENTAGEM da imagem (nunca em pixel) — é o que mantém
   // cada ponto no lugar certo em qualquer largura de tela.
   palcoAgora.innerHTML = `
-    <img class="devolucao-img" src="data:${img.mimeType || d.mimeType};base64,${img.base64}" alt="${escaparHTML(d.nomeArquivo || "")}">
+    <img class="devolucao-img" src="${img.url || `data:${img.mimeType || d.mimeType};base64,${img.base64}`}" alt="${escaparHTML(d.nomeArquivo || "")}">
     ${pins.map((p, i) => `<span class="devolucao-ponto" style="left:${Number(p.x)}%;top:${Number(p.y)}%">${i + 1}</span>`).join("")}
   `;
 }

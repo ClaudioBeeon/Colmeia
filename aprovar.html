@@ -910,7 +910,11 @@
       frameHtml.srcdoc = base64ParaTextoUtf8(peca.base64);
       slot.appendChild(frameHtml);
     } else {
-      var fonte = "data:" + peca.mimeType + ";base64," + peca.base64;
+      // `url` é o caminho novo (a peça publicada no Storage — ver
+      // Storage.gs): endereço de verdade, que o navegador guarda entre uma
+      // visita e outra. `base64` continua atendendo quando a publicação
+      // não deu, e os links gerados antes disso existir.
+      var fonte = peca.url || ("data:" + peca.mimeType + ";base64," + peca.base64);
       var el = document.createElement(peca.ehVideo ? "video" : "img");
       if (peca.ehVideo) { el.controls = true; el.playsInline = true; }
       else { el.alt = peca.nome || "Peça pra aprovação"; }
@@ -977,7 +981,7 @@
       if (p.erro) miolo = '<span class="filme-mini-icone">⚠️</span>';
       else if (p.previewUrl || p.ehVideo) miolo = '<span class="filme-mini-icone">▶️</span>';
       else if (ehHtml(p)) miolo = '<span class="filme-mini-icone">🌐</span>';
-      else miolo = '<img alt="" src="data:' + p.mimeType + ";base64," + p.base64 + '">';
+      else miolo = '<img alt="" src="' + (p.url || ("data:" + p.mimeType + ";base64," + p.base64)) + '">';
       return '<button type="button" class="filme-item" data-peca="' + i + '">' +
         '<span class="filme-mini">' + miolo + '<span class="filme-marca" data-marca="' + i + '" hidden></span></span>' +
         '<span class="filme-rotulo">' + escaparTexto(p.nome || ("Peça " + (i + 1))) + "</span>" +

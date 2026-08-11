@@ -594,6 +594,15 @@ function buscarAprovacaoPublica(codigo) {
       };
     }
 
+    // A peça publicada no Storage: o cliente recebe um ENDEREÇO em vez de
+    // megabytes de texto. É onde isso mais vale — a página do cliente é
+    // aberta muitas vezes, frequentemente em rede de celular ruim, e o
+    // navegador dele passa a guardar a imagem entre uma visita e outra.
+    var urlPublica = urlPublicaDaPeca(id);
+    if (urlPublica) {
+      return { nome: arquivo.getName(), mimeType: tipo, ehVideo: false, url: urlPublica };
+    }
+
     try {
       var blob = arquivo.getBlob();
       var bytes = blob.getBytes();

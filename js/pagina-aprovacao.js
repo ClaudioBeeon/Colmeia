@@ -1370,7 +1370,10 @@ async function apvMostrarNoPalco(peca, versao) {
   const slotAgora = document.getElementById("apvPalcoSlot");
   if (!slotAgora || !apvPecaAberta || apvVersaoNaTela !== versao) return;
 
-  if (!data || !data.ok || !data.base64) {
+  // `url` = a peça publicada no Storage (ver Storage.gs), que é o caminho
+  // normal agora; `base64` continua atendendo o que não é imagem (o
+  // preview de HTML logo abaixo) e quando a publicação não deu certo.
+  if (!data || !data.ok || (!data.url && !data.base64)) {
     slotAgora.innerHTML = `
       <div class="apv-vazio">
         Não consegui carregar essa peça pra mostrar aqui.
@@ -1389,7 +1392,8 @@ async function apvMostrarNoPalco(peca, versao) {
     if (frameHtml) frameHtml.srcdoc = base64ParaTextoUtf8(data.base64);
     return;
   }
-  slotAgora.innerHTML = `<img class="apv-palco-img" src="data:${data.mimeType || arquivo.mimeType};base64,${data.base64}" alt="${escaparHTML(arquivo.nome)}">`;
+  const fonteDaPeca = data.url || `data:${data.mimeType || arquivo.mimeType};base64,${data.base64}`;
+  slotAgora.innerHTML = `<img class="apv-palco-img" src="${fonteDaPeca}" alt="${escaparHTML(arquivo.nome)}">`;
 
   // Os pontos já marcados (se tiver) precisam se realinhar com a imagem
   // NOVA — a caixa dela só existe depois que o navegador termina de

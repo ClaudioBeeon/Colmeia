@@ -178,8 +178,10 @@
       // Fica o player e a lista escrita, que continua valendo.
       palco = '<div class="palco"><iframe src="https://drive.google.com/file/d/'
         + encodeURIComponent(p.fileId) + '/preview" allow="autoplay" allowfullscreen></iframe></div>';
-    } else if (p.base64) {
-      palco = '<div class="palco"><img src="data:' + escaparTexto(p.mimeType) + ';base64,' + p.base64 + '" alt="'
+    } else if (p.url || p.base64) {
+      // `url` = a peça publicada no Storage (ver Storage.gs). O base64
+      // continua atendendo os links de antes e quando a publicação falha.
+      palco = '<div class="palco"><img src="' + (p.url ? escaparTexto(p.url) : ('data:' + escaparTexto(p.mimeType) + ';base64,' + p.base64)) + '" alt="'
         + escaparTexto(p.nomeArquivo) + '">'
         + pins.map(function (pt, i) {
             return '<span class="ponto" style="left:' + Number(pt.x) + '%;top:' + Number(pt.y) + '%">' + (i + 1) + '</span>';

@@ -1765,6 +1765,43 @@ painel que já existia em vez de criar página nova.
 **Privacidade, de propósito:** guarda QUEM e QUAL TELA. Não guarda o que a pessoa digitou, nem
 conteúdo de tarefa, nem endereço de rede. Existe pra achar defeito e decidir o que melhorar.
 
+## Imagem de peça pelo Supabase Storage (2026-08-10)
+
+`Storage.gs` + `supabase/08-storage.sql`. Antes disso, toda imagem virava TEXTO (base64) dentro da
+resposta do Apps Script, **toda vez que alguém olhava** — o navegador não guarda nada disso (não é um
+endereço, é texto no meio de uma resposta) e acima de 25MB simplesmente falha. Foi exatamente esse
+buraco que quebrou vídeo em 2026-08-04; imagem grande caía nele também, só que mais raramente — o que
+é pior, porque parece aleatório.
+
+Agora a imagem é copiada UMA vez pro Storage e as telas usam `<img src="...">` normal.
+
+**O ponto de entrada é um só e serve quase tudo:** `buscarImagemCheiaDrive` (Drive.gs) tenta
+`urlPublicaDaPeca` antes do base64. Isso cobre conferência, `ajuste.html`, a devolução dentro do card
+e o visualizador ampliado de uma vez. A página do cliente (`buscarAprovacaoPublica`) tem caminho
+próprio e foi ligada separadamente.
+
+**O `base64` NÃO foi removido de lugar nenhum, e não deve ser.** O backend passou a mandar `url`
+**junto**, e cada tela usa `url || base64`. Isso mantém funcionando: os links de aprovação gerados
+antes disso existir, o que não é imagem (o preview de HTML de e-mail usa `srcdoc` com base64), e
+qualquer caso em que a publicação falhe. **Storage é atalho de velocidade, nunca dependência.**
+
+**Vídeo continua fora** — já é servido pelo player do Drive, e copiar dezenas de MB por peça não paga
+o que resolve. `urlPublicaDaPeca` devolve `null` pra qualquer coisa que não seja `image/*`.
+
+⚠️ **Quando a cópia é apagada — e por que NÃO é quando a conferência acaba.** A ideia original (dita
+na auditoria) era apagar ao aprovar ou devolver. **Está errada:** o passo seguinte à aprovação interna
+é justamente o link do cliente, que precisa da MESMA imagem — apagar ali quebraria o fluxo no momento
+em que ele mais importa. Some por IDADE (120 dias, `limparArquivosPublicadosAntigos`, junto do backup
+diário), bem depois de qualquer conferência (30 dias) ter se resolvido. Apaga do Storage **e** da
+tabela, nessa ordem: uma linha apontando pra arquivo inexistente faria a tela mostrar imagem quebrada
+em vez de republicar.
+
+**O que protege a peça é o caminho sorteado**, não uma parede: o balde é público pra quem tem o
+endereço (é o que faz funcionar em página sem login), mas cada arquivo mora sob um UUID e não há
+listagem. Mesma proteção que o link de aprovação do cliente já usa.
+
+**`testarStorage(fileId)`** roda no editor do Apps Script e diz, em ordem, o que conferir se falhar.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

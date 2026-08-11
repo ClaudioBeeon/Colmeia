@@ -455,6 +455,17 @@ function buscarThumbnailDrive(fileId) {
 
 function buscarImagemCheiaDrive(fileId) {
   if (!fileId) return { ok: false, error: 'fileId não informado.' };
+
+  // CAMINHO NOVO (2026-08-10): se a imagem já está publicada no Storage —
+  // ou se der pra publicar agora —, devolve só o ENDEREÇO dela. A resposta
+  // deixa de carregar megabytes de texto, o navegador passa a guardar a
+  // imagem (segunda visita instantânea) e some o teto de 25 MB de baixo.
+  //
+  // Falhar aqui não é erro: cai no base64 de sempre, logo abaixo. Ver
+  // Storage.gs pro porquê disso ser um atalho e não uma dependência.
+  var url = urlPublicaDaPeca(fileId);
+  if (url) return { ok: true, url: url };
+
   try {
     var arquivo = DriveApp.getFileById(fileId);
     var blob = arquivo.getBlob();
@@ -724,6 +735,7 @@ function fazerBackupDaPlanilha() {
   try {
     limparFeedEventosAntigos();
     limparMonitoramentoAntigo();
+    limparArquivosPublicadosAntigos();
   } catch (err) {
     Logger.log('Erro ao limpar eventos antigos do feed: ' + err.message);
   }

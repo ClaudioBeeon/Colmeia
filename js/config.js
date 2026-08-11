@@ -1194,7 +1194,10 @@ function abrirImagemAmpliadaDoDrive(fileId, nomeArquivo) {
       corpo.innerHTML = `<div class="drive-img-erro">${escaparHTML((resultado && resultado.error) || "Não consegui abrir essa imagem.")}</div>`;
       return;
     }
-    corpo.innerHTML = `<img src="data:${resultado.mimeType};base64,${resultado.base64}" alt="${escaparHTML(nomeArquivo || "")}">`;
+    // `url` = a peça publicada no Storage (ver Storage.gs); `base64` é o
+    // caminho antigo, que segue valendo quando a publicação não deu.
+    const fonte = resultado.url || `data:${resultado.mimeType};base64,${resultado.base64}`;
+    corpo.innerHTML = `<img src="${fonte}" alt="${escaparHTML(nomeArquivo || "")}">`;
   });
 }
 
