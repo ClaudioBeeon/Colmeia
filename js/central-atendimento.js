@@ -1083,13 +1083,21 @@ function centralRenderTimelineHoje() {
     </div>`;
   }).join("");
 
-  // Miniaturas entram depois, uma a uma — cada uma é uma ida ao Drive, e
-  // segurar a Timeline inteira esperando por elas atrasaria a única coisa
-  // que importa mais rápido (mesmo padrão de apvCarregarMiniatura,
-  // js/pagina-aprovacao.js).
-  lista.querySelectorAll("[data-central-tl-thumb]").forEach(el => {
-    const fileId = el.dataset.centralTlThumb;
-    if (fileId) centralCarregarMiniaturaTimeline(fileId, el);
+  // Miniaturas entram depois da Timeline já estar na tela — segurar tudo
+  // esperando por elas atrasaria a única coisa que importa mais rápido
+  // (mesmo padrão de apvCarregarMiniatura, js/pagina-aprovacao.js).
+  //
+  // 2026-08-11: primeiro UMA chamada pega as URLs do Storage de todos os
+  // posts de uma vez; só quem não tiver imagem publicada cai no base64 de
+  // antes. Era uma ida ao Drive POR POST, e o navegador não guardava nada
+  // — cada atualizar da BeeLine refazia todas.
+  const idsDaTimeline = [...lista.querySelectorAll("[data-central-tl-thumb]")]
+    .map(el => el.dataset.centralTlThumb).filter(Boolean);
+  centralGarantirUrlsDasPecas(idsDaTimeline).finally(() => {
+    lista.querySelectorAll("[data-central-tl-thumb]").forEach(el => {
+      const fileId = el.dataset.centralTlThumb;
+      if (fileId) centralCarregarMiniaturaTimeline(fileId, el);
+    });
   });
 
   // Mandou pra conferência → abre a conferência daquela peça.
@@ -1166,7 +1174,31 @@ async function centralRecarregarBeeLine(btn) {
 }
 
 async function centralCarregarMiniaturaTimeline(fileId, el) {
+  // Pelo Storage primeiro (2026-08-11): as URLs já vieram todas numa
+  // chamada só, então aqui não há ida ao servidor nenhuma — é só apontar
+  // a <img> pro CDN, que o navegador guarda por um ano. Ver o bloco "AS
+  // IMAGENS DA LISTA" mais abaixo.
+  const url = centralUrlsDePecas.get(fileId);
+  if (url) {
+    if (!el.isConnected) return;
+    el.style.backgroundImage = `url("${url}")`;
+    return;
+  }
+
+  // Reserva, e ela tem que continuar existindo: vídeo não vai pro Storage
+  // de propósito, imagem recém-subida só entra no lote seguinte, e o
+  // Storage pode estar desligado.
+  if (centralThumbsBase64.has(fileId)) {
+    const guardado = centralThumbsBase64.get(fileId);
+    if (!el.isConnected) return;
+    if (guardado) el.style.backgroundImage = guardado;
+    else el.remove();
+    return;
+  }
+
   const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
+  centralThumbsBase64.set(fileId, (data && data.ok && data.base64)
+    ? `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")` : "");
   if (!el.isConnected) return; // saiu da tela (redesenhou) enquanto a miniatura vinha
   if (!data || !data.ok || !data.base64) {
     // Sem imagem o bloco some — e agora isso é seguro: desde 2026-08-11 a
