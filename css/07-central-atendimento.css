@@ -1447,7 +1447,23 @@
    vocabulário do app, amarelo é o que pede sua atenção AGORA. Com peça
    atrasada na fila ele fica VERMELHO (`.tem-atrasada`) — aí não é mais
    "olha isso", é "isso já passou do prazo". */
-.central-atencao-wrap { position: relative; flex-shrink: 0; }
+/* O SLOT (2026-08-11, pedido do Cláudio: "centralizada, ocupando todo
+   espaço vazio") é o único elemento com `flex:1` da barra — o trecho de
+   fundo preto que sobraria vazio entre as abas e o grupo data/ver-tudo/
+   cliente vira ele, e `justify-content:center` centraliza a pílula dentro
+   desse espaço. `.central-atencao-wrap`, por dentro, continua do tamanho
+   exato da pílula (ver o porquê no comentário do index.html — é o que
+   mantém `.central-atencao-pop` colado embaixo do botão certo). */
+.central-atencao-slot { flex: 1 1 0; min-width: 40px; display: flex; justify-content: center; }
+/* `flex:1 1 auto` faz o WRAP (não só a pílula) crescer dentro do slot, até
+   o teto de 460px — sem teto, numa tela ultrawide ela esticaria absurda.
+   Passado o teto, o flexbox devolve o espaço que sobrou pro
+   `justify-content:center` do slot centralizar o wrap nele. A pílula, por
+   dentro, é sempre `width:100%` do wrap — os dois SEMPRE do mesmo
+   tamanho, nunca um mais largo que o outro, que é o que mantém
+   `.central-atencao-pop` (`right:0` relativo ao wrap) colado embaixo do
+   botão de verdade em qualquer largura de tela. */
+.central-atencao-wrap { position: relative; flex: 1 1 auto; max-width: 460px; min-width: 0; }
 .central-atencao-wrap[hidden] { display: none; }
 
 /* Maior, e com o carrossel dentro dela (2026-08-11, protótipo aprovado
@@ -1458,11 +1474,14 @@
    "tocando" do quadro (.now-playing) — mesmo amarelo, mesmo formato de
    pílula grande e arredondada. */
 .central-atencao-pill {
-  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 12px; cursor: pointer;
   font: inherit; font-family: var(--font-body); text-align: left;
   border: none; border-radius: 999px; padding: 6px 22px 6px 6px;
   background: var(--kanban-yellow); color: #16181D;
   box-shadow: 0 4px 14px rgba(255, 199, 0, .32);
+  /* Sempre 100% do wrap — o teto de largura mora no wrap (ver o comentário
+     lá), não aqui, de propósito: são os dois que precisam medir igual. */
+  width: 100%;
   transition: background var(--dur-fast) var(--ease-apple), filter var(--dur-fast) var(--ease-apple);
   animation: centralAtencaoPillEntra var(--dur-slow) var(--ease-apple-spring);
 }

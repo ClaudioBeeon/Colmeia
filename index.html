@@ -13,14 +13,14 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-11c">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-11c">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-11c">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-11c">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-11c">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-11c">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-11c">
-<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-11c">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-11d">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-11d">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-11d">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-11d">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-11d">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-11d">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-11d">
+<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-11d">
 </head>
 <body>
 
@@ -1594,6 +1594,36 @@
         <button type="button" class="central-nav-ic" data-central-tab="metricas">Métricas</button>
       </nav>
 
+      <!-- PRECISA DE ATENÇÃO (2026-08-09, pedido do Cláudio: "subir para
+           um pill amarelo em cima"). Era uma pílula no rodapé da Timeline;
+           virou um pill AMARELO aqui dentro da barra preta, no mesmo lugar
+           (e no mesmo espírito) da pílula do "tocando" do quadro — quem
+           precisa de decisão fica no topo, não no pé de uma coluna que
+           rola. Mostra peça ATRASADA (postou e não ficou pronta) + as de
+           hoje e amanhã; clicar abre a revisão em baralho, que agora
+           expande daqui em vez de cobrir o card preto.
+           Ver js/central-atencao.js. Nasce escondido: sem fila, não existe.
+
+           POSIÇÃO (2026-08-11, pedido do Cláudio: "centralizada, ocupando
+           todo espaço vazio"): mora logo depois das abas, dentro de um
+           SLOT que é o único elemento com `flex:1` da barra — o único
+           trecho de fundo preto que sobraria vazio (entre as abas e o
+           grupo data/ver-tudo/cliente) vira esse slot, e o
+           `justify-content:center` dele centraliza a pílula dentro do
+           espaço. É um slot A MAIS (em vez de crescer o próprio
+           `.central-atencao-wrap`) de propósito: o wrap continua do
+           tamanho exato da pílula (nunca mais largo que ela), que é o que
+           mantém `.central-atencao-pop` (o painel que abre no clique,
+           `right:0` relativo ao wrap) colado embaixo da pílula de verdade
+           — se o wrap esticasse, o painel abriria deslocado, longe do
+           botão que a pessoa clicou. -->
+      <div class="central-atencao-slot">
+        <div class="central-atencao-wrap" id="centralAtencaoWrap" hidden>
+          <button type="button" class="central-atencao-pill" id="centralAtencaoPill" aria-expanded="false"></button>
+          <div class="central-atencao-pop" id="centralAtencaoPop" hidden></div>
+        </div>
+      </div>
+
       <div class="central-date-pill">
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span id="centralDateText"></span>
@@ -1608,20 +1638,6 @@
         <select id="centralFiltroPessoaSelect" class="central-filtro-select" aria-label="Ver como">
           <option value="">Ver tudo</option>
         </select>
-      </div>
-
-      <!-- PRECISA DE ATENÇÃO (2026-08-09, pedido do Cláudio: "subir para
-           um pill amarelo em cima"). Era uma pílula no rodapé da Timeline;
-           virou um pill AMARELO aqui dentro da barra preta, no mesmo lugar
-           (e no mesmo espírito) da pílula do "tocando" do quadro — quem
-           precisa de decisão fica no topo, não no pé de uma coluna que
-           rola. Mostra peça ATRASADA (postou e não ficou pronta) + as de
-           hoje e amanhã; clicar abre a revisão em baralho, que agora
-           expande daqui em vez de cobrir o card preto.
-           Ver js/central-atencao.js. Nasce escondido: sem fila, não existe. -->
-      <div class="central-atencao-wrap" id="centralAtencaoWrap" hidden>
-        <button type="button" class="central-atencao-pill" id="centralAtencaoPill" aria-expanded="false"></button>
-        <div class="central-atencao-pop" id="centralAtencaoPop" hidden></div>
       </div>
 
       <!-- O pill AMARELO de cliente (2026-08-08, pedido do Cláudio: "igual
@@ -1822,34 +1838,34 @@
      abertura do app: se ele demorar ou não carregar, a tela de login
      continua funcionando com a chave de acesso de sempre. -->
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="js/config.js?v=2026-08-11c"></script>
-<script src="js/fila-offline.js?v=2026-08-11c"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-11c"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-11c"></script>
-<script src="js/kanban-polling.js?v=2026-08-11c"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-11c"></script>
-<script src="js/regras-briefing.js?v=2026-08-11c"></script>
-<script src="js/kanban-board.js?v=2026-08-11c"></script>
-<script src="js/clientes-hub.js?v=2026-08-11c"></script>
-<script src="js/chat-comentarios.js?v=2026-08-11c"></script>
-<script src="js/detalhe-modal.js?v=2026-08-11c"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-11c"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-11c"></script>
-<script src="js/bee.js?v=2026-08-11c"></script>
-<script src="js/paginas-designers.js?v=2026-08-11c"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-11c"></script>
-<script src="js/pagina-repasse.js?v=2026-08-11c"></script>
-<script src="js/pagina-horas.js?v=2026-08-11c"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-11c"></script>
-<script src="js/paleta-comando.js?v=2026-08-11c"></script>
-<script src="js/roteador-url.js?v=2026-08-11c"></script>
-<script src="js/detalhe-historia.js?v=2026-08-11c"></script>
-<script src="js/modo-foco.js?v=2026-08-11c"></script>
-<script src="js/pagina-bee.js?v=2026-08-11c"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-11c"></script>
-<script src="js/central-atendimento.js?v=2026-08-11c"></script>
-<script src="js/central-atencao.js?v=2026-08-11c"></script>
-<script src="js/pagina-painel-designers.js?v=2026-08-11c"></script>
-<script src="js/login-boot.js?v=2026-08-11c"></script>
+<script src="js/config.js?v=2026-08-11d"></script>
+<script src="js/fila-offline.js?v=2026-08-11d"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-11d"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-11d"></script>
+<script src="js/kanban-polling.js?v=2026-08-11d"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-11d"></script>
+<script src="js/regras-briefing.js?v=2026-08-11d"></script>
+<script src="js/kanban-board.js?v=2026-08-11d"></script>
+<script src="js/clientes-hub.js?v=2026-08-11d"></script>
+<script src="js/chat-comentarios.js?v=2026-08-11d"></script>
+<script src="js/detalhe-modal.js?v=2026-08-11d"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-11d"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-11d"></script>
+<script src="js/bee.js?v=2026-08-11d"></script>
+<script src="js/paginas-designers.js?v=2026-08-11d"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-11d"></script>
+<script src="js/pagina-repasse.js?v=2026-08-11d"></script>
+<script src="js/pagina-horas.js?v=2026-08-11d"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-11d"></script>
+<script src="js/paleta-comando.js?v=2026-08-11d"></script>
+<script src="js/roteador-url.js?v=2026-08-11d"></script>
+<script src="js/detalhe-historia.js?v=2026-08-11d"></script>
+<script src="js/modo-foco.js?v=2026-08-11d"></script>
+<script src="js/pagina-bee.js?v=2026-08-11d"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-11d"></script>
+<script src="js/central-atendimento.js?v=2026-08-11d"></script>
+<script src="js/central-atencao.js?v=2026-08-11d"></script>
+<script src="js/pagina-painel-designers.js?v=2026-08-11d"></script>
+<script src="js/login-boot.js?v=2026-08-11d"></script>
 </body>
 </html>
