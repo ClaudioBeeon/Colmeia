@@ -230,7 +230,13 @@
    a tela toda é dos cartões e da Timeline, e uma faixa com cartão
    próprio aqui empurraria os dois pra baixo por um resumo.
    =================================================================== */
-.central-hoje-topo { display: flex; align-items: flex-end; gap: 26px; padding: 2px 6px 0; flex: 0 0 auto; }
+/* `grid-area: topo` desde 2026-08-11 — ela mora DENTRO da grade agora
+   (ver o porquê em .central-hoje-grid). O `padding-bottom` substitui o
+   `gap` que ela tinha quando era irmã da grade. */
+.central-hoje-topo {
+  grid-area: topo; display: flex; align-items: flex-end; gap: 26px;
+  padding: 2px 6px 4px; min-width: 0;
+}
 .central-hoje-saud { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .central-hoje-saud span { font-size: 12.5px; color: var(--text-secondary); }
 .central-hoje-saud b {
@@ -284,11 +290,17 @@
      um piso (min-height) pra não espremer demais numa janela baixa; se
      nem o piso couber, `.central-content` rola a página inteira como
      rede de segurança, mas isso só acontece em telas bem pequenas. */
-  grid-template-rows: 3fr 4fr 2.6fr;
+  /* `auto` na primeira linha: é a saudação + os números, que têm a altura
+     do próprio conteúdo. As outras três mantêm a proporção 4:4:2.6 de
+     antes entre si. */
+  grid-template-rows: auto 3fr 4fr 2.6fr;
   /* A foto encolheu pra UMA linha (a mesma altura dos cartões de número
      ao lado) e o calendário ocupa o espaço que ela liberou — pedido do
-     Cláudio, 2026-08-08. */
+     Cláudio, 2026-08-08.
+     A linha `topo` entrou em 2026-08-11: a Timeline passou a começar no
+     alto de verdade, ao LADO dos números, em vez de abaixo deles. */
   grid-template-areas:
+    "topo topo topo timeline"
     "foto esperando prontas timeline"
     "cal comcliente ajuste timeline"
     "cal radar radar timeline";
@@ -431,11 +443,74 @@
    propósito sem `.clicavel`: é uma lista pra ler/rolar, não um atalho —
    cada evento dela é que pode levar a algum lugar no futuro, o card
    inteiro não. */
-.central-hoje-timeline { grid-area: timeline; background: #16181D; color: #fff; padding: 14px 14px 6px; }
-.central-hoje-timeline-head {
-  display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700;
-  padding: 0 2px 10px; flex-shrink: 0;
+.central-hoje-timeline { grid-area: timeline; background: #16181D; color: #fff; padding: 10px 10px 6px; }
+
+/* ----- O topo "BeeLine" (2026-08-11, referência que o Cláudio mandou) -----
+   Pílula AMARELA com o nome e a busca dentro dela, e as pílulas de filtro
+   embaixo. Substituiu o rótulo "Timeline" solto. O pontinho que pisca
+   continua sendo o mesmo (.central-hoje-timeline-livedot), agora ao lado
+   do nome dentro da pílula. */
+.central-tl-topo { flex: 0 0 auto; display: flex; flex-direction: column; gap: 9px; padding-bottom: 10px; }
+.central-tl-marca {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--kanban-yellow); border-radius: 999px; padding: 5px 6px 5px 14px;
 }
+.central-tl-marca-txt {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 7px;
+  font-family: var(--font-display); font-size: 17px; font-weight: 700; color: #16181D;
+}
+.central-tl-busca {
+  flex: 1; min-width: 0; border: none; border-radius: 999px;
+  background: #2B2C33; color: #fff; font-family: var(--font-body); font-size: 12.5px;
+  padding: 9px 14px;
+}
+.central-tl-busca::placeholder { color: rgba(255, 255, 255, .45); }
+.central-tl-busca:focus { outline: 2px solid #16181D; outline-offset: 1px; }
+/* O X nativo do type=search fica cinza sobre o escuro e some — o campo já
+   limpa com a tecla, e a pílula fica mais limpa sem ele. */
+.central-tl-busca::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.central-tl-recarregar {
+  flex: 0 0 auto; width: 32px; height: 32px; border: none; border-radius: 50%; cursor: pointer;
+  background: rgba(22, 24, 29, .12); color: #16181D;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.central-tl-recarregar:hover { background: rgba(22, 24, 29, .22); }
+.central-tl-recarregar svg { width: 16px; height: 16px; display: block; }
+.central-tl-recarregar.girando svg { animation: centralTlGira .9s linear infinite; }
+@keyframes centralTlGira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .central-tl-recarregar.girando svg { animation: none; } }
+
+.central-tl-filtros { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.central-tl-chip-wrap { position: relative; }
+.central-tl-chip {
+  border: none; cursor: pointer; border-radius: 999px; padding: 7px 13px;
+  background: rgba(255, 255, 255, .09); color: rgba(255, 255, 255, .75);
+  font-family: var(--font-body); font-size: 12px; font-weight: 600; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px; max-width: 160px;
+  overflow: hidden; text-overflow: ellipsis;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-tl-chip:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+.central-tl-chip.on { background: var(--kanban-yellow); color: #16181D; }
+.central-tl-cli-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  width: 220px; max-height: 260px; overflow-y: auto;
+  background: #22232B; border-radius: 14px; padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  animation: chatHdrMenuPop var(--dur-base) var(--ease-apple-spring);
+}
+.central-tl-cli-menu[hidden] { display: none; }
+.central-tl-cli-i {
+  width: 100%; border: none; background: none; cursor: pointer; text-align: left;
+  font-family: var(--font-body); font-size: 12.5px; color: rgba(255, 255, 255, .8);
+  padding: 8px 10px; border-radius: 9px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-tl-cli-i:hover { background: rgba(255, 255, 255, .09); color: #fff; }
+.central-tl-cli-i.on { background: var(--kanban-yellow); color: #16181D; font-weight: 700; }
+
 .central-hoje-timeline-livedot {
   width: 7px; height: 7px; border-radius: 50%; background: var(--success);
   animation: centralTlPulse 1.8s ease-out infinite;
@@ -530,35 +605,44 @@
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
   overflow: hidden;
 }
-.central-tl-arte[data-central-tl-conferir] { cursor: pointer; }
-/* Sombra só no rodapé da imagem: é onde as duas pastilhas moram, e sem
-   ela uma arte clara engolia o nome do cliente. */
-.central-tl-arte::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 34%;
-  background: linear-gradient(transparent, rgba(8,8,12,.62));
-  pointer-events: none;
-}
-.central-tl-arte-cli, .central-tl-arte-cta { position: absolute; bottom: 8px; z-index: 2; }
-.central-tl-arte-cli {
-  left: 8px; max-width: 55%;
-  background: rgba(10,10,14,.6); color: #fff; backdrop-filter: blur(7px);
-  font-size: 10px; font-weight: 650; padding: 4px 10px; border-radius: 999px;
+/* A ARTE FICOU LIMPA (2026-08-11): o nome do cliente e a pastilha
+   CONFERIR saíram de cima dela. O cliente virou uma linha no PRÓPRIO post
+   (.central-tl-cli), porque por cima da arte ele sumia nos posts sem
+   imagem; e o CONFERIR virou a SETA do cabeçalho (.central-tl-ir), a
+   pedido do Cláudio. Sem nada por cima, a sombra de rodapé também deixou
+   de ter função e saiu. */
+/* Miniatura que não veio (arquivo apagado, Drive fora): o bloco some de
+   vez, em vez de deixar um retângulo cinza fingindo que tem arte — agora
+   ele não carrega mais botão nenhum junto (ver
+   centralCarregarMiniaturaTimeline). */
+.central-tl-arte.sem-imagem { display: none; }
+
+/* O CLIENTE, no post (2026-08-11). Antes só existia por cima da arte, e
+   um post sem imagem não dizia de qual cliente era — "se não, não faz
+   sentido", nas palavras do Cláudio. */
+.central-tl-cli {
+  align-self: flex-start; max-width: 100%;
+  background: rgba(255, 255, 255, .09); color: rgba(255, 255, 255, .8);
+  font-size: 10.5px; font-weight: 700; letter-spacing: .01em;
+  padding: 4px 10px; border-radius: 999px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.central-tl-arte-cta {
-  right: 8px;
-  background: var(--kanban-yellow); color: #16181D;
-  font-size: 10.5px; font-weight: 800; letter-spacing: .03em;
-  padding: 5px 12px; border-radius: 999px;
-  transition: filter var(--dur-fast) var(--ease-apple);
+
+/* A SETA no lugar da pastilha CONFERIR (2026-08-11, pedido do Cláudio:
+   "substitua para uma flecha apontando para o canto superior direito").
+   Fica no cabeçalho do post, ao lado do selo — some a pastilha amarela
+   grande, e o post inteiro passa a ser o alvo do clique. */
+.central-tl-ir {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(255, 255, 255, .09); color: rgba(255, 255, 255, .65);
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple),
+              transform var(--dur-fast) var(--ease-apple);
 }
-.central-tl-arte:hover .central-tl-arte-cta { filter: brightness(1.08); }
-/* Miniatura que não veio (arquivo apagado, Drive fora): o bloco encolhe
-   pra uma faixa com o botão, em vez de um retângulo cinza de 148px
-   fingindo que tem uma arte ali. */
-.central-tl-arte.sem-imagem { aspect-ratio: auto; height: 44px; }
-.central-tl-arte.sem-imagem::after { display: none; }
-.central-tl-arte.sem-imagem .central-tl-arte-cli { background: rgba(255,255,255,.08); }
+.central-tl-ir svg { width: 13px; height: 13px; display: block; }
+.central-tl-post.clicavel:hover .central-tl-ir {
+  background: var(--kanban-yellow); color: #16181D; transform: translate(1px, -1px);
+}
 
 /* O pedido do cliente, palavra por palavra. Ele é a instrução do que
    fazer e antes só aparecia depois de abrir a conferência. */
@@ -586,8 +670,8 @@
   .central-hoje-nums { flex-wrap: wrap; gap: 14px 0; }
   .central-hoje-n:first-child { padding-left: 0; }
   .central-hoje-grid {
-    grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto);
-    grid-template-areas: "foto foto" "esperando prontas" "comcliente ajuste" "cal cal" "timeline timeline" "radar radar";
+    grid-template-columns: 1fr 1fr; grid-template-rows: repeat(6, auto);
+    grid-template-areas: "topo topo" "foto foto" "esperando prontas" "comcliente ajuste" "cal cal" "timeline timeline" "radar radar";
   }
   .central-hoje-foto { min-height: 120px; }
   /* Empilhada, ela ocupa as duas colunas — num tablet de 900px isso são

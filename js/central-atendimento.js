@@ -536,9 +536,16 @@ function centralRenderHoje() {
   centralHojeUltimaContagemAjuste = voltouAjuste.length;
 
   el.innerHTML = `
-    ${centralHojeFaixaDeNumerosHTML(nomeExibido, esperandoVoce, prontasEnviar, comCliente, voltouAjuste, limiteAlerta)}
-
     <div class="central-hoje-grid">
+      <!-- A saudação + os números entraram PRA DENTRO da grade (2026-08-11,
+           pedido do Cláudio: "quero que a timeline ocupe a parte desses
+           números em cima também, e os números chegam pro lado"). Antes
+           eram uma faixa acima da grade inteira, e a Timeline começava
+           abaixo deles — ela perdia a altura da faixa sem ganhar nada. Como
+           área própria (topo), ela ocupa só as três primeiras colunas, e a
+           Timeline sobe até o topo de verdade. -->
+      ${centralHojeFaixaDeNumerosHTML(nomeExibido, esperandoVoce, prontasEnviar, comCliente, voltouAjuste, limiteAlerta)}
+
       <div class="hr-card central-hoje-tile central-hoje-foto">
         <div class="central-hoje-foto-img" id="chFotoImg">
           <div class="central-hoje-foto-img-fundo" id="chFotoImgFundo"></div>
@@ -563,8 +570,25 @@ function centralRenderHoje() {
            pra barra preta do topo em 2026-08-09 (ver o comentário no
            index.html e js/central-atencao.js) — aqui embaixo ela era o pé de
            uma coluna que rola, e o que pede decisão não deveria estar lá. -->
+      <!-- O cabeçalho virou "BeeLine" (2026-08-11, referência que o Cláudio
+           mandou): pílula amarela com o nome e a busca dentro, e embaixo os
+           filtros. O pontinho que pisca continua sendo o mesmo de antes, e o
+           botão de atualizar entrou a pedido dele. -->
       <div class="hr-card central-hoje-tile central-hoje-timeline">
-        <div class="central-hoje-timeline-head"><span class="central-hoje-timeline-livedot"></span>Timeline</div>
+        <div class="central-tl-topo">
+          <div class="central-tl-marca">
+            <span class="central-tl-marca-txt">
+              <span class="central-hoje-timeline-livedot"></span>BeeLine
+            </span>
+            <input type="search" class="central-tl-busca" id="chTlBusca" placeholder="Pesquisar"
+                   value="${escaparHTML(centralTlBusca)}" aria-label="Pesquisar na BeeLine">
+            <button type="button" class="central-tl-recarregar" id="chTlRecarregar"
+                    title="Atualizar" aria-label="Atualizar">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11a8 8 0 1 0-.6 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M20 4v7h-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <div class="central-tl-filtros" id="chTlFiltros"></div>
+        </div>
         <div class="central-hoje-timeline-list" id="chTimelineList"></div>
       </div>
 
@@ -801,6 +825,19 @@ function centralHojeCartaoAjuste(itens, ajusteSubiu) {
     </button>`;
 }
 
+// ===== Os filtros da BeeLine (2026-08-11) =====
+// Todos cortam a lista NO NAVEGADOR, sem nenhuma busca nova: os eventos já
+// estão todos em memória (ver centralConstruirTimeline). Por isso são
+// baratos e podem ser combinados à vontade.
+let centralTlBusca = "";
+// "tudo" (padrão) | "hoje" | "7dias"
+let centralTlJanela = "tudo";
+// Só o que ALGUÉM DA CASA fez (mandou pra conferência, pediu atenção),
+// escondendo as respostas do cliente. O contrário não tem pílula própria:
+// dá pra chegar nele filtrando por cliente.
+let centralTlSoDesigners = false;
+let centralTlCliente = "";   // "" = todos
+
 /**
  * Junta os eventos mais recentes de DUAS fontes que a Central já busca —
  * peça nova pedindo conferência (fila, `pedidoEm`) e cliente respondendo
@@ -904,23 +941,121 @@ function centralTlAvatarHTML(ev) {
   return `<span class="central-tl-avatar ${ev.tipo}">${escaparHTML(ev.inicial)}</span>`;
 }
 
+/** Passa pelos filtros da BeeLine? Todos são no navegador (ver acima). */
+function centralTlPassaNoFiltro(ev) {
+  if (centralTlSoDesigners && ev.tipo !== "novo" && ev.tipo !== "atencao") return false;
+  if (centralTlCliente && !centralMesmoCliente(ev.cliente, centralTlCliente)) return false;
+  if (centralTlJanela !== "tudo") {
+    const dias = centralTlJanela === "hoje" ? 0 : 7;
+    if (centralDiasDesde(ev.quando) > dias) return false;
+  }
+  if (centralTlBusca) {
+    // Procura em quem, cliente e no texto do evento — as tags do `texto`
+    // saem antes, senão buscar por "b" acharia todo post em negrito.
+    const alvo = `${ev.quem || ""} ${ev.cliente || ""} ${String(ev.texto || "").replace(/<[^>]*>/g, "")}`;
+    if (centralSemAcento(alvo).indexOf(centralTlBusca) === -1) return false;
+  }
+  return true;
+}
+
+/** As pílulas de filtro embaixo da marca. */
+function centralTlRenderFiltros(eventos) {
+  const alvo = document.getElementById("chTlFiltros");
+  if (!alvo) return;
+
+  const rotuloJanela = centralTlJanela === "hoje" ? "Hoje" : centralTlJanela === "7dias" ? "7 dias" : "Data";
+  const clientes = [...new Set(eventos.map(e => e.cliente).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  alvo.innerHTML = `
+    <button type="button" class="central-tl-chip ${centralTlJanela !== "tudo" ? "on" : ""}" id="chTlJanela">${escaparHTML(rotuloJanela)}</button>
+    <button type="button" class="central-tl-chip ${centralTlSoDesigners ? "on" : ""}" id="chTlSoDesigners">Somente designers</button>
+    <div class="central-tl-chip-wrap">
+      <button type="button" class="central-tl-chip ${centralTlCliente ? "on" : ""}" id="chTlCliente" aria-expanded="false">
+        ${escaparHTML(centralTlCliente || "Cliente")}
+        <span aria-hidden="true">▾</span>
+      </button>
+      <div class="central-tl-cli-menu" id="chTlCliMenu" hidden>
+        <button type="button" class="central-tl-cli-i ${!centralTlCliente ? "on" : ""}" data-central-tl-cli="">Todos os clientes</button>
+        ${clientes.map(c => `<button type="button" class="central-tl-cli-i ${centralMesmoCliente(c, centralTlCliente) ? "on" : ""}" data-central-tl-cli="${escaparHTML(c)}">${escaparHTML(c)}</button>`).join("")}
+      </div>
+    </div>`;
+
+  // "Data" gira entre os três estados no clique — é uma pílula só, e três
+  // botões de janela roubariam a largura das outras duas.
+  document.getElementById("chTlJanela").addEventListener("click", () => {
+    centralTlJanela = centralTlJanela === "tudo" ? "hoje" : centralTlJanela === "hoje" ? "7dias" : "tudo";
+    centralRenderTimelineHoje();
+  });
+  document.getElementById("chTlSoDesigners").addEventListener("click", () => {
+    centralTlSoDesigners = !centralTlSoDesigners;
+    centralRenderTimelineHoje();
+  });
+
+  const btnCli = document.getElementById("chTlCliente");
+  const menuCli = document.getElementById("chTlCliMenu");
+  btnCli.addEventListener("click", ev => {
+    ev.stopPropagation();   // senão o "fechar ao clicar fora" pega este mesmo clique
+    menuCli.hidden = !menuCli.hidden;
+    btnCli.setAttribute("aria-expanded", menuCli.hidden ? "false" : "true");
+    if (!menuCli.hidden) {
+      setTimeout(() => {
+        const fechar = e => {
+          if (!menuCli.contains(e.target)) {
+            menuCli.hidden = true;
+            btnCli.setAttribute("aria-expanded", "false");
+            document.removeEventListener("click", fechar, true);
+          }
+        };
+        document.addEventListener("click", fechar, true);
+      }, 0);
+    }
+  });
+  menuCli.querySelectorAll("[data-central-tl-cli]").forEach(b => {
+    b.addEventListener("click", () => {
+      centralTlCliente = b.dataset.centralTlCli;
+      centralRenderTimelineHoje();
+    });
+  });
+}
+
 function centralRenderTimelineHoje() {
   const lista = document.getElementById("chTimelineList");
   if (!lista) return;
 
-  const eventos = centralConstruirTimeline();
+  const todos = centralConstruirTimeline();
+  // Os filtros e a busca são ligados aqui, a cada desenho: o campo é
+  // recriado junto com o cabeçalho quando a aba redesenha.
+  centralTlRenderFiltros(todos);
+  centralTlLigarBusca();
+
+  const eventos = todos.filter(centralTlPassaNoFiltro);
   if (!eventos.length) {
-    lista.innerHTML = `<div class="central-hoje-timeline-vazio">Nada novo por aqui ainda.</div>`;
+    const filtrando = centralTlBusca || centralTlSoDesigners || centralTlCliente || centralTlJanela !== "tudo";
+    lista.innerHTML = `<div class="central-hoje-timeline-vazio">${
+      filtrando ? "Nada aqui com esse filtro." : "Nada novo por aqui ainda."
+    }</div>`;
     return;
   }
 
   // O FEED (2026-08-08, protótipo "Feed cheio" aprovado pelo Cláudio).
   // Cada evento é um post: avatar grande, quem em destaque, a hora
   // embaixo do nome, a pastilha de status à direita, a frase, e — só
-  // quando tem arte nova — a peça em tamanho cheio com o nome do cliente
-  // e o "Conferir" por cima dela.
-  lista.innerHTML = eventos.map(ev => `
-    <div class="central-tl-post ${ev.codigo ? "clicavel" : ""}" ${ev.codigo ? `data-central-tl-abrir="${escaparHTML(ev.codigo)}"` : ""}>
+  // quando tem arte nova — a peça em tamanho cheio.
+  //
+  // ⚠️ O POST INTEIRO É CLICÁVEL quando tem pra onde ir (2026-08-11, bug
+  // relatado pelo Cláudio: "esses dois primeiros não estão clicáveis").
+  // Antes, num evento "mandou pra conferência" só a pastilha CONFERIR
+  // sobre a ARTE levava a algum lugar — então um post SEM imagem (peça em
+  // vídeo, ou miniatura que não veio) não tinha nada pra clicar, mesmo
+  // tendo exatamente o mesmo destino.
+  lista.innerHTML = eventos.map(ev => {
+    const alvo = ev.loteId
+      ? ` data-central-tl-conferir="${escaparHTML(ev.taskId || "")}|${escaparHTML(ev.loteId)}"`
+      : ev.codigo ? ` data-central-tl-abrir="${escaparHTML(ev.codigo)}"` : "";
+    const clicavel = !!alvo;
+    return `
+    <div class="central-tl-post ${clicavel ? "clicavel" : ""}"${alvo}>
       <div class="central-tl-cab">
         ${centralTlAvatarHTML(ev)}
         <span class="central-tl-quem">
@@ -928,33 +1063,25 @@ function centralRenderTimelineHoje() {
           <span class="central-tl-time">${centralTempoRelativo(ev.quando)}</span>
         </span>
         <span class="central-tl-selo ${ev.tipo}">${CENTRAL_TL_SELO[ev.tipo] || ""}</span>
+        ${clicavel ? `
+          <span class="central-tl-ir" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>` : ""}
       </div>
       <span class="central-tl-txt">${ev.texto}</span>
+      ${/* O CLIENTE fica aqui, no post, e não mais só por cima da arte
+           (2026-08-11): sem imagem ele simplesmente não aparecia, e um
+           post que não diz de qual cliente é não serve pra nada. */
+        ev.cliente ? `<span class="central-tl-cli">${escaparHTML(ev.cliente)}</span>` : ""}
       ${ev.fileId ? `
-        <div class="central-tl-arte" data-central-tl-thumb="${escaparHTML(ev.fileId)}"
-             ${ev.loteId ? `data-central-tl-conferir="${escaparHTML(ev.taskId || "")}|${escaparHTML(ev.loteId)}"` : ""}>
-          ${ev.cliente ? `<span class="central-tl-arte-cli">${escaparHTML(ev.cliente)}</span>` : ""}
-          ${ev.loteId ? `<span class="central-tl-arte-cta">CONFERIR</span>` : ""}
-        </div>` : ""}
+        <div class="central-tl-arte" data-central-tl-thumb="${escaparHTML(ev.fileId)}"></div>` : ""}
       ${ev.citacao ? `
         <div class="central-tl-cita">
           <span class="central-tl-cita-rot">o que o cliente escreveu</span>
           ${escaparHTML(ev.citacao)}
         </div>` : ""}
-    </div>
-  `).join("");
-
-  // O "Conferir" em cima da arte abre a conferência daquela peça direto —
-  // é o mesmo destino do card na aba Aprovações, um clique mais curto.
-  // `stopPropagation` porque o post inteiro pode ser clicável (ajuste), e
-  // aí os dois disparariam.
-  lista.querySelectorAll("[data-central-tl-conferir]").forEach(el => {
-    el.addEventListener("click", ev => {
-      ev.stopPropagation();
-      const [taskId, loteId] = String(el.dataset.centralTlConferir).split("|");
-      if (taskId && loteId && typeof apvAbrirConferencia === "function") apvAbrirConferencia(taskId, loteId);
-    });
-  });
+    </div>`;
+  }).join("");
 
   // Miniaturas entram depois, uma a uma — cada uma é uma ida ao Drive, e
   // segurar a Timeline inteira esperando por elas atrasaria a única coisa
@@ -963,6 +1090,14 @@ function centralRenderTimelineHoje() {
   lista.querySelectorAll("[data-central-tl-thumb]").forEach(el => {
     const fileId = el.dataset.centralTlThumb;
     if (fileId) centralCarregarMiniaturaTimeline(fileId, el);
+  });
+
+  // Mandou pra conferência → abre a conferência daquela peça.
+  lista.querySelectorAll("[data-central-tl-conferir]").forEach(el => {
+    el.addEventListener("click", () => {
+      const [taskId, loteId] = String(el.dataset.centralTlConferir).split("|");
+      if (taskId && loteId && typeof apvAbrirConferencia === "function") apvAbrirConferencia(taskId, loteId);
+    });
   });
 
   // "Pediu ajuste" abre a MESMA tela de conferência, já no modo do pedido
@@ -978,16 +1113,67 @@ function centralRenderTimelineHoje() {
   });
 }
 
+/**
+ * A busca e o botão de atualizar. Ligados uma vez por elemento (marca
+ * `dataset.ligado`): o cabeçalho só é recriado quando a aba Hoje inteira
+ * redesenha, e religar a cada filtro empilharia listeners.
+ *
+ * ⚠️ A busca NÃO redesenha o cabeçalho — só a lista. Recriar o campo a
+ * cada tecla digitada tiraria o foco dele no meio da palavra.
+ */
+function centralTlLigarBusca() {
+  const campo = document.getElementById("chTlBusca");
+  if (campo && !campo.dataset.ligado) {
+    campo.dataset.ligado = "1";
+    campo.addEventListener("input", () => {
+      centralTlBusca = centralSemAcento(campo.value.trim());
+      centralTlRenderSoLista();
+    });
+  }
+  const btn = document.getElementById("chTlRecarregar");
+  if (btn && !btn.dataset.ligado) {
+    btn.dataset.ligado = "1";
+    btn.addEventListener("click", () => centralRecarregarBeeLine(btn));
+  }
+}
+
+/** Redesenha SÓ a lista, preservando o foco do campo de busca. */
+function centralTlRenderSoLista() {
+  const campo = document.getElementById("chTlBusca");
+  const foco = document.activeElement === campo;
+  const pos = campo ? campo.selectionStart : null;
+  centralRenderTimelineHoje();
+  if (foco) {
+    const novo = document.getElementById("chTlBusca");
+    if (novo) { novo.focus(); if (pos !== null) novo.setSelectionRange(pos, pos); }
+  }
+}
+
+/**
+ * O botão de atualizar: rebusca a fila e as aprovações (as duas fontes da
+ * BeeLine) e redesenha a Central. É a MESMA busca da abertura — ver
+ * centralCarregarDados —, só que sob demanda, pra quem não quer esperar o
+ * próximo poll.
+ */
+async function centralRecarregarBeeLine(btn) {
+  if (btn) btn.classList.add("girando");
+  try {
+    await centralCarregarDados();
+  } finally {
+    // O botão pode ter sido recriado pelo redesenho no meio do caminho.
+    document.getElementById("chTlRecarregar")?.classList.remove("girando");
+  }
+}
+
 async function centralCarregarMiniaturaTimeline(fileId, el) {
   const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
   if (!el.isConnected) return; // saiu da tela (redesenhou) enquanto a miniatura vinha
   if (!data || !data.ok || !data.base64) {
-    // Sem imagem, o bloco só continua existindo se ele carregar o
-    // "Conferir" — perder o botão porque uma miniatura falhou seria
-    // trocar um problema de aparência por um de função. Sem botão, ele
-    // não tem mais nada dentro e sai.
-    if (!el.querySelector(".central-tl-arte-cta")) el.remove();
-    else el.classList.add("sem-imagem");
+    // Sem imagem o bloco some — e agora isso é seguro: desde 2026-08-11 a
+    // arte não carrega mais botão nenhum (o CONFERIR virou a seta do
+    // cabeçalho e o cliente virou uma linha do post), então perder a
+    // miniatura não tira mais nenhuma função do post.
+    el.remove();
     return;
   }
   el.style.backgroundImage = `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")`;
