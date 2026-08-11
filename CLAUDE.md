@@ -1654,14 +1654,19 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
    atendimento e o cliente pelo link público), e onde a trava única mais dói. São **quatro** abas,
    não três, migradas em quatro etapas separadas e ordenadas por QUEM mexe em cada uma:
    `HistoricoConferencias` ✅ (ninguém: é arquivo) → `ConferenciaInterna` ✅ (atendimento e designers)
-   → `Devolucoes` (atendimento) → `Aprovacoes` (**o cliente**, na página sem login — por último, com
-   as outras três já rodando).
+   → `Devolucoes` ✅ (atendimento) → `Aprovacoes` (**o cliente**, na página sem login — por último,
+   com as outras três já rodando).
    **Uma aba vira uma tabela, com as mesmas colunas — sem redesenhar o modelo.** É tentador
    aproveitar a viagem pra separar as peças de um lote em tabela própria ou transformar o
    `fileId1|fileId2` numa lista de verdade; reformar o fluxo junto multiplicaria o risco justo onde
    menos se pode errar. Depois de estar no banco, essas melhorias ficam baratas. As duas únicas
-   exceções não mudam comportamento: os campos que hoje guardam JSON em texto (`pins`, `pecas_json`,
-   `respostasPecas`) viram `jsonb`, e as colunas penduradas depois entram como colunas normais.
+   exceções não mudam comportamento: as colunas penduradas depois entram como colunas normais, e —
+   **plano revisto em 2026-08-10, na etapa 3** — os campos que guardam JSON em texto (`pins`,
+   `pecas_json`, `respostasPecas`) **continuam em texto, não viram `jsonb`**: o ganho seria consultar
+   dentro do JSON, coisa que nada no Colmeia faz, e o custo é concreto — o Postgres reescreve `jsonb`
+   no formato dele (espaço e ordem das chaves mudam), e aí `supabaseConferir` acusaria diferença em
+   toda linha sem nenhuma diferença existir. Trocar a rede de segurança por um recurso que ninguém
+   pediu é mau negócio. Vira `jsonb` no dia em que alguém precisar perguntar algo pro conteúdo.
    ⚠️ **O cabeçalho da aba `Aprovacoes` mente:** ela é criada com 13 colunas (A:M) e o código lê até
    a 17ª — `aviso_pendente`, `quemAprovou`, `respostasPecas` e `consultandoEm` foram penduradas
    depois, cada uma com um remendo `if (getLastColumn() < N)`. Ao migrar, tirar as colunas de

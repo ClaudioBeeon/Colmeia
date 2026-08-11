@@ -1417,6 +1417,11 @@ function vincularDevolucaoAAlteracao(codigo, taskIdAlteracao) {
   var lock = LockService.getScriptLock();
   pegarTravaDaPlanilha(lock);
   try {
+    if (supabaseConfigurado()) {
+      // No banco é direto pelo código, sem procurar linha nenhuma.
+      supabaseAtualizar('devolucoes', 'codigo=eq.' + encodeURIComponent(String(codigo)),
+        { task_id_alteracao: String(taskIdAlteracao) });
+    }
     var linhas = sheet.getDataRange().getValues();
     for (var i = 1; i < linhas.length; i++) {
       if (String(linhas[i][0]) === String(codigo)) {
@@ -1513,6 +1518,58 @@ function getDevolucoesSheet() {
   return sheet;
 }
 
+// ---------------------------------------------------------------------
+// A DEVOLUÇÃO NO SUPABASE (etapa 3 de 4). Mesma técnica da conferência: o
+// banco devolve linha no formato da planilha, então `linhaParaDevolucao`
+// (com toda a compatibilidade que ela carrega) continua valendo inteira.
+//
+// A identidade aqui já existia e é boa: `codigo`, um UUID. Com ele
+// indexado, abrir um link de ajuste deixa de varrer a aba inteira — e
+// quem abre esse link é o designer, muitas vezes direto do Runrun.it.
+//
+// ⚠️ `pins` e `pecas_json` ficam em TEXTO, e isso é uma mudança de plano
+// consciente: eu tinha proposto virarem `jsonb`. O ganho seria poder
+// consultar dentro do JSON, coisa que nada no Colmeia faz hoje; o custo é
+// real — o Postgres reescreve `jsonb` no formato dele (espaço e ordem das
+// chaves mudam), e aí `supabaseConferir` acusaria diferença em toda linha
+// sem nenhuma diferença existir de verdade. Trocar a rede de segurança
+// por um recurso que ninguém pediu é mau negócio. Vira `jsonb` no dia em
+// que alguém precisar perguntar algo pro conteúdo dele.
+// ---------------------------------------------------------------------
+
+var COLUNAS_DEVOLUCAO = [
+  'codigo', 'task_id_alteracao', 'task_id_origem', 'card_mae_id', 'cliente',
+  'nome_peca', 'file_id', 'nome_arquivo', 'mime_type', 'motivo', 'pins',
+  'devolvido_em', 'pecas_json'
+];
+
+/** Linha da planilha (array) → objeto do banco. */
+function devolucaoDaLinha(l) {
+  var obj = {};
+  COLUNAS_DEVOLUCAO.forEach(function (nome, i) {
+    obj[nome] = (l[i] === undefined || l[i] === null) ? '' : String(l[i]);
+  });
+  return obj;
+}
+
+/** Objeto do banco → linha no formato da planilha. */
+function devolucaoParaLinha(obj) {
+  return COLUNAS_DEVOLUCAO.map(function (nome) {
+    return (obj[nome] === undefined || obj[nome] === null) ? '' : String(obj[nome]);
+  });
+}
+
+/**
+ * As devoluções que casam com um filtro do PostgREST, já no formato de
+ * linha da planilha. Devolve null quando não deu pra perguntar — aí quem
+ * chama varre a planilha, como sempre fez.
+ */
+function devolucoesDoBanco(filtros) {
+  if (!supabaseManda('devolucoes')) return null;
+  var r = supabaseBuscarTudo('devolucoes', filtros);
+  return r ? r.map(devolucaoParaLinha) : null;
+}
+
 /**
  * Guarda a devolução inteira (motivo + pinos + qual arquivo estava sendo
  * conferido) e devolve o código do link.
@@ -1540,7 +1597,7 @@ function gravarDevolucao(dados) {
       ? dados.pecas
       : [{ nomePeca: dados.nomePeca || '', fileId: dados.fileId || '', nomeArquivo: dados.nomeArquivo || '', mimeType: dados.mimeType || '', pins: dados.pins || [] }];
     var primeira = pecas[0];
-    sheet.appendRow([
+    var valores = [
       codigo,
       dados.taskIdAlteracao || '',
       dados.taskIdOrigem || '',
@@ -1554,7 +1611,9 @@ function gravarDevolucao(dados) {
       JSON.stringify(primeira.pins || []),
       new Date().toISOString(),
       JSON.stringify(pecas)
-    ]);
+    ];
+    if (supabaseConfigurado()) supabaseInserir('devolucoes', devolucaoDaLinha(valores));
+    sheet.appendRow(valores);
   } finally {
     lock.releaseLock();
   }
@@ -1602,7 +1661,15 @@ function linhaParaDevolucao(l) {
  */
 function buscarDevolucaoPublica(codigo) {
   if (!codigo) return { ok: false, error: 'codigo não informado.' };
-  var linhas = getDevolucoesSheet().getDataRange().getValues();
+
+  // Pelo banco vem só a linha pedida (o código é indexado); pela planilha,
+  // a aba inteira e a comparação no laço abaixo. As duas terminam no mesmo
+  // `linhaParaDevolucao`, que é onde mora toda a compatibilidade com
+  // devolução gravada antes de `pecas_json` existir.
+  var linhas = devolucoesDoBanco('select=*&codigo=eq.' + encodeURIComponent(String(codigo)));
+  if (linhas) linhas.unshift([]); // cabeçalho de mentira: o laço começa no 1
+  else linhas = getDevolucoesSheet().getDataRange().getValues();
+
   for (var i = 1; i < linhas.length; i++) {
     if (String(linhas[i][0]) !== String(codigo)) continue;
     var d = linhaParaDevolucao(linhas[i]);
@@ -1649,7 +1716,18 @@ function buscarDevolucaoPublica(codigo) {
  */
 function buscarDevolucaoDaTarefa(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
-  var linhas = getDevolucoesSheet().getDataRange().getValues();
+
+  // O banco devolve um conjunto MAIOR do que o certo de propósito (as duas
+  // colunas que podem casar), e a regra exata — "é a alteração, OU é o
+  // card mãe de uma devolução sem subtarefa" — continua sendo aplicada no
+  // laço abaixo, num lugar só. Traduzir essa condição pra SQL deixaria a
+  // mesma regra escrita em dois idiomas, que é como os dois lados começam
+  // a discordar.
+  var alvo = encodeURIComponent(String(taskId));
+  var linhas = devolucoesDoBanco('select=*&or=(task_id_alteracao.eq.' + alvo + ',card_mae_id.eq.' + alvo + ')');
+  if (linhas) linhas.unshift([]);
+  else linhas = getDevolucoesSheet().getDataRange().getValues();
+
   var achada = null;
   for (var i = 1; i < linhas.length; i++) {
     var d = linhaParaDevolucao(linhas[i]);
@@ -2055,6 +2133,16 @@ function migrarConferenciaInternaParaSupabase() {
  */
 function conferirConferenciaInterna() {
   supabaseConferir('conferencia_interna', getConferenciasSheet(), 0, 0, conferenciaDaLinha);
+}
+
+/** A cópia inicial das DEVOLUÇÕES. Ver supabaseCopiaInicial (Supabase.gs). */
+function migrarDevolucoesParaSupabase() {
+  supabaseCopiaInicial('devolucoes', getDevolucoesSheet(), 0, 0, devolucaoDaLinha);
+}
+
+/** Compara os dois lados das devoluções. Rodar entre a cópia e a virada. */
+function conferirDevolucoes() {
+  supabaseConferir('devolucoes', getDevolucoesSheet(), 0, 0, devolucaoDaLinha);
 }
 
 /** A cópia inicial do histórico. Ver supabaseCopiaInicial (Supabase.gs). */
