@@ -539,7 +539,11 @@ function centralRenderHoje() {
 
     <div class="central-hoje-grid">
       <div class="hr-card central-hoje-tile central-hoje-foto">
-        <div class="central-hoje-foto-img" id="chFotoImg"></div>
+        <div class="central-hoje-foto-img" id="chFotoImg">
+          <div class="central-hoje-foto-img-fundo" id="chFotoImgFundo"></div>
+          <div class="central-hoje-foto-img-nitida" id="chFotoImgNitida"></div>
+          <div class="central-hoje-foto-iniciais" id="chFotoIniciais"></div>
+        </div>
         <div class="central-hoje-foto-scrim"></div>
         <div class="central-hoje-foto-info"><b id="chFotoNome"></b><span id="chFotoPapel"></span></div>
       </div>
@@ -1330,6 +1334,9 @@ function centralRenderMetricas() {
  */
 function centralPreencherFotoAtendimento(prefixo, nome, comValor) {
   const img = document.getElementById(prefixo + "FotoImg");
+  const fundo = document.getElementById(prefixo + "FotoImgFundo");
+  const nitida = document.getElementById(prefixo + "FotoImgNitida");
+  const iniciais = document.getElementById(prefixo + "FotoIniciais");
   const nomeEl = document.getElementById(prefixo + "FotoNome");
   const papel = document.getElementById(prefixo + "FotoPapel");
   if (!img) return;
@@ -1340,13 +1347,16 @@ function centralPreencherFotoAtendimento(prefixo, nome, comValor) {
     || (typeof fotoDoAtendimento === "function" && fotoDoAtendimento(nome))
     || (typeof fotoDoDesigner === "function" && fotoDoDesigner(nome));
   if (foto) {
-    img.style.backgroundImage = `url("${foto}")`;
+    const url = `url("${foto}")`;
+    if (fundo) fundo.style.backgroundImage = url;
+    if (nitida) nitida.style.backgroundImage = url;
     img.classList.remove("sem-foto");
-    img.textContent = "";
+    if (iniciais) iniciais.textContent = "";
   } else {
-    img.style.backgroundImage = "";
+    if (fundo) fundo.style.backgroundImage = "";
+    if (nitida) nitida.style.backgroundImage = "";
     img.classList.add("sem-foto");
-    img.textContent = typeof initials === "function" ? initials(nome) : "";
+    if (iniciais) iniciais.textContent = typeof initials === "function" ? initials(nome) : "";
   }
   if (nomeEl) nomeEl.textContent = nome || "";
   if (papel) {

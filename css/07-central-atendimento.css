@@ -298,21 +298,37 @@
 .central-hoje-tile.clicavel:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
 
 .central-hoje-foto { grid-area: foto; padding: 0; justify-content: flex-end; }
-.central-hoje-foto-img {
-  position: absolute; inset: 0; background-size: cover;
-  /* 38%, não `top` (corrigido em 2026-08-11). Este quadro mede ~358x144
-     — proporção 2,5:1 — desde que a foto encolheu pra uma linha só. As
-     fotos de perfil são QUADRADAS (1024x1024), então com `cover` só
-     40% da altura delas cabe aqui. Com `top`, os 40% que apareciam eram
-     os de cima: cabelo e testa, sem rosto nenhum. Ancorar em 38% mostra
-     a faixa de 23% a 63% da foto, que é onde o rosto está.
-     Não é chute: foi medido com as fotos de verdade da equipe. */
-  background-position: center 38%;
+/* Segunda passada nesta foto (2026-08-11). A primeira tentativa (`cover` +
+   `background-position: center 38%`) foi calibrada medindo um quadro de
+   ~358x144 (proporção 2,5:1) — mas esse quadro é feito de `fr` numa grade
+   que cresce com a altura da JANELA, não um tamanho fixo. Numa tela mais
+   alta a proporção muda, e uma posição fixa em % passa a cortar hora o
+   cabelo, hora o queixo — foi exatamente o corte que o Cláudio via.
+   Solução: a foto de verdade NUNCA é cortada. `.central-hoje-foto-img-nitida`
+   mostra ela INTEIRA e centralizada (`background-size: contain`), e o
+   espaço que sobra nas laterais é preenchido pela MESMA foto, ampliada e
+   borrada, atrás dela (`.central-hoje-foto-img-fundo`) — só pra não deixar
+   barra vazia. As duas são IRMÃS, nunca uma dentro da outra: `filter: blur()`
+   borra tudo que está DENTRO do elemento, então se a nítida fosse filha da
+   borrada ela saía borrada junto. */
+.central-hoje-foto-img { position: absolute; inset: 0; overflow: hidden; background: var(--page-bg); }
+.central-hoje-foto-img-fundo {
+  position: absolute; inset: -12%;
+  background-size: cover; background-position: center;
+  filter: blur(24px) brightness(.7);
 }
-.central-hoje-foto-img.sem-foto {
-  display: flex; align-items: center; justify-content: center; background: var(--page-bg);
+.central-hoje-foto-img-nitida {
+  position: absolute; inset: 0;
+  background-size: contain; background-repeat: no-repeat; background-position: center;
+}
+.central-hoje-foto-img.sem-foto .central-hoje-foto-img-fundo,
+.central-hoje-foto-img.sem-foto .central-hoje-foto-img-nitida { display: none; }
+.central-hoje-foto-iniciais {
+  position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  background: var(--page-bg);
   font-family: var(--font-display); font-size: 34px; font-weight: 600; color: var(--text-muted);
 }
+.central-hoje-foto-img.sem-foto .central-hoje-foto-iniciais { display: flex; }
 .central-hoje-foto-scrim {
   position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%);
 }
