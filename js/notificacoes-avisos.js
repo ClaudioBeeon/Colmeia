@@ -1056,6 +1056,17 @@ if (_configTabVinculos) {
     atualizarAbasConfig();
   });
 }
+// Acessos (2026-08-10). O clique das abas mora AQUI, não no arquivo que
+// desenha o painel — foi exatamente por isso que a aba nasceu sem fazer
+// nada ao ser clicada. Ao criar aba nova em Configurações, são sempre
+// DOIS lugares: o botão no index.html + o clique aqui.
+const _configTabAcessos = document.getElementById("configTabAcessos");
+if (_configTabAcessos) {
+  _configTabAcessos.addEventListener("click", () => {
+    configTabAtiva = "acessos";
+    atualizarAbasConfig();
+  });
+}
 
 /**
  * Roda tudo que o Colmeia precisa pra funcionar de verdade — só chamada
