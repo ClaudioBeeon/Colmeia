@@ -127,12 +127,39 @@ function abrirPainelDesigners() {
     pnlRenderTudo(); // já tinha carregado antes (voltou pra página): desenha na hora
   }
   pnlCarregarAtividade();
-  if (!pnlPollTimer) pnlPollTimer = setInterval(pnlPollUmaVez, 8000);
+  if (!pnlPollTimer) pnlPollTimer = setInterval(pnlPollUmaVez, PNL_POLL_MS);
+  ligarPollAoVoltarPraAba();
 }
 
 function fecharPainelDesigners() {
   pnlAberta = false;
   if (pnlPollTimer) { clearInterval(pnlPollTimer); pnlPollTimer = null; }
+}
+
+// 30s no lugar dos 8s de antes — ver o comentário de pnlPollUmaVez.
+const PNL_POLL_MS = 30000;
+
+/**
+ * Buscar na hora em que a pessoa volta pra aba.
+ *
+ * É isto que deixa afrouxar o intervalo sem ninguém perceber: quem sai e
+ * volta encontra o painel atualizado no instante em que olha, em vez de
+ * esperar o próximo tique. Um intervalo curto tentava adivinhar esse
+ * momento perguntando o tempo todo; aqui a gente simplesmente sabe quando
+ * ele acontece.
+ *
+ * Ligado uma vez só (`_pnlOuvindoVolta`): abrir e fechar a página várias
+ * vezes empilharia um ouvinte por abertura, e aí cada volta pra aba
+ * dispararia várias buscas iguais.
+ */
+let _pnlOuvindoVolta = false;
+
+function ligarPollAoVoltarPraAba() {
+  if (_pnlOuvindoVolta) return;
+  _pnlOuvindoVolta = true;
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && pnlAberta) pnlPollUmaVez();
+  });
 }
 
 // ===== Carregar / salvar (a planilha do painel, via PainelDesigners.gs) =====
@@ -204,9 +231,25 @@ function pnlAtualizarSync(estado) {
   el.textContent = estado === "salvando" ? "Salvando..." : estado === "erro" ? "Não consegui salvar — tentando de novo" : "";
 }
 
-/** Poll de 8s: só busca de novo o que mudou (outra pessoa editando ao mesmo tempo). */
+/**
+ * Busca de novo o que mudou — existe pra quando duas pessoas editam o
+ * painel ao mesmo tempo.
+ *
+ * Era de 8 em 8 segundos (2026-08-10: passou pra 30). Oito segundos é
+ * ritmo de dado que muda o tempo todo; este muda algumas vezes por dia, e
+ * quem está editando de verdade já vê o próprio trabalho na hora — a
+ * pergunta rápida só servia pro caso raro de duas pessoas na mesma tela
+ * no mesmo minuto. Esse caso continua atendido pelo gancho de "voltou pra
+ * aba", que busca na hora e é bem melhor que qualquer intervalo.
+ *
+ * E o principal: NÃO PERGUNTA COM A ABA NO FUNDO. Antes, uma aba
+ * esquecida aberta atrás de outras coisas ficava batendo no Apps Script do
+ * painel-designers-beeon a cada 8 segundos o dia inteiro, sem ninguém
+ * olhando o resultado.
+ */
 async function pnlPollUmaVez() {
   if (!pnlAberta || pnlSavePending || pnlEstaEditando()) return;
+  if (document.hidden) return;
   const data = await chamarBackend({ acao: "painelLerEstado" });
   if (data && data.ok && !data.empty && data.data && data.updatedAt > pnlUpdatedAt) {
     pnlAplicarDados(data.data);
