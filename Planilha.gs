@@ -1073,6 +1073,46 @@ function substituirPessoaDoLogin(nomeAntigo, dadosNovos) {
 // aviso pra você resolver na mão, nunca um palpite gravado.
 // ---------------------------------------------------------------------
 
+/**
+ * Quem existe no Runrun.it e ainda NÃO tem acesso ao Colmeia.
+ *
+ * Alimenta a lista "adicionar com um clique" da aba Acessos. Não cria
+ * ninguém sozinho de propósito: o Runrun.it tem gente que não é do
+ * Colmeia, e o PAPEL (designer / atendimento / coordenador) não dá pra
+ * adivinhar de lá — é justamente o que define o que a pessoa enxerga.
+ * Então o Colmeia traz o nome e o e-mail prontos, e quem escolhe o papel
+ * é você, com um clique em vez de digitação.
+ */
+function listarPessoasDoRunrunSemAcesso() {
+  var usuarios = buscarUsuariosRunrunComCache();
+  if (!Array.isArray(usuarios)) {
+    return { ok: false, error: 'Não consegui ler os usuários do Runrun.it agora.' };
+  }
+
+  var jaTem = {};
+  var linhas = getLoginSheet().getDataRange().getValues();
+  for (var i = 1; i < linhas.length; i++) {
+    if (linhas[i][0]) jaTem[normalizarNomeLogin(linhas[i][0])] = true;
+    var email = String(linhas[i][3] || '').toLowerCase().trim();
+    if (email) jaTem['@' + email] = true;
+  }
+
+  var faltando = [];
+  usuarios.forEach(function (u) {
+    var nome = String(u.name || '').trim();
+    var email = String(u.email || '').toLowerCase().trim();
+    if (!nome || !email) return;
+    // Só gente da casa: o Runrun.it pode ter convidado, cliente ou conta
+    // de outra agência, e nada disso deve virar sugestão de acesso.
+    if (email.indexOf('@beeon.com.br') === -1) return;
+    if (jaTem[normalizarNomeLogin(nome)] || jaTem['@' + email]) return;
+    faltando.push({ nome: nome, email: email });
+  });
+
+  faltando.sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+  return { ok: true, pessoas: faltando };
+}
+
 /** Só mostra o que o vínculo automático faria. Não grava nada. */
 function verEmailsDoRunrun() {
   relatorioDeEmailsDoRunrun(false);

@@ -1046,12 +1046,79 @@ async function renderPainelAcessos() {
     <div class="acessos-lista">
       ${acessosLista.map(p => acessoLinhaHTML(p)).join("")}
     </div>
+    <div class="acessos-nova" id="acessosDoRunrun">
+      <h4>Gente do Runrun.it que ainda não tem acesso</h4>
+      <p class="quick-access-empty" style="margin:0 0 10px">Procurando…</p>
+    </div>
     <div class="acessos-nova">
-      <h4>Adicionar pessoa</h4>
+      <h4>Adicionar na mão</h4>
       ${acessoFormHTML("novo", { nome: "", papel: "designer", email: "" })}
     </div>
   `;
   wireAcessos(corpoAgora);
+  renderSugestoesDoRunrun();
+}
+
+/**
+ * "Adicionar com um clique": quem existe no Runrun.it com e-mail da Beeon
+ * e ainda não entra no Colmeia.
+ *
+ * NÃO cria ninguém sozinho — o papel (designer / atendimento /
+ * coordenador) é o que define o que a pessoa enxerga, e isso não dá pra
+ * adivinhar do Runrun.it. O que o Colmeia faz é trazer nome e e-mail
+ * prontos, pra sobrar só a escolha que é de verdade sua.
+ */
+async function renderSugestoesDoRunrun() {
+  const data = await chamarBackend({ acao: "listarPessoasDoRunrunSemAcesso" });
+  const bloco = document.getElementById("acessosDoRunrun");
+  if (!bloco || configTabAtiva !== "acessos") return;
+
+  if (!data || !data.ok) {
+    bloco.innerHTML = `<h4>Gente do Runrun.it que ainda não tem acesso</h4>
+      <p class="quick-access-empty">${escaparHTML((data && data.error) || "Não consegui consultar o Runrun.it agora.")}</p>`;
+    return;
+  }
+  const pessoas = data.pessoas || [];
+  if (!pessoas.length) {
+    bloco.innerHTML = `<h4>Gente do Runrun.it que ainda não tem acesso</h4>
+      <p class="quick-access-empty">Todo mundo do Runrun.it já tem acesso.</p>`;
+    return;
+  }
+
+  bloco.innerHTML = `
+    <h4>Gente do Runrun.it que ainda não tem acesso</h4>
+    <p class="quick-access-empty" style="margin:0 0 10px">
+      Nome e e-mail já vêm do Runrun.it — escolha o papel e clique em Adicionar.
+      Quem entra por aqui usa o Google, sem chave de acesso.
+    </p>
+    ${pessoas.map((p, i) => `
+      <div class="acesso-item" data-sugestao="${i}">
+        <div class="acesso-cabeca">
+          <strong>${escaparHTML(p.nome)}</strong>
+          <span class="acesso-email">${escaparHTML(p.email)}</span>
+        </div>
+        <div class="acesso-campos">
+          <select data-campo="papel">
+            ${["atendimento", "designer", "coordenador"].map(v =>
+              `<option value="${v}">${v}</option>`).join("")}
+          </select>
+          <button type="button" class="repasse-btn" data-sugestao-add="${i}">Adicionar</button>
+        </div>
+      </div>`).join("")}
+  `;
+
+  bloco.querySelectorAll("[data-sugestao-add]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const p = pessoas[Number(btn.dataset.sugestaoAdd)];
+      const item = btn.closest(".acesso-item");
+      const papel = item.querySelector('[data-campo="papel"]').value;
+      btn.disabled = true;
+      await acessoChamar(
+        { acao: "salvarPessoaDoLogin", nome: p.nome, papel, email: p.email, chave: "" },
+        `${p.nome} agora entra pelo Google.`
+      );
+    });
+  });
 }
 
 function acessoLinhaHTML(p) {
