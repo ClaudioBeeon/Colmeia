@@ -1802,6 +1802,48 @@ listagem. Mesma proteção que o link de aprovação do cliente já usa.
 
 **`testarStorage(fileId)`** roda no editor do Apps Script e diz, em ordem, o que conferir se falhar.
 
+## O site passou a ser montado antes de publicar (2026-08-10)
+
+`.github/scripts/montar-frontend.js` + `.github/workflows/publicar-site.yml`.
+
+O navegador baixava **1,8 MB em 37 pedidos** a cada abertura. Agora baixa **dois arquivos**
+(medido: 340 KB → 159 KB de JS e 104 KB → 45 KB de CSS, já contando a compressão que o GitHub Pages
+sempre fez).
+
+**O repositório NÃO mudou, e essa é a decisão central.** Os 29 arquivos de `js/` continuam separados
+por assunto e com os comentários todos; o `index.html` continua listando um por um — e é dele que a
+ORDEM é lida, nunca escrita à mão duas vezes. A pasta `_site` é montada na hora do deploy e **nunca
+é gravada de volta** (está no `.gitignore`), então não existe deploy disparando deploy em círculo.
+
+⚠️ **Exige a fonte do Pages em "GitHub Actions"** (Settings → Pages → Source), não mais "Deploy from
+a branch". Enquanto estiver no antigo, o workflow falha e o site segue servido do jeito velho — o
+pior caso é o site ficar **velho**, nunca quebrado.
+
+### As duas armadilhas que proibiram um "bundler" de verdade
+
+Ambas quebrariam produção **em silêncio**, e aqui não há revisão antes do deploy:
+
+1. **Os arquivos compartilham o mesmo espaço de variáveis.** Tags `<script>` comuns são "como se
+   fosse um arquivo só" — um bundler envolveria cada arquivo num escopo próprio e `config.js`
+   deixaria de enxergar o que `bee.js` declarou. Por isso é **concatenação pura**, na ordem das tags.
+2. **Existem 18 handlers escritos dentro do HTML** (`onclick="buildAprovacaoPage(...)"`,
+   `onerror="handleAvatarImgError(...)"`). Esses nomes vivem dentro de uma **string**, invisível pra
+   qualquer compressor: renomear `handleAvatarImgError` pra `a` deixaria o HTML chamando o nome
+   velho, sem erro nenhum aparecendo em lugar nenhum. Daí **`minifyIdentifiers: false`** — perde-se
+   ~15% de compressão e ganha-se a certeza de que nada muda de comportamento. Como **34% do peso
+   aqui é comentário**, o grosso do ganho vem de graça mesmo assim.
+
+**A checagem de sintaxe de `js/` virou obrigatória antes de publicar** (mesmo espírito da que já
+existia pros `.gs`): agora é um arquivo só, então um erro de digitação em qualquer `js/` derrubaria o
+Colmeia inteiro pra todo mundo de uma vez.
+
+**O nome do pacote carrega a digital do conteúdo** (`colmeia.<hash>.js`): conteúdo novo = nome novo.
+Isso aposenta a chatice de trocar o `?v=` em todas as tags a cada mudança — a regra continua no
+`index.html` por segurança e porque o checador a confere, mas já não é ela que evita cache velho.
+
+**`aprovar.html` e `ajuste.html` NÃO passam pela montagem**, de propósito: cada uma é um arquivo
+único e completo, feito pra abrir sem login e sem depender do resto do app.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

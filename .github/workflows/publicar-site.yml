@@ -1,0 +1,94 @@
+name: Publicar o site (junta e comprime o front-end)
+
+# Monta o site antes de publicar: junta os 29 arquivos de js/ e os 8 de
+# css/ num pacote só e tira comentários e espaços. Ver o porquê e as duas
+# armadilhas evitadas em .github/scripts/montar-frontend.js.
+#
+# O REPOSITÓRIO NÃO MUDA. Os arquivos continuam separados por assunto e
+# com os comentários todos; a pasta `_site` é montada aqui na hora e nunca
+# é gravada de volta — por isso não existe risco de um deploy disparar
+# outro em círculo.
+#
+# ⚠️ Isto exige que a fonte do GitHub Pages esteja em "GitHub Actions"
+# (Settings → Pages → Source). Enquanto estiver em "Deploy from a branch",
+# este workflow falha e o site continua sendo servido do jeito antigo —
+# ou seja, o pior caso é o site ficar velho, nunca quebrado.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "js/**"
+      - "css/**"
+      - "aprovar.html"
+      - "ajuste.html"
+      - "404.html"
+      - "CNAME"
+      - ".github/scripts/montar-frontend.js"
+      - ".github/workflows/publicar-site.yml"
+      - "package.json"
+  workflow_dispatch: {}
+
+# Uma publicação por vez, e sem cancelar a que já está no meio: melhor
+# esperar do que interromper um deploy pela metade.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # REDE DE PROTEÇÃO, o mesmo espírito da checagem dos .gs: se algum
+      # arquivo de js/ estiver com erro de sintaxe, para AQUI. Sem isso, um
+      # erro de digitação entraria no pacote e derrubaria o Colmeia inteiro
+      # pra todo mundo de uma vez — porque agora é um arquivo só.
+      - name: Conferir a sintaxe de todos os arquivos de js/
+        run: |
+          erro=0
+          for arquivo in js/*.js; do
+            if node --check "$arquivo" > /dev/null 2>&1; then
+              echo "ok    $arquivo"
+            else
+              echo "::error::$arquivo tem erro de sintaxe:"
+              node --check "$arquivo" || true
+              erro=1
+            fi
+          done
+          if [ "$erro" -ne 0 ]; then
+            echo "::error::Publicação CANCELADA — o site no ar continua o de antes."
+            exit 1
+          fi
+
+      - name: Conferir a ordem das tags do index.html
+        run: node .github/scripts/checar-ordem-dos-scripts.js
+
+      - name: Instalar o esbuild
+        run: npm install
+
+      - name: Montar o site
+        run: node .github/scripts/montar-frontend.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

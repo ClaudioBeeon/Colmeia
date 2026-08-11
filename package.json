@@ -1,8 +1,9 @@
 {
   "name": "colmeia-apps-script-deploy",
   "private": true,
-  "description": "Só existe pra dar ao GitHub Actions uma cópia do clasp (a ferramenta que publica o Code.gs no Google Apps Script) — não tem relação com o frontend (index.html/js/style.css).",
+  "description": "Ferramentas do GitHub Actions, não do site: o clasp publica os .gs no Google Apps Script, e o esbuild junta e comprime js/ e css/ na hora de publicar (ver .github/scripts/montar-frontend.js). O front-end continua sem build no repositório.",
   "devDependencies": {
-    "@google/clasp": "3.3.0"
+    "@google/clasp": "3.3.0",
+    "esbuild": "0.25.0"
   }
 }
