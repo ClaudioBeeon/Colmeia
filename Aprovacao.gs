@@ -65,6 +65,88 @@ function getAprovacoesSheet() {
 }
 
 /** Uma célula pode ter várias respostas, uma por peça (ver getAprovacoesSheet). */
+// =====================================================================
+// AS APROVAÇÕES NO SUPABASE (etapa 4 de 4 — a última, e a única que uma
+// pessoa de fora da agência toca)
+//
+// Mesma técnica das etapas anteriores: o banco devolve linha no FORMATO
+// da planilha, então `linhaParaObjetoDeAprovacao` e todos os leitores
+// continuam valendo letra por letra.
+//
+// ⚠️ AS COLUNAS SAEM DAQUI, NUNCA DO CABEÇALHO DA ABA. O cabeçalho é
+// escrito com 13 colunas (A:M) e nunca foi corrigido; as outras quatro
+// foram penduradas depois, uma a uma, cada uma com um remendo
+// `if (getLastColumn() < N)`. Quem for conferir a lista abaixo tem que
+// comparar com `linhaParaObjetoDeAprovacao`, que é a verdade.
+// =====================================================================
+
+var COLUNAS_APROVACAO = [
+  'codigo', 'task_id', 'cliente', 'titulo_tarefa', 'file_id', 'nome_arquivo',
+  'mime_type', 'criado_em', 'status', 'resposta_texto', 'respondido_em', 'autor',
+  'pins',            // M — os pontos marcados na peça
+  'aviso_pendente',  // N — "1" enquanto o recado não entrou na tarefa
+  'quem_aprovou',    // O — o nome que o CLIENTE digitou
+  'respostas_pecas', // P — resposta por peça, quando o link tem várias
+  'consultando_em'   // Q — "vou consultar e te falo"
+];
+
+/** Linha da planilha (array) → objeto do banco. */
+function aprovacaoDaLinha(l) {
+  var obj = {};
+  COLUNAS_APROVACAO.forEach(function (nome, i) {
+    obj[nome] = (l[i] === undefined || l[i] === null) ? '' : String(l[i]);
+  });
+  return obj;
+}
+
+/** Objeto do banco → linha no formato da planilha (o caminho de volta). */
+function aprovacaoParaLinha(obj) {
+  return COLUNAS_APROVACAO.map(function (nome) {
+    return (obj[nome] === undefined || obj[nome] === null) ? '' : String(obj[nome]);
+  });
+}
+
+/**
+ * TODAS as aprovações, da fonte que estiver mandando, no formato da
+ * planilha (com cabeçalho de mentira na posição 0).
+ *
+ * Cair na planilha quando o banco não responde importa mais aqui do que
+ * em qualquer aba anterior: é isto que a página do cliente lê. Uma lista
+ * vazia viraria "esse link de aprovação não existe mais" na cara de quem
+ * está do lado de fora — a pior mensagem possível, e mentirosa.
+ */
+function linhasDeAprovacao(filtros) {
+  if (supabaseManda('aprovacoes')) {
+    var doBanco = supabaseBuscarTudo('aprovacoes', filtros || 'select=*&order=id.asc');
+    if (doBanco) {
+      var linhas = [COLUNAS_APROVACAO.slice()];
+      doBanco.forEach(function (o) { linhas.push(aprovacaoParaLinha(o)); });
+      return linhas;
+    }
+  }
+  return getAprovacoesSheet().getDataRange().getValues();
+}
+
+/** Muda alguns campos de UMA aprovação, achada pelo código (indexado). */
+function atualizarAprovacaoNoBanco(codigo, campos) {
+  if (!supabaseConfigurado()) return;
+  supabaseAtualizar('aprovacoes', 'codigo=eq.' + encodeURIComponent(String(codigo)), campos);
+}
+
+/** A cópia inicial das APROVAÇÕES. Ver supabaseCopiaInicial (Supabase.gs). */
+function migrarAprovacoesParaSupabase() {
+  supabaseCopiaInicial('aprovacoes', getAprovacoesSheet(), 0, 0, aprovacaoDaLinha);
+}
+
+/**
+ * Compara os dois lados das aprovações. Rodar entre a cópia e a virada —
+ * e aqui não é formalidade: é a única tabela cujo erro aparece pra alguém
+ * de fora da agência, dias depois, sem tela nenhuma pra avisar antes.
+ */
+function conferirAprovacoes() {
+  supabaseConferir('aprovacoes', getAprovacoesSheet(), 0, 0, aprovacaoDaLinha);
+}
+
 function parsearRespostasPecas(json, quantasPecas) {
   var lista = [];
   if (json) {
@@ -405,10 +487,12 @@ function gravarLinhaDeAprovacao(taskId, cliente, tituloTarefa, autor, arquivos) 
     }
 
     var codigo = montarCodigoDeAprovacao(taskId, cliente, linhas);
-    sheet.appendRow([
+    var valores = [
       codigo, taskId, cliente || '', tituloTarefa || '', ids, nomes,
       tipos, new Date().getTime(), 'pendente', '', '', autor || ''
-    ]);
+    ];
+    if (supabaseConfigurado()) supabaseInserir('aprovacoes', aprovacaoDaLinha(valores));
+    sheet.appendRow(valores);
     return {
       ok: true,
       codigo: codigo,
@@ -618,7 +702,12 @@ function responderAprovacaoPublica(codigo, aprovado, respostaTexto, pins, quemRe
     var status = aprovado ? 'aprovado' : 'ajuste';
     var pinsTexto = (pins && pins.length) ? JSON.stringify(pins) : '';
     var nomeAprovador = aprovado ? String(quemRespondeu || '').trim() : '';
-    sheet.getRange(indice + 1, 9, 1, 3).setValues([[status, respostaTexto || '', new Date().getTime()]]);
+    var quandoRespondeu = new Date().getTime();
+    atualizarAprovacaoNoBanco(codigo, {
+      status: status, resposta_texto: respostaTexto || '', respondido_em: String(quandoRespondeu),
+      pins: pinsTexto, quem_aprovou: nomeAprovador
+    });
+    sheet.getRange(indice + 1, 9, 1, 3).setValues([[status, respostaTexto || '', quandoRespondeu]]);
     sheet.getRange(indice + 1, 13).setValue(pinsTexto);
     sheet.getRange(indice + 1, 15).setValue(nomeAprovador);
     linha.status = status;
@@ -727,8 +816,12 @@ function responderPecaAprovacaoPublica(codigo, indicePeca, aprovado, respostaTex
     var pinsDestaPeca = (pins || []).map(function (p) { return { x: p.x, y: p.y, texto: p.texto, peca: indicePeca }; });
     var pinsTodos = pinsExistentes.concat(pinsDestaPeca);
 
+    var pinsTexto = pinsTodos.length ? JSON.stringify(pinsTodos) : '';
+    atualizarAprovacaoNoBanco(codigo, {
+      respostas_pecas: JSON.stringify(respostas), pins: pinsTexto
+    });
     sheet.getRange(indiceLinha + 1, 16).setValue(JSON.stringify(respostas));
-    sheet.getRange(indiceLinha + 1, 13).setValue(pinsTodos.length ? JSON.stringify(pinsTodos) : '');
+    sheet.getRange(indiceLinha + 1, 13).setValue(pinsTexto);
 
     todasRespondidas = respostas.every(function (r) { return !!r; });
     if (todasRespondidas) {
@@ -737,10 +830,18 @@ function responderPecaAprovacaoPublica(codigo, indicePeca, aprovado, respostaTex
       var textoAgregado = respostas
         .map(function (r, idx) { return r.texto ? '(' + (idx + 1) + ') ' + r.texto : ''; })
         .filter(function (t) { return !!t; }).join(' · ');
-      sheet.getRange(indiceLinha + 1, 9, 1, 3).setValues([[
-        todasAprovadas ? 'aprovado' : 'ajuste', textoAgregado, new Date().getTime()
-      ]]);
-      sheet.getRange(indiceLinha + 1, 15).setValue(todasAprovadas && primeiroAprovador ? primeiroAprovador.quemAprovou : '');
+      // O AGREGADO, escrito só quando todas as peças já responderam — é o
+      // que a aba "Aprovações" da Fila de repasse lê, sem saber que
+      // resposta por peça existe.
+      var statusFinal = todasAprovadas ? 'aprovado' : 'ajuste';
+      var aprovadorFinal = todasAprovadas && primeiroAprovador ? primeiroAprovador.quemAprovou : '';
+      var quandoFechou = new Date().getTime();
+      atualizarAprovacaoNoBanco(codigo, {
+        status: statusFinal, resposta_texto: textoAgregado,
+        respondido_em: String(quandoFechou), quem_aprovou: aprovadorFinal
+      });
+      sheet.getRange(indiceLinha + 1, 9, 1, 3).setValues([[statusFinal, textoAgregado, quandoFechou]]);
+      sheet.getRange(indiceLinha + 1, 15).setValue(aprovadorFinal);
     }
   } finally {
     lock.releaseLock();
@@ -795,6 +896,7 @@ function marcarAvisoDeAprovacaoPendente(codigo) {
       var linhas = sheet.getDataRange().getValues();
       for (var i = 1; i < linhas.length; i++) {
         if (String(linhas[i][0]) === String(codigo)) {
+          atualizarAprovacaoNoBanco(codigo, { aviso_pendente: '1' });
           sheet.getRange(i + 1, COLUNA_AVISO_PENDENTE).setValue('1');
           return;
         }
@@ -850,6 +952,7 @@ function reenviarAvisosDeAprovacaoPendentes() {
     // insistir nas outras linhas só ia falhar igual e gastar tempo.
     if (!envio || !envio.ok) break;
 
+    atualizarAprovacaoNoBanco(linhas[i][0], { aviso_pendente: '' });
     try { sheet.getRange(i + 1, COLUNA_AVISO_PENDENTE).setValue(''); } catch (e) { /* segue */ }
     reenviados++;
   }
@@ -864,8 +967,7 @@ function reenviarAvisosDeAprovacaoPendentes() {
  * pro estado "ainda não foi enviado", mesmo já tendo sido.
  */
 function buscarLinkClienteMaisRecente(taskId) {
-  var sheet = getAprovacoesSheet();
-  var linhas = sheet.getDataRange().getValues();
+  var linhas = linhasDeAprovacao();
   var achada = null;
   for (var i = 1; i < linhas.length; i++) {
     if (String(linhas[i][1]) !== String(taskId)) continue;
@@ -913,7 +1015,9 @@ function avisarQueVaiConsultar(codigo) {
       if (String(linhas[i][0]) !== String(codigo)) continue;
       linha = linhaParaObjetoDeAprovacao(linhas[i]);
       if (linha.status !== 'pendente') { lock.releaseLock(); return { ok: true, jaRespondido: true }; }
-      sheet.getRange(i + 1, 17).setValue(new Date().getTime());
+      var quandoConsultou = new Date().getTime();
+      atualizarAprovacaoNoBanco(codigo, { consultando_em: String(quandoConsultou) });
+      sheet.getRange(i + 1, 17).setValue(quandoConsultou);
       break;
     }
     if (!linha) { lock.releaseLock(); return { ok: false, error: 'Não encontrei essa aprovação.' }; }
@@ -989,7 +1093,12 @@ function aprovarAprovacaoPorFora(dados) {
     // "Concluídos" parecer que a agência aprovou a própria peça.
     var nomeAprovador = quemAprovou || (canal ? 'cliente (' + canal + ')' : 'cliente');
 
-    sheet.getRange(indice + 1, 9, 1, 3).setValues([['aprovado', texto, new Date().getTime()]]);
+    var quandoPorFora = new Date().getTime();
+    atualizarAprovacaoNoBanco(codigo, {
+      status: 'aprovado', resposta_texto: texto, respondido_em: String(quandoPorFora),
+      quem_aprovou: nomeAprovador
+    });
+    sheet.getRange(indice + 1, 9, 1, 3).setValues([['aprovado', texto, quandoPorFora]]);
     sheet.getRange(indice + 1, 15).setValue(nomeAprovador);
     linha.status = 'aprovado';
     linha.respostaTexto = texto;
@@ -1036,7 +1145,13 @@ function limparAprovacoesAntigas() {
     for (var i = linhas.length - 1; i >= 1; i--) {
       if (String(linhas[i][8]) === 'pendente') continue;
       var quando = Number(linhas[i][10]) || Number(linhas[i][7]) || 0;
-      if (quando && quando < limite) sheet.deleteRow(i + 1);
+      if (quando && quando < limite) {
+        // No banco, pelo código: número de linha só existe na planilha.
+        if (supabaseConfigurado()) {
+          supabaseApagar('aprovacoes', 'codigo=eq.' + encodeURIComponent(String(linhas[i][0])));
+        }
+        sheet.deleteRow(i + 1);
+      }
     }
   } finally {
     lock.releaseLock();
@@ -1053,8 +1168,7 @@ function limparAprovacoesAntigas() {
  */
 function listarAprovacoesDoCliente(cliente) {
   if (!cliente) return { ok: false, error: 'cliente não informado.' };
-  var sheet = getAprovacoesSheet();
-  var linhas = sheet.getDataRange().getValues();
+  var linhas = linhasDeAprovacao();
   var alvo = normalizarNomeParaComparar(cliente);
   var lista = [];
   for (var i = 1; i < linhas.length; i++) {
@@ -1102,8 +1216,7 @@ function listarAprovacoesPendentes() {
   // ninguém precisar fazer nada. Nunca derruba a listagem.
   try { reenviarAvisosDeAprovacaoPendentes(); } catch (e) { /* segue */ }
 
-  var sheet = getAprovacoesSheet();
-  var linhas = sheet.getDataRange().getValues();
+  var linhas = linhasDeAprovacao();
   var corteAprovadas = new Date().getTime() - APROVADAS_JANELA_DIAS * 24 * 60 * 60 * 1000;
   var lista = [];
 
@@ -1178,6 +1291,9 @@ function excluirLinkDeAprovacao(codigo) {
     var linhas = sheet.getDataRange().getValues();
     for (var i = 1; i < linhas.length; i++) {
       if (String(linhas[i][0]) === String(codigo)) {
+        if (supabaseConfigurado()) {
+          supabaseApagar('aprovacoes', 'codigo=eq.' + encodeURIComponent(String(codigo)));
+        }
         sheet.deleteRow(i + 1);
         return { ok: true };
       }
@@ -1197,8 +1313,7 @@ function excluirLinkDeAprovacao(codigo) {
  */
 function listarLinksDaTarefa(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
-  var sheet = getAprovacoesSheet();
-  var linhas = sheet.getDataRange().getValues();
+  var linhas = linhasDeAprovacao();
   var lista = [];
   for (var i = 1; i < linhas.length; i++) {
     if (String(linhas[i][1]) !== String(taskId)) continue;
@@ -1216,8 +1331,11 @@ function listarLinksDaTarefa(taskId) {
 }
 
 function acharLinhaDeAprovacao(codigo) {
-  var sheet = getAprovacoesSheet();
-  var linhas = sheet.getDataRange().getValues();
+  // É a função que a PÁGINA DO CLIENTE usa pra achar o link dela. Pelo
+  // banco vem só a linha pedida (o código é indexado); pela planilha, a
+  // aba inteira e a comparação no laço abaixo — que continua valendo pros
+  // dois caminhos, sem duplicar a regra.
+  var linhas = linhasDeAprovacao('select=*&codigo=eq.' + encodeURIComponent(String(codigo)));
   for (var i = 1; i < linhas.length; i++) {
     if (String(linhas[i][0]) === String(codigo)) return linhaParaObjetoDeAprovacao(linhas[i]);
   }

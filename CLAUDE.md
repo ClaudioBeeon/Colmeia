@@ -1654,8 +1654,8 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
    atendimento e o cliente pelo link público), e onde a trava única mais dói. São **quatro** abas,
    não três, migradas em quatro etapas separadas e ordenadas por QUEM mexe em cada uma:
    `HistoricoConferencias` ✅ (ninguém: é arquivo) → `ConferenciaInterna` ✅ (atendimento e designers)
-   → `Devolucoes` ✅ (atendimento) → `Aprovacoes` (**o cliente**, na página sem login — por último,
-   com as outras três já rodando).
+   → `Devolucoes` ✅ (atendimento) → `Aprovacoes` ✅ (**o cliente**, na página sem login — por
+   último, com as outras três já rodando).
    **Uma aba vira uma tabela, com as mesmas colunas — sem redesenhar o modelo.** É tentador
    aproveitar a viagem pra separar as peças de um lote em tabela própria ou transformar o
    `fileId1|fileId2` numa lista de verdade; reformar o fluxo junto multiplicaria o risco justo onde
@@ -1669,8 +1669,14 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
    pediu é mau negócio. Vira `jsonb` no dia em que alguém precisar perguntar algo pro conteúdo.
    ⚠️ **O cabeçalho da aba `Aprovacoes` mente:** ela é criada com 13 colunas (A:M) e o código lê até
    a 17ª — `aviso_pendente`, `quemAprovou`, `respostasPecas` e `consultandoEm` foram penduradas
-   depois, cada uma com um remendo `if (getLastColumn() < N)`. Ao migrar, tirar as colunas de
-   `linhaParaObjetoDeAprovacao`, **nunca do cabeçalho**.
+   depois, cada uma com um remendo `if (getLastColumn() < N)`. Por isso `COLUNAS_APROVACAO`
+   (Aprovacao.gs) foi tirada de `linhaParaObjetoDeAprovacao`, **nunca do cabeçalho** — confiar nele
+   perderia quatro colunas em silêncio, três delas com resposta de cliente.
+
+**A escrita da `Aprovacoes` é sempre pelo CÓDIGO** (`atualizarAprovacaoNoBanco`), nunca por número
+de linha: número de linha só existe na planilha. Os dois lados recebem o mesmo carimbo de tempo,
+guardado numa variável antes das duas gravações — dois `new Date().getTime()` separados dariam
+milissegundos diferentes e a conferência acusaria diferença toda vez.
 5. Login com sessão de verdade — hoje a senha sozinha identifica a PESSOA.
 6. As abas de cadastro (LinksClientes, Pessoas, AcessoRapido) — **talvez nunca**: quase não têm
    escrita concorrente, e vale muito poder abrir a planilha e corrigir uma linha na mão.
