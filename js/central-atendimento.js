@@ -883,6 +883,27 @@ function centralConstruirTimeline() {
 /** O rótulo curto da pastilha de status, no canto do cabeçalho do post. */
 const CENTRAL_TL_SELO = { novo: "conferir", ajuste: "ajuste", aprovado: "aprovada", atencao: "atenção" };
 
+/**
+ * O avatar do cabeçalho de cada post da Timeline (2026-08-11, bug
+ * relatado pelo Cláudio: nunca mostrava a foto cadastrada, só a bolinha
+ * colorida com a inicial). `ev.quem` só é uma PESSOA de verdade (designer
+ * ou atendimento) nos tipos "novo" e "atencao" — em "ajuste"/"aprovado"
+ * é o CLIENTE, que não tem cadastro de foto no Colmeia, então esses dois
+ * continuam com a bolinha de inicial de sempre, sem tentar foto nenhuma.
+ * `avatarAtendimentoHTML` (js/pessoas-fotos.js) é a MESMA cadeia de foto
+ * (manual → atendimento → painel-designers-beeon) que a barra lateral já
+ * usa — passando `central-tl-avatar ${ev.tipo}` como classe, o tamanho e
+ * a cor de fundo por tipo continuam vindo do CSS de sempre (mais
+ * específico que o `.avatar` genérico, então ganha sem precisar redefinir
+ * nada aqui).
+ */
+function centralTlAvatarHTML(ev) {
+  if ((ev.tipo === "novo" || ev.tipo === "atencao") && typeof avatarAtendimentoHTML === "function") {
+    return avatarAtendimentoHTML(ev.quem, `central-tl-avatar ${ev.tipo}`);
+  }
+  return `<span class="central-tl-avatar ${ev.tipo}">${escaparHTML(ev.inicial)}</span>`;
+}
+
 function centralRenderTimelineHoje() {
   const lista = document.getElementById("chTimelineList");
   if (!lista) return;
@@ -901,7 +922,7 @@ function centralRenderTimelineHoje() {
   lista.innerHTML = eventos.map(ev => `
     <div class="central-tl-post ${ev.codigo ? "clicavel" : ""}" ${ev.codigo ? `data-central-tl-abrir="${escaparHTML(ev.codigo)}"` : ""}>
       <div class="central-tl-cab">
-        <span class="central-tl-avatar ${ev.tipo}">${escaparHTML(ev.inicial)}</span>
+        ${centralTlAvatarHTML(ev)}
         <span class="central-tl-quem">
           <b>${escaparHTML(ev.quem || "")}</b>
           <span class="central-tl-time">${centralTempoRelativo(ev.quando)}</span>
