@@ -52,36 +52,31 @@
 }
 .pnl-mini-btn:hover { background: var(--page-bg); color: var(--text-primary); }
 
-/* ---- KPIs de cima ---- */
-.pnl-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-@media (max-width: 900px) { .pnl-kpis { grid-template-columns: repeat(2, 1fr); } }
-.pnl-kpi-card {
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  padding: 16px 18px; box-shadow: var(--shadow-card);
+/* ---- os 3 boxes pequenos (Clientes/Criativos/Horas), na coluna da
+   direita — mesma largura da coluna de baixo (.pnl-runrun-kpis, "Tarefas
+   atrasadas"/"Tarefas pra hoje"/"Prioridades"/"Tarefas do mês"), de
+   propósito: eram 4 caixas grandes ocupando a largura inteira da página,
+   lá em cima; encolheram e desceram pra caber ao lado da grade de
+   designers, que subiu pro lugar delas (2026-08-12, pedido do Cláudio). */
+.pnl-kpis-mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.pnl-kpi-mini-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 10px 8px; box-shadow: var(--shadow-card); text-align: center;
 }
-.pnl-kpi-card.clicavel { cursor: pointer; transition: box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple); }
-.pnl-kpi-card.clicavel:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
-.pnl-kpi-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 6px; }
-.pnl-kpi-value { font-family: var(--font-display); font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: var(--text-primary); line-height: 1.1; }
-.pnl-kpi-sub { font-size: 11.5px; color: var(--text-secondary); margin-top: 4px; }
+.pnl-kpi-mini-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnl-kpi-mini-value { font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: -.01em; color: var(--text-primary); line-height: 1.1; }
 
-/* "Esforço de hoje": uma coluna por pessoa (avatar, tempo, nome), igual ao
-   painel original — não uma lista de barras. Cada coluna é clicável e
-   filtra o modal só pras tarefas dessa pessoa. */
-.pnl-kpi-esforco-cols { display: flex; gap: 14px; margin-top: 8px; overflow-x: auto; padding-bottom: 2px; }
-.pnl-kpi-esforco-col {
-  display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; width: 58px;
-  cursor: pointer; padding: 4px; border-radius: 10px; transition: background var(--dur-fast) var(--ease-apple);
+/* ---- "Esforço de hoje": uma LINHA por designer (não mais colunas lado a
+   lado) — entrou no lugar de "Atividade recente" na coluna da direita. ---- */
+.pnl-esforco-lista { display: flex; flex-direction: column; gap: 2px; }
+.pnl-esforco-linha {
+  display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-radius: 8px;
+  cursor: pointer; transition: background var(--dur-fast) var(--ease-apple);
 }
-.pnl-kpi-esforco-col:hover { background: var(--page-bg); }
-.pnl-kpi-esforco-avatar {
-  width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display); font-weight: 700; font-size: 12px; background: var(--page-bg); color: var(--text-secondary);
-  object-fit: cover;
-}
-.pnl-kpi-esforco-valor { font-family: var(--font-display); font-size: 12.5px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.pnl-kpi-esforco-valor.alerta { color: var(--danger); }
-.pnl-kpi-esforco-nome { font-size: 10px; color: var(--text-muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 58px; }
+.pnl-esforco-linha:hover { background: var(--page-bg); }
+.pnl-esforco-linha-nome { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnl-esforco-linha-valor { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.pnl-esforco-linha-valor.alerta { color: var(--danger); }
 .pnl-esforco-vazio { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
 
 /* ---- layout de duas colunas ---- */
@@ -94,8 +89,14 @@
 }
 .pnl-secao-titulo-sm { font-size: 13px; margin-bottom: 10px; }
 
-/* ---- grade de designers ---- */
-.pnl-designers { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+/* ---- grade de designers ----
+   `auto-fit` (não `auto-fill`) + minmax menor: quando sobra um card
+   sozinho na última linha (ex: "Sem designer", o 4º da lista de hoje),
+   ele estica pra ocupar a linha inteira em vez de ficar "meio card"
+   torto do lado de uma coluna vazia — é isso que fazia ele parecer
+   esquecido lá embaixo. Com 4 designers cabendo na largura da tela, os
+   4 ficam lado a lado numa linha só (2026-08-12, pedido do Cláudio). */
+.pnl-designers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .pnl-designer-card {
   background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card); overflow: hidden; display: flex; flex-direction: column;
@@ -147,9 +148,16 @@
 .pnl-ho-bar { width: 14px; height: 6px; border-radius: 999px; background: var(--page-bg); cursor: pointer; border: 1px solid var(--border); }
 .pnl-ho-bar.preenchida { background: var(--purple); border-color: var(--purple); }
 
-/* Clientes dentro do card — recolhe/expande. */
+/* Clientes dentro do card — recolhe/expande.
+   ⚠️ O teto de 55vh (em vez do 2000px de antes) é o que resolve "não dá
+   pra rolar e tem cliente que não aparece": sem teto, o card crescia até
+   caber TODOS os clientes, empurrando a página pra baixo do fim da tela
+   sem sobrar rolagem pra chegar lá. Com o teto, o card para de crescer
+   e quem rola é a LISTA, por dentro dele mesmo (overflow-y) — a página
+   ao redor fica parada. `vh` (não px) é o que adapta sozinho a qualquer
+   tamanho de tela. */
 .pnl-clientes-inner { max-height: 0; overflow: hidden; transition: max-height var(--dur-base) var(--ease-apple); }
-.pnl-designer-card.expandido .pnl-clientes-inner { max-height: 2000px; }
+.pnl-designer-card.expandido .pnl-clientes-inner { max-height: 55vh; overflow-y: auto; }
 .pnl-clientes-lista { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 6px; }
 
 .pnl-client-card {
@@ -225,15 +233,7 @@
 .pnl-runrun-kpi-label { font-size: 10.5px; color: var(--text-secondary); margin-top: 5px; }
 
 .pnl-atividade { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; box-shadow: var(--shadow-card); }
-.pnl-atividade-lista { display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; }
-.pnl-atividade-item { display: flex; gap: 9px; align-items: flex-start; font-size: 12px; text-decoration: none; color: inherit; border-radius: 8px; padding: 4px; margin: -4px; transition: background var(--dur-fast) var(--ease-apple); }
-.pnl-atividade-item:hover { background: var(--page-bg); }
-.pnl-atividade-item .avatar { flex-shrink: 0; }
-.pnl-atividade-txt { min-width: 0; }
-.pnl-atividade-txt b { color: var(--text-primary); }
-.pnl-atividade-cliente { color: var(--text-secondary); }
-.pnl-atividade-quando { color: var(--text-muted); font-size: 10.5px; margin-top: 1px; }
-.pnl-atividade-vazio, .pnl-vazio { font-size: 12.5px; color: var(--text-muted); padding: 8px 0; }
+.pnl-vazio { font-size: 12.5px; color: var(--text-muted); padding: 8px 0; }
 
 /* A busca filtra a grade de designers na hora — ver pnlRenderDesigners()
    em js/pagina-painel-designers.js. Sem tela de resultado separada, de

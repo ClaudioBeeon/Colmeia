@@ -126,7 +126,6 @@ function abrirPainelDesigners() {
   } else {
     pnlRenderTudo(); // já tinha carregado antes (voltou pra página): desenha na hora
   }
-  pnlCarregarAtividade();
   if (!pnlPollTimer) pnlPollTimer = setInterval(pnlPollUmaVez, PNL_POLL_MS);
   ligarPollAoVoltarPraAba();
 }
@@ -364,13 +363,21 @@ function pnlTarefasDoDesignerPainel(nomeDesignerPainel) {
 // ===== Render =====
 
 function pnlRenderTudo() {
-  pnlRenderKPIs();
+  pnlRenderKPIsMini();
   pnlRenderDesigners();
   pnlRenderRunrunKPIs();
+  pnlRenderEsforcoLista();
 }
 
-function pnlRenderKPIs() {
-  const el = document.getElementById("pnlKpis");
+/**
+ * Os 3 boxes pequenos (Clientes/Criativos/Horas) — encolheram e desceram
+ * pra coluna da direita em 2026-08-12 (ver o comentário no CSS,
+ * .pnl-kpis-mini) pra abrir espaço em cima pra grade de designers.
+ * "Esforço de hoje" saiu daqui: virou `pnlRenderEsforcoLista`, no lugar
+ * de "Atividade recente".
+ */
+function pnlRenderKPIsMini() {
+  const el = document.getElementById("pnlKpisMini");
   if (!el) return;
 
   const nomesClientes = new Set();
@@ -378,53 +385,52 @@ function pnlRenderKPIs() {
   const totalClientes = nomesClientes.size;
   const totalCriativos = pnlDesigners.reduce((s, d) => s + (pnlState[d] || []).reduce((s2, c) => s2 + (c.criativos || 0), 0), 0);
   const totalMin = pnlDesigners.reduce((s, d) => s + (pnlState[d] || []).reduce((s2, c) => s2 + ((c.criativos || 0) * (c.tempo || 0)), 0), 0);
-  const designersAtivos = pnlDesigners.filter(d => d !== "Sem designer" && (pnlState[d] || []).length).length;
+
+  el.innerHTML = `
+    <div class="pnl-kpi-mini-card">
+      <div class="pnl-kpi-mini-label">Clientes</div>
+      <div class="pnl-kpi-mini-value">${totalClientes}</div>
+    </div>
+    <div class="pnl-kpi-mini-card">
+      <div class="pnl-kpi-mini-label">Criativos</div>
+      <div class="pnl-kpi-mini-value">${totalCriativos}</div>
+    </div>
+    <div class="pnl-kpi-mini-card">
+      <div class="pnl-kpi-mini-label">Horas totais</div>
+      <div class="pnl-kpi-mini-value">${escaparHTML(pnlFormatTempo(totalMin))}</div>
+    </div>
+  `;
+}
+
+/**
+ * "Esforço de hoje", agora em LINHAS (um designer embaixo do outro, com
+ * as horas do dia) em vez das colunas lado a lado de antes — no lugar de
+ * "Atividade recente" (2026-08-12, pedido do Cláudio). Clicar numa linha
+ * abre o mesmo modal de sempre, já filtrado pra essa pessoa.
+ */
+function pnlRenderEsforcoLista() {
+  const el = document.getElementById("pnlEsforcoLista");
+  if (!el) return;
 
   const esforco = pnlEsforcoPorResponsavel();
   const nomesEsforco = Object.keys(esforco).sort((a, b) => esforco[b].min - esforco[a].min);
-  const maiorMin = Math.max(1, ...nomesEsforco.map(n => esforco[n].min));
 
-  el.innerHTML = `
-    <div class="pnl-kpi-card">
-      <div class="pnl-kpi-label">Total de clientes</div>
-      <div class="pnl-kpi-value">${totalClientes}</div>
-      <div class="pnl-kpi-sub">${pnlDesigners.length} designers</div>
-    </div>
-    <div class="pnl-kpi-card">
-      <div class="pnl-kpi-label">Criativos no total</div>
-      <div class="pnl-kpi-value">${totalCriativos}</div>
-      <div class="pnl-kpi-sub">média ${totalClientes ? (totalCriativos / totalClientes).toFixed(1) : 0} por cliente</div>
-    </div>
-    <div class="pnl-kpi-card">
-      <div class="pnl-kpi-label">Horas totais</div>
-      <div class="pnl-kpi-value">${escaparHTML(pnlFormatTempo(totalMin))}</div>
-      <div class="pnl-kpi-sub">${designersAtivos} designers ativos</div>
-    </div>
-    <div class="pnl-kpi-card ${nomesEsforco.length ? "clicavel" : ""}" id="pnlKpiEsforco">
-      <div class="pnl-kpi-label">Esforço de hoje</div>
-      <div class="pnl-kpi-esforco-cols">
-        ${nomesEsforco.length ? nomesEsforco.map(n => `
-          <div class="pnl-kpi-esforco-col" data-pnl-esforco-pessoa="${escaparHTML(n)}">
-            ${typeof avatarHTML === "function" ? avatarHTML(n, "pnl-kpi-esforco-avatar") : `<div class="pnl-kpi-esforco-avatar">${escaparHTML((typeof initials === "function" ? initials(n) : n.slice(0, 2)))}</div>`}
-            <div class="pnl-kpi-esforco-valor ${esforco[n].min > 240 ? "alerta" : ""}">${escaparHTML(pnlFormatTempo(esforco[n].min))}</div>
-            <div class="pnl-kpi-esforco-nome">${escaparHTML(n)}</div>
-          </div>
-        `).join("") : `<div class="pnl-esforco-vazio">Nada atrasado nem pra hoje.</div>`}
-      </div>
-    </div>
-  `;
-
-  // O card inteiro abre o pop-up (todo mundo); clicar numa coluna já abre
-  // filtrado só naquela pessoa — igual ao painel original.
-  if (nomesEsforco.length) {
-    document.getElementById("pnlKpiEsforco")?.addEventListener("click", () => pnlAbrirEsforcoModal());
-    el.querySelectorAll("[data-pnl-esforco-pessoa]").forEach(col => {
-      col.addEventListener("click", ev => {
-        ev.stopPropagation();
-        pnlAbrirEsforcoModal(col.dataset.pnlEsforcoPessoa);
-      });
-    });
+  if (!nomesEsforco.length) {
+    el.innerHTML = `<div class="pnl-esforco-vazio">Nada atrasado nem pra hoje.</div>`;
+    return;
   }
+
+  el.innerHTML = nomesEsforco.map(n => `
+    <div class="pnl-esforco-linha" data-pnl-esforco-pessoa="${escaparHTML(n)}">
+      ${typeof avatarHTML === "function" ? avatarHTML(n, "avatar-sm") : ""}
+      <div class="pnl-esforco-linha-nome">${escaparHTML(n)}</div>
+      <div class="pnl-esforco-linha-valor ${esforco[n].min > 240 ? "alerta" : ""}">${escaparHTML(pnlFormatTempo(esforco[n].min))}</div>
+    </div>
+  `).join("");
+
+  el.querySelectorAll("[data-pnl-esforco-pessoa]").forEach(linha => {
+    linha.addEventListener("click", () => pnlAbrirEsforcoModal(linha.dataset.pnlEsforcoPessoa));
+  });
 }
 
 function pnlRenderDesigners() {
@@ -815,59 +821,6 @@ function pnlRenderRunrunKPIs() {
   document.getElementById("pnlKpiHoje").addEventListener("click", () => pnlAbrirTarefasModal("Tarefas pra hoje", { lista: grupos.hoje, mostrarDesigner: true }));
   document.getElementById("pnlKpiPrioridades").addEventListener("click", () => pnlAbrirTarefasModal("Prioridades", { lista: prioridades, mostrarDesigner: true }));
   document.getElementById("pnlKpiMes").addEventListener("click", () => pnlAbrirTarefasModal("Tarefas do mês", { lista: doMes, mostrarDesigner: true }));
-}
-
-// ===== Atividade recente (reaproveita a busca que já existe no Colmeia) =====
-
-/**
- * Junta arquivos da mesma pessoa, no mesmo cliente e na mesma PASTA de
- * publicação — igual o painel original já fazia. Sem isso, subir 6 artes
- * de uma vez virava 6 linhas repetidas, e cada uma mostrava o NOME DO
- * ARQUIVO cru (que no Drive costuma ser um nome gerado tipo "asset_3fa9c1"
- * — daí o Cláudio ver "letras e números aleatórios"); o que a pessoa quer
- * saber é em qual pasta/cliente caiu o upload, não o nome do arquivo.
- */
-function pnlAgruparAtividades(atividades) {
-  const grupos = new Map();
-  atividades.forEach(a => {
-    const chave = (a.quem || "") + "|" + (a.cliente || "") + "|" + (a.pasta || "");
-    if (!grupos.has(chave)) grupos.set(chave, { quem: a.quem, cliente: a.cliente, pasta: a.pasta, link: a.link, quando: a.quando, count: 0 });
-    const g = grupos.get(chave);
-    g.count++;
-    if (a.quando > g.quando) g.quando = a.quando;
-  });
-  return [...grupos.values()].sort((a, b) => b.quando - a.quando);
-}
-
-async function pnlCarregarAtividade() {
-  const el = document.getElementById("pnlAtividadeLista");
-  if (!el) return;
-  el.innerHTML = `<div class="pnl-atividade-vazio">Carregando...</div>`;
-  const atividades = typeof buscarAtividadesPainelBeeon === "function" ? await buscarAtividadesPainelBeeon() : [];
-  if (!pnlAberta) return; // saiu da página enquanto buscava
-  const grupos = pnlAgruparAtividades(atividades);
-  if (!grupos.length) { el.innerHTML = `<div class="pnl-atividade-vazio">Nada nos últimos dias.</div>`; return; }
-
-  el.innerHTML = grupos.slice(0, 20).map(g => `
-    <a class="pnl-atividade-item" href="${g.link ? escaparHTML(g.link) : "#"}" target="_blank" rel="noopener">
-      ${typeof avatarHTML === "function" ? avatarHTML(g.quem, "avatar-sm") : ""}
-      <div class="pnl-atividade-txt">
-        <span><b>${escaparHTML(g.quem || "?")}</b> subiu ${g.count > 1 ? g.count + " arquivos" : "1 arquivo"}${g.pasta ? ` em <b>${escaparHTML(g.pasta)}</b>` : ""}</span>
-        <div class="pnl-atividade-cliente">${escaparHTML(g.cliente || "")}</div>
-        <div class="pnl-atividade-quando">${pnlHaQuanto(g.quando)}</div>
-      </div>
-    </a>
-  `).join("");
-}
-
-function pnlHaQuanto(ts) {
-  if (!ts) return "";
-  const min = Math.floor((Date.now() - Number(ts)) / 60000);
-  if (min < 1) return "agora";
-  if (min < 60) return `há ${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `há ${h}h`;
-  return `há ${Math.floor(h / 24)}d`;
 }
 
 // ===== Ações: designer =====
@@ -1353,8 +1306,6 @@ function pnlLigarControlesUmaVez() {
   document.getElementById("pnlTarefasOverlay")?.addEventListener("click", ev => {
     if (ev.target.id === "pnlTarefasOverlay") pnlFecharTarefasModal();
   });
-
-  document.getElementById("pnlAtividadeRefresh")?.addEventListener("click", pnlCarregarAtividade);
 
   document.addEventListener("keydown", ev => {
     if (ev.key !== "Escape") return;
