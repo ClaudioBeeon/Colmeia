@@ -79,21 +79,16 @@ function abrirCentralAtendimento() {
     if (souCoord) centralPopularFiltroPessoa();
   }
 
-  // "Mesmos botões da esquerda" (2026-08-09, pedido do Cláudio; ampliado
-  // 2026-08-12 pros outros coordenadores do atendimento — João Paulo e
-  // Lucas nunca veem a sidebar normal, sempre entram direto aqui, então é
-  // ESTA barra que precisa ter Central/Painel de Designers/Clientes por
-  // atendimento pra eles). Quem tem papel "atendimento" comum (Laura, Manu,
-  // Giovanna) continua sem ver nada disso — pra eles a Central já é a casa.
+  // "Mesmos botões da esquerda" (2026-08-09, pedido do Cláudio) — só pra
+  // ele: os 8 destinos são a sidebar normal INTEIRA (Kanban, Bee, Minhas
+  // horas...), não só coordenação. ⚠️ Chegou a ser ampliada pros outros
+  // coordenadores em 2026-08-12 e revertida no mesmo dia (o Cláudio
+  // corrigiu: "não, o menu deles é só Central/Painel de Designers/Clientes
+  // por atendimento — só esses 3") — o caminho certo pra João Paulo e
+  // Lucas é a página /coordenacao (3 cartões, ver index.html/
+  // js/pagina-repasse.js), não esta barra de 8 botões.
   const extraNav = document.getElementById("centralSidebarExtraNav");
-  const souCoordExtra = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
-  if (extraNav) extraNav.hidden = !souCoordExtra;
-  // "Fila de repasse" fica de fora mesmo pra quem coordena: é só do
-  // Cláudio, que atende os clientes e decide o que repassar — papel
-  // diferente de "coordenar" (mesma regra da sidebar normal, ver
-  // login-boot.js). O botão continua no HTML pros outros 7 destinos.
-  const extraNavRepasse = document.querySelector('#centralSidebarExtraNav [data-central-ir-pagina="repasse"]');
-  if (extraNavRepasse) extraNavRepasse.hidden = !(typeof souClaudio === "function" && souClaudio());
+  if (extraNav) extraNav.hidden = !(typeof souClaudio === "function" && souClaudio());
 
   centralLigarEventosUmaVez();
 
