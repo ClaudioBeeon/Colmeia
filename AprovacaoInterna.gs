@@ -1007,6 +1007,114 @@ function apagarDeVerdadeConferenciasDoIncidenteErick() {
 }
 
 /**
+ * A limpeza dos COMENTÁRIOS de verdade no Runrun.it (2026-08-12) — a
+ * limpeza de cima só arrumou a fila de conferência; os comentários que a
+ * automação postou continuam lá. Usa a fila JÁ LIMPA como "verdade": o
+ * que sobrou nela (task_id + nome_peça) é o que é legítimo — qualquer
+ * comentário automático (autor Erick, no formato "<peça> está pronta pra
+ * revisão: link" ou "• <peça>: link") que mencione peça FORA dessa lista
+ * é sobra do incidente.
+ *
+ * ⚠️ Rode `limparConferenciasDoIncidenteErick`/`apagarDeVerdadeConferenciasDoIncidenteErick`
+ * ANTES desta — ela lê o resultado daquela.
+ */
+function pecasMencionadasNoComentario(texto) {
+  var nomes = [];
+  String(texto || '').split('\n').forEach(function (linha) {
+    var mConsolidado = linha.match(/^•\s*(.+?):\s*https?:\/\//);
+    if (mConsolidado) { nomes.push(mConsolidado[1].trim()); return; }
+    var mIndividual = linha.match(/^(.+?)\s+está pronta pra revisão:\s*https?:\/\//);
+    if (mIndividual) { nomes.push(mIndividual[1].trim()); return; }
+  });
+  return nomes;
+}
+
+function idsDeCardMaeDasTarefasAfetadas() {
+  var ids = {};
+  ERICK_TAREFAS_AFETADAS_20260812.forEach(function (taskId) {
+    try {
+      var t = runrunFetch('/tasks/' + taskId);
+      if (t && !t.erroFetch && t.parent_task_id) ids[String(t.parent_task_id)] = true;
+    } catch (e) { /* segue sem esse card mãe */ }
+  });
+  return Object.keys(ids);
+}
+
+function limparComentariosDoIncidenteErickNoRunrun(apagarDeVerdade) {
+  var linhas = linhasDaConferencia();
+  var legitimoPorTarefa = {}; // taskId -> {nomePeca: true}
+  var legitimoGeral = {};     // nomePeca: true (pro card mãe, que não é "de uma tarefa só")
+  for (var i = 1; i < linhas.length; i++) {
+    var taskId = String(linhas[i][0]);
+    if (ERICK_TAREFAS_AFETADAS_20260812.indexOf(taskId) === -1) continue;
+    var nomePeca = String(linhas[i][3] || '');
+    if (!legitimoPorTarefa[taskId]) legitimoPorTarefa[taskId] = {};
+    legitimoPorTarefa[taskId][nomePeca] = true;
+    legitimoGeral[nomePeca] = true;
+  }
+
+  var paraApagar = [];
+
+  // Nas subtarefas: comentário automático só fica se TODA peça que ele
+  // menciona pertence de verdade a essa tarefa.
+  ERICK_TAREFAS_AFETADAS_20260812.forEach(function (taskId) {
+    var r = listarComentarios(taskId);
+    if (!r.ok) return;
+    var legit = legitimoPorTarefa[taskId] || {};
+    r.comentarios.forEach(function (c) {
+      if (!ehErick(c.autor)) return;
+      var pecas = pecasMencionadasNoComentario(c.texto);
+      if (!pecas.length) return; // não é um comentário automático nosso
+      var todasLegitimas = pecas.every(function (p) { return legit[p]; });
+      if (!todasLegitimas) {
+        paraApagar.push({ tarefaOnde: taskId, commentId: c.id, texto: c.texto, motivo: 'peça não pertence a esta tarefa' });
+      }
+    });
+  });
+
+  // No(s) card(s) mãe: cada peça legítima só pode aparecer UMA vez — a
+  // primeira ocorrência (mais antiga) fica, as repetidas (a mesma peça
+  // anunciada de novo por uma tarefa irmã) são apagadas.
+  idsDeCardMaeDasTarefasAfetadas().forEach(function (cardMaeId) {
+    var r = listarComentarios(cardMaeId);
+    if (!r.ok) return;
+    var jaVistas = {};
+    r.comentarios.forEach(function (c) {
+      if (!ehErick(c.autor)) return;
+      var pecas = pecasMencionadasNoComentario(c.texto);
+      if (!pecas.length) return;
+      var novasEValidas = pecas.every(function (p) { return legitimoGeral[p] && !jaVistas[p]; });
+      if (novasEValidas) {
+        pecas.forEach(function (p) { jaVistas[p] = true; });
+        return; // primeira vez que aparece essa(s) peça(s) aqui -- mantém
+      }
+      paraApagar.push({ tarefaOnde: cardMaeId, commentId: c.id, texto: c.texto, motivo: 'repetida ou peça não legítima (card mãe)' });
+    });
+  });
+
+  Logger.log('=== ' + (apagarDeVerdade ? 'APAGANDO DE VERDADE NO RUNRUN.IT' : 'SIMULAÇÃO -- nada foi apagado ainda') + ' ===');
+  Logger.log(paraApagar.length + ' comentário(s) identificado(s):');
+  paraApagar.forEach(function (p) {
+    Logger.log('  ' + (apagarDeVerdade ? 'APAGUEI' : 'apagaria') + ' -- tarefa ' + p.tarefaOnde + ' (comentário ' + p.commentId + ', ' + p.motivo + ') -- "' + String(p.texto).slice(0, 150) + '"');
+  });
+
+  if (!apagarDeVerdade) {
+    Logger.log('Nada foi apagado. Confira a lista e, se estiver certa, rode apagarDeVerdadeComentariosDoIncidenteErickNoRunrun.');
+    return { simulacao: true, apagariam: paraApagar.length };
+  }
+
+  paraApagar.forEach(function (p) {
+    excluirComentario(p.commentId, 'Erick');
+  });
+  Logger.log('Pronto -- ' + paraApagar.length + ' comentário(s) apagado(s) no Runrun.it.');
+  return { simulacao: false, apagados: paraApagar.length };
+}
+
+function apagarDeVerdadeComentariosDoIncidenteErickNoRunrun() {
+  limparComentariosDoIncidenteErickNoRunrun(true);
+}
+
+/**
  * A fila do atendimento: o que está esperando ALGUMA ação de quem confere —
  * ou ainda não olhou ('pendente'), ou já aprovou mas ainda não mandou pro
  * cliente ('aprovada'). As duas continuam na fila de propósito: se só a
