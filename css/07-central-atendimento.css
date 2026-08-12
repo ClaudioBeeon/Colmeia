@@ -2027,14 +2027,18 @@ body.central-atencao-revisando .bee-fab { opacity: 0; pointer-events: none; }
    =================================================================== */
 
 .central-grupo-modovis { display: flex; gap: 4px; margin-left: auto; }
+/* ⚠️ Esta barra tem fundo CLARO, não é a pílula preta de cima. Na
+   primeira versão os dois botões vieram com cores de fundo escuro
+   (branco translúcido), e o inativo ficou branco sobre branco — só o
+   ativo aparecia, e a tela parecia ter um botão só. */
 .central-grupo-mv {
   width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
   display: grid; place-items: center;
-  background: transparent; border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.55);
+  background: #fff; border: 1px solid rgba(12, 14, 20, 0.16);
+  color: #5B616C;
 }
 .central-grupo-mv svg { width: 15px; height: 15px; }
-.central-grupo-mv:hover { color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.central-grupo-mv:hover { color: #16181D; border-color: rgba(12, 14, 20, 0.4); }
 .central-grupo-mv.ativa {
   background: var(--central-g, var(--kanban-yellow));
   border-color: transparent; color: #16181D;
