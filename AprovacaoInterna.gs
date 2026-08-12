@@ -521,9 +521,18 @@ function extrairIdDeUrlDeArquivoDrive(url) {
 var ERICK_LINK_DRIVE_REGEX = /https?:\/\/(?:drive|docs)\.google\.com\/\S+/gi;
 
 /**
- * Chamada pelo gatilho de tempo. Varre as tarefas abertas do Erick
- * (já vêm de graça em getTarefasColmeia — nenhuma busca extra ao
- * Runrun.it) e, em cada uma, procura comentário DELE com link do Drive.
+ * Chamada pelo gatilho de tempo. Varre as tarefas ABERTAS do Erick (já
+ * vêm de graça em getTarefasColmeia) MAIS as que ele fechou recentemente
+ * (buscarTarefasFechadasRecentesDoErick, logo abaixo) — e, em cada uma,
+ * procura comentário DELE com link do Drive.
+ *
+ * ⚠️ Por que também as fechadas (2026-08-12, achado pelo Cláudio testando
+ * de verdade): ele costuma comentar o link e já entregar a subtarefa
+ * quase junto — na prática, no próximo gatilho (10 em 10 minutos) a
+ * tarefa quase nunca estava mais aberta, e a peça nunca era pega. Sem
+ * risco de duplicar nada: `mandarPecaDoErickParaConferencia` já faz
+ * dedupe por (taskId, fileId), então escanear a mesma tarefa fechada de
+ * novo em ciclos seguintes é seguro, só um pouco redundante.
  */
 function verificarLinksDoErickNoRunrun() {
   // ⚠️ getTarefasColmeia() devolve { ok, tarefas, colunas }, nunca a
@@ -532,11 +541,17 @@ function verificarLinksDoErickNoRunrun() {
   // testar. `!resultado.ok` cobre o caso do Runrun.it fora do ar (a
   // função devolve `ok:false` ali, sem `tarefas` nenhuma).
   var resultado = getTarefasColmeia();
-  if (!resultado || !resultado.ok || !Array.isArray(resultado.tarefas)) return;
+  var abertas = (resultado && resultado.ok && Array.isArray(resultado.tarefas)) ? resultado.tarefas : [];
 
-  var tarefas = resultado.tarefas.filter(function (t) {
+  var tarefas = abertas.filter(function (t) {
     return normalizarNomeParaComparar(t.assignee || '') === 'erick';
   });
+
+  try {
+    tarefas = tarefas.concat(buscarTarefasFechadasRecentesDoErick());
+  } catch (e) {
+    Logger.log('Erro buscando fechadas recentes do Erick: ' + e);
+  }
 
   tarefas.forEach(function (tarefa) {
     try {
@@ -545,6 +560,47 @@ function verificarLinksDoErickNoRunrun() {
       Logger.log('Erro verificando peças do Erick na tarefa ' + tarefa.id + ': ' + e);
     }
   });
+}
+
+// 24h de folga: dá conta de um gatilho que falhou uma vez ou duas sem
+// perder a peça, e o custo é baixo — é UMA pessoa só, não o time todo
+// (diferente de buscarPostagensFechadas, que varre os três).
+var ERICK_JANELA_FECHADAS_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * As tarefas do Erick fechadas recentemente. Não reaproveita
+ * `buscarPostagensFechadas` (mais abaixo neste arquivo): aquela função
+ * só serve peça com "Data de Publicação" preenchida (é feita pro
+ * calendário) — a maioria das subtarefas comuns não tem esse campo, e
+ * ficariam de fora aqui também se eu reaproveitasse ela sem mudar nada.
+ */
+function buscarTarefasFechadasRecentesDoErick() {
+  var idsPorEmail;
+  try {
+    idsPorEmail = buscarIdsResponsaveisRunrun();
+  } catch (e) {
+    return [];
+  }
+  var idErick = idsPorEmail['erick@beeon.com.br'];
+  if (!idErick) return [];
+
+  var corte = Date.now() - ERICK_JANELA_FECHADAS_MS;
+  var fechadas = [];
+  for (var pagina = 1; pagina <= 3; pagina++) {
+    var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(idErick) +
+      '&is_closed=true&sort=updated_at&sortDir=desc&limit=100&page=' + pagina);
+    if (!Array.isArray(lote) || !lote.length) break;
+
+    var saiuDaJanela = false;
+    for (var i = 0; i < lote.length; i++) {
+      var t = lote[i];
+      var atualizadoEm = t.updated_at ? new Date(t.updated_at).getTime() : 0;
+      if (atualizadoEm < corte) { saiuDaJanela = true; break; }
+      fechadas.push(transformarTarefaParaColmeia(t, 'Erick', null));
+    }
+    if (saiuDaJanela) break;
+  }
+  return fechadas;
 }
 
 function processarComentariosDoErick(tarefa) {
