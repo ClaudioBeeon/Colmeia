@@ -851,6 +851,70 @@ function configurarGatilhoErick() {
 }
 
 /**
+ * LIMPEZA (2026-08-12) — só leitura, não apaga nada. Roda no editor do
+ * Apps Script depois do incidente da pasta compartilhada (ver o
+ * comentário grande em mandarPastaDoErickParaConferencia): lista, pra
+ * cada tarefa afetada, o que está gravado na fila de conferência,
+ * comparando o NOME DA PEÇA salvo com o TÍTULO real da tarefa no
+ * Runrun.it — quando não bate, é bem provável que seja peça de uma
+ * subtarefa IRMÃ que entrou na tarefa errada por causa do bug.
+ *
+ * Olhe o "Registro de execução" depois de rodar: cada linha diz
+ * "⚠️ SUSPEITA" ou "OK". Não apaga nada sozinho de propósito — é só o
+ * primeiro passo, pra você confirmar antes de eu escrever a limpeza de
+ * verdade.
+ */
+var ERICK_TAREFAS_AFETADAS_20260812 = [
+  '114790', '114867', '114621', '114620', '114619', '114618', '114617', '114616', '113888', '113780', '114816'
+];
+
+function listarConferenciasSuspeitasDoErick() {
+  var linhas = linhasDaConferencia();
+  var suspeitas = [];
+  var okCount = 0;
+
+  for (var i = 1; i < linhas.length; i++) {
+    var l = linhas[i];
+    var taskId = String(l[0]);
+    if (ERICK_TAREFAS_AFETADAS_20260812.indexOf(taskId) === -1) continue;
+
+    var nomePeca = String(l[3] || '');
+    var status = String(l[11] || '');
+    var fileId = String(l[6] || '');
+
+    var tituloDaTarefa = '(não consegui ler)';
+    try {
+      var tarefaCrua = runrunFetch('/tasks/' + taskId);
+      if (tarefaCrua && !tarefaCrua.erroFetch) tituloDaTarefa = tarefaCrua.title || '(sem título)';
+    } catch (e) { /* segue com o aviso de "não consegui ler" */ }
+
+    var tituloNorm = normalizarNomeParaComparar(tituloDaTarefa);
+    var pecaNorm = normalizarNomeParaComparar(nomePeca);
+    var bate = tituloNorm && pecaNorm && (tituloNorm.indexOf(pecaNorm) !== -1 || pecaNorm.indexOf(tituloNorm) !== -1);
+
+    var linha = {
+      linhaNaPlanilha: i + 1,
+      taskId: taskId,
+      tituloDaTarefa: tituloDaTarefa,
+      nomePeca: nomePeca,
+      status: status,
+      fileId: fileId
+    };
+    if (bate) { okCount++; } else { suspeitas.push(linha); }
+
+    Logger.log((bate ? 'OK        ' : '⚠️ SUSPEITA') +
+      ' | tarefa ' + taskId + ' ("' + tituloDaTarefa + '")' +
+      ' | peça gravada: "' + nomePeca + '"' +
+      ' | status: ' + status +
+      ' | fileId: ' + fileId +
+      ' | linha da planilha: ' + (i + 1));
+  }
+
+  Logger.log('--- Resumo: ' + okCount + ' ok, ' + suspeitas.length + ' suspeita(s) de ' + (okCount + suspeitas.length) + ' entrada(s) das tarefas afetadas. ---');
+  return suspeitas;
+}
+
+/**
  * A fila do atendimento: o que está esperando ALGUMA ação de quem confere —
  * ou ainda não olhou ('pendente'), ou já aprovou mas ainda não mandou pro
  * cliente ('aprovada'). As duas continuam na fila de propósito: se só a
