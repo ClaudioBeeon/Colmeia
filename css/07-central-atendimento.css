@@ -2276,3 +2276,67 @@ body.central-grupo-aberto .central-grupo-fundo { background: transparent; }
 .central-grupo-corpo { flex: 1; min-height: 0; }
 .central-grupo-main { display: block; height: 100%; }
 .central-grupo-lista-col { width: 100%; max-width: none; height: 100%; }
+
+/* ===================================================================
+   O PAINEL, AJUSTADO PRO PROTÓTIPO (2026-08-11, segunda passada)
+
+   A primeira versão errou em três coisas ao mesmo tempo: a busca e o
+   seletor de clientes continuaram DENTRO da barra preta (no protótipo
+   ela só tem as setas e o nome do grupo), a grade abriu duas colunas
+   (era pra ser uma), e o painel colou nas quatro bordas da tela.
+   =================================================================== */
+
+/* Caixa FLUTUANTE, com folga nas bordas e cantos arredondados — não uma
+   parede grudada no fim da tela. */
+.central-grupo {
+  top: 14px; bottom: 14px; right: 14px;
+  height: auto;
+  border-radius: 22px;
+  overflow: hidden;
+}
+body.central-grupo-aberto #centralAtendimento { padding-right: min(548px, 100%); }
+
+/* A moldura de cima é BRANCA: só o miolo (as setas + o nome) é preto. */
+.central-grupo-pill {
+  display: flex; flex-direction: column; align-items: stretch;
+  background: #fff;
+  padding: 16px 16px 10px;
+  border: none;
+}
+
+/* A busca e o seletor descem pra baixo da pílula preta, lado a lado. */
+.central-grupo-busca {
+  order: 3; margin-top: 20px; width: auto;
+  display: flex; align-items: center; gap: 8px;
+}
+.central-grupo-cli-wrap { order: 4; margin-top: 12px; align-self: flex-start; }
+.central-grupo-cli-btn {
+  background: #fff; color: #5B616C;
+  border: 1px solid rgba(12, 14, 20, 0.14); border-radius: 999px;
+  padding: 6px 12px; font-size: 13px;
+}
+.central-grupo-cli-btn:hover { color: #16181D; border-color: rgba(12, 14, 20, 0.35); }
+
+/* O X sai do meio da barra e vira um botão solto no canto de cima. */
+.central-grupo-x {
+  order: 0; position: absolute; top: 10px; right: 12px;
+  margin: 0; z-index: 3;
+  width: 28px; height: 28px; border-radius: 999px;
+  background: rgba(12, 14, 20, 0.06); color: #5B616C;
+}
+.central-grupo-x:hover { background: rgba(12, 14, 20, 0.12); color: #16181D; }
+
+/* O subtítulo sai: "52 peças esperando sua conferência" repete o número
+   que já está dentro da pílula, a dois centímetros dele. */
+.central-grupo-sub { display: none; }
+
+/* UMA COLUNA. O protótipo é um card por linha, com a arte grande — dois
+   por linha em 520px devolve a miniatura pequena que ele veio substituir. */
+.central-grupo-lista.modo-cards,
+.central-grupo-lista.modo-cards .central-grupo-sec-corpo,
+.central-grupo-lista.modo-cards .central-grupo-gm-filhos {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.central-grupo-lista.modo-cards .central-grupo-li-arte { aspect-ratio: 16 / 11; }
+.central-grupo-lista.modo-cards .central-grupo-li { padding: 10px; border-radius: 18px; }
