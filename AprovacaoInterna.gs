@@ -2522,9 +2522,16 @@ function calendarioDePostagens() {
     if (pronto) return { ok: true, postagens: JSON.parse(pronto), doCache: true };
   } catch (e) { /* cache indisponível: monta na mão */ }
 
+  // ⚠️ getTarefasColmeia() devolve { ok, tarefas, colunas }, nunca a lista
+  // direto — `empilhar` logo abaixo só checa `!lista.length`, que num
+  // objeto é sempre `undefined` (falsy), então isso falhava CALADO: as
+  // tarefas abertas nunca entravam no calendário, sem erro nenhum
+  // aparecer em lugar nenhum (achado ao corrigir o mesmo engano na
+  // automação do Erick, 2026-08-12 — mesma causa, dois lugares).
   var tarefas;
   try {
-    tarefas = getTarefasColmeia();
+    var resultadoTarefas = getTarefasColmeia();
+    tarefas = (resultadoTarefas && resultadoTarefas.ok && resultadoTarefas.tarefas) || [];
   } catch (e) {
     return { ok: false, error: 'Não consegui ler as tarefas agora.' };
   }
