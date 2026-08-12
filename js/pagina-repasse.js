@@ -267,6 +267,37 @@ function buildRepassePage() {
   }
 }
 
+// ===== Página "Coordenação" (2026-08-12) =====
+//
+// Atalho de URL (colmeia.beeon.com.br/coordenacao) pra quem coordena o
+// atendimento. Sem ícone fixo na sidebar de propósito — é um link direto
+// pra quem já sabe que existe, não uma opção de menu a mais pra todo
+// mundo ver (pedido do Cláudio).
+//
+// ⚠️ O GATE exige DUAS coisas, não uma: `souCoordenadorDoAtendimento()`
+// (o nome bate com um dos três) E `EMAIL_LOGADO` preenchido (entrou pelo
+// Google, não pela chave de acesso nem pelo código do atendimento). A
+// chave sozinha não prova QUEM é a pessoa — é a mesma lacuna que o
+// "Entrar com o Google" (2026-08-10) já existe pra fechar; sem essa
+// segunda checagem, qualquer um que soubesse a chave e digitasse
+// "Lucas" no código do atendimento entraria aqui como se fosse ele.
+function buildCoordenacaoPage() {
+  const liberado = typeof EMAIL_LOGADO !== "undefined" && !!EMAIL_LOGADO
+    && typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+  if (!liberado) { mostrarPagina("kanban"); return; }
+
+  if (!coordenacaoMontada) {
+    document.getElementById("coordCardCentral")?.addEventListener("click", () => {
+      if (typeof abrirCentralAtendimento === "function") abrirCentralAtendimento();
+    });
+    document.querySelectorAll("#page-coordenacao [data-coord-ir]").forEach(btn => {
+      btn.addEventListener("click", () => mostrarPagina(btn.dataset.coordIr));
+    });
+    coordenacaoMontada = true;
+  }
+}
+let coordenacaoMontada = false;
+
 // Formato curto (dd/mm, sem ano) usado no "pill" de datas do card de
 // repasse — mais compacto que o "10 ago" usado no resto do Colmeia.
 function formatarDataCurtaSemAno(iso) {
@@ -1580,6 +1611,7 @@ function mostrarPagina(page) {
   // js/pagina-aprovacao.js) — a chamada já fica ligada aqui pra quem for
   // implementar só precisar preencher a função por dentro.
   if (page === "aprovacao") buildAprovacaoPage();
+  if (page === "coordenacao") buildCoordenacaoPage();
   // Painel de Designers tem um poll próprio (6s) enquanto a página está
   // aberta — liga ao entrar, desliga ao sair, senão ficaria rodando à
   // toa pelo resto da sessão (mesmo cuidado do relógio da página de

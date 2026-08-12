@@ -70,6 +70,7 @@ const ROTEADOR_SLUGS = {
   bee: "bee",
   aprovacao: "aprovacoes",
   "painel-designers": "painel-designers",
+  coordenacao: "coordenacao",
 };
 const ROTEADOR_SLUGS_INVERSO = Object.fromEntries(
   Object.entries(ROTEADOR_SLUGS).map(([pagina, slug]) => [slug, pagina])

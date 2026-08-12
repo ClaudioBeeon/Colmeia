@@ -79,11 +79,21 @@ function abrirCentralAtendimento() {
     if (souCoord) centralPopularFiltroPessoa();
   }
 
-  // "Mesmos botões da esquerda" (2026-08-09, pedido do Cláudio) — só pra
-  // ele: quem tem papel "atendimento" nunca viu a sidebar normal (entra
-  // direto aqui), então esse atalho não faz sentido pra eles.
+  // "Mesmos botões da esquerda" (2026-08-09, pedido do Cláudio; ampliado
+  // 2026-08-12 pros outros coordenadores do atendimento — João Paulo e
+  // Lucas nunca veem a sidebar normal, sempre entram direto aqui, então é
+  // ESTA barra que precisa ter Central/Painel de Designers/Clientes por
+  // atendimento pra eles). Quem tem papel "atendimento" comum (Laura, Manu,
+  // Giovanna) continua sem ver nada disso — pra eles a Central já é a casa.
   const extraNav = document.getElementById("centralSidebarExtraNav");
-  if (extraNav) extraNav.hidden = !(typeof souClaudio === "function" && souClaudio());
+  const souCoordExtra = typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+  if (extraNav) extraNav.hidden = !souCoordExtra;
+  // "Fila de repasse" fica de fora mesmo pra quem coordena: é só do
+  // Cláudio, que atende os clientes e decide o que repassar — papel
+  // diferente de "coordenar" (mesma regra da sidebar normal, ver
+  // login-boot.js). O botão continua no HTML pros outros 7 destinos.
+  const extraNavRepasse = document.querySelector('#centralSidebarExtraNav [data-central-ir-pagina="repasse"]');
+  if (extraNavRepasse) extraNavRepasse.hidden = !(typeof souClaudio === "function" && souClaudio());
 
   centralLigarEventosUmaVez();
 

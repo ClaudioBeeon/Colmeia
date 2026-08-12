@@ -9,6 +9,7 @@ const pageTitles = {
   bee: ["Bee", "O que aconteceu nas suas tarefas, e a Bee sempre à mão"],
   aprovacao: ["Peças esperando você", "Conferência do atendimento antes de ir pro cliente"],
   "painel-designers": ["Painel de Designers", "Designers, clientes e o esforço de hoje"],
+  coordenacao: ["Coordenação", "Atalho pra quem coordena o atendimento"],
 };
 
 // Nome do designer logado no Colmeia hoje (mesmo usado na barra lateral).

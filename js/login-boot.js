@@ -45,20 +45,26 @@ function iniciarAppPosLogin() {
 
   // A Central do Atendimento (2026-08-06) é uma área SEPARADA do resto do
   // Colmeia — ver o comentário grande em cima de #centralAtendimento no
-  // index.html. O ícone pra abri-la (escondido por padrão) só aparece pro
-  // Cláudio, que cobre/testa; quem tem papel "atendimento" nem precisa
-  // dele — cai direto lá embaixo, sem ver o quadro/sidebar normal.
+  // index.html. O ícone pra abri-la (escondido por padrão) aparece pra quem
+  // coordena (Cláudio, João Paulo, Lucas — ver souCoordenadorDoAtendimento);
+  // quem tem papel "atendimento" comum nem precisa dele — cai direto lá
+  // embaixo, sem ver o quadro/sidebar normal. ⚠️ Até 2026-08-12 isso só
+  // olhava `souClaudio()`: João Paulo e Lucas já eram tratados como
+  // coordenadores DENTRO da Central (o "vê tudo" do time), mas o ícone pra
+  // abrir ela nem aparecia pros dois — pedido do Cláudio pra corrigir.
   const centralNav = document.getElementById("centralAtendimentoNavBtn");
-  if (centralNav) centralNav.hidden = !souClaudio();
+  if (centralNav) centralNav.hidden = !souCoordenadorDoAtendimento();
 
-  // Painel de Designers (2026-08-10) — mesma regra da Fila de repasse: só
-  // o Cláudio (é quem cadastra designer/cliente e olha o esforço do time).
+  // Painel de Designers (2026-08-10) — mesma regra da Central acima, desde
+  // 2026-08-12 (antes era só Cláudio). A Fila de repasse continua SÓ dele
+  // de propósito (ver o comentário ali embaixo) — ele é quem atende os
+  // clientes e decide o que repassar, papel diferente de "coordenar".
   // A aba "Vincular clientes" das Configurações do coordenador vem junto,
   // porque é o mesmo dado do mesmo painel.
   const painelDesignersNav = document.querySelector('.nav-ic[data-page="painel-designers"]');
-  if (painelDesignersNav) painelDesignersNav.hidden = !souClaudio();
+  if (painelDesignersNav) painelDesignersNav.hidden = !souCoordenadorDoAtendimento();
   const configTabVinculos = document.getElementById("configTabVinculos");
-  if (configTabVinculos) configTabVinculos.hidden = !souClaudio();
+  if (configTabVinculos) configTabVinculos.hidden = !souCoordenadorDoAtendimento();
   if (PAPEL_LOGADO === "atendimento" && typeof abrirCentralAtendimento === "function") {
     abrirCentralAtendimento();
   }
