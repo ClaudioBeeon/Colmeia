@@ -585,17 +585,28 @@ function buscarTarefasFechadasRecentesDoErick() {
   try {
     idsPorEmail = buscarIdsResponsaveisRunrun();
   } catch (e) {
+    Logger.log('[Erick] buscarIdsResponsaveisRunrun falhou: ' + e);
     return [];
   }
   var idErick = idsPorEmail['erick@beeon.com.br'];
-  if (!idErick) return [];
+  if (!idErick) {
+    Logger.log('[Erick] nao achei o id do Erick no Runrun.it (idsPorEmail: ' + JSON.stringify(idsPorEmail) + ') -- a busca de fechadas nao pode rodar.');
+    return [];
+  }
 
   var corte = Date.now() - ERICK_JANELA_FECHADAS_MS;
   var fechadas = [];
   for (var pagina = 1; pagina <= 3; pagina++) {
     var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(idErick) +
       '&is_closed=true&sort=updated_at&sortDir=desc&limit=100&page=' + pagina);
-    if (!Array.isArray(lote) || !lote.length) break;
+    if (!Array.isArray(lote)) {
+      Logger.log('[Erick] pagina ' + pagina + ' das fechadas nao veio como lista -- resposta: ' + JSON.stringify(lote).slice(0, 500));
+      break;
+    }
+    if (!lote.length) {
+      Logger.log('[Erick] pagina ' + pagina + ' das fechadas veio vazia (id usado: ' + idErick + ').');
+      break;
+    }
 
     var saiuDaJanela = false;
     for (var i = 0; i < lote.length; i++) {
@@ -628,13 +639,59 @@ function processarComentariosDoErick(tarefa) {
       return;
     }
     links.forEach(function (link) {
+      // Ele costuma colar o link da PASTA inteira (.../drive/folders/<id>),
+      // não de um arquivo específico (achado 2026-08-12, conferindo o
+      // comentário de verdade dele) — por isso tenta as duas leituras,
+      // arquivo primeiro (mais específico) e pasta como reserva.
       var fileId = extrairIdDeUrlDeArquivoDrive(link);
-      if (!fileId) {
-        Logger.log('[Erick] tarefa ' + tarefa.id + ': achei um link do Drive mas nao extrai o id -> ' + link);
-        return;
-      }
-      mandarPecaDoErickParaConferencia(tarefa, fileId);
+      if (fileId) { mandarPecaDoErickParaConferencia(tarefa, fileId); return; }
+
+      var folderId = extrairIdDeUrlDrive(link); // Drive.gs — pega o id de ".../folders/<id>"
+      if (folderId) { mandarPastaDoErickParaConferencia(tarefa, folderId); return; }
+
+      Logger.log('[Erick] tarefa ' + tarefa.id + ': link do Drive reconhecido mas nao consegui extrair id de arquivo nem de pasta -> ' + link);
     });
+  });
+}
+
+/**
+ * Quando o link colado é de uma PASTA inteira (não de um arquivo): varre
+ * ela e manda cada peça pra conferência — mesma lógica de agrupar por
+ * nome-base e pegar a versão mais alta que `listarVersoesDasPecasSemCache`
+ * já usa (nomeBaseDaPeca/versaoDoArquivo, mais acima neste arquivo), só
+ * que aqui a pasta não é a "pasta do card" vinculada — é a pasta que o
+ * Erick decidiu colar naquele comentário específico.
+ */
+function mandarPastaDoErickParaConferencia(tarefa, folderId) {
+  var pasta;
+  try {
+    pasta = DriveApp.getFolderById(folderId);
+  } catch (e) {
+    Logger.log('[Erick] tarefa ' + tarefa.id + ': nao consegui abrir a pasta ' + folderId + ' -> ' + e);
+    return;
+  }
+
+  var grupos = {};
+  var arquivos = pasta.getFiles();
+  while (arquivos.hasNext()) {
+    var arq = arquivos.next();
+    var tipo = arq.getMimeType();
+    if (!ehTipoDePecaAceito(tipo)) continue;
+    var nome = arq.getName();
+    var base = nomeBaseDaPeca(nome);
+    var versao = versaoDoArquivo(nome) || 0;
+    if (!grupos[base] || versao > grupos[base].versao) {
+      grupos[base] = { fileId: arq.getId(), versao: versao };
+    }
+  }
+
+  var nomes = Object.keys(grupos);
+  if (!nomes.length) {
+    Logger.log('[Erick] tarefa ' + tarefa.id + ': pasta ' + folderId + ' nao tem nenhuma imagem/video aceito.');
+    return;
+  }
+  nomes.forEach(function (nome) {
+    mandarPecaDoErickParaConferencia(tarefa, grupos[nome].fileId);
   });
 }
 
