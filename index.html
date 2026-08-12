@@ -34,14 +34,14 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-12b">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-12b">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-12b">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-12b">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-12b">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-12b">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-12b">
-<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-12b">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-12c">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-12c">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-12c">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-12c">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-12c">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-12c">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-12c">
+<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-12c">
 </head>
 <body>
 
@@ -61,6 +61,23 @@
   <div class="login-content">
     <p class="login-frase" id="loginFrase">Bom trabalho, hoje é um bom dia pra organizar tudo.</p>
     <div class="login-bottom">
+      <!-- ENTRAR COM O GOOGLE (2026-08-10) — some ADIÇÃO: a chave de acesso
+           abaixo continua igual e quem preferir ela não precisa mudar nada.
+           Este bloco nasce escondido e só aparece quando GOOGLE_CLIENT_ID
+           estiver preenchido em js/config.js (ver ligarEntrarComGoogle,
+           js/login-boot.js), então antes da configuração ninguém vê um
+           botão que não funciona.
+           ⚠️ Fica FORA de `.login-dock` de propósito (2026-08-12, pedido do
+           Cláudio): morava dentro da mesma cápsula da chave de acesso, e
+           como `.login-dock` é uma pílula (border-radius:999px) esticada
+           por dois blocos empilhados, virava uma forma comprida e estranha
+           — "bugada". Solto aqui em cima, ele é só o botão do Google
+           mesmo, sem caixa nenhuma em volta. -->
+      <div class="login-google" id="loginGoogleBloco" hidden>
+        <div id="loginGoogleBtn"></div>
+        <span class="login-google-ou">ou</span>
+      </div>
+
       <div class="login-dock">
         <form id="loginForm" class="login-form">
           <input type="password" id="loginSenha" placeholder="Chave de acesso" autocomplete="current-password" required>
@@ -68,17 +85,6 @@
             <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </form>
-
-        <!-- ENTRAR COM O GOOGLE (2026-08-10) — some ADIÇÃO: a chave de
-             acesso acima continua igual e quem preferir ela não precisa
-             mudar nada. Este bloco nasce escondido e só aparece quando
-             GOOGLE_CLIENT_ID estiver preenchido em js/config.js (ver
-             ligarEntrarComGoogle, js/login-boot.js), então antes da
-             configuração ninguém vê um botão que não funciona. -->
-        <div class="login-google" id="loginGoogleBloco" hidden>
-          <span class="login-google-ou">ou</span>
-          <div id="loginGoogleBtn"></div>
-        </div>
       </div>
 
       <!-- ENTRADA DO ATENDIMENTO — só aparece quem chega por um link de
@@ -1905,34 +1911,34 @@
      abertura do app: se ele demorar ou não carregar, a tela de login
      continua funcionando com a chave de acesso de sempre. -->
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="js/config.js?v=2026-08-12b"></script>
-<script src="js/fila-offline.js?v=2026-08-12b"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-12b"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-12b"></script>
-<script src="js/kanban-polling.js?v=2026-08-12b"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-12b"></script>
-<script src="js/regras-briefing.js?v=2026-08-12b"></script>
-<script src="js/kanban-board.js?v=2026-08-12b"></script>
-<script src="js/clientes-hub.js?v=2026-08-12b"></script>
-<script src="js/chat-comentarios.js?v=2026-08-12b"></script>
-<script src="js/detalhe-modal.js?v=2026-08-12b"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-12b"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-12b"></script>
-<script src="js/bee.js?v=2026-08-12b"></script>
-<script src="js/paginas-designers.js?v=2026-08-12b"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-12b"></script>
-<script src="js/pagina-repasse.js?v=2026-08-12b"></script>
-<script src="js/pagina-horas.js?v=2026-08-12b"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-12b"></script>
-<script src="js/paleta-comando.js?v=2026-08-12b"></script>
-<script src="js/roteador-url.js?v=2026-08-12b"></script>
-<script src="js/detalhe-historia.js?v=2026-08-12b"></script>
-<script src="js/modo-foco.js?v=2026-08-12b"></script>
-<script src="js/pagina-bee.js?v=2026-08-12b"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-12b"></script>
-<script src="js/central-atendimento.js?v=2026-08-12b"></script>
-<script src="js/central-atencao.js?v=2026-08-12b"></script>
-<script src="js/pagina-painel-designers.js?v=2026-08-12b"></script>
-<script src="js/login-boot.js?v=2026-08-12b"></script>
+<script src="js/config.js?v=2026-08-12c"></script>
+<script src="js/fila-offline.js?v=2026-08-12c"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-12c"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-12c"></script>
+<script src="js/kanban-polling.js?v=2026-08-12c"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-12c"></script>
+<script src="js/regras-briefing.js?v=2026-08-12c"></script>
+<script src="js/kanban-board.js?v=2026-08-12c"></script>
+<script src="js/clientes-hub.js?v=2026-08-12c"></script>
+<script src="js/chat-comentarios.js?v=2026-08-12c"></script>
+<script src="js/detalhe-modal.js?v=2026-08-12c"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-12c"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-12c"></script>
+<script src="js/bee.js?v=2026-08-12c"></script>
+<script src="js/paginas-designers.js?v=2026-08-12c"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-12c"></script>
+<script src="js/pagina-repasse.js?v=2026-08-12c"></script>
+<script src="js/pagina-horas.js?v=2026-08-12c"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-12c"></script>
+<script src="js/paleta-comando.js?v=2026-08-12c"></script>
+<script src="js/roteador-url.js?v=2026-08-12c"></script>
+<script src="js/detalhe-historia.js?v=2026-08-12c"></script>
+<script src="js/modo-foco.js?v=2026-08-12c"></script>
+<script src="js/pagina-bee.js?v=2026-08-12c"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-12c"></script>
+<script src="js/central-atendimento.js?v=2026-08-12c"></script>
+<script src="js/central-atencao.js?v=2026-08-12c"></script>
+<script src="js/pagina-painel-designers.js?v=2026-08-12c"></script>
+<script src="js/login-boot.js?v=2026-08-12c"></script>
 </body>
 </html>
