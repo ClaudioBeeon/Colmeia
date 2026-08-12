@@ -526,7 +526,15 @@ var ERICK_LINK_DRIVE_REGEX = /https?:\/\/(?:drive|docs)\.google\.com\/\S+/gi;
  * Runrun.it) e, em cada uma, procura comentário DELE com link do Drive.
  */
 function verificarLinksDoErickNoRunrun() {
-  var tarefas = getTarefasColmeia().filter(function (t) {
+  // ⚠️ getTarefasColmeia() devolve { ok, tarefas, colunas }, nunca a
+  // lista direto — faltou o .tarefas aqui na primeira versão, e
+  // ".filter is not a function" foi o erro que o Cláudio recebeu ao
+  // testar. `!resultado.ok` cobre o caso do Runrun.it fora do ar (a
+  // função devolve `ok:false` ali, sem `tarefas` nenhuma).
+  var resultado = getTarefasColmeia();
+  if (!resultado || !resultado.ok || !Array.isArray(resultado.tarefas)) return;
+
+  var tarefas = resultado.tarefas.filter(function (t) {
     return normalizarNomeParaComparar(t.assignee || '') === 'erick';
   });
 
