@@ -547,11 +547,17 @@ function verificarLinksDoErickNoRunrun() {
     return normalizarNomeParaComparar(t.assignee || '') === 'erick';
   });
 
+  var fechadasRecentes = [];
   try {
-    tarefas = tarefas.concat(buscarTarefasFechadasRecentesDoErick());
+    fechadasRecentes = buscarTarefasFechadasRecentesDoErick();
+    tarefas = tarefas.concat(fechadasRecentes);
   } catch (e) {
     Logger.log('Erro buscando fechadas recentes do Erick: ' + e);
   }
+
+  Logger.log('[Erick] varredura: ' + abertas.filter(function (t) { return normalizarNomeParaComparar(t.assignee || '') === 'erick'; }).length +
+    ' tarefa(s) aberta(s) + ' + fechadasRecentes.length + ' fechada(s) nas ultimas 24h -- ids: ' +
+    tarefas.map(function (t) { return t.id; }).join(', '));
 
   tarefas.forEach(function (tarefa) {
     try {
@@ -605,15 +611,29 @@ function buscarTarefasFechadasRecentesDoErick() {
 
 function processarComentariosDoErick(tarefa) {
   var r = listarComentarios(tarefa.id);
-  if (!r.ok) return;
+  if (!r.ok) {
+    Logger.log('[Erick] tarefa ' + tarefa.id + ': nao consegui ler os comentarios (' + (r.error || '?') + ')');
+    return;
+  }
 
-  r.comentarios.forEach(function (c) {
-    if (normalizarNomeParaComparar(c.autor || '') !== 'erick') return;
+  var comentariosDoErick = r.comentarios.filter(function (c) {
+    return normalizarNomeParaComparar(c.autor || '') === 'erick';
+  });
+  if (!comentariosDoErick.length) return; // caso comum (a maioria das tarefas dele): nada a logar
+
+  comentariosDoErick.forEach(function (c) {
     var links = String(c.texto || '').match(ERICK_LINK_DRIVE_REGEX);
-    if (!links) return;
+    if (!links) {
+      Logger.log('[Erick] tarefa ' + tarefa.id + ': comentario dele sem link de Drive reconhecido -> "' + String(c.texto || '').slice(0, 200) + '"');
+      return;
+    }
     links.forEach(function (link) {
       var fileId = extrairIdDeUrlDeArquivoDrive(link);
-      if (fileId) mandarPecaDoErickParaConferencia(tarefa, fileId);
+      if (!fileId) {
+        Logger.log('[Erick] tarefa ' + tarefa.id + ': achei um link do Drive mas nao extrai o id -> ' + link);
+        return;
+      }
+      mandarPecaDoErickParaConferencia(tarefa, fileId);
     });
   });
 }
@@ -624,17 +644,24 @@ function mandarPecaDoErickParaConferencia(tarefa, fileId) {
   // comentário grande no topo desta seção pro motivo).
   var linhas = linhasDaConferencia();
   for (var i = 1; i < linhas.length; i++) {
-    if (String(linhas[i][0]) === String(tarefa.id) && String(linhas[i][6]) === String(fileId)) return;
+    if (String(linhas[i][0]) === String(tarefa.id) && String(linhas[i][6]) === String(fileId)) {
+      Logger.log('[Erick] tarefa ' + tarefa.id + ': arquivo ' + fileId + ' ja estava na fila, pulei.');
+      return;
+    }
   }
 
   var arquivo;
   try {
     arquivo = DriveApp.getFileById(fileId);
   } catch (e) {
-    return; // link quebrado, arquivo apagado, ou sem permissão — ignora
+    Logger.log('[Erick] tarefa ' + tarefa.id + ': nao consegui abrir o arquivo ' + fileId + ' (link quebrado, apagado, ou sem permissao) -> ' + e);
+    return;
   }
   var mimeType = arquivo.getMimeType();
-  if (!ehTipoDePecaAceito(mimeType)) return; // não é imagem nem vídeo (ex: um PDF de briefing)
+  if (!ehTipoDePecaAceito(mimeType)) {
+    Logger.log('[Erick] tarefa ' + tarefa.id + ': arquivo ' + fileId + ' (' + arquivo.getName() + ') tem tipo "' + mimeType + '", nao e imagem/video aceito -- pulei.');
+    return;
+  }
 
   var nomeArquivo = arquivo.getName();
   var nomePeca = nomeBaseDaPeca(nomeArquivo);
@@ -683,6 +710,8 @@ function mandarPecaDoErickParaConferencia(tarefa, fileId) {
   if (tarefa.parentTaskId) {
     adicionarComentario(tarefa.parentTaskId, texto, 'Erick');
   }
+
+  Logger.log('[Erick] tarefa ' + tarefa.id + ': peca "' + nomePeca + '" entrou na fila e comentei -- ' + link);
 }
 
 /**
