@@ -242,6 +242,57 @@ function resolverNomeCanonico(nome, mapaVinculos) {
   return canonico || nome;
 }
 
+/**
+ * QUEM É PAI DE ALGUÉM NESTA VARREDURA (2026-08-11).
+ *
+ * ---------------------------------------------------------------------
+ * O PROBLEMA
+ *
+ * `tarefaEhCardMae` reconhece card mãe pela ETAPA ("Cards Mães"). Quando
+ * o atendimento esquece de mover o card pra lá, ele cai no quadro do
+ * designer como se fosse trabalho — lado a lado com a subtarefa dele.
+ * Foi o que o Cláudio viu: "Criativo 19 - Cartão de Visita" (o pai) e
+ * "Arte - Criativo 19 - Cartão de Visita" (a filha), os dois no quadro,
+ * o mesmo trabalho contado duas vezes.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUE NÃO BASTA OLHAR `subtask_ids`
+ *
+ * ⚠️ O PRÓPRIO COLMEIA CRIA ALTERAÇÃO COMO SUBTAREFA (ver
+ * vincularSubtarefaAoPai, RunrunEscrita.gs). Então QUALQUER tarefa que já
+ * recebeu um pedido de alteração tem `subtask_ids` preenchido. A regra
+ * ingênua ("tem subtarefa logo é card mãe") faria toda tarefa com
+ * alteração SUMIR do quadro do designer — esconder trabalho de verdade é
+ * muito pior que o incômodo que isto veio resolver.
+ *
+ * Por isso a filha precisa NÃO ser alteração pra contar.
+ *
+ * ---------------------------------------------------------------------
+ * O QUE ISTO TAMBÉM PEGA, DE PROPÓSITO
+ *
+ * O Cláudio confirmou que designer às vezes quebra a própria tarefa em
+ * partes. Esse pai também sai do quadro — e está certo: o trabalho está
+ * nas partes, que continuam lá. O pai segue alcançável pela seta do card
+ * filho, igual a qualquer card mãe.
+ *
+ * Olha só o que JÁ VEIO na varredura: nenhuma chamada nova ao Runrun.it.
+ * Se a filha não estiver no quadro de ninguém (foi pra outra pessoa), o
+ * pai continua aparecendo — que é exatamente o comportamento de antes.
+ */
+function idsDePaisNaVarredura(crus) {
+  var pais = {};
+  crus.forEach(function (item) {
+    var t = item.t;
+    var paiId = t.parent_task_id;
+    if (!paiId) return;
+    // Alteração não faz do pai um card mãe: ela é uma correção PEDIDA
+    // naquela tarefa, não uma peça filha dela.
+    if (normalizarNomeParaComparar(t.title || '').indexOf('alteracao') !== -1) return;
+    pais[String(paiId)] = true;
+  });
+  return pais;
+}
+
 function tarefaEhCardMae(tarefa) {
   var etapa = ((tarefa.board_stage_name || '') + ' ' + (tarefa.task_state_name || '')).toLowerCase().trim();
   return etapa.indexOf('card mãe') !== -1 ||
@@ -811,6 +862,7 @@ function buscarTarefasAbertasSeparadas() {
   //
   // Como quase sempre cada designer cabe numa página só, na prática isso
   // vira UMA rodada em vez de três idas seguidas.
+  var crus = [];                     // {t, designer} — classificados na 2ª passada
   var pendentes = designers.slice(); // quem ainda pode ter mais página
   var pagina = 1;
   while (pendentes.length && pagina <= 5) {
@@ -822,16 +874,23 @@ function buscarTarefasAbertasSeparadas() {
       var lote = lotes[i];
       if (!Array.isArray(lote) || lote.length === 0) continue; // acabou pra esse designer
       var nomeDesigner = pendentes[i].nome;
-      lote.forEach(function (t) {
-        if (tarefaEhCardMae(t)) cardMae.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
-        else normais.push(transformarTarefaParaColmeia(t, nomeDesigner, contexto));
-      });
+      // Guarda cruas: quem é card mãe só dá pra saber DEPOIS de ver a
+      // varredura inteira (ver a segunda passada logo abaixo).
+      lote.forEach(function (t) { crus.push({ t: t, designer: nomeDesigner }); });
       // Página cheia = pode ter mais; página pela metade = acabou.
       if (lote.length >= 100) aindaPendentes.push(pendentes[i]);
     }
     pendentes = aindaPendentes;
     pagina++;
   }
+
+  // SEGUNDA PASSADA: quem é card mãe de verdade.
+  var idsQueSaoPai = idsDePaisNaVarredura(crus);
+  crus.forEach(function (item) {
+    var pronta = transformarTarefaParaColmeia(item.t, item.designer, contexto);
+    if (tarefaEhCardMae(item.t) || idsQueSaoPai[String(item.t.id)]) cardMae.push(pronta);
+    else normais.push(pronta);
+  });
 
   // Deixa os cards mãe prontos pra página "Runrun completo" pegar sem
   // repetir a varredura. TTL de 120s porque o quadro atualiza a cada 60s,
