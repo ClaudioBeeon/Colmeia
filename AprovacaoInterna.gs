@@ -997,6 +997,16 @@ function limparConferenciasDoIncidenteErick(apagarDeVerdade) {
 }
 
 /**
+ * Atalho pra rodar pelo menu do editor do Apps Script, que só deixa
+ * escolher uma função e executar — sem jeito de passar `true` na mão.
+ * Só rode ISTO depois de já ter rodado `limparConferenciasDoIncidenteErick`
+ * (sem argumento) e conferido que a lista da simulação está certa.
+ */
+function apagarDeVerdadeConferenciasDoIncidenteErick() {
+  limparConferenciasDoIncidenteErick(true);
+}
+
+/**
  * A fila do atendimento: o que está esperando ALGUMA ação de quem confere —
  * ou ainda não olhou ('pendente'), ou já aprovou mas ainda não mandou pro
  * cliente ('aprovada'). As duas continuam na fila de propósito: se só a
