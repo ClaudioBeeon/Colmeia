@@ -1056,12 +1056,17 @@ function briefingDaConferencia(taskId) {
     'Copy = as palavras que vão APARECER ESCRITAS DENTRO DA ARTE, pra quem confere ler na tela ' +
     'e comparar letra por letra: título, chamada, oferta, preço, condição, telefone, CTA.\n' +
     'O teste: "dá pra LER isso olhando a peça?" Se não dá, NÃO é copy.\n' +
-    'NÃO é copy, e não deve entrar em lugar nenhum da resposta:\n' +
+    'NÃO é copy, e não deve entrar em "copy" nem em "itens":\n' +
     '  - LEGENDA / caption / texto do post — é o que vai escrito no Instagram na hora de publicar, ' +
-    'fora da arte. Mesmo quando o briefing traz a legenda inteira, ela NÃO entra.\n' +
+    'fora da arte. Ela NUNCA entra em "copy" nem em "itens" (quem confere ficaria procurando na ' +
+    'arte um texto que não está lá). Ela tem um campo SÓ DELA, "legenda", descrito abaixo.\n' +
     '  - hashtags, @arrobas, link da bio, roteiro de vídeo, sugestão de horário de publicação;\n' +
     '  - o pedido em si ("fazer um post sobre o combo"), que é descrição de tarefa, não texto da peça.\n\n' +
-    'SEPARE EM TRÊS COISAS:\n' +
+    'SEPARE EM QUATRO COISAS:\n' +
+    '- "legenda": o texto que vai escrito NO POST na hora de publicar (caption), copiado do ' +
+    'briefing EXATAMENTE como está, com emoji e hashtags, sem reescrever nem resumir. É o ' +
+    'único lugar da resposta onde ela pode aparecer. "" se o briefing não trouxer legenda — ' +
+    'não invente uma a partir do pedido.\n' +
     '- "formato": só o que foi pedido DE VERDADE (respeitando as caixas marcadas) — tamanho, ' +
     'dimensões, proporção ou onde vai ser publicado (ex: "Stories 1080x1920"). Vários formatos ' +
     'marcados viram um texto só, separados por vírgula. "" se não estiver escrito.\n' +
@@ -1113,7 +1118,17 @@ function briefingDaConferencia(taskId) {
     formato: String(dados.formato || ''),
     copy: limpar(dados.copy, true),
     itens: limpar(dados.itens, true).slice(0, 5),
-    alteracao: limpar(dados.alteracao, false)
+    alteracao: limpar(dados.alteracao, false),
+    // ⚠️ SÓ O FEED LÊ ISTO (2026-08-11). A legenda é o texto do POST, fora
+    // da arte — foi tirada da conferência de propósito, porque fazia quem
+    // confere procurar na peça um texto que nunca estaria lá. No feed ela
+    // é exatamente o que deve ser: a legenda embaixo do post.
+    //
+    // `montarBriefingHTML` (js/pagina-aprovacao.js) desenha campo a campo
+    // e não conhece este — é isso que a mantém fora da conferência. Quem
+    // for mexer lá: não saia iterando o briefing inteiro, ou ela volta
+    // pro lugar de onde foi tirada.
+    legenda: String(dados.legenda || '').trim()
   };
   salvarBriefingCacheado(chaveCache, hash, briefing);
   return { ok: true, briefing: briefing };

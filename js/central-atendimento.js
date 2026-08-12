@@ -1597,6 +1597,10 @@ function centralPostHTML(item, indice) {
         <p class="central-post-legenda">
           <b>${escaparHTML(item.cliente || "")}</b> ${escaparHTML(item.tituloTarefa || "")}
         </p>
+        <!-- A legenda de verdade do post, quando o briefing traz uma.
+             Nasce vazia e é preenchida por centralCarregarLegenda — ver
+             o porquê lá. -->
+        <div class="central-post-caption" data-legenda="${escaparHTML(String(item.taskId || ""))}" hidden></div>
         <!-- Sem repetir o tempo: o selo lá em cima já diz há quanto tempo
              está esperando, e dizer duas vezes na mesma tela é ruído. -->
         <p class="central-post-nota">
@@ -1633,6 +1637,23 @@ function centralLigarFeed(wrap, lotes, comStories) {
   artes.slice(0, 8).forEach(el => {
     observador.unobserve(el);
     centralCarregarArteDoFeed(el);
+  });
+
+  // As legendas seguem a mesma regra da arte: as primeiras vêm junto, o
+  // resto espera a rolagem. Uma chamada por post, e o servidor guarda o
+  // briefing — então só a primeira visita de cada peça custa.
+  const legendas = [...wrap.querySelectorAll("[data-legenda]")];
+  const obsLegenda = new IntersectionObserver(entradas => {
+    entradas.forEach(e => {
+      if (!e.isIntersecting) return;
+      obsLegenda.unobserve(e.target);
+      centralCarregarLegenda(e.target);
+    });
+  }, { rootMargin: "300px" });
+  legendas.forEach(el => obsLegenda.observe(el));
+  legendas.slice(0, 4).forEach(el => {
+    obsLegenda.unobserve(el);
+    centralCarregarLegenda(el);
   });
 
   // Carrossel: quem manda é o scroll nativo (arrastar no celular, trackpad
@@ -1701,6 +1722,57 @@ async function centralCarregarArteDoFeed(el) {
   if (!el.isConnected) return;
   if (!data || !data.ok || !data.base64) { el.classList.add("sem-arte"); return; }
   el.src = `data:${data.mimeType || "image/jpeg"};base64,${data.base64}`;
+}
+
+// taskId → legenda já buscada ("" quando o briefing não trouxe nenhuma).
+// Vive pela sessão: o feed é redesenhado a cada troca de ordem, e pedir
+// o briefing de novo a cada vez seria caro à toa.
+const centralLegendas = new Map();
+
+/**
+ * A LEGENDA DO POST (2026-08-11).
+ *
+ * A legenda é o texto que vai no Instagram, fora da arte. Ela foi TIRADA
+ * da conferência de propósito — lá ela fazia quem confere procurar na
+ * peça um texto que nunca estaria nela. No feed a decisão se inverte: é
+ * aqui que ela é exatamente o que deve ser.
+ *
+ * Só entra no feed. Ver o comentário do campo `legenda` em
+ * AprovacaoInterna.gs.
+ *
+ * Buscada sob demanda, junto com a arte: o briefing é uma chamada por
+ * tarefa (cacheada no servidor), e disparar todas de uma vez na abertura
+ * do feed seria o mesmo erro que a lista da Central já cometeu uma vez.
+ */
+async function centralCarregarLegenda(el) {
+  const taskId = el.dataset.legenda;
+  if (!taskId) return;
+
+  if (!centralLegendas.has(taskId)) {
+    const data = await chamarBackend({ acao: "briefingDaConferencia", taskId });
+    // Falha de rede não vira "não tem legenda": não guarda nada e tenta
+    // de novo no próximo desenho.
+    if (!data || !data.ok) return;
+    centralLegendas.set(taskId, (data.briefing && data.briefing.legenda) || "");
+  }
+
+  const texto = centralLegendas.get(taskId);
+  if (!texto || !el.isConnected) return;
+
+  el.hidden = false;
+  el.innerHTML = `
+    <span class="central-post-caption-txt">${escaparHTML(texto)}</span>
+    <button type="button" class="central-post-caption-mais">ver mais</button>`;
+
+  // "ver mais" só existe se o texto REALMENTE não coube — senão vira um
+  // botão que não faz nada, que é pior que não ter botão.
+  const txt = el.querySelector(".central-post-caption-txt");
+  const btn = el.querySelector(".central-post-caption-mais");
+  if (txt.scrollHeight <= txt.clientHeight + 1) { btn.remove(); return; }
+  btn.addEventListener("click", () => {
+    const aberta = el.classList.toggle("aberta");
+    btn.textContent = aberta ? "ver menos" : "ver mais";
+  });
 }
 
 // fileId → altura/largura da arte. É a memória do que já foi medido: a

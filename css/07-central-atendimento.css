@@ -2591,3 +2591,23 @@ body.central-grupo-aberto #centralAtendimento { padding-right: min(548px, 100%);
   font-weight: 600; cursor: pointer; text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* ---- a legenda do post (2026-08-11) ----
+   Duas linhas e "ver mais", como no Instagram. Cortar importa: uma
+   legenda de oito linhas empurraria o próximo post pra fora da tela, e o
+   feed existe pra correr o olho. */
+.central-post-caption { margin: 8px 0 0; font-size: 13px; line-height: 1.5; }
+.central-post-caption[hidden] { display: none; }
+.central-post-caption-txt {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; color: var(--text-secondary); white-space: pre-wrap;
+}
+.central-post-caption.aberta .central-post-caption-txt {
+  -webkit-line-clamp: unset; overflow: visible;
+}
+.central-post-caption-mais {
+  border: none; background: none; padding: 2px 0 0; cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  color: var(--text-muted);
+}
+.central-post-caption-mais:hover { color: var(--text-primary); }
