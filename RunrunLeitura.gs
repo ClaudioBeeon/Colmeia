@@ -237,6 +237,13 @@ function normalizarNomeParaComparar(s) {
   return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
+// Mesma regra do front-end (ehTarefaDeAlteracao, js/detalhe-alteracao.js),
+// so a parte do titulo -- aqui nao faz sentido exigir parent_task_id junto
+// (quem chama ja checou isso antes, com o dado cru do Runrun.it).
+function ehTituloDeAlteracao(titulo) {
+  return normalizarNomeParaComparar(titulo).indexOf('alteracao') !== -1;
+}
+
 function resolverNomeCanonico(nome, mapaVinculos) {
   var canonico = mapaVinculos && mapaVinculos[normalizarNomeParaComparar(nome)];
   return canonico || nome;
@@ -1436,9 +1443,31 @@ function abrirTarefaParaColmeia(taskId) {
 
   // Leitura na planilha (instantânea, não toca no Drive): a pasta do card,
   // que antes era mais um pedido separado do navegador.
+  //
+  // ⚠️ SUBTAREFA DE ALTERAÇÃO NOVA HERDA A PASTA DA PEÇA ORIGINAL
+  // (2026-08-12). `buscarOuHerdarPastaCard` (Planilha.gs) já existia e já
+  // fazia isso certo — mas só era chamada de um caminho do front-end
+  // (`verificarPastaJaSalva`) que fica MORTO na abertura normal do card
+  // (ver `carregarTudoDaTarefa`, js/chat-comentarios.js: a marca
+  // `task._abrindoTudo` pula essa função). Resultado: toda alteração nova
+  // aparecia oferecendo criar uma pasta DO ZERO pra ela, mesmo a peça
+  // original já tendo uma — e às vezes num caminho errado, porque o
+  // preview do modal nem consultava o Drive de verdade.
+  //
+  // Custa uma ida a mais ao Runrun.it (buscar o card mãe pra saber os
+  // ids das subtarefas irmãs) — mas só quando a tarefa É uma alteração
+  // sem pasta própria ainda; pra qualquer outra tarefa, o custo é
+  // idêntico ao de antes.
   var pastaUrl = null;
   try {
-    var salvo = buscarPastaSalvaDoCard(taskId);
+    var idsRelacionados = [];
+    if (tarefaCrua.parent_task_id && ehTituloDeAlteracao(tarefaCrua.title)) {
+      var cardMaeDaAlteracao = runrunFetch('/tasks/' + tarefaCrua.parent_task_id);
+      if (cardMaeDaAlteracao && !cardMaeDaAlteracao.erroFetch && Array.isArray(cardMaeDaAlteracao.subtask_ids)) {
+        idsRelacionados = cardMaeDaAlteracao.subtask_ids;
+      }
+    }
+    var salvo = buscarOuHerdarPastaCard(taskId, idsRelacionados);
     if (salvo.ok) pastaUrl = salvo.url || null;
   } catch (e) { /* segue sem a pasta — o botão volta a checar sozinho */ }
 

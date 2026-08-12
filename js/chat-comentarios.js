@@ -1478,13 +1478,22 @@ async function confirmarECriarPastaDoCard(task) {
   // decidir a pasta (ver criarPastaDoCardNoDrive, Drive.gs) — esse
   // preview mostra o MESMO mês, senão a confirmação mentiria sobre onde
   // a pasta vai ser criada de verdade.
+  //
+  // ⚠️ NÃO afirma "Cliente > Publicações" como caminho fixo (2026-08-12):
+  // cliente com frente/marca dentro da mesma pasta (ex: GO TOGETHER >
+  // MICE > Publicações) tem a pasta de verdade um nível mais fundo, e
+  // esse nível só o backend sabe (lê o link configurado em Configurações
+  // → Clientes, ver acharPastaDePublicacoesDoCliente, Drive.gs) — um
+  // preview fixo já mostrou um caminho que nunca existiu de verdade. O
+  // caminho REAL só aparece depois, no aviso de sucesso.
   const mesProjeto = extrairMesAnoDoProjeto(task.projeto);
   const agora = new Date();
   const ano = mesProjeto ? mesProjeto.ano : agora.getFullYear();
   const mes = MESES_PT_JS[mesProjeto ? mesProjeto.mesIndex : agora.getMonth()];
-  const caminho = `${task.client} &gt; Publicações &gt; ${ano} &gt; ${mes} &gt; ${task.title}`;
 
-  const confirmado = await confirmarCriacaoDePasta(`Deseja criar a pasta <strong>"${task.title}"</strong> em<br>${caminho}?`);
+  const confirmado = await confirmarCriacaoDePasta(
+    `Deseja criar a pasta <strong>"${task.title}"</strong> dentro de Publicações de <strong>${task.client}</strong> (${mes}/${ano})?`
+  );
   if (!confirmado) return;
 
   btn.disabled = true;
@@ -1508,6 +1517,10 @@ async function confirmarECriarPastaDoCard(task) {
     trocarTextoBotaoPasta("Acessar pasta do card");
     mostrarPillCopiarLinkDaPasta(data.url);
     atualizarLabelLinkManual(true);
+    // O caminho de VERDADE (já resolvido pelo backend, com a frente/marca
+    // do cliente incluída quando existe) — o preview de antes da criação
+    // não sabia isso, então é aqui que a pessoa confere onde caiu de fato.
+    if (data.caminho) mostrarToast((data.jaExistia ? "Pasta já existia em " : "Pasta criada em ") + data.caminho, "sucesso");
   } catch (err) {
     console.error("Falha ao criar pasta do card no Drive:", err);
     btn.disabled = false;

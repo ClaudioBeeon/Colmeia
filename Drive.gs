@@ -121,6 +121,54 @@ function acharPastaDoCliente(clientesFolder, nomeCliente) {
   return getSubfolderParecida(clientesFolder, nomeCliente);
 }
 
+/**
+ * A pasta "Publicações" do cliente — pelo LINK configurado manualmente
+ * (Configurações → Clientes → "Pasta de publicações"), quando existir; ou
+ * por busca de nome parecido direto dentro da raiz do cliente, quando não
+ * (comportamento de sempre, pra quem nunca precisou configurar nada).
+ *
+ * O link existe justamente pros clientes com "frentes"/marcas dentro da
+ * mesma pasta (ex: GO TOGETHER > MICE > Publicações, não
+ * GO TOGETHER > Publicações direto) — sem consultar o link, a busca por
+ * nome nunca acha essa pasta, porque ela não está um nível abaixo da
+ * raiz do cliente. Mesmo padrão de `acharPastaDoCliente`, um nível abaixo.
+ */
+function acharPastaDePublicacoesDoCliente(pastaCliente, nomeCliente) {
+  var linksSalvos = listarLinksClientes();
+  if (linksSalvos.ok) {
+    var alvo = nomeCliente.toString().trim().toLowerCase();
+    for (var i = 0; i < linksSalvos.links.length; i++) {
+      if (linksSalvos.links[i].cliente.toString().trim().toLowerCase() === alvo && linksSalvos.links[i].pastaPublicacoes) {
+        var id = extrairIdDeUrlDrive(linksSalvos.links[i].pastaPublicacoes);
+        if (id) {
+          try { return DriveApp.getFolderById(id); } catch (e) { /* segue pro nome mesmo */ }
+        }
+      }
+    }
+  }
+  return getSubfolderParecida(pastaCliente, 'Publicações');
+}
+
+/**
+ * O caminho legível de uma pasta até a raiz do cliente (ex: "MICE >
+ * Publicações"), subindo por `getParents()` até achar `pastaRaiz` (ou até
+ * um teto de segurança). Só pra montar uma mensagem de confirmação
+ * honesta — sem isso, o texto sempre dizia "Cliente > Publicações",
+ * mesmo quando a pasta de verdade está mais funda (ex: dentro de uma
+ * frente/marca como MICE), o que já confundiu o Cláudio uma vez.
+ */
+function caminhoAteARaiz(pastaAlvo, pastaRaiz) {
+  var nomes = [];
+  var atual = pastaAlvo;
+  var idRaiz = pastaRaiz.getId();
+  for (var i = 0; i < 6 && atual && atual.getId() !== idRaiz; i++) {
+    nomes.unshift(atual.getName());
+    var pais = atual.getParents();
+    atual = pais.hasNext() ? pais.next() : null;
+  }
+  return nomes.join(' > ');
+}
+
 function criarPastaDoCardNoDrive(cliente, tituloCard, taskId, projeto) {
   if (!cliente || !tituloCard) return { ok: false, error: 'Cliente ou título ausente.' };
   try {
@@ -132,9 +180,9 @@ function criarPastaDoCardNoDrive(cliente, tituloCard, taskId, projeto) {
     if (!pastaCliente) return { ok: false, error: 'Não achei a pasta do cliente "' + cliente + '" no Drive. Vincule ela manualmente em Links de clientes primeiro.' };
 
     // A pasta "Publicações" nunca é criada automaticamente: se não achar
-    // (nem com grafia parecida, sem acento/cedilha), é melhor avisar do
-    // que criar uma pasta nova duplicada dentro do cliente.
-    var pastaPublicacoes = getSubfolderParecida(pastaCliente, 'Publicações');
+    // (nem pelo link configurado, nem por grafia parecida), é melhor
+    // avisar do que criar uma pasta nova duplicada dentro do cliente.
+    var pastaPublicacoes = acharPastaDePublicacoesDoCliente(pastaCliente, cliente);
     if (!pastaPublicacoes) {
       return { ok: false, error: 'Não encontrei a pasta "Publicações" (nem com grafia parecida) dentro do cliente "' + cliente + '". Pra eu não criar uma pasta duplicada, me mostre o caminho certo dela no Drive.' };
     }
@@ -164,11 +212,19 @@ function criarPastaDoCardNoDrive(cliente, tituloCard, taskId, projeto) {
       salvarPastaDoCard(taskId, pastaCard.getUrl());
     }
 
+    // Caminho de VERDADE, não mais "Cliente > Publicações" fixo: cliente
+    // com frente/marca (ex: GO TOGETHER > MICE > Publicações) mostrava um
+    // caminho que nunca existiu, e o Cláudio já achou isso por causa disso.
+    var trechoIntermediario = caminhoAteARaiz(pastaPublicacoes, pastaCliente);
+    var caminhoDeVerdade = cliente
+      + (trechoIntermediario ? ' > ' + trechoIntermediario : ' > Publicações')
+      + ' > ' + ano + ' > ' + pastaMes.getName() + ' > ' + tituloCard;
+
     return {
       ok: true,
       url: pastaCard.getUrl(),
       jaExistia: jaExistia,
-      caminho: cliente + ' > Publicações > ' + ano + ' > ' + pastaMes.getName() + ' > ' + tituloCard
+      caminho: caminhoDeVerdade
     };
   } catch (err) {
     return { ok: false, error: 'Erro ao criar a pasta: ' + err.message };
@@ -339,7 +395,7 @@ function buscarUploadsRecentesDoCard(taskId, cliente) {
       var beeonFolder = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
       var clientesFolder = (beeonFolder.getName() === 'Clientes') ? beeonFolder : getSubfolderPorNome(beeonFolder, 'Clientes');
       var pastaCliente = clientesFolder && acharPastaDoCliente(clientesFolder, cliente);
-      var pastaPublicacoes = pastaCliente && getSubfolderPorNome(pastaCliente, 'Publicações');
+      var pastaPublicacoes = pastaCliente && acharPastaDePublicacoesDoCliente(pastaCliente, cliente);
       var pastaAno = pastaPublicacoes && getSubfolderPorNome(pastaPublicacoes, String(new Date().getFullYear()));
       var pastaMes = pastaAno && getPastaMesSemCriar(pastaAno, new Date().getMonth());
       if (pastaMes) {
