@@ -1774,6 +1774,41 @@
   </div>
 
   <!-- ======================================================================
+       VISOR DE STORIES (2026-08-11) — a vista "Feed" da aba Hoje.
+
+       Fica DENTRO de #centralAtendimento pelo mesmo motivo do pop-up dos
+       grupos logo abaixo: herda a moldura da Central e continua ABAIXO da
+       conferência (.apv-conferencia, z-index 120), que é o que precisa
+       acontecer quando "Conferir" abre ela por cima daqui.
+
+       Ele só MOSTRA. A decisão (aprovar, pedir ajuste) continua na tela de
+       conferência de sempre — um visor que passa sozinho a cada 5s é bom
+       pra olhar e péssimo pra decidir. Ver centralAbrirStories(),
+       js/central-atendimento.js.
+       ====================================================================== -->
+  <div class="central-story-visor" id="centralStoriesVisor" role="dialog" aria-modal="true" aria-label="Stories do cliente" hidden>
+    <div class="central-story-visor-caixa">
+      <div class="central-story-barras" id="chStoryBarras"></div>
+      <div class="central-story-visor-topo">
+        <div class="central-story-visor-quem" id="chStoryQuem"></div>
+        <button type="button" class="central-story-fechar" id="chStoryFechar" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="central-story-palco">
+        <div class="central-story-arte" id="chStoryArte" data-arte></div>
+        <div class="central-story-nav">
+          <button type="button" id="chStoryAnt" aria-label="Story anterior"></button>
+          <button type="button" id="chStoryProx" aria-label="Próximo story"></button>
+        </div>
+      </div>
+      <div class="central-story-visor-acoes">
+        <button type="button" class="central-post-btn principal" id="chStoryConferir">Conferir esta peça</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================
        POP-UP DOS GRUPOS (2026-08-08, protótipo "Prateleira" aprovado pelo
        Cláudio)
 

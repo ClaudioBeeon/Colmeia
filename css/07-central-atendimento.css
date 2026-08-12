@@ -2340,3 +2340,212 @@ body.central-grupo-aberto #centralAtendimento { padding-right: min(548px, 100%);
 }
 .central-grupo-lista.modo-cards .central-grupo-li-arte { aspect-ratio: 16 / 11; }
 .central-grupo-lista.modo-cards .central-grupo-li { padding: 10px; border-radius: 18px; }
+/* =====================================================================
+   VISTA "FEED" DA ABA HOJE (2026-08-11)
+
+   A MESMA fila de conferência do Painel, com cara de rede social —
+   protótipo do Cláudio, estilo "clássico". Stories em cima (só os
+   clientes que têm peça vertical), um post por LOTE embaixo.
+
+   Um post por lote e não por peça: um lote de 13 peças viraria 13 posts
+   repetindo o mesmo cliente, e a fila existe pra decidir sobre o lote.
+   As peças viram carrossel dentro do card.
+   ===================================================================== */
+
+/* O alternador Painel/Feed — mesmo controle segmentado das Configurações
+   (.config-tabs), pra não inventar um terceiro jeito de trocar de vista
+   dentro do mesmo app. */
+.central-vista-switcher {
+  display: inline-flex; gap: 2px; padding: 4px; margin: 0 0 18px;
+  background: rgba(255,255,255,.06); border-radius: 12px;
+}
+.central-vista-btn {
+  border: none; background: transparent; cursor: pointer; white-space: nowrap;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  color: var(--text-secondary); padding: 8px 18px; border-radius: 9px;
+  transition: background var(--dur-fast) var(--ease-apple), color var(--dur-fast) var(--ease-apple);
+}
+.central-vista-btn:hover:not(.ativa) { color: var(--text-primary); }
+.central-vista-btn.ativa { background: var(--card-bg); color: var(--text-primary); }
+
+.central-feed-wrap { padding-bottom: 40px; }
+
+/* ---- stories ---- */
+.central-stories {
+  display: flex; gap: 16px; overflow-x: auto; padding: 2px 2px 20px;
+  scrollbar-width: none;
+}
+.central-stories::-webkit-scrollbar { display: none; }
+.central-story {
+  border: none; background: none; padding: 0; cursor: pointer; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; width: 74px;
+}
+/* O anel colorido é o que diz "tem coisa nova aqui" sem precisar de
+   texto. Quem já foi visto perde a cor — mesma convenção de todo app de
+   stories, então ninguém precisa aprender. */
+.central-story-anel {
+  width: 66px; height: 66px; border-radius: 50%; padding: 3px;
+  background: conic-gradient(from 140deg, var(--kanban-yellow), #FF7A00, var(--accent), var(--kanban-yellow));
+}
+.central-story.visto .central-story-anel { background: var(--border); }
+.central-story-foto {
+  width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+  border: 2.5px solid var(--card-bg); display: flex; align-items: center; justify-content: center;
+}
+.avatar.avatar-story { width: 100%; height: 100%; font-size: 17px; }
+.central-story-nome {
+  font-size: 11px; color: var(--text-secondary); max-width: 74px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---- o post ---- */
+.central-feed { display: flex; flex-direction: column; gap: 26px; align-items: center; }
+.central-post {
+  width: min(430px, 100%); background: var(--card-bg); border-radius: 18px;
+  box-shadow: var(--shadow-card); overflow: hidden;
+}
+.central-post-topo { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.avatar.avatar-post { width: 40px; height: 40px; font-size: 14px; }
+.central-post-quem { flex: 1; min-width: 0; }
+.central-post-cliente {
+  font-family: var(--font-display); font-weight: 600; font-size: 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.central-post-sub { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+.central-post-selo {
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+  color: var(--kanban-yellow-text); background: var(--warning-soft);
+  padding: 5px 10px; border-radius: 999px;
+}
+.central-post-selo.nova { color: var(--accent); background: var(--accent-soft); }
+
+.central-post-media { position: relative; background: var(--page-bg); }
+/* O carrossel é scroll nativo com encaixe: arrastar no celular e o
+   trackpad no computador já funcionam sozinhos, sem uma linha de JS
+   controlando posição. O JS só acompanha pra atualizar os pontinhos. */
+.central-post-carrossel {
+  display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.central-post-carrossel::-webkit-scrollbar { display: none; }
+.central-post-slide {
+  flex: 0 0 100%; aspect-ratio: 1 / 1; scroll-snap-align: center;
+  background-size: cover; background-position: center;
+}
+.central-post-slide.sem-arte {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--page-bg);
+}
+.central-post-slide.sem-arte::after {
+  content: "sem prévia"; font-size: 12px; color: var(--text-muted);
+}
+.central-post-contador {
+  position: absolute; top: 12px; right: 12px;
+  background: rgba(17,17,20,.62); color: #fff;
+  font-size: 11.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+}
+.central-post-pontos {
+  position: absolute; bottom: 12px; left: 0; right: 0;
+  display: flex; gap: 5px; justify-content: center; pointer-events: none;
+}
+.central-post-ponto {
+  width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.5);
+  transition: background var(--dur-fast) var(--ease-apple);
+}
+.central-post-ponto.on { background: #fff; }
+/* A foto de quem FEZ a peça, sobrando pra fora da arte. No protótipo era
+   "a foto que o cliente mandou", que não existe no Colmeia — o designer
+   é o dado real e responde a mesma pergunta ("de quem é isso?"). */
+.central-post-autor {
+  position: absolute; left: 14px; bottom: -26px;
+  border-radius: 50%; border: 3px solid var(--card-bg);
+  box-shadow: 0 4px 12px rgba(0,0,0,.15); line-height: 0;
+}
+.avatar.avatar-autor { width: 50px; height: 50px; font-size: 16px; }
+
+.central-post-corpo { padding: 38px 16px 14px; }
+.central-post-legenda { font-size: 13.5px; line-height: 1.55; margin: 0; }
+.central-post-legenda b { font-family: var(--font-display); font-weight: 600; }
+.central-post-nota { font-size: 11.5px; color: var(--text-secondary); margin: 6px 0 0; }
+
+.central-post-acoes { display: flex; gap: 10px; padding: 0 16px 16px; position: relative; }
+.central-post-btn {
+  flex: 1; font-family: var(--font-body); font-weight: 600; font-size: 14px;
+  height: 44px; border-radius: 10px; cursor: pointer;
+  background: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--border);
+  transition: background var(--dur-fast) var(--ease-apple), opacity var(--dur-fast) var(--ease-apple);
+}
+.central-post-btn:hover { background: var(--page-bg); }
+.central-post-btn.principal { background: var(--accent); color: #fff; border-color: transparent; }
+.central-post-btn.principal:hover { opacity: .9; background: var(--accent); }
+
+.central-post-pop {
+  position: absolute; bottom: 58px; left: 16px; width: 262px; z-index: 5;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow-hover); padding: 6px;
+}
+.central-post-pop[hidden] { display: none; }
+.central-post-pop button {
+  display: flex; align-items: center; gap: 9px; width: 100%; border: none; background: none;
+  font-family: var(--font-body); font-size: 13.5px; color: var(--text-primary);
+  padding: 10px 11px; border-radius: 9px; cursor: pointer; text-align: left;
+}
+.central-post-pop button:hover:not(:disabled) { background: var(--page-bg); }
+.central-post-pop button:disabled { color: var(--text-muted); cursor: default; }
+.central-post-pop button em { font-style: normal; font-size: 11.5px; opacity: .8; }
+
+/* ---- o visor de stories ---- */
+.central-story-visor {
+  position: absolute; inset: 0; z-index: 60;
+  background: rgba(8,8,12,.94);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.central-story-visor[hidden] { display: none; }
+.central-story-visor-caixa { width: min(400px, 100%); }
+.central-story-barras { display: flex; gap: 4px; margin-bottom: 12px; }
+.central-story-barra {
+  flex: 1; height: 3px; border-radius: 2px; overflow: hidden;
+  background: rgba(255,255,255,.28);
+}
+.central-story-barra i { display: block; height: 100%; width: 0; background: #fff; }
+.central-story-barra.cheia i { width: 100%; }
+/* 5s é o mesmo tempo do setTimeout que troca de peça
+   (centralDesenharStory) — os dois precisam bater, senão a barra mente
+   sobre quanto falta. */
+.central-story-barra i.andando { animation: central-story-anda 5s linear forwards; }
+@keyframes central-story-anda { from { width: 0; } to { width: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .central-story-barra i.andando { animation: none; width: 100%; }
+}
+
+.central-story-visor-topo { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.central-story-visor-quem { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.avatar.avatar-story-topo { width: 34px; height: 34px; font-size: 13px; }
+.central-story-visor-nome { color: #fff; font-family: var(--font-display); font-weight: 600; font-size: 14px; }
+.central-story-visor-sub { color: rgba(255,255,255,.65); font-size: 11.5px; }
+.central-story-fechar {
+  background: none; border: none; color: #fff; cursor: pointer; padding: 6px;
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+}
+.central-story-fechar svg { width: 18px; height: 18px; }
+
+.central-story-palco { position: relative; }
+.central-story-arte {
+  width: 100%; aspect-ratio: 9 / 16; max-height: 62vh; border-radius: 14px;
+  background-size: cover; background-position: center; background-color: rgba(255,255,255,.06);
+}
+.central-story-arte.sem-arte { display: flex; align-items: center; justify-content: center; }
+.central-story-arte.sem-arte::after {
+  content: "sem prévia"; color: rgba(255,255,255,.5); font-size: 13px;
+}
+/* As duas metades invisíveis: direita avança, esquerda volta. É o gesto
+   que todo mundo já traz de outros apps — por isso não tem rótulo. */
+.central-story-nav { position: absolute; inset: 0; display: flex; }
+.central-story-nav button { flex: 1; background: none; border: none; cursor: pointer; }
+.central-story-visor-acoes { margin-top: 14px; display: flex; }
+.central-story-visor-acoes .central-post-btn { flex: 1; }
+
+@media (max-width: 640px) {
+  .central-post { width: 100%; }
+  .central-feed-wrap { padding-bottom: 24px; }
+}

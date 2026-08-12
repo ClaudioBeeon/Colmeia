@@ -522,6 +522,11 @@ function renderPainelClientes() {
                   <textarea data-campo="descricao" placeholder="Ex: Açougue frigorífico em Passos, Itaú e SSP" rows="2">${dados.descricao || ""}</textarea>
                 </label>
                 <label class="cliente-link-field">
+                  <span>Logo do cliente</span>
+                  <span class="cfg-ajuda">É a bolinha redonda no feed da Central do Atendimento. Sem logo, aparecem as iniciais do cliente.</span>
+                  <input type="text" data-campo="logo" value="${escaparHTML(dados.logo || "")}" placeholder="https://... (endereço da imagem)">
+                </label>
+                <label class="cliente-link-field">
                   <span>Sigla do link de aprovação${dados.sigla ? "" : ` (automática: <b>${escaparHTML(siglaAutomaticaDeCliente(cliente))}</b>)`}</span>
                   <input type="text" data-campo="sigla" value="${escaparHTML(dados.sigla || "")}" maxlength="6"
                          placeholder="${escaparHTML(siglaAutomaticaDeCliente(cliente))}"
@@ -634,6 +639,7 @@ function renderPainelClientes() {
         // backend, na gravação, pra que o que fica guardado seja exatamente
         // o que vai aparecer na URL.
         sigla: form.querySelector('[data-campo="sigla"]').value.trim(),
+        logo: form.querySelector('[data-campo="logo"]').value.trim(),
         drive: form.querySelector('[data-campo="drive"]').value.trim(),
         bancoImagens: form.querySelector('[data-campo="bancoImagens"]').value.trim(),
         bibliotecaAdobe: form.querySelector('[data-campo="bibliotecaAdobe"]').value.trim(),

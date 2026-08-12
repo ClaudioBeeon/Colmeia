@@ -331,9 +331,28 @@ function corDoCliente(nomeCliente) {
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
   return CORES_AVATAR_CLIENTE[hash % CORES_AVATAR_CLIENTE.length];
 }
+/**
+ * O logo cadastrado do cliente, se houver (aba Clientes das
+ * Configurações, 2026-08-11). Sem logo devolve null e quem chama cai nas
+ * iniciais coloridas de sempre — que é como todo cliente começa.
+ */
+function logoDoCliente(nomeCliente) {
+  if (typeof getLinksDoCliente !== "function") return null;
+  const dados = getLinksDoCliente(nomeCliente);
+  return (dados && dados.logo) || null;
+}
+
 function avatarClienteHTML(nomeCliente, sizeClass) {
   const nome = (nomeCliente || "?").trim();
   const inicial = (nome.charAt(0) || "?").toUpperCase();
+  const logo = logoDoCliente(nome);
+  if (logo) {
+    // `handleAvatarImgError` troca pela inicial se o endereço estiver
+    // quebrado — o mesmo caminho de reserva das fotos de pessoa.
+    return `<img class="avatar avatar-cliente ${sizeClass || ""}" src="${escaparHTML(logo)}" `
+      + `data-nome="${escaparHTML(nome)}" alt="${escaparHTML(nome)}" title="${escaparHTML(nome)}" `
+      + `onerror="handleAvatarImgError(this)">`;
+  }
   return `<div class="avatar avatar-cliente ${sizeClass || ""}" style="background:${corDoCliente(nome)}" title="${escaparHTML(nome)}">${inicial}</div>`;
 }
 

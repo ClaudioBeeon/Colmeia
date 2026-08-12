@@ -37,6 +37,13 @@ function getLinksClientesSheet() {
   if (sheet.getLastColumn() < 10) {
     sheet.getRange(1, 10).setValue('sigla');
   }
+  // Coluna K: o logo do cliente (2026-08-11), pro feed da Central do
+  // Atendimento — é a bolinha redonda de cada card, no lugar das
+  // iniciais. Vazia significa "mostra as iniciais", que é como todo
+  // cliente começa e continua até alguém colar um endereço aqui.
+  if (sheet.getLastColumn() < 11) {
+    sheet.getRange(1, 11).setValue('logo');
+  }
   return sheet;
 }
 
@@ -331,7 +338,8 @@ function listarLinksClientes() {
       pastaDriveVinculada: linhas[i][6] || '',
       descricao: linhas[i][7] || '',
       aliases: linhas[i][8] ? String(linhas[i][8]).split('|').map(function (s) { return s.trim(); }).filter(Boolean) : [],
-      sigla: linhas[i][9] ? String(linhas[i][9]).trim() : ''
+      sigla: linhas[i][9] ? String(linhas[i][9]).trim() : '',
+      logo: linhas[i][10] ? String(linhas[i][10]).trim() : ''
     });
   }
   return { ok: true, links: links };
@@ -358,11 +366,12 @@ function salvarLinksCliente(cliente, dados) {
       // Normalizada aqui, na porta de entrada, e não na hora de montar o
       // link: assim o que está guardado é sempre o que vai aparecer na URL
       // — sem espaço, sem acento, sem maiúscula.
-      normalizarSiglaDeCliente(dados.sigla)
+      normalizarSiglaDeCliente(dados.sigla),
+      String(dados.logo || '').trim()
     ];
     for (var i = 1; i < linhas.length; i++) {
       if (String(linhas[i][0]) === String(cliente)) {
-        sheet.getRange(i + 1, 2, 1, 9).setValues([linhaValores]);
+        sheet.getRange(i + 1, 2, 1, 10).setValues([linhaValores]);
         return { ok: true };
       }
     }

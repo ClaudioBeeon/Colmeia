@@ -65,6 +65,11 @@ function abrirCentralAtendimento() {
   // viu o quadro), só "Sair" faz sentido pra eles.
   document.getElementById("centralVoltarBtn").hidden = !(typeof souClaudio === "function" && souClaudio());
 
+  // Os botões do visor de stories são ligados UMA vez (a marca
+  // `dataset.ligado` cuida disso) — o visor é markup fixo do index.html,
+  // não é redesenhado junto com o feed.
+  centralLigarVisorDeStories();
+
   // O seletor "ver como" é só pra quem coordena (Cláudio, João Paulo,
   // Lucas — ver souCoordenadorDoAtendimento, js/login-boot.js).
   const filtroWrap = document.getElementById("centralFiltroPessoaWrap");
@@ -517,9 +522,48 @@ let centralHojeUltimaContagemAjuste = null;
  * ele mandou). A Timeline NÃO foi tocada nessa mudança — ver o pedido dele:
  * "ela já foi ajustada, tamanho e tudo, não alterar nada nela".
  */
+// =====================================================================
+// DUAS FORMAS DE VER A MESMA FILA (2026-08-11)
+//
+// "Painel" é a tela de sempre: números, cartões, calendário, BeeLine.
+// "Feed" mostra a MESMA fila de conferência com cara de rede social —
+// stories dos clientes que têm peça vertical em cima, e um post por lote
+// embaixo. Pedido do Cláudio, a partir de um protótipo dele.
+//
+// Começa SEMPRE no Painel (decisão dele): o feed é um jeito de olhar, não
+// o padrão. Por isso isto é uma variável de sessão e não vai pro
+// localStorage — abrir a Central sempre cai nos números.
+// =====================================================================
+let centralHojeVista = "painel";
+
+function centralHojeAlternadorHTML() {
+  const aba = (id, rotulo) => `
+    <button type="button" class="central-vista-btn${centralHojeVista === id ? " ativa" : ""}"
+            data-central-vista="${id}">${rotulo}</button>`;
+  return `<div class="central-vista-switcher">${aba("painel", "Painel")}${aba("feed", "Feed")}</div>`;
+}
+
+function centralLigarAlternador(el) {
+  el.querySelectorAll("[data-central-vista]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (centralHojeVista === btn.dataset.centralVista) return;
+      centralHojeVista = btn.dataset.centralVista;
+      centralRenderHoje();
+    });
+  });
+}
+
 function centralRenderHoje() {
   const el = document.getElementById("centralTabHoje");
   if (!el) return;
+
+  if (centralHojeVista === "feed") {
+    el.innerHTML = centralHojeAlternadorHTML()
+      + `<div class="central-feed-wrap" id="centralFeedWrap"></div>`;
+    centralLigarAlternador(el);
+    centralRenderFeed();
+    return;
+  }
 
   const esperandoVoce = centralFilaPor("pendente");
   const prontasEnviar = centralFilaPor("aprovada");
@@ -535,7 +579,7 @@ function centralRenderHoje() {
   const ajusteSubiu = centralHojeUltimaContagemAjuste !== null && voltouAjuste.length > centralHojeUltimaContagemAjuste;
   centralHojeUltimaContagemAjuste = voltouAjuste.length;
 
-  el.innerHTML = `
+  el.innerHTML = centralHojeAlternadorHTML() + `
     <div class="central-hoje-grid">
       <!-- A saudação + os números entraram PRA DENTRO da grade (2026-08-11,
            pedido do Cláudio: "quero que a timeline ocupe a parte desses
@@ -635,6 +679,8 @@ function centralRenderHoje() {
   el.querySelectorAll("[data-central-topo-ir]").forEach(btn => {
     btn.addEventListener("click", () => centralTrocarAba(btn.dataset.centralTopoIr));
   });
+
+  centralLigarAlternador(el);
 }
 
 /**
@@ -1320,6 +1366,357 @@ function centralPreencherSecaoFila(idCorpo, itens, status) {
       if (typeof apvAbrirConferencia === "function") apvAbrirConferencia(item.taskId, item.loteId);
     });
   });
+}
+
+// =====================================================================
+// O FEED (2026-08-11)
+//
+// A MESMA fila de conferência do Painel, com cara de rede social. Não
+// busca nada novo: lê `centralFilaPor("pendente")`, que já está em cache.
+//
+// Um card por LOTE, não por peça — um lote de 13 peças viraria 13 posts
+// repetindo o mesmo cliente, e a fila existe pra decidir sobre o lote.
+// Dentro do card, as peças viram carrossel.
+// =====================================================================
+
+/**
+ * Essa peça é de stories?
+ *
+ * Primeiro pelo NOME do arquivo, que é o costume da casa ("Stories - v1")
+ * e o mesmo padrão que `listarPecasDaPastaDoCard` já usa pra agrupar. Se
+ * o nome não disser nada, a proporção da imagem decide quando ela
+ * carregar (ver centralMarcarFormatoPelaProporcao) — arte em pé e bem
+ * alta é stories.
+ */
+function centralEhStoriesPeloNome(peca) {
+  const texto = `${peca.nomePeca || ""} ${peca.nomeArquivo || ""}`.toLowerCase();
+  if (/\bstor(y|ies)\b|\bstories\b/.test(texto)) return true;
+  if (/\bfeed\b|\bcarrossel\b|\bcarousel\b/.test(texto)) return false;
+  return null; // não deu pra saber pelo nome
+}
+
+/** Um lote tem alguma peça de stories? (só o que dá pra saber pelo nome) */
+function centralLoteTemStories(item) {
+  return (item.pecas || []).some(p => centralEhStoriesPeloNome(p) === true);
+}
+
+function centralRenderFeed() {
+  const wrap = document.getElementById("centralFeedWrap");
+  if (!wrap) return;
+
+  const lotes = centralFilaPor("pendente");
+  if (!lotes.length) {
+    wrap.innerHTML = `<div class="central-section-empty" style="margin-top:40px">
+      Nada esperando você conferir agora.</div>`;
+    return;
+  }
+
+  const comStories = lotes.filter(centralLoteTemStories);
+
+  wrap.innerHTML = `
+    ${comStories.length ? `
+      <div class="central-stories">
+        ${comStories.map((l, i) => `
+          <button type="button" class="central-story" data-story="${i}">
+            <span class="central-story-anel"><span class="central-story-foto">
+              ${typeof avatarClienteHTML === "function" ? avatarClienteHTML(l.cliente, "avatar-story") : ""}
+            </span></span>
+            <span class="central-story-nome">${escaparHTML(String(l.cliente || "").split(" ")[0])}</span>
+          </button>`).join("")}
+      </div>` : ""}
+    <div class="central-feed">
+      ${lotes.map((l, i) => centralPostHTML(l, i)).join("")}
+    </div>`;
+
+  centralLigarFeed(wrap, lotes, comStories);
+}
+
+function centralPostHTML(item, indice) {
+  const pecas = (item.pecas || []).filter(p => !p.arquivoSumiu);
+  const primeira = pecas[0] || {};
+  const ehStories = centralEhStoriesPeloNome(primeira);
+  const versaoNova = pecas.some(p => p.temVersaoNova);
+
+  return `
+    <article class="central-post" data-post="${indice}">
+      <div class="central-post-topo">
+        ${typeof avatarClienteHTML === "function" ? avatarClienteHTML(item.cliente, "avatar-post") : ""}
+        <div class="central-post-quem">
+          <div class="central-post-cliente">${escaparHTML(item.cliente || "Sem cliente")}</div>
+          <div class="central-post-sub">
+            ${ehStories === true ? "Stories" : ehStories === false ? "Feed" : "Peça"} ·
+            feito por ${escaparHTML(item.designer || "—")}
+          </div>
+        </div>
+        <span class="central-post-selo${versaoNova ? " nova" : ""}">
+          ${versaoNova ? "Versão nova" : apvTempoDeEspera(item.pedidoEm)}
+        </span>
+      </div>
+
+      <div class="central-post-media">
+        <div class="central-post-carrossel" data-carrossel="${indice}">
+          ${pecas.map((p, k) => `
+            <div class="central-post-slide" data-arte data-file="${escaparHTML(p.fileId || "")}"
+                 data-slide="${k}" title="${escaparHTML(p.nomePeca || "")}"></div>`).join("")}
+        </div>
+        ${pecas.length > 1 ? `
+          <span class="central-post-contador" data-contador="${indice}">1 / ${pecas.length}</span>
+          <div class="central-post-pontos" data-pontos="${indice}">
+            ${pecas.map((_, k) => `<span class="central-post-ponto${k === 0 ? " on" : ""}"></span>`).join("")}
+          </div>` : ""}
+        <span class="central-post-autor">
+          ${typeof avatarHTML === "function" ? avatarHTML(item.designer, "avatar-autor") : ""}
+        </span>
+      </div>
+
+      <div class="central-post-corpo">
+        <p class="central-post-legenda">
+          <b>${escaparHTML(item.cliente || "")}</b> ${escaparHTML(item.tituloTarefa || "")}
+        </p>
+        <!-- Sem repetir o tempo: o selo lá em cima já diz há quanto tempo
+             está esperando, e dizer duas vezes na mesma tela é ruído. -->
+        <p class="central-post-nota">
+          ${pecas.length} peça${pecas.length > 1 ? "s" : ""} neste lote
+        </p>
+      </div>
+
+      <div class="central-post-acoes">
+        <button type="button" class="central-post-btn principal" data-links="${indice}">Links</button>
+        <button type="button" class="central-post-btn" data-conferir="${indice}">Conferir</button>
+        <div class="central-post-pop" data-pop="${indice}" hidden></div>
+      </div>
+    </article>`;
+}
+
+function centralLigarFeed(wrap, lotes, comStories) {
+  // As miniaturas vêm uma a uma, só quando o slide entra na tela — um
+  // lote de 13 peças não pode disparar 13 buscas de uma vez.
+  const observador = new IntersectionObserver(entradas => {
+    entradas.forEach(e => {
+      if (!e.isIntersecting) return;
+      observador.unobserve(e.target);
+      centralCarregarArteDoFeed(e.target);
+    });
+  }, { rootMargin: "300px" });
+  wrap.querySelectorAll("[data-arte]").forEach(el => observador.observe(el));
+
+  // Carrossel: quem manda é o scroll nativo (arrastar no celular, trackpad
+  // no computador) — os pontinhos só acompanham.
+  wrap.querySelectorAll("[data-carrossel]").forEach(faixa => {
+    const i = faixa.dataset.carrossel;
+    const pontos = wrap.querySelector(`[data-pontos="${i}"]`);
+    const contador = wrap.querySelector(`[data-contador="${i}"]`);
+    if (!pontos && !contador) return;
+    faixa.addEventListener("scroll", () => {
+      const atual = Math.round(faixa.scrollLeft / faixa.clientWidth);
+      if (contador) contador.textContent = `${atual + 1} / ${faixa.children.length}`;
+      if (pontos) [...pontos.children].forEach((p, k) => p.classList.toggle("on", k === atual));
+    }, { passive: true });
+  });
+
+  wrap.querySelectorAll("[data-conferir]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const item = lotes[Number(btn.dataset.conferir)];
+      // A MESMA tela de conferência do Painel — aprovar e pedir ajuste
+      // continuam acontecendo lá, sem duplicar decisão nenhuma aqui.
+      if (typeof apvAbrirConferencia === "function") apvAbrirConferencia(item.taskId, item.loteId);
+    });
+  });
+
+  wrap.addEventListener("click", e => {
+    const abrir = e.target.closest("[data-links]");
+    wrap.querySelectorAll("[data-pop]").forEach(p => {
+      if (!abrir || p.dataset.pop !== abrir.dataset.links) p.hidden = true;
+    });
+    if (!abrir) return;
+    const pop = wrap.querySelector(`[data-pop="${abrir.dataset.links}"]`);
+    if (!pop.hidden) { pop.hidden = true; return; }
+    centralMontarPopoverDeLinks(pop, lotes[Number(abrir.dataset.links)]);
+    pop.hidden = false;
+  });
+
+  wrap.querySelectorAll("[data-story]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      btn.classList.add("visto");
+      centralAbrirStories(comStories, Number(btn.dataset.story));
+    });
+  });
+}
+
+async function centralCarregarArteDoFeed(el) {
+  const fileId = el.dataset.file;
+  if (!fileId) { el.classList.add("sem-arte"); return; }
+  const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
+  if (!el.isConnected) return;
+  if (!data || !data.ok || !data.base64) { el.classList.add("sem-arte"); return; }
+  el.style.backgroundImage = `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")`;
+  centralMarcarFormatoPelaProporcao(el, data);
+}
+
+/**
+ * A reserva da detecção de stories: quando o nome do arquivo não disse
+ * nada, a proporção decide. Arte em pé e bem alta (9:16 e parecidos) é
+ * stories; quadrada ou 4:5 é feed. Só roda depois da miniatura chegar —
+ * por isso é reserva, e não o caminho principal.
+ */
+function centralMarcarFormatoPelaProporcao(el, data) {
+  const img = new Image();
+  img.onload = () => {
+    if (!el.isConnected || !img.width) return;
+    const alturaSobreLargura = img.height / img.width;
+    el.dataset.formato = alturaSobreLargura >= 1.6 ? "stories" : "feed";
+  };
+  img.src = `data:${data.mimeType || "image/jpeg"};base64,${data.base64}`;
+}
+
+function centralMontarPopoverDeLinks(pop, item) {
+  // A peça ainda está na conferência interna: ela NÃO foi pro cliente, e
+  // link de cliente não existe até alguém enviar. Mostrar a opção
+  // desabilitada, dizendo por quê, é melhor que escondê-la — senão parece
+  // que o Colmeia esqueceu de oferecer.
+  const aprovacao = (centralAprovacoesCache || [])
+    .find(a => String(a.taskId) === String(item.taskId));
+  const primeira = (item.pecas || []).find(p => p.fileId);
+
+  pop.innerHTML = `
+    ${aprovacao
+      ? `<button type="button" data-link-cliente="${escaparHTML(aprovacao.codigo)}">🔗 Copiar link do cliente</button>`
+      : `<button type="button" disabled title="Essa peça ainda não foi enviada pro cliente">
+           🔗 Link do cliente <em>— ainda não enviada</em></button>`}
+    ${primeira
+      ? `<button type="button" data-link-drive="${escaparHTML(primeira.fileId)}">📁 Copiar link do Drive</button>`
+      : ""}
+    <button type="button" data-abrir-tarefa="${escaparHTML(String(item.taskId || ""))}">↗️ Abrir tarefa no Runrun.it</button>`;
+
+  pop.querySelector("[data-link-cliente]")?.addEventListener("click", async () => {
+    const url = typeof urlDeAprovacao === "function"
+      ? urlDeAprovacao(pop.querySelector("[data-link-cliente]").dataset.linkCliente) : "";
+    await centralCopiar(url, "Link do cliente copiado.");
+    pop.hidden = true;
+  });
+  pop.querySelector("[data-link-drive]")?.addEventListener("click", async () => {
+    const id = pop.querySelector("[data-link-drive]").dataset.linkDrive;
+    await centralCopiar(`https://drive.google.com/file/d/${id}/view`, "Link do Drive copiado.");
+    pop.hidden = true;
+  });
+  pop.querySelector("[data-abrir-tarefa]")?.addEventListener("click", () => {
+    const id = Number(pop.querySelector("[data-abrir-tarefa]").dataset.abrirTarefa);
+    if (id && typeof abrirTarefaPorId === "function") abrirTarefaPorId(id);
+    pop.hidden = true;
+  });
+}
+
+// ===== O VISOR DE STORIES =====
+// Tela cheia, barras de progresso em cima, avança sozinho. Clicar na
+// metade direita pula pra próxima, na esquerda volta — o gesto que todo
+// mundo já conhece de outros apps, e por isso não precisa de instrução.
+//
+// O que ele NÃO faz: decidir. "Conferir" leva pra mesma tela de sempre.
+// Um visor que passa rápido é bom pra OLHAR, péssimo pra aprovar — a
+// decisão continua onde ela tem contexto.
+let centralStoriesEstado = null;
+
+function centralAbrirStories(lotes, indiceLote) {
+  const visor = document.getElementById("centralStoriesVisor");
+  if (!visor) return;
+  centralStoriesEstado = { lotes, lote: indiceLote, peca: 0, timer: null };
+  visor.hidden = false;
+  document.body.classList.add("central-stories-aberto");
+  centralDesenharStory();
+}
+
+function centralStoriesPecasDoLote() {
+  const e = centralStoriesEstado;
+  const lote = e.lotes[e.lote];
+  return (lote.pecas || []).filter(p => !p.arquivoSumiu && centralEhStoriesPeloNome(p) === true);
+}
+
+function centralDesenharStory() {
+  const e = centralStoriesEstado;
+  if (!e) return;
+  const lote = e.lotes[e.lote];
+  const pecas = centralStoriesPecasDoLote();
+  const peca = pecas[e.peca];
+  if (!peca) { centralFecharStories(); return; }
+
+  document.getElementById("chStoryQuem").innerHTML = `
+    ${typeof avatarClienteHTML === "function" ? avatarClienteHTML(lote.cliente, "avatar-story-topo") : ""}
+    <div>
+      <div class="central-story-visor-nome">${escaparHTML(lote.cliente || "")}</div>
+      <div class="central-story-visor-sub">feito por ${escaparHTML(lote.designer || "—")} · ${apvTempoDeEspera(lote.pedidoEm)}</div>
+    </div>`;
+
+  document.getElementById("chStoryBarras").innerHTML = pecas.map((_, k) => `
+    <span class="central-story-barra${k < e.peca ? " cheia" : ""}">
+      <i${k === e.peca ? ' class="andando"' : ""}></i></span>`).join("");
+
+  const arte = document.getElementById("chStoryArte");
+  arte.style.backgroundImage = "";
+  arte.classList.remove("sem-arte");
+  arte.dataset.file = peca.fileId || "";
+  centralCarregarArteDoFeed(arte);
+
+  clearTimeout(e.timer);
+  e.timer = setTimeout(centralStoriesProximo, 5000);
+}
+
+function centralStoriesProximo() {
+  const e = centralStoriesEstado;
+  if (!e) return;
+  if (e.peca < centralStoriesPecasDoLote().length - 1) { e.peca++; centralDesenharStory(); return; }
+  // Acabaram as deste cliente: emenda no próximo que tem stories, como
+  // qualquer app de stories faz. No fim de todos, fecha.
+  if (e.lote < e.lotes.length - 1) { e.lote++; e.peca = 0; centralDesenharStory(); return; }
+  centralFecharStories();
+}
+
+function centralStoriesAnterior() {
+  const e = centralStoriesEstado;
+  if (!e) return;
+  if (e.peca > 0) { e.peca--; centralDesenharStory(); return; }
+  if (e.lote > 0) {
+    e.lote--;
+    e.peca = Math.max(0, centralStoriesPecasDoLote().length - 1);
+    centralDesenharStory();
+  }
+}
+
+function centralFecharStories() {
+  const visor = document.getElementById("centralStoriesVisor");
+  if (centralStoriesEstado) clearTimeout(centralStoriesEstado.timer);
+  centralStoriesEstado = null;
+  if (visor) visor.hidden = true;
+  document.body.classList.remove("central-stories-aberto");
+}
+
+function centralLigarVisorDeStories() {
+  const visor = document.getElementById("centralStoriesVisor");
+  if (!visor || visor.dataset.ligado) return;
+  visor.dataset.ligado = "1";
+  document.getElementById("chStoryFechar")?.addEventListener("click", centralFecharStories);
+  document.getElementById("chStoryAnt")?.addEventListener("click", centralStoriesAnterior);
+  document.getElementById("chStoryProx")?.addEventListener("click", centralStoriesProximo);
+  document.getElementById("chStoryConferir")?.addEventListener("click", () => {
+    const e = centralStoriesEstado;
+    if (!e) return;
+    const lote = e.lotes[e.lote];
+    centralFecharStories();
+    if (typeof apvAbrirConferencia === "function") apvAbrirConferencia(lote.taskId, lote.loteId);
+  });
+  // Esc fecha — num visor que ocupa a tela inteira, é o primeiro reflexo.
+  document.addEventListener("keydown", ev => {
+    if (ev.key === "Escape" && centralStoriesEstado) centralFecharStories();
+  });
+}
+
+async function centralCopiar(texto, recado) {
+  if (!texto) { mostrarToast("Não achei esse link.", "erro"); return; }
+  try {
+    await navigator.clipboard.writeText(texto);
+    mostrarToast(recado, "sucesso");
+  } catch (err) {
+    mostrarToast(`Link (não consegui copiar sozinho): ${texto}`);
+  }
 }
 
 /** Peças já enviadas pro cliente (reaproveita o card pronto da Fila de repasse). */
