@@ -2169,3 +2169,110 @@ body.central-atencao-revisando .bee-fab { opacity: 0; pointer-events: none; }
     grid-template-columns: 1fr;
   }
 }
+
+/* ===================================================================
+   O PAINEL LATERAL (2026-08-11, pedido do Cláudio)
+
+   O grupo deixou de abrir como uma tela cheia por cima da Central e
+   passou a entrar pela DIREITA, empurrando o resto — o mesmo gesto do
+   painel da Bee, que o time já conhece.
+
+   Estas regras ficam no FIM do arquivo de propósito: elas sobrescrevem a
+   versão de tela cheia acima, e em CSS quem vem depois ganha. Ao mexer
+   em .central-grupo lá em cima, conferir se a regra nova não precisa de
+   um par aqui embaixo.
+   =================================================================== */
+
+.central-grupo {
+  left: auto; right: 0; top: 0; bottom: 0;
+  width: min(520px, 100%);
+  max-width: 100%;
+  border-radius: 0;
+  background: #fff;
+  display: flex; flex-direction: column;
+  /* Sombra do PAINEL, pra ele descolar da Central atrás. A pílula de
+     dentro continua sem sombra nenhuma, como pedido. */
+  box-shadow: -18px 0 48px rgba(8, 10, 14, 0.28);
+  transform: none;
+}
+
+/* Empurra a Central pro lado em vez de cobrir. O padding (e não uma
+   margem) mantém o fundo dela inteiro por baixo — sem faixa branca
+   aparecendo na beirada durante a transição. */
+#centralAtendimento { transition: padding-right var(--dur-slow, .35s) var(--ease-apple, ease); }
+body.central-grupo-aberto #centralAtendimento { padding-right: min(520px, 100%); }
+
+/* O escurecido de fundo perde a função: não há mais nada por baixo do
+   painel pra esconder, e ele só atrapalharia clicar na Central empurrada. */
+body.central-grupo-aberto .central-grupo-fundo { background: transparent; }
+
+/* ---------- a pílula: um grupo por vez, com setas ---------- */
+.central-grupo-pill {
+  flex-wrap: wrap;
+  gap: 8px;
+  border-radius: 0;
+  box-shadow: none;      /* pedido: sombra só nos cards */
+  padding: 14px 16px 12px;
+}
+.central-grupo-seg {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%;
+  background: #16181D;
+  border-radius: 999px;
+  padding: 5px;
+  position: relative;
+}
+.central-grupo-seta {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 999px;
+  display: grid; place-items: center; cursor: pointer;
+  background: rgba(255, 255, 255, 0.09); border: none; color: #fff;
+}
+.central-grupo-seta svg { width: 15px; height: 15px; }
+.central-grupo-seta:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); }
+.central-grupo-seta:disabled { opacity: 0.22; cursor: default; }
+
+.central-grupo-atual {
+  flex: 1; min-width: 0; text-align: center;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  color: #fff; font-size: 14.5px; font-weight: 650; letter-spacing: -0.01em;
+}
+.central-grupo-atual-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.central-grupo-atual .n {
+  flex: 0 0 auto;
+  background: var(--central-g, var(--kanban-yellow)); color: #16181D;
+  border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 800;
+}
+.central-grupo-atual.feito .n { background: #2FBF71; }
+
+/* Os pontinhos dizem em que ponto dos cinco você está — é o que a fileira
+   de abas mostrava de graça e some quando só um grupo aparece por vez. */
+.central-grupo-pontos {
+  position: absolute; left: 0; right: 0; bottom: -13px;
+  display: flex; justify-content: center; gap: 4px;
+}
+.central-grupo-pontos i {
+  width: 4px; height: 4px; border-radius: 50%; background: rgba(12, 14, 20, 0.18);
+}
+.central-grupo-pontos i.on { width: 14px; border-radius: 999px; background: var(--central-g, #16181D); }
+
+/* A busca vira uma linha, minimalista, embaixo da pílula. */
+.central-grupo-busca {
+  order: 3; flex: 1 1 auto; min-width: 0;
+  margin-top: 12px;
+  background: transparent; border: none;
+  border-bottom: 1px solid rgba(12, 14, 20, 0.14);
+  border-radius: 0; padding: 6px 2px;
+  color: #16181D;
+}
+.central-grupo-busca input { color: #16181D; }
+.central-grupo-cli-wrap { order: 4; margin-top: 12px; }
+.central-grupo-x { order: 5; margin-top: 12px; color: #5B616C; }
+.central-grupo-x:hover { color: #16181D; }
+
+/* ---------- o corpo: só a lista ---------- */
+/* A prévia grande e a coluna de contexto não cabem em 520px — e a arte
+   agora aparece no próprio card (modo cards), que era o papel da prévia. */
+.central-grupo-previa, .central-grupo-lado { display: none; }
+.central-grupo-corpo { flex: 1; min-height: 0; }
+.central-grupo-main { display: block; height: 100%; }
+.central-grupo-lista-col { width: 100%; max-width: none; height: 100%; }

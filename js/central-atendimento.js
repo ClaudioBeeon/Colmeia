@@ -1967,6 +1967,10 @@ function centralAbrirGrupo(chave) {
   if (!pop || !fundo) return;
   fundo.hidden = false;
   pop.hidden = false;
+  // É esta classe que empurra a Central pro lado (ver o bloco "O PAINEL
+  // LATERAL" no fim de css/07-central-atendimento.css) — o mesmo gesto do
+  // painel da Bee, em vez de uma tela cheia por cima.
+  document.body.classList.add("central-grupo-aberto");
   centralRenderGrupo();
 }
 
@@ -1975,6 +1979,7 @@ function centralFecharGrupo() {
   const fundo = document.getElementById("centralGrupoFundo");
   if (pop) pop.hidden = true;
   if (fundo) fundo.hidden = true;
+  document.body.classList.remove("central-grupo-aberto");
   centralGrupoAtual = null;
 }
 
@@ -1991,23 +1996,40 @@ function centralRenderGrupo() {
   const sub = document.getElementById("centralGrupoSub");
   if (!seg || !lista) return;
 
-  seg.innerHTML = Object.keys(CENTRAL_GRUPOS).map(chave => {
-    const g = CENTRAL_GRUPOS[chave];
-    const n = g.itens().length;
-    // O traço antes do "Concluídos" separa o que é trabalho em aberto do
-    // que é histórico: sem ele, os cinco pareceriam cinco filas iguais, e
-    // um deles não pede nada de ninguém.
-    const risco = g.historico ? `<span class="central-grupo-risco" aria-hidden="true"></span>` : "";
-    return risco + `
-      <button type="button" role="tab" data-central-grupo="${chave}"
-              aria-selected="${chave === centralGrupoAtual ? "true" : "false"}"
-              class="central-grupo-aba ${chave === centralGrupoAtual ? "ativa" : ""} ${g.alerta && n ? "alerta" : ""} ${g.historico ? "feito" : ""}">
-        ${escaparHTML(g.rotulo)} <span class="n">${n}</span>
-      </button>`;
-  }).join("");
-  seg.querySelectorAll("[data-central-grupo]").forEach(b => {
+  // A PÍLULA COM SETAS (2026-08-11, pedido do Cláudio). Eram cinco abas
+  // lado a lado; num painel de 520px elas não cabem sem virar texto
+  // cortado. Agora é um grupo por vez, com ← → dentro da própria pílula.
+  //
+  // As setas PARAM na ponta, não circulam: os cinco grupos são a ordem do
+  // fluxo (esperando → pronta → com o cliente → ajuste → concluído), e
+  // voltar do fim pro começo faria perder a noção de onde se está nele.
+  const chaves = Object.keys(CENTRAL_GRUPOS);
+  const pos = chaves.indexOf(centralGrupoAtual);
+  const g = CENTRAL_GRUPOS[centralGrupoAtual];
+  const n = g.itens().length;
+
+  seg.innerHTML = `
+    <button type="button" class="central-grupo-seta" data-central-ir="-1"
+            ${pos <= 0 ? "disabled" : ""} aria-label="Grupo anterior">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <span class="central-grupo-atual ${g.alerta && n ? "alerta" : ""} ${g.historico ? "feito" : ""}">
+      <span class="central-grupo-atual-t">${escaparHTML(g.rotulo)}</span>
+      <span class="n">${n}</span>
+    </span>
+    <button type="button" class="central-grupo-seta" data-central-ir="1"
+            ${pos >= chaves.length - 1 ? "disabled" : ""} aria-label="Próximo grupo">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <span class="central-grupo-pontos" aria-hidden="true">
+      ${chaves.map((c, i) => `<i class="${i === pos ? "on" : ""}"></i>`).join("")}
+    </span>`;
+
+  seg.querySelectorAll("[data-central-ir]").forEach(b => {
     b.addEventListener("click", () => {
-      centralGrupoAtual = b.dataset.centralGrupo;
+      const alvo = pos + Number(b.dataset.centralIr);
+      if (alvo < 0 || alvo >= chaves.length) return;
+      centralGrupoAtual = chaves[alvo];
       centralGrupoLimparFiltros();   // o filtro é do grupo, não da sessão
       centralRenderGrupo();
     });
