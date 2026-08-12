@@ -2611,3 +2611,35 @@ body.central-grupo-aberto #centralAtendimento { padding-right: min(548px, 100%);
   color: var(--text-muted);
 }
 .central-post-caption-mais:hover { color: var(--text-primary); }
+
+/* ---- setas do carrossel (2026-08-11) ----
+   O carrossel só respondia a arrastar; no computador com mouse não havia
+   como passar de peça. Elas empurram o MESMO scroll nativo — não é um
+   segundo jeito de controlar posição. */
+.central-post-seta {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border: none; border-radius: 50%;
+  background: rgba(17,17,20,.55); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity var(--dur-fast) var(--ease-apple);
+  backdrop-filter: blur(4px); z-index: 2;
+}
+.central-post-seta[hidden] { display: none; }
+.central-post-seta.ant { left: 10px; }
+.central-post-seta.prox { right: 10px; }
+.central-post-seta svg { width: 16px; height: 16px; }
+/* Aparecem ao passar o mouse no post — no celular, onde não existe hover,
+   ficam sempre visíveis (o arrastar também funciona lá). */
+.central-post-media:hover .central-post-seta { opacity: 1; }
+.central-post-seta:focus-visible { opacity: 1; outline: 2px solid #fff; outline-offset: 2px; }
+@media (hover: none) {
+  .central-post-seta { opacity: .9; }
+}
+
+/* A faixa tem a altura da peça que está na frente (ver
+   centralAjustarAlturaDoCarrossel). Sem isto ela assumia a altura da MAIS
+   ALTA do lote, e uma peça 4:5 ao lado de um stories 9:16 aparecia
+   flutuando num vão de espaço vazio. */
+.central-post-carrossel {
+  transition: height var(--dur-base) var(--ease-apple);
+}

@@ -1579,12 +1579,24 @@ function centralPostHTML(item, indice) {
             <div class="central-post-slide" data-slide="${k}">
               <img class="central-post-arte" data-arte alt="${escaparHTML(p.nomePeca || "")}"
                    data-file="${escaparHTML(p.fileId || "")}"
+                   data-ver="${Number(p.atualizadoEm) || 0}"
                    data-lote="${escaparHTML(String(item.loteId || ""))}"
                    title="${escaparHTML(p.nomePeca || "")}">
             </div>`).join("")}
         </div>
         ${pecas.length > 1 ? `
           <span class="central-post-contador" data-contador="${indice}">1 / ${pecas.length}</span>
+          <!-- As setas entraram em 2026-08-11: o carrossel só respondia a
+               arrastar, e no computador com mouse não havia como passar de
+               peça — o lote de 2 mostrava só a primeira, pra sempre. -->
+          <button type="button" class="central-post-seta ant" data-passo="-1" data-alvo="${indice}"
+                  aria-label="Peça anterior" hidden>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button type="button" class="central-post-seta prox" data-passo="1" data-alvo="${indice}"
+                  aria-label="Próxima peça">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <div class="central-post-pontos" data-pontos="${indice}">
             ${pecas.map((_, k) => `<span class="central-post-ponto${k === 0 ? " on" : ""}"></span>`).join("")}
           </div>` : ""}
@@ -1616,58 +1628,72 @@ function centralPostHTML(item, indice) {
     </article>`;
 }
 
-function centralLigarFeed(wrap, lotes, comStories) {
-  // As miniaturas vêm uma a uma, só quando o slide entra na tela — um
-  // lote de 13 peças não pode disparar 13 buscas de uma vez.
-  const observador = new IntersectionObserver(entradas => {
-    entradas.forEach(e => {
-      if (!e.isIntersecting) return;
-      observador.unobserve(e.target);
-      centralCarregarArteDoFeed(e.target);
-    });
-  }, { rootMargin: "300px" });
+function centralLigarFeed(wrap, lotes) {
+  // ⚠️ AS IMAGENS VÊM PELO STORAGE, NÃO POR base64 (corrigido em
+  // 2026-08-11). O feed nasceu chamando `buscarThumbnailDrive` peça por
+  // peça — texto no meio da resposta, que o navegador NÃO consegue
+  // guardar. Resultado: cada refresh baixava tudo de novo e o Cláudio
+  // esperava perto de um minuto.
+  //
+  // O caminho rápido já existia e é o mesmo da lista da Central: uma
+  // chamada devolve `{fileId: url}`, e o navegador guarda as imagens por
+  // um ano (o Storage manda essa validade). Segundo refresh não baixa
+  // nada. O base64 continua como reserva, pro que ainda não foi publicado.
+  const todasAsPecas = [];
+  (lotes || []).forEach(l => (l.pecas || []).forEach(p => {
+    if (p.fileId && !p.arquivoSumiu) {
+      todasAsPecas.push({ fileId: p.fileId, atualizadoEm: p.atualizadoEm });
+    }
+  }));
+
   const artes = [...wrap.querySelectorAll("[data-arte]")];
-  artes.forEach(el => observador.observe(el));
-
-  // As primeiras não esperam o observador. Duas razões: elas já estão na
-  // frente da pessoa (esperar é atraso à toa), e — mais importante — a
-  // fileira de stories só existe depois que alguma arte revela a
-  // proporção dela. Sem isto, uma tela onde o observador demore a
-  // disparar ficaria sem stories nenhum, sem erro nenhum aparecendo.
-  artes.slice(0, 8).forEach(el => {
-    observador.unobserve(el);
-    centralCarregarArteDoFeed(el);
+  centralGarantirUrlsDasPecas(todasAsPecas).finally(() => {
+    artes.forEach(el => { if (el.isConnected) centralCarregarArteDoFeed(el); });
   });
 
-  // As legendas seguem a mesma regra da arte: as primeiras vêm junto, o
-  // resto espera a rolagem. Uma chamada por post, e o servidor guarda o
-  // briefing — então só a primeira visita de cada peça custa.
-  const legendas = [...wrap.querySelectorAll("[data-legenda]")];
-  const obsLegenda = new IntersectionObserver(entradas => {
-    entradas.forEach(e => {
-      if (!e.isIntersecting) return;
-      obsLegenda.unobserve(e.target);
-      centralCarregarLegenda(e.target);
-    });
-  }, { rootMargin: "300px" });
-  legendas.forEach(el => obsLegenda.observe(el));
-  legendas.slice(0, 4).forEach(el => {
-    obsLegenda.unobserve(el);
-    centralCarregarLegenda(el);
-  });
+  // As legendas vêm TODAS, não só as primeiras (2026-08-11): o Cláudio
+  // viu legenda em uns posts e em outros não, e a causa era esta — o
+  // observador que devia trazer o resto nem sempre dispara. O feed mostra
+  // uma semana, e o briefing fica em cache no servidor: são poucas
+  // chamadas, e só na primeira visita de cada peça.
+  wrap.querySelectorAll("[data-legenda]").forEach(el => centralCarregarLegenda(el));
 
-  // Carrossel: quem manda é o scroll nativo (arrastar no celular, trackpad
-  // no computador) — os pontinhos só acompanham.
+  // Carrossel. O scroll nativo continua mandando (arrastar no celular,
+  // trackpad no computador), e as SETAS empurram esse mesmo scroll — não
+  // existe um segundo jeito de controlar posição, só um gatilho a mais.
   wrap.querySelectorAll("[data-carrossel]").forEach(faixa => {
     const i = faixa.dataset.carrossel;
     const pontos = wrap.querySelector(`[data-pontos="${i}"]`);
     const contador = wrap.querySelector(`[data-contador="${i}"]`);
-    if (!pontos && !contador) return;
-    faixa.addEventListener("scroll", () => {
-      const atual = Math.round(faixa.scrollLeft / faixa.clientWidth);
-      if (contador) contador.textContent = `${atual + 1} / ${faixa.children.length}`;
+    const setaAnt = wrap.querySelector(`.central-post-seta.ant[data-alvo="${i}"]`);
+    const setaProx = wrap.querySelector(`.central-post-seta.prox[data-alvo="${i}"]`);
+    const total = faixa.children.length;
+
+    const posicaoAtual = () => Math.round(faixa.scrollLeft / Math.max(1, faixa.clientWidth));
+
+    function acompanhar() {
+      const atual = posicaoAtual();
+      if (contador) contador.textContent = `${atual + 1} / ${total}`;
       if (pontos) [...pontos.children].forEach((p, k) => p.classList.toggle("on", k === atual));
-    }, { passive: true });
+      // Seta que não leva a lugar nenhum não aparece.
+      if (setaAnt) setaAnt.hidden = atual <= 0;
+      if (setaProx) setaProx.hidden = atual >= total - 1;
+      centralAjustarAlturaDoCarrossel(faixa, atual);
+    }
+
+    faixa.addEventListener("scroll", acompanhar, { passive: true });
+    [setaAnt, setaProx].forEach(b => b && b.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const destino = Math.min(total - 1, Math.max(0, posicaoAtual() + Number(b.dataset.passo)));
+      faixa.scrollTo({ left: destino * faixa.clientWidth, behavior: "smooth" });
+      // Não espera o evento de scroll pra atualizar contador, pontos e
+      // setas. Ele é assíncrono, e com rolagem suave chega tarde — a
+      // pessoa clicaria e veria "1 / 2" por um instante depois de já
+      // estar na 2. Aqui já sabemos pra onde vamos, então dizemos na hora.
+      requestAnimationFrame(acompanhar);
+      setTimeout(acompanhar, 350); // e de novo quando a rolagem terminar
+    }));
+    acompanhar();
   });
 
   wrap.querySelectorAll("[data-conferir]").forEach(btn => {
@@ -1713,11 +1739,20 @@ function centralLigarFeed(wrap, lotes, comStories) {
  */
 async function centralCarregarArteDoFeed(el) {
   const fileId = el.dataset.file;
+  if (!fileId || el.src) return;              // sem peça, ou já pintada
   if (!fileId) { el.classList.add("sem-arte"); return; }
 
   el.addEventListener("load", () => centralAnotarProporcao(el), { once: true });
   el.addEventListener("error", () => el.classList.add("sem-arte"), { once: true });
 
+  // 1) O endereço do Storage, se a peça já estiver publicada. É o caminho
+  //    normal: o navegador baixa direto do CDN e guarda por um ano.
+  const chave = centralChaveDaPeca(fileId, Number(el.dataset.ver) || 0);
+  const url = centralUrlsDePecas.get(chave);
+  if (url) { el.src = url; return; }
+
+  // 2) Reserva: o base64 de sempre. Vale pra peça ainda não publicada e
+  //    pro dia em que o Storage estiver desligado.
   const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
   if (!el.isConnected) return;
   if (!data || !data.ok || !data.base64) { el.classList.add("sem-arte"); return; }
@@ -1781,6 +1816,27 @@ const centralProporcaoDaArte = new Map();
 let centralStoriesRedesenho = null;
 
 /**
+ * A ALTURA DO CARROSSEL ACOMPANHA A PEÇA QUE ESTÁ NA FRENTE (2026-08-11).
+ *
+ * Um lote pode misturar formatos — um Feed 4:5 e um Stories 9:16 no mesmo
+ * post. Como as fatias ficam lado a lado, a faixa assumia a altura da
+ * MAIS ALTA, e a peça baixa aparecia num vão enorme de espaço vazio
+ * ("quando tem um stories junto, o feed já corta e fica estranho").
+ *
+ * Agora a faixa tem a altura da peça atual e transiciona ao passar. Cada
+ * arte continua inteira, sem corte — só o vazio em volta desaparece.
+ */
+function centralAjustarAlturaDoCarrossel(faixa, indice) {
+  const slide = faixa.children[indice];
+  const img = slide && slide.querySelector("img");
+  // Sem a arte carregada ainda não há altura pra copiar — quando ela
+  // chegar, centralAnotarProporcao chama isto de novo.
+  if (!img || !img.naturalWidth) return;
+  const altura = Math.round(img.getBoundingClientRect().height);
+  if (altura > 0) faixa.style.height = altura + "px";
+}
+
+/**
  * Anota a proporção e pede a fileira de stories de volta.
  *
  * O redesenho é adiado um instante de propósito: numa tela com dez artes
@@ -1790,6 +1846,13 @@ let centralStoriesRedesenho = null;
 function centralAnotarProporcao(img) {
   if (!img.naturalWidth || !img.dataset.file) return;
   centralProporcaoDaArte.set(img.dataset.file, img.naturalHeight / img.naturalWidth);
+
+  // A faixa só sabe que altura ter depois que a arte chega.
+  const faixa = img.closest("[data-carrossel]");
+  if (faixa) {
+    const atual = Math.round(faixa.scrollLeft / Math.max(1, faixa.clientWidth));
+    centralAjustarAlturaDoCarrossel(faixa, atual);
+  }
   clearTimeout(centralStoriesRedesenho);
   centralStoriesRedesenho = setTimeout(() => {
     if (typeof centralHojeVista !== "undefined" && centralHojeVista !== "feed") return;
