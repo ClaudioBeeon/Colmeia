@@ -674,6 +674,15 @@ function mandarPecaDoErickParaConferencia(tarefa, fileId) {
   var link = COLMEIA_URL_PUBLICA + '?t=' + encodeURIComponent(tarefa.id) + '&p=' + encodeURIComponent(loteId);
   var texto = nomePeca + ' está pronta pra revisão: ' + link;
   adicionarComentario(tarefa.id, texto, 'Erick');
+
+  // Repete no card mãe (2026-08-12, pedido do Cláudio: "igual a Bee
+  // faz"). Lá é a mesma pergunta "Repetir esse comentário no card mãe
+  // também?" que o resto do Colmeia faz pro designer — só que aqui,
+  // automática, direto: sem designer nenhum pra clicar "Sim", e o
+  // atendimento acompanha mais o card mãe do que a subtarefa avulsa.
+  if (tarefa.parentTaskId) {
+    adicionarComentario(tarefa.parentTaskId, texto, 'Erick');
+  }
 }
 
 /**
