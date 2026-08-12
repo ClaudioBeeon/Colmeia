@@ -492,6 +492,141 @@ function acharLinhaDaConferencia(linhas, taskId, nomePeca) {
   return 0;
 }
 
+// =====================================================================
+// PEÇAS DO ERICK — ele ainda trabalha direto no Runrun.it (2026-08-12)
+// =====================================================================
+//
+// Nunca abre o Colmeia, então nunca vê a fala da Bee de "arquivo novo"
+// nem o botão "Enviar para revisão" — as peças dele nunca entravam
+// sozinhas na fila de conferência. Isto aqui faz, por um gatilho de
+// tempo (ver configurarGatilhoErick), o que a Bee faria por qualquer
+// outro designer: quando ELE MESMO cola um link de arquivo do Drive num
+// comentário da própria tarefa, a peça entra na fila de conferência
+// interna e o link da conferência já sai comentado — sem precisar de
+// clique nenhum, porque ele não teria como dar esse clique mesmo.
+//
+// ⚠️ NÃO reaproveita `pedirConferenciaInterna`: aquela função exige a
+// peça estar na PASTA DO CARD já vinculada (listarVersoesDasPecasSemCache)
+// — e como o Erick nunca usou "Criar pasta do card", a tarefa dele quase
+// sempre não tem pasta nenhuma. Aqui a peça é resolvida direto do
+// arquivo que ele mesmo linkou, sem depender de pasta — por isso o
+// dedupe é por (taskId, fileId), não por (taskId, nomePeca) como lá.
+
+/** Link de ARQUIVO do Drive (não pasta) — formatos "/file/d/<id>" e "?id=<id>". */
+function extrairIdDeUrlDeArquivoDrive(url) {
+  var m = String(url).match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+var ERICK_LINK_DRIVE_REGEX = /https?:\/\/(?:drive|docs)\.google\.com\/\S+/gi;
+
+/**
+ * Chamada pelo gatilho de tempo. Varre as tarefas abertas do Erick
+ * (já vêm de graça em getTarefasColmeia — nenhuma busca extra ao
+ * Runrun.it) e, em cada uma, procura comentário DELE com link do Drive.
+ */
+function verificarLinksDoErickNoRunrun() {
+  var tarefas = getTarefasColmeia().filter(function (t) {
+    return normalizarNomeParaComparar(t.assignee || '') === 'erick';
+  });
+
+  tarefas.forEach(function (tarefa) {
+    try {
+      processarComentariosDoErick(tarefa);
+    } catch (e) {
+      Logger.log('Erro verificando peças do Erick na tarefa ' + tarefa.id + ': ' + e);
+    }
+  });
+}
+
+function processarComentariosDoErick(tarefa) {
+  var r = listarComentarios(tarefa.id);
+  if (!r.ok) return;
+
+  r.comentarios.forEach(function (c) {
+    if (normalizarNomeParaComparar(c.autor || '') !== 'erick') return;
+    var links = String(c.texto || '').match(ERICK_LINK_DRIVE_REGEX);
+    if (!links) return;
+    links.forEach(function (link) {
+      var fileId = extrairIdDeUrlDeArquivoDrive(link);
+      if (fileId) mandarPecaDoErickParaConferencia(tarefa, fileId);
+    });
+  });
+}
+
+function mandarPecaDoErickParaConferencia(tarefa, fileId) {
+  // Já foi processado antes? (mesma tarefa + mesmo arquivo já na fila,
+  // aprovado ou devolvido) — dedupe por fileId, não por nomePeca (ver o
+  // comentário grande no topo desta seção pro motivo).
+  var linhas = linhasDaConferencia();
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) === String(tarefa.id) && String(linhas[i][6]) === String(fileId)) return;
+  }
+
+  var arquivo;
+  try {
+    arquivo = DriveApp.getFileById(fileId);
+  } catch (e) {
+    return; // link quebrado, arquivo apagado, ou sem permissão — ignora
+  }
+  var mimeType = arquivo.getMimeType();
+  if (!ehTipoDePecaAceito(mimeType)) return; // não é imagem nem vídeo (ex: um PDF de briefing)
+
+  var nomeArquivo = arquivo.getName();
+  var nomePeca = nomeBaseDaPeca(nomeArquivo);
+  var versao = versaoDoArquivo(nomeArquivo) || 1;
+
+  var loteId = '';
+  for (var iLote = 0; iLote < 6; iLote++) {
+    loteId += ALFABETO_CODIGO_APROVACAO.charAt(Math.floor(Math.random() * ALFABETO_CODIGO_APROVACAO.length));
+  }
+
+  var valores = [
+    String(tarefa.id), tarefa.client || '', tarefa.title || '', nomePeca,
+    'Erick', tarefa.assigneeId || '',
+    fileId, nomeArquivo, mimeType, versao,
+    new Date().toISOString(), 'pendente', '', '', '', loteId
+  ];
+
+  var lock = LockService.getScriptLock();
+  pegarTravaDaPlanilha(lock);
+  try {
+    // No banco é um comando só (upsert por task_id+nome_peca). Na
+    // planilha continua sendo procurar a linha e escrever nela — mesmo
+    // padrão de pedirConferenciaInterna.
+    salvarConferenciaNoBanco(valores);
+    var sheet = getConferenciasSheet();
+    var linhasSheet = sheet.getDataRange().getValues();
+    var existente = acharLinhaDaConferencia(linhasSheet, tarefa.id, nomePeca);
+    if (existente) sheet.getRange(existente, 1, 1, valores.length).setValues([valores]);
+    else sheet.appendRow(valores);
+  } finally {
+    lock.releaseLock();
+  }
+
+  // O comentário sai SOZINHO, como Erick — diferente do resto do app (a
+  // Bee só deixa o texto rascunhado pro designer clicar em enviar): aqui
+  // não existe designer nenhum no Colmeia pra dar esse clique.
+  var link = COLMEIA_URL_PUBLICA + '?t=' + encodeURIComponent(tarefa.id) + '&p=' + encodeURIComponent(loteId);
+  var texto = nomePeca + ' está pronta pra revisão: ' + link;
+  adicionarComentario(tarefa.id, texto, 'Erick');
+}
+
+/**
+ * RODAR UMA ÚNICA VEZ, manualmente, pelo editor do Apps Script — mesmo
+ * padrão de configurarGatilhoBackup (Drive.gs). Configura o gatilho que
+ * faz verificarLinksDoErickNoRunrun rodar sozinha a cada 10 minutos.
+ */
+function configurarGatilhoErick() {
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function (t) {
+    if (t.getHandlerFunction() === 'verificarLinksDoErickNoRunrun') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('verificarLinksDoErickNoRunrun').timeBased().everyMinutes(10).create();
+  verificarLinksDoErickNoRunrun(); // já roda uma vez agora
+  Logger.log('Gatilho configurado: verificarLinksDoErickNoRunrun vai rodar sozinha a cada 10 minutos.');
+}
+
 /**
  * A fila do atendimento: o que está esperando ALGUMA ação de quem confere —
  * ou ainda não olhou ('pendente'), ou já aprovou mas ainda não mandou pro
