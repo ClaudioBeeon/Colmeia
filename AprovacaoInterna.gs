@@ -521,6 +521,20 @@ function extrairIdDeUrlDeArquivoDrive(url) {
 var ERICK_LINK_DRIVE_REGEX = /https?:\/\/(?:drive|docs)\.google\.com\/\S+/gi;
 
 /**
+ * "Erick" bate tanto com o nome sozinho quanto com o nome completo dele
+ * no Runrun.it (ex: "Erick Bara") — achado 2026-08-12: a comparação por
+ * IGUALDADE (`=== 'erick'`) nunca batia com o autor de comentário nem
+ * com `assignee`, os dois vêm com o nome completo, e a automação inteira
+ * ficava muda sem erro nenhum aparecer. `indexOf('erick ') === 0` cobre
+ * "Erick Bara"/"Erick Silva"/etc. sem confundir com um nome que só
+ * CONTENHA "erick" no meio (ex: um "Mauerick" hipotético).
+ */
+function ehErick(nome) {
+  var normal = normalizarNomeParaComparar(nome || '');
+  return normal === 'erick' || normal.indexOf('erick ') === 0;
+}
+
+/**
  * Chamada pelo gatilho de tempo. Varre as tarefas ABERTAS do Erick (já
  * vêm de graça em getTarefasColmeia) MAIS as que ele fechou recentemente
  * (buscarTarefasFechadasRecentesDoErick, logo abaixo) — e, em cada uma,
@@ -544,7 +558,7 @@ function verificarLinksDoErickNoRunrun() {
   var abertas = (resultado && resultado.ok && Array.isArray(resultado.tarefas)) ? resultado.tarefas : [];
 
   var tarefas = abertas.filter(function (t) {
-    return normalizarNomeParaComparar(t.assignee || '') === 'erick';
+    return ehErick(t.assignee);
   });
 
   var fechadasRecentes = [];
@@ -555,7 +569,7 @@ function verificarLinksDoErickNoRunrun() {
     Logger.log('Erro buscando fechadas recentes do Erick: ' + e);
   }
 
-  Logger.log('[Erick] varredura: ' + abertas.filter(function (t) { return normalizarNomeParaComparar(t.assignee || '') === 'erick'; }).length +
+  Logger.log('[Erick] varredura: ' + abertas.filter(function (t) { return ehErick(t.assignee); }).length +
     ' tarefa(s) aberta(s) + ' + fechadasRecentes.length + ' fechada(s) nas ultimas 24h -- ids: ' +
     tarefas.map(function (t) { return t.id; }).join(', '));
 
@@ -634,7 +648,7 @@ function processarComentariosDoErick(tarefa) {
   }
 
   var comentariosDoErick = r.comentarios.filter(function (c) {
-    return normalizarNomeParaComparar(c.autor || '') === 'erick';
+    return ehErick(c.autor);
   });
   if (!comentariosDoErick.length) return; // caso comum (a maioria das tarefas dele): nada a logar
 
