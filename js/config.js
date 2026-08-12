@@ -36,6 +36,28 @@ function registrarNoDiagnostico(tipo, texto) {
     localStorage.setItem(DIAGNOSTICO_CHAVE, JSON.stringify(_diagnosticoLista));
   } catch (err) { /* aba privada / espaço cheio — segue sem anotar */ }
   mandarErroProBanco(tipo, texto);
+  mandarErroProPostHog(tipo, texto);
+}
+
+// ---------------------------------------------------------------------
+// PostHog (2026-08-12) — roda em PARALELO ao mandarErroProBanco acima,
+// de propósito: o Monitoramento.gs/painel de diagnóstico continuam vivos
+// até o time confirmar que o PostHog está pegando tudo. Depois disso os
+// dois (código e tabelas erros/uso_telas) saem juntos.
+//
+// Mesmos dois cuidados do mandarErroProBanco: só "erro"/"quebrou" (aviso
+// de rede vira ruído) e nunca trava a tela de quem já está com problema.
+// A deduplicação por sessão já acontece lá em cima (_errosJaMandados) —
+// não repete aqui.
+// ---------------------------------------------------------------------
+function mandarErroProPostHog(tipo, texto) {
+  if (tipo !== "erro" && tipo !== "quebrou") return;
+  if (typeof posthog === "undefined") return;
+  try {
+    posthog.captureException(new Error(String(texto).slice(0, 800)), {
+      tela: telaAtualParaMonitoramento()
+    });
+  } catch (err) { /* não pode travar a tela por causa do relatório */ }
 }
 
 // ---------------------------------------------------------------------
@@ -119,6 +141,9 @@ function contarTelaAberta(tela) {
     chamarBackend({ acao: "registrarTelaAberta", tela, designer: DESIGNER_LOGADO })
       .catch(() => { /* medir uso nunca pode atrapalhar usar */ });
   } catch (err) { /* segue */ }
+  if (typeof posthog !== "undefined") {
+    try { posthog.capture("tela_aberta", { tela }); } catch (err) { /* segue */ }
+  }
 }
 
 (function ligarCapturaDeErros() {

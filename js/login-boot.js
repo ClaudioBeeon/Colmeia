@@ -1,4 +1,14 @@
 function iniciarAppPosLogin() {
+  // Liga o nome (e o e-mail, quando existe) a partir daqui — é o que faz
+  // erro e replay do PostHog dizerem "foi a Laura", em vez de uma sessão
+  // anônima qualquer. `person_profiles: 'identified_only'` no snippet do
+  // index.html já evita perfil pra quem nem chegou a logar.
+  if (typeof posthog !== "undefined") {
+    try {
+      posthog.identify(DESIGNER_LOGADO, typeof EMAIL_LOGADO !== "undefined" && EMAIL_LOGADO ? { email: EMAIL_LOGADO } : undefined);
+    } catch (err) { /* PostHog fora do ar não pode travar o login */ }
+  }
+
   document.getElementById("loginScreen").hidden = true;
   document.getElementById("page").hidden = false;
 
