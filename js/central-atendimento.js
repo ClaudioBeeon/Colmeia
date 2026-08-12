@@ -1406,53 +1406,155 @@ function centralPreencherSecaoFila(idCorpo, itens, status) {
  * carregar (ver centralMarcarFormatoPelaProporcao) — arte em pé e bem
  * alta é stories.
  */
-function centralEhStoriesPeloNome(peca) {
-  const texto = `${peca.nomePeca || ""} ${peca.nomeArquivo || ""}`.toLowerCase();
-  if (/\bstor(y|ies)\b|\bstories\b/.test(texto)) return true;
-  if (/\bfeed\b|\bcarrossel\b|\bcarousel\b/.test(texto)) return false;
-  return null; // não deu pra saber pelo nome
+// Mais alto que 1,5× a largura = vertical de stories. 9:16 dá 1,78;
+// 4:5 (o mais alto que o feed usa) dá 1,25 — a folga entre os dois é
+// grande, então o corte no meio não fica em cima de nenhum formato real.
+const CENTRAL_PROPORCAO_STORIES = 1.5;
+
+/**
+ * Essa peça é de stories?
+ *
+ * ⚠️ PELA PROPORÇÃO DA ARTE, NUNCA PELO NOME (2026-08-11). O nome errava
+ * dos dois lados: sumia com a peça chamada "Criativo 01" que é stories, e
+ * trazia todo mundo que tivesse a palavra escrita em algum canto — foi
+ * assim que a fileira apareceu com a agência inteira.
+ *
+ * Devolve `null` enquanto a arte não carregou: não dá pra saber ainda, e
+ * chutar aqui é justamente o que se quer evitar. A fileira é remontada
+ * quando cada arte chega (ver centralAnotarProporcao).
+ */
+function centralEhStories(peca) {
+  if (!peca || !peca.fileId) return null;
+  const proporcao = centralProporcaoDaArte.get(peca.fileId);
+  if (proporcao === undefined) return null;
+  return proporcao >= CENTRAL_PROPORCAO_STORIES;
 }
 
 /** Um lote tem alguma peça de stories? (só o que dá pra saber pelo nome) */
 function centralLoteTemStories(item) {
-  return (item.pecas || []).some(p => centralEhStoriesPeloNome(p) === true);
+  return (item.pecas || []).some(p => centralEhStories(p) === true);
+}
+
+// Mais novas primeiro é o padrão (decisão do Cláudio): o feed é uma linha
+// do tempo do que acabou de chegar, não uma fila de urgência — pra
+// urgência existe o Painel, que ordena por prazo.
+let centralFeedOrdem = "novas"; // "novas" | "antigas"
+
+// Uma semana. Peça aprovada some do feed, então o volume e' baixo — mas
+// sem um corte a rolagem cresce sem fim e o feed deixa de servir pra
+// olhar. O que ficou pra tras nao some calado: vai contado no rodape,
+// com o caminho pra ver.
+const CENTRAL_FEED_JANELA_MS = 7 * 24 * 60 * 60 * 1000;
+
+function centralFeedQuando(lote) {
+  return Date.parse(lote && lote.pedidoEm) || 0;
 }
 
 function centralRenderFeed() {
   const wrap = document.getElementById("centralFeedWrap");
   if (!wrap) return;
 
-  const lotes = centralFilaPor("pendente");
-  if (!lotes.length) {
+  const todos = centralFilaPor("pendente").slice().sort((a, b) => {
+    const d = centralFeedQuando(b) - centralFeedQuando(a);
+    return centralFeedOrdem === "novas" ? d : -d;
+  });
+
+  if (!todos.length) {
     wrap.innerHTML = `<div class="central-section-empty" style="margin-top:40px">
       Nada esperando você conferir agora.</div>`;
     return;
   }
 
-  const comStories = lotes.filter(centralLoteTemStories);
+  const corte = Date.now() - CENTRAL_FEED_JANELA_MS;
+  const lotes = todos.filter(l => centralFeedQuando(l) >= corte);
+  const antigos = todos.length - lotes.length;
 
+  // A fileira de stories nasce vazia e é preenchida por
+  // centralRenderStories() quando as proporções das artes forem
+  // conhecidas — ver centralMarcarFormatoPelaProporcao.
   wrap.innerHTML = `
-    ${comStories.length ? `
-      <div class="central-stories">
-        ${comStories.map((l, i) => `
-          <button type="button" class="central-story" data-story="${i}">
-            <span class="central-story-anel"><span class="central-story-foto">
-              ${typeof avatarClienteHTML === "function" ? avatarClienteHTML(l.cliente, "avatar-story") : ""}
-            </span></span>
-            <span class="central-story-nome">${escaparHTML(String(l.cliente || "").split(" ")[0])}</span>
-          </button>`).join("")}
-      </div>` : ""}
+    <div class="central-feed-topo">
+      <span class="central-feed-titulo">Últimos 7 dias</span>
+      <button type="button" class="central-feed-ordem" data-central-feed-ordem>
+        ${centralFeedOrdem === "novas" ? "Mais novas primeiro" : "Mais antigas primeiro"}
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="central-stories" id="centralStoriesFila" hidden></div>
     <div class="central-feed">
       ${lotes.map((l, i) => centralPostHTML(l, i)).join("")}
-    </div>`;
+    </div>
+    ${antigos ? `
+      <div class="central-feed-rodape">
+        ${antigos} peça${antigos > 1 ? "s" : ""} de mais de uma semana atrás continua${antigos > 1 ? "m" : ""} esperando.
+        <button type="button" data-central-feed-antigas>Ver no Painel</button>
+      </div>` : ""}`;
 
-  centralLigarFeed(wrap, lotes, comStories);
+  wrap.querySelector("[data-central-feed-ordem]")?.addEventListener("click", () => {
+    centralFeedOrdem = centralFeedOrdem === "novas" ? "antigas" : "novas";
+    centralRenderFeed();
+  });
+  wrap.querySelector("[data-central-feed-antigas]")?.addEventListener("click", () => {
+    // Leva pro grupo "Esperando você" do Painel, que mostra a fila
+    // inteira sem recorte de data.
+    if (typeof centralAbrirGrupo === "function") centralAbrirGrupo("esperando");
+  });
+
+  centralLotesNoFeed = lotes;
+  centralLigarFeed(wrap, lotes);
+  centralRenderStories(lotes);
 }
+
+// Os lotes que estão na tela agora — a fileira de stories precisa deles
+// pra ser remontada quando uma arte nova revela sua proporção.
+let centralLotesNoFeed = [];
+
+/**
+ * A FILEIRA DE STORIES.
+ *
+ * Só entram os clientes com peça VERTICAL, e vertical é decidido pela
+ * proporção da arte — não pelo nome (2026-08-11). O nome erra dos dois
+ * lados: some com a peça chamada "Criativo 01" que é stories, e traz todo
+ * mundo que tem a palavra escrita em algum lugar. Foi isso que fez a
+ * fileira aparecer com a agência inteira.
+ *
+ * Como a proporção só é conhecida quando a arte carrega, esta função é
+ * chamada de novo a cada arte que chega (ver centralMarcarFormatoPelaProporcao)
+ * — a fileira aparece sozinha um instante depois do feed, e cresce.
+ */
+function centralRenderStories(lotes) {
+  const fila = document.getElementById("centralStoriesFila");
+  if (!fila) return;
+
+  const comStories = (lotes || []).filter(centralLoteTemStories);
+  if (!comStories.length) { fila.hidden = true; fila.innerHTML = ""; return; }
+
+  fila.hidden = false;
+  fila.innerHTML = comStories.map((l, i) => `
+    <button type="button" class="central-story${centralStoriesVistos.has(l.loteId) ? " visto" : ""}" data-story="${i}">
+      <span class="central-story-anel"><span class="central-story-foto">
+        ${typeof avatarClienteHTML === "function" ? avatarClienteHTML(l.cliente, "avatar-story") : ""}
+      </span></span>
+      <span class="central-story-nome">${escaparHTML(String(l.cliente || "").split(" ")[0])}</span>
+    </button>`).join("");
+
+  fila.querySelectorAll("[data-story]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const lote = comStories[Number(btn.dataset.story)];
+      centralStoriesVistos.add(lote.loteId);
+      btn.classList.add("visto");
+      centralAbrirStories(comStories, Number(btn.dataset.story));
+    });
+  });
+}
+
+// Quem já foi aberto nesta sessão — é o que apaga o anel colorido.
+const centralStoriesVistos = new Set();
 
 function centralPostHTML(item, indice) {
   const pecas = (item.pecas || []).filter(p => !p.arquivoSumiu);
   const primeira = pecas[0] || {};
-  const ehStories = centralEhStoriesPeloNome(primeira);
+  const ehStories = centralEhStories(primeira);
   const versaoNova = pecas.some(p => p.temVersaoNova);
 
   return `
@@ -1474,8 +1576,12 @@ function centralPostHTML(item, indice) {
       <div class="central-post-media">
         <div class="central-post-carrossel" data-carrossel="${indice}">
           ${pecas.map((p, k) => `
-            <div class="central-post-slide" data-arte data-file="${escaparHTML(p.fileId || "")}"
-                 data-slide="${k}" title="${escaparHTML(p.nomePeca || "")}"></div>`).join("")}
+            <div class="central-post-slide" data-slide="${k}">
+              <img class="central-post-arte" data-arte alt="${escaparHTML(p.nomePeca || "")}"
+                   data-file="${escaparHTML(p.fileId || "")}"
+                   data-lote="${escaparHTML(String(item.loteId || ""))}"
+                   title="${escaparHTML(p.nomePeca || "")}">
+            </div>`).join("")}
         </div>
         ${pecas.length > 1 ? `
           <span class="central-post-contador" data-contador="${indice}">1 / ${pecas.length}</span>
@@ -1516,7 +1622,18 @@ function centralLigarFeed(wrap, lotes, comStories) {
       centralCarregarArteDoFeed(e.target);
     });
   }, { rootMargin: "300px" });
-  wrap.querySelectorAll("[data-arte]").forEach(el => observador.observe(el));
+  const artes = [...wrap.querySelectorAll("[data-arte]")];
+  artes.forEach(el => observador.observe(el));
+
+  // As primeiras não esperam o observador. Duas razões: elas já estão na
+  // frente da pessoa (esperar é atraso à toa), e — mais importante — a
+  // fileira de stories só existe depois que alguma arte revela a
+  // proporção dela. Sem isto, uma tela onde o observador demore a
+  // disparar ficaria sem stories nenhum, sem erro nenhum aparecendo.
+  artes.slice(0, 8).forEach(el => {
+    observador.unobserve(el);
+    centralCarregarArteDoFeed(el);
+  });
 
   // Carrossel: quem manda é o scroll nativo (arrastar no celular, trackpad
   // no computador) — os pontinhos só acompanham.
@@ -1561,30 +1678,51 @@ function centralLigarFeed(wrap, lotes, comStories) {
   });
 }
 
+/**
+ * A arte de um slide.
+ *
+ * É uma <img> de verdade, não um fundo (2026-08-11, pedido do Cláudio:
+ * "que apareça no tamanho original, 1x1, 1080x1350 ou 1080x1440, a
+ * imagem inteira adaptando"). Um fundo obriga a caixa a ter altura fixa,
+ * e foi isso que espremia tudo em quadrado, cortando as verticais.
+ *
+ * De quebra, a <img> entrega a PROPORÇÃO de graça (`naturalWidth`), que é
+ * o que decide se a peça é stories — sem baixar a imagem duas vezes, que
+ * é o que a versão anterior fazia.
+ */
 async function centralCarregarArteDoFeed(el) {
   const fileId = el.dataset.file;
   if (!fileId) { el.classList.add("sem-arte"); return; }
+
+  el.addEventListener("load", () => centralAnotarProporcao(el), { once: true });
+  el.addEventListener("error", () => el.classList.add("sem-arte"), { once: true });
+
   const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
   if (!el.isConnected) return;
   if (!data || !data.ok || !data.base64) { el.classList.add("sem-arte"); return; }
-  el.style.backgroundImage = `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")`;
-  centralMarcarFormatoPelaProporcao(el, data);
+  el.src = `data:${data.mimeType || "image/jpeg"};base64,${data.base64}`;
 }
 
+// fileId → altura/largura da arte. É a memória do que já foi medido: a
+// fileira de stories é remontada a cada arte nova que chega.
+const centralProporcaoDaArte = new Map();
+let centralStoriesRedesenho = null;
+
 /**
- * A reserva da detecção de stories: quando o nome do arquivo não disse
- * nada, a proporção decide. Arte em pé e bem alta (9:16 e parecidos) é
- * stories; quadrada ou 4:5 é feed. Só roda depois da miniatura chegar —
- * por isso é reserva, e não o caminho principal.
+ * Anota a proporção e pede a fileira de stories de volta.
+ *
+ * O redesenho é adiado um instante de propósito: numa tela com dez artes
+ * carregando quase juntas, remontar a fileira dez vezes seguidas faria
+ * ela piscar. Esperar o fim da rajada monta uma vez só.
  */
-function centralMarcarFormatoPelaProporcao(el, data) {
-  const img = new Image();
-  img.onload = () => {
-    if (!el.isConnected || !img.width) return;
-    const alturaSobreLargura = img.height / img.width;
-    el.dataset.formato = alturaSobreLargura >= 1.6 ? "stories" : "feed";
-  };
-  img.src = `data:${data.mimeType || "image/jpeg"};base64,${data.base64}`;
+function centralAnotarProporcao(img) {
+  if (!img.naturalWidth || !img.dataset.file) return;
+  centralProporcaoDaArte.set(img.dataset.file, img.naturalHeight / img.naturalWidth);
+  clearTimeout(centralStoriesRedesenho);
+  centralStoriesRedesenho = setTimeout(() => {
+    if (typeof centralHojeVista !== "undefined" && centralHojeVista !== "feed") return;
+    centralRenderStories(centralLotesNoFeed);
+  }, 150);
 }
 
 function centralMontarPopoverDeLinks(pop, item) {
@@ -1637,7 +1775,7 @@ let centralStoriesEstado = null;
 function centralAbrirStories(lotes, indiceLote) {
   const visor = document.getElementById("centralStoriesVisor");
   if (!visor) return;
-  centralStoriesEstado = { lotes, lote: indiceLote, peca: 0, timer: null };
+  centralStoriesEstado = { lotes, lote: indiceLote, peca: 0 };
   visor.hidden = false;
   document.body.classList.add("central-stories-aberto");
   centralDesenharStory();
@@ -1646,7 +1784,7 @@ function centralAbrirStories(lotes, indiceLote) {
 function centralStoriesPecasDoLote() {
   const e = centralStoriesEstado;
   const lote = e.lotes[e.lote];
-  return (lote.pecas || []).filter(p => !p.arquivoSumiu && centralEhStoriesPeloNome(p) === true);
+  return (lote.pecas || []).filter(p => !p.arquivoSumiu && centralEhStories(p) === true);
 }
 
 function centralDesenharStory() {
@@ -1664,18 +1802,22 @@ function centralDesenharStory() {
       <div class="central-story-visor-sub">feito por ${escaparHTML(lote.designer || "—")} · ${apvTempoDeEspera(lote.pedidoEm)}</div>
     </div>`;
 
+  // As barras viraram só POSIÇÃO (2026-08-11): "está na 2 de 3". Antes
+  // elas enchiam sozinhas, marcando um tempo que já não existe.
   document.getElementById("chStoryBarras").innerHTML = pecas.map((_, k) => `
-    <span class="central-story-barra${k < e.peca ? " cheia" : ""}">
-      <i${k === e.peca ? ' class="andando"' : ""}></i></span>`).join("");
+    <span class="central-story-barra${k <= e.peca ? " cheia" : ""}"><i></i></span>`).join("");
 
   const arte = document.getElementById("chStoryArte");
-  arte.style.backgroundImage = "";
+  arte.removeAttribute("src");
   arte.classList.remove("sem-arte");
   arte.dataset.file = peca.fileId || "";
   centralCarregarArteDoFeed(arte);
 
-  clearTimeout(e.timer);
-  e.timer = setTimeout(centralStoriesProximo, 5000);
+  // ⚠️ NÃO PASSA SOZINHO. Pedido do Cláudio: o story trocava a cada 5s,
+  // às vezes antes de a arte terminar de carregar — você olhava pra uma
+  // peça que não deu tempo de aparecer e ela já tinha ido embora. Numa
+  // tela de CONFERÊNCIA isso é o oposto do que se quer: quem decide
+  // quando avançar é quem está conferindo.
 }
 
 function centralStoriesProximo() {
@@ -1701,7 +1843,6 @@ function centralStoriesAnterior() {
 
 function centralFecharStories() {
   const visor = document.getElementById("centralStoriesVisor");
-  if (centralStoriesEstado) clearTimeout(centralStoriesEstado.timer);
   centralStoriesEstado = null;
   if (visor) visor.hidden = true;
   document.body.classList.remove("central-stories-aberto");
