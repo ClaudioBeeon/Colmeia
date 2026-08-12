@@ -594,28 +594,28 @@ function buscarTarefasFechadasRecentesDoErick() {
     return [];
   }
 
+  // ⚠️ SEM `sort=updated_at` de propósito (2026-08-12): o Runrun.it
+  // recusa essa ordenação quando `is_closed=true` -- "Invalid order:
+  // 'updated_at'" -- mesmo ela funcionando pra tarefas ABERTAS em todo
+  // o resto do app (buscarTarefasAbertasSeparadas etc.). Sem ordenação
+  // garantida não dá pra "parar assim que sair da janela" com
+  // confiança, então aqui é: busca um teto de páginas e filtra a data
+  // em memória, sem cortar cedo.
   var corte = Date.now() - ERICK_JANELA_FECHADAS_MS;
   var fechadas = [];
   for (var pagina = 1; pagina <= 3; pagina++) {
     var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(idErick) +
-      '&is_closed=true&sort=updated_at&sortDir=desc&limit=100&page=' + pagina);
+      '&is_closed=true&limit=100&page=' + pagina);
     if (!Array.isArray(lote)) {
       Logger.log('[Erick] pagina ' + pagina + ' das fechadas nao veio como lista -- resposta: ' + JSON.stringify(lote).slice(0, 500));
       break;
     }
-    if (!lote.length) {
-      Logger.log('[Erick] pagina ' + pagina + ' das fechadas veio vazia (id usado: ' + idErick + ').');
-      break;
-    }
+    if (!lote.length) break; // acabaram as páginas, sem nada de errado
 
-    var saiuDaJanela = false;
-    for (var i = 0; i < lote.length; i++) {
-      var t = lote[i];
+    lote.forEach(function (t) {
       var atualizadoEm = t.updated_at ? new Date(t.updated_at).getTime() : 0;
-      if (atualizadoEm < corte) { saiuDaJanela = true; break; }
-      fechadas.push(transformarTarefaParaColmeia(t, 'Erick', null));
-    }
-    if (saiuDaJanela) break;
+      if (atualizadoEm >= corte) fechadas.push(transformarTarefaParaColmeia(t, 'Erick', null));
+    });
   }
   return fechadas;
 }
