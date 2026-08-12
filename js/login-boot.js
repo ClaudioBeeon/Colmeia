@@ -65,7 +65,18 @@ function iniciarAppPosLogin() {
   if (painelDesignersNav) painelDesignersNav.hidden = !souCoordenadorDoAtendimento();
   const configTabVinculos = document.getElementById("configTabVinculos");
   if (configTabVinculos) configTabVinculos.hidden = !souCoordenadorDoAtendimento();
-  if (PAPEL_LOGADO === "atendimento" && typeof abrirCentralAtendimento === "function") {
+  // ⚠️ Exceção (2026-08-12): se a pessoa veio direto pra /coordenacao (ver
+  // js/roteador-url.js), essa abertura automática NÃO acontece — senão a
+  // Central (um overlay de tela cheia, por cima de tudo) cobriria os 3
+  // cartões da página antes dela sequer aparecer, e o link perderia o
+  // sentido pro João Paulo e pro Lucas (os dois têm papel "atendimento",
+  // então SEMPRE cairiam direto na Central, em qualquer URL, sem essa
+  // exceção). Em qualquer outra URL, o comportamento de sempre continua.
+  const veioParaCoordenacao = typeof roteadorInterpretarRota === "function" && (() => {
+    const rota = roteadorInterpretarRota();
+    return rota.tipo === "pagina" && rota.pagina === "coordenacao";
+  })();
+  if (PAPEL_LOGADO === "atendimento" && !veioParaCoordenacao && typeof abrirCentralAtendimento === "function") {
     abrirCentralAtendimento();
   }
 
