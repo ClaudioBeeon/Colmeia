@@ -549,6 +549,10 @@ function ehErick(nome) {
  * novo em ciclos seguintes é seguro, só um pouco redundante.
  */
 function verificarLinksDoErickNoRunrun() {
+  // Zera o "balde" de comentários pro card mãe desta rodada — ver o
+  // comentário grande em cima de `_erickCardMaeAcumulado`, mais abaixo.
+  _erickCardMaeAcumulado = {};
+
   // ⚠️ getTarefasColmeia() devolve { ok, tarefas, colunas }, nunca a
   // lista direto — faltou o .tarefas aqui na primeira versão, e
   // ".filter is not a function" foi o erro que o Cláudio recebeu ao
@@ -580,6 +584,31 @@ function verificarLinksDoErickNoRunrun() {
       Logger.log('Erro verificando peças do Erick na tarefa ' + tarefa.id + ': ' + e);
     }
   });
+
+  dispararComentariosDeCardMaeAcumulados();
+}
+
+/**
+ * Um comentário SÓ por card mãe, por rodada do gatilho — não mais um por
+ * peça (2026-08-12, pedido do Cláudio: um card mãe com 8 subtarefas
+ * entregues juntas virava 8 comentários repetidos nele, uma bagunça).
+ * `mandarPecaDoErickParaConferencia` só ACUMULA aqui; quem dispara de
+ * verdade é `dispararComentariosDeCardMaeAcumulados`, uma vez, no fim de
+ * `verificarLinksDoErickNoRunrun`.
+ */
+var _erickCardMaeAcumulado = {}; // parentTaskId -> [{nomePeca, link}]
+
+function dispararComentariosDeCardMaeAcumulados() {
+  Object.keys(_erickCardMaeAcumulado).forEach(function (parentTaskId) {
+    var itens = _erickCardMaeAcumulado[parentTaskId];
+    if (!itens.length) return;
+    var texto = itens.length === 1
+      ? itens[0].nomePeca + ' está pronta pra revisão: ' + itens[0].link
+      : itens.map(function (it) { return '• ' + it.nomePeca + ': ' + it.link; }).join('\n');
+    adicionarComentario(parentTaskId, texto, 'Erick');
+    Logger.log('[Erick] card mae ' + parentTaskId + ': comentei ' + itens.length + ' peca(s) junto, num comentario so.');
+  });
+  _erickCardMaeAcumulado = {};
 }
 
 // 24h de folga: dá conta de um gatilho que falhou uma vez ou duas sem
@@ -793,12 +822,14 @@ function mandarPecaDoErickParaConferencia(tarefa, fileId) {
   adicionarComentario(tarefa.id, texto, 'Erick');
 
   // Repete no card mãe (2026-08-12, pedido do Cláudio: "igual a Bee
-  // faz"). Lá é a mesma pergunta "Repetir esse comentário no card mãe
-  // também?" que o resto do Colmeia faz pro designer — só que aqui,
-  // automática, direto: sem designer nenhum pra clicar "Sim", e o
-  // atendimento acompanha mais o card mãe do que a subtarefa avulsa.
+  // faz") — mas só ACUMULA aqui, não dispara na hora: várias subtarefas
+  // irmãs entregues juntas (mesmo card mãe) viraram 8 comentários
+  // repetidos nele antes disso, uma bagunça. Quem dispara de verdade,
+  // UM comentário juntando tudo, é dispararComentariosDeCardMaeAcumulados,
+  // uma vez no fim da rodada.
   if (tarefa.parentTaskId) {
-    adicionarComentario(tarefa.parentTaskId, texto, 'Erick');
+    if (!_erickCardMaeAcumulado[tarefa.parentTaskId]) _erickCardMaeAcumulado[tarefa.parentTaskId] = [];
+    _erickCardMaeAcumulado[tarefa.parentTaskId].push({ nomePeca: nomePeca, link: link });
   }
 
   Logger.log('[Erick] tarefa ' + tarefa.id + ': peca "' + nomePeca + '" entrou na fila e comentei -- ' + link);
