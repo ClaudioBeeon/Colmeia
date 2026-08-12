@@ -1648,8 +1648,13 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
    `buscarPlaysDeHoje` continua **agrupando por tarefa no Apps Script** nos dois caminhos: o que muda
    é só de onde vêm as linhas (o banco já entrega filtradas). Um cálculo só, sem os dois lados
    poderem divergir.
-3. `BeeChat` — hoje a conversa inteira mora dentro de UMA célula por tarefa; vira uma linha por
-   mensagem, e a conversa passa a poder ser buscada.
+3. `BeeChat` ✅ — **plano revisto em 2026-08-12**, pelo mesmo motivo já registrado na etapa 4 (JSON em
+   texto continua texto): a ideia original era "uma linha por mensagem"; migrada de verdade, ficou
+   **uma linha por chave** (`task_id` — que também guarda as chaves `livre-<designer>-<carimbo>` das
+   conversas soltas), exatamente a forma da aba de hoje, com `conversa_json` continuando a guardar a
+   lista de mensagens inteira. Redesenhar o formato JUNTO da migração multiplicaria o risco onde não
+   precisava — vira uma linha por mensagem no dia em que alguém precisar BUSCAR dentro da conversa,
+   não antes. Ver `COLUNAS_BEECHAT`/`linhasDoBeeChat` em Bee.gs e `supabase/12-bee-chat.sql`.
 4. O fluxo de aprovação — **o prêmio**: onde mais gente escreve ao mesmo tempo (designer,
    atendimento e o cliente pelo link público), e onde a trava única mais dói. São **quatro** abas,
    não três, migradas em quatro etapas separadas e ordenadas por QUEM mexe em cada uma:

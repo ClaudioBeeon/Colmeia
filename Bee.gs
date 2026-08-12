@@ -398,8 +398,7 @@ function beeTituloDaConversa(mensagens) {
  * antiga — é o que alimenta "Conversas recentes" na tela inicial da Bee.
  */
 function beeListarConversasLivres(designer) {
-  var sheet = getBeeChatSheet();
-  var linhas = sheet.getDataRange().getValues();
+  var linhas = linhasDoBeeChat();
   var prefixo = beePrefixoLivre(designer);
   var antiga = beeChaveLivre(designer);
   var lista = [];
@@ -1390,10 +1389,77 @@ function getBeeChatSheet() {
   return sheet;
 }
 
+// A coluna se chama "task_id" por herança do desenho original, mas guarda
+// duas coisas: o id da tarefa (conversa dentro de um card) ou a chave
+// "livre-<designer>-<carimbo>" (conversa solta, fora de tarefa nenhuma).
+// É essa mesma coluna que vira a IDENTIDADE no Supabase (índice único).
 function beeLinhaDaTarefa(sheet, taskId) {
   var linhas = sheet.getDataRange().getValues();
   for (var i = 1; i < linhas.length; i++) {
     if (String(linhas[i][0]) === String(taskId)) return { indice: i + 1, valores: linhas[i] };
+  }
+  return null;
+}
+
+// =====================================================================
+// A BEECHAT NO SUPABASE (migração de 2026-08-12)
+//
+// Mesma ideia da ConferenciaInterna (ver AprovacaoInterna.gs): o banco
+// devolve as linhas no MESMO FORMATO da planilha — um array por linha, na
+// ordem de COLUNAS_BEECHAT, com uma linha falsa de cabeçalho na frente —
+// pra `beeLinhaEmLinhas`/`beeListarConversasLivres` continuarem valendo
+// letra por letra. Só muda de onde as linhas vêm pra LER.
+//
+// A ESCRITA continua sempre nos dois lugares, em qualquer fase: a
+// planilha nunca para de ser gravada (é ela quem sobrevive se o Supabase
+// cair), e o Supabase é gravado sempre que estiver configurado. Isso é
+// diferente de "grava só até virar a chave" — a chave (`supabaseManda`)
+// decide só de onde a LEITURA vem.
+// =====================================================================
+
+var COLUNAS_BEECHAT = ['task_id', 'conversa_json', 'entregue_em', 'atualizado_em', 'titulo'];
+
+/** Linha da planilha (array) → objeto do banco. Usado pela cópia e pela conferência. */
+function beeChatDaLinha(l) {
+  var obj = {};
+  COLUNAS_BEECHAT.forEach(function (nome, i) {
+    obj[nome] = (l[i] === undefined || l[i] === null) ? '' : String(l[i]);
+  });
+  return obj;
+}
+
+/** Objeto do banco → linha no formato da planilha (o caminho de volta). */
+function beeChatParaLinha(obj) {
+  return COLUNAS_BEECHAT.map(function (nome) {
+    return (obj[nome] === undefined || obj[nome] === null) ? '' : String(obj[nome]);
+  });
+}
+
+/**
+ * TODAS as linhas da BeeChat, da fonte que estiver mandando — sempre no
+ * formato da planilha (cabeçalho de mentira na posição 0, porque todo
+ * leitor daqui começa o laço no 1).
+ *
+ * Se o banco não responder, cai na planilha: uma conversa que "sumisse"
+ * por causa de uma falha de rede seria o pior tipo de bug aqui — pareceria
+ * que a Bee esqueceu tudo que já foi conversado.
+ */
+function linhasDoBeeChat() {
+  if (supabaseManda('bee_chat')) {
+    var doBanco = supabaseBuscarTudo('bee_chat', 'select=*&order=id.asc');
+    if (doBanco) {
+      var linhas = [COLUNAS_BEECHAT.slice()];
+      doBanco.forEach(function (o) { linhas.push(beeChatParaLinha(o)); });
+      return linhas;
+    }
+  }
+  return getBeeChatSheet().getDataRange().getValues();
+}
+
+/** Como beeLinhaDaTarefa, mas opera numa lista de linhas já lida (linhasDoBeeChat) — sem índice de sheet, só leitura. */
+function beeLinhaEmLinhas(linhas, chave) {
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) === String(chave)) return { valores: linhas[i] };
   }
   return null;
 }
@@ -1411,6 +1477,7 @@ function excluirConversaBee(chave) {
     var sheet = getBeeChatSheet();
     var linha = beeLinhaDaTarefa(sheet, chave);
     if (linha) sheet.deleteRow(linha.indice);
+    if (supabaseConfigurado()) supabaseApagar('bee_chat', 'task_id=eq.' + encodeURIComponent(String(chave)));
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -1434,7 +1501,7 @@ function atualizarMensagemBee(chave, indice, texto) {
 
 function lerConversaBee(taskId) {
   if (!taskId) return [];
-  var linha = beeLinhaDaTarefa(getBeeChatSheet(), taskId);
+  var linha = beeLinhaEmLinhas(linhasDoBeeChat(), taskId);
   if (!linha) return [];
   try {
     var lista = JSON.parse(linha.valores[1] || '[]');
@@ -1460,12 +1527,26 @@ function salvarConversaBee(taskId, mensagens, titulo) {
     }
     var agora = new Date().getTime();
     var linha = beeLinhaDaTarefa(sheet, taskId);
+    // entregue_em não é mexido aqui (só marcarEntregaParaBee carimba isso) —
+    // por isso o valor que já estava na linha é reaproveitado pro upsert do
+    // banco, senão toda mensagem nova apagaria o carimbo de entrega.
+    var entregueEm = linha ? linha.valores[2] : '';
+    var tituloFinal = titulo || (linha ? linha.valores[4] : '') || '';
     if (linha) {
       sheet.getRange(linha.indice, 2).setValue(texto);
       sheet.getRange(linha.indice, 4).setValue(agora);
       if (titulo) sheet.getRange(linha.indice, 5).setValue(titulo);
     } else {
       sheet.appendRow([String(taskId), texto, '', agora, titulo || '']);
+    }
+    if (supabaseConfigurado()) {
+      supabaseSalvar('bee_chat', {
+        task_id: String(taskId),
+        conversa_json: texto,
+        entregue_em: String(entregueEm || ''),
+        atualizado_em: String(agora),
+        titulo: String(tituloFinal || '')
+      });
     }
     return { ok: true };
   } finally {
@@ -1484,7 +1565,13 @@ function marcarEntregaParaBee(taskId) {
   try {
     var sheet = getBeeChatSheet();
     var linha = beeLinhaDaTarefa(sheet, taskId);
-    if (linha) sheet.getRange(linha.indice, 3).setValue(new Date().getTime());
+    if (linha) {
+      var agora = new Date().getTime();
+      sheet.getRange(linha.indice, 3).setValue(agora);
+      if (supabaseConfigurado()) {
+        supabaseAtualizar('bee_chat', 'task_id=eq.' + encodeURIComponent(String(taskId)), { entregue_em: String(agora) });
+      }
+    }
   } catch (e) { /* sem conversa guardada dessa tarefa — nada a carimbar */ }
 }
 
@@ -1504,6 +1591,7 @@ function limparConversasBeeAntigas() {
     var limiteEntrega = BEE_DIAS_APOS_ENTREGA * 24 * 60 * 60 * 1000;
     var limiteSemMexer = BEE_DIAS_SEM_MEXER * 24 * 60 * 60 * 1000;
     var apagadas = 0;
+    var chavesApagadas = [];
     // De baixo pra cima: apagar linha muda o número das de baixo.
     for (var i = linhas.length - 1; i >= 1; i--) {
       var entregueEm = Number(linhas[i][2]) || 0;
@@ -1511,12 +1599,28 @@ function limparConversasBeeAntigas() {
       var venceuPelaEntrega = entregueEm && (agora - entregueEm) > limiteEntrega;
       var venceuPorAbandono = !entregueEm && atualizadoEm && (agora - atualizadoEm) > limiteSemMexer;
       if (venceuPelaEntrega || venceuPorAbandono) {
+        chavesApagadas.push(String(linhas[i][0]));
         sheet.deleteRow(i + 1);
         apagadas++;
       }
+    }
+    if (supabaseConfigurado()) {
+      chavesApagadas.forEach(function (chave) {
+        supabaseApagar('bee_chat', 'task_id=eq.' + encodeURIComponent(chave));
+      });
     }
     return { ok: true, apagadas: apagadas };
   } finally {
     lock.releaseLock();
   }
+}
+
+/** A cópia inicial da BEECHAT. Ver supabaseCopiaInicial (Supabase.gs). Rodar no editor do Apps Script. */
+function migrarBeeChatParaSupabase() {
+  supabaseCopiaInicial('bee_chat', getBeeChatSheet(), 0, 0, beeChatDaLinha);
+}
+
+/** A conferência da BEECHAT: compara os dois lados linha a linha. Rodar depois da cópia e antes de virar a chave. */
+function conferirBeeChat() {
+  supabaseConferir('bee_chat', getBeeChatSheet(), 0, 0, beeChatDaLinha);
 }
