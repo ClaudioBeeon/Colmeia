@@ -914,6 +914,88 @@ function listarConferenciasSuspeitasDoErick() {
   return suspeitas;
 }
 
+/** O número no FIM de um texto ("Story 6" -> 6, "Storie 6.png" -> 6), ou null se não tiver. */
+function extrairNumeroFinal(texto) {
+  var m = String(texto || '').match(/(\d+)\D*$/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/**
+ * A limpeza de verdade do incidente — só dos casos onde dá pra ter
+ * CERTEZA (2026-08-12). `listarConferenciasSuspeitasDoErick` marcou 52
+ * de 52 como suspeita, mas boa parte não é bug de verdade: "Alteração
+ * 3" com 2 banners (Celular+PC) ou "Criativo 5" com 8 pranchetas podem
+ * ser entregas legítimas de VÁRIOS arquivos numa tarefa só — não dá pra
+ * saber isso só pelo nome. O padrão confirmado é outro, mais estreito:
+ * as 6 tarefas "Story N" (114616 a 114621) ficaram cada uma com as 6
+ * peças ("Storie 1" a "Storie 6") — a comparação de texto não bateu
+ * "Story"/"Storie" (a letra a mais), mas o NÚMERO no fim dos dois bate.
+ *
+ * Só mexe quando os DOIS lados (título da tarefa e nome da peça) têm um
+ * número no final E esse número é DIFERENTE — nesse caso, sim, é uma
+ * peça de uma tarefa irmã que entrou na errada. Fora desse padrão, a
+ * entrada fica INTOCADA — fica pra revisão manual seguida (Alteração/
+ * Criativo com múltiplos arquivos).
+ *
+ * RODAR DUAS VEZES: primeiro sem argumento (ou `false`) — só mostra o
+ * que FARIA, não apaga nada. Confira o log; só depois rode de novo com
+ * `true` pra apagar de verdade.
+ */
+function limparConferenciasDoIncidenteErick(apagarDeVerdade) {
+  var linhas = linhasDaConferencia();
+  var paraApagar = [];
+  var mantidasPorNumeroOk = 0;
+  var foraDoPadrao = 0;
+
+  for (var i = 1; i < linhas.length; i++) {
+    var l = linhas[i];
+    var taskId = String(l[0]);
+    if (ERICK_TAREFAS_AFETADAS_20260812.indexOf(taskId) === -1) continue;
+    var nomePeca = String(l[3] || '');
+
+    var tituloDaTarefa = '';
+    try {
+      var t = runrunFetch('/tasks/' + taskId);
+      if (t && !t.erroFetch) tituloDaTarefa = t.title || '';
+    } catch (e) { /* segue sem título -- entra em "fora do padrão" abaixo */ }
+
+    var numTarefa = extrairNumeroFinal(tituloDaTarefa);
+    var numPeca = extrairNumeroFinal(nomePeca);
+    if (numTarefa === null || numPeca === null) { foraDoPadrao++; continue; }
+    if (numTarefa === numPeca) { mantidasPorNumeroOk++; continue; }
+
+    paraApagar.push({ linha: i + 1, taskId: taskId, tituloDaTarefa: tituloDaTarefa, nomePeca: nomePeca, fileId: String(l[6] || '') });
+  }
+
+  Logger.log('=== ' + (apagarDeVerdade ? 'APAGANDO DE VERDADE' : 'SIMULAÇÃO -- nada foi apagado ainda') + ' ===');
+  Logger.log(paraApagar.length + ' entrada(s) confirmada(s) como cruzada (número da peça diferente do número da tarefa):');
+  paraApagar.forEach(function (p) {
+    Logger.log('  ' + (apagarDeVerdade ? 'APAGUEI' : 'apagaria') + ' -- tarefa ' + p.taskId + ' ("' + p.tituloDaTarefa + '") tinha "' + p.nomePeca + '" gravada (linha ' + p.linha + ')');
+  });
+  Logger.log(mantidasPorNumeroOk + ' entrada(s) com número batendo (a peça certa, fica como está) e ' +
+    foraDoPadrao + ' fora do padrão numérico (Alteração/Criativo com vários arquivos — não mexi, revisão manual).');
+
+  if (!apagarDeVerdade) {
+    Logger.log('Nada foi apagado. Confira a lista acima e, se estiver certa, rode limparConferenciasDoIncidenteErick(true) pra apagar de verdade.');
+    return { simulacao: true, apagariam: paraApagar.length };
+  }
+
+  // De baixo pra cima na planilha (apagar uma linha embaralha o número
+  // das que vêm depois dela) — e por identidade (task_id+nome_peca) no
+  // banco, mesmo padrão de sempre.
+  paraApagar.sort(function (a, b) { return b.linha - a.linha; });
+  var sheet = getConferenciasSheet();
+  paraApagar.forEach(function (p) {
+    sheet.deleteRow(p.linha);
+    if (supabaseConfigurado()) {
+      supabaseApagar('conferencia_interna',
+        'task_id=eq.' + encodeURIComponent(p.taskId) + '&nome_peca=eq.' + encodeURIComponent(p.nomePeca));
+    }
+  });
+  Logger.log('Pronto -- ' + paraApagar.length + ' linha(s) apagada(s) da planilha e do banco.');
+  return { simulacao: false, apagadas: paraApagar.length };
+}
+
 /**
  * A fila do atendimento: o que está esperando ALGUMA ação de quem confere —
  * ou ainda não olhou ('pendente'), ou já aprovou mas ainda não mandou pro
