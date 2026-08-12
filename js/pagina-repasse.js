@@ -1577,6 +1577,18 @@ function mostrarPagina(page) {
   document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.toggle("active", l.dataset.page === page));
   document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
   document.getElementById("page-" + page).hidden = false;
+
+  // ⚠️ O endereço do navegador é ajustado AQUI, antes dos build*Page()
+  // logo abaixo — não no fim da função (onde estava até 2026-08-12).
+  // Motivo: algumas páginas (Fila de repasse, Coordenação) se recusam a
+  // abrir e chamam `mostrarPagina("kanban")` de DENTRO do próprio
+  // build*Page() quando quem está vendo não pode estar ali — essa chamada
+  // aninhada já escreve a URL certa ("/"). Se o ajuste continuasse no fim
+  // desta função (a de FORA, "coordenacao"), ele rodaria DEPOIS e
+  // sobrescreveria a URL certa de volta pra "/coordenacao" — a tela
+  // mostrava o quadro, mas o endereço mentia dizendo outra coisa.
+  if (typeof roteadorAoMostrarPagina === "function") roteadorAoMostrarPagina(page);
+
   const [title] = pageTitles[page];
   const heading = document.getElementById("pageHeadingTitle");
   if (heading) heading.textContent = title;
@@ -1630,11 +1642,6 @@ function mostrarPagina(page) {
   // qualquer outra página (ver js/pagina-bee.js).
   if (page === "bee" && typeof abrirPaginaBee === "function") abrirPaginaBee();
   else if (typeof fecharPaginaBee === "function") fecharPaginaBee();
-
-  // Deixa o endereço lá em cima do navegador combinando com a página
-  // (ver js/roteador-url.js) — permite link direto, F5 sem perder o
-  // lugar, e o botão Voltar funcionando.
-  if (typeof roteadorAoMostrarPagina === "function") roteadorAoMostrarPagina(page);
 }
 
 document.getElementById("designerFilterSelect").addEventListener("change", e => {
