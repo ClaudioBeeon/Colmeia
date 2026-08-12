@@ -314,8 +314,74 @@ function listarVersoesDasPecasSemCache(taskId) {
     };
   });
 
+  juntarVersoesDoStorage(pecas);
+
   pecas.sort(function (a, b) { return b.ultima.atualizadoEm - a.ultima.atualizadoEm; });
   return { ok: true, pecas: pecas, pastaUrl: pastaInfo.url };
+}
+
+/**
+ * ACRESCENTA AS VERSÕES QUE SÓ EXISTEM NO STORAGE (2026-08-11).
+ *
+ * O Drive guarda UM arquivo por peça: o designer substitui o conteúdo e
+ * mantém o mesmo id. Então, pra quem trabalha assim, a listagem da pasta
+ * sempre devolveu uma versão só — era por isso que o seletor mostrava um
+ * "v1" solitário mesmo depois de várias entregas.
+ *
+ * O histórico existe, mas noutro lugar: cada vez que o arquivo muda, o
+ * Colmeia publica uma cópia nova no Storage e guarda a anterior (ver
+ * urlPublicaDaPeca, Storage.gs). Aqui essas cópias entram na frente da
+ * versão atual, da mais antiga pra mais nova.
+ *
+ * ⚠️ Elas carregam `url`, e isso não é detalhe: o conteúdo antigo NÃO
+ * existe mais no Drive. Pedir a imagem por `fileId` devolveria a versão
+ * de hoje — a tela precisa ler a cópia guardada. Ver apvMostrarNoPalco.
+ *
+ * Só entra o que é anterior à versão que está no Drive: a cópia mais nova
+ * do Storage é a própria peça atual, e listá-la de novo mostraria a mesma
+ * arte duas vezes.
+ */
+function juntarVersoesDoStorage(pecas) {
+  if (!pecas.length || typeof versoesPublicadasDeVarias !== 'function') return;
+
+  // Uma consulta só pra todas as peças da tarefa — esta função já é a
+  // mais cara da Central, não pode ganhar uma pergunta por peça.
+  var ids = pecas.map(function (p) { return p.ultima && p.ultima.fileId; })
+    .filter(function (x) { return !!x; });
+  var historico = versoesPublicadasDeVarias(ids);
+  if (!historico) return;
+
+  pecas.forEach(function (p) {
+    var atual = p.ultima;
+    if (!atual || !atual.fileId) return;
+    var copias = historico[atual.fileId] || [];
+    if (copias.length < 2) return; // só a atual (ou nenhuma): nada a acrescentar
+
+    var anteriores = copias.filter(function (c) {
+      return c.atualizadoEm && c.atualizadoEm < Number(atual.atualizadoEm);
+    });
+    if (!anteriores.length) return;
+
+    var novas = anteriores.map(function (c) {
+      return {
+        fileId: atual.fileId,
+        nome: atual.nome,
+        mimeType: atual.mimeType,
+        // `versao: null` faz o seletor numerar pela ordem — que é a única
+        // noção de versão que existe aqui, já que o nome do arquivo é o
+        // mesmo nas duas.
+        versao: null,
+        atualizadoEm: c.atualizadoEm,
+        url: c.url,
+        doStorage: true
+      };
+    });
+
+    // As antigas na frente, a do Drive por último — e renumera tudo.
+    p.versoes = novas.concat(p.versoes);
+    p.versoes.forEach(function (v, i) { v.ordem = i + 1; });
+    p.ultima = p.versoes[p.versoes.length - 1];
+  });
 }
 
 // ---------------------------------------------------------------------

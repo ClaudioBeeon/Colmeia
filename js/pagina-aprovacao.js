@@ -1361,7 +1361,14 @@ async function apvMostrarNoPalco(peca, versao) {
   }
 
   slot.innerHTML = `<div class="apv-vazio">Carregando a peça...</div>`;
-  const data = await chamarBackend({ acao: "buscarImagemCheiaDrive", fileId: arquivo.fileId });
+
+  // Versão ANTERIOR: ela só existe na cópia guardada no Storage (o Drive
+  // tem só a atual — o designer substitui o arquivo). Pedir por `fileId`
+  // aqui traria a arte de hoje e o seletor mentiria: você clicaria em "v1"
+  // e veria a v2. Ver juntarVersoesDoStorage, AprovacaoInterna.gs.
+  const data = arquivo.url
+    ? { ok: true, url: arquivo.url, mimeType: arquivo.mimeType }
+    : await chamarBackend({ acao: "buscarImagemCheiaDrive", fileId: arquivo.fileId });
 
   // A tela pode ter mudado enquanto a imagem vinha (trocou de versão, fechou a
   // conferência) — buscar o elemento de novo e conferir se ainda é esta peça

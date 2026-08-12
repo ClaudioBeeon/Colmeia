@@ -217,6 +217,48 @@ function versoesPublicadasDaPeca(fileId) {
 var STORAGE_MAX_PUBLICAR_POR_VEZ = 12;
 
 /**
+ * O histórico de VÁRIAS peças numa consulta só.
+ *
+ * Existe pra não fazer uma pergunta por peça dentro de
+ * `listarVersoesDasPecasSemCache`, que já é a função mais cara da Central.
+ *
+ * Devolve `{fileId: [{url, atualizadoEm}, ...]}`, da mais ANTIGA pra mais
+ * nova — que é a ordem em que o seletor de versão as mostra.
+ */
+function versoesPublicadasDeVarias(fileIds) {
+  var saida = {};
+  if (!supabaseConfigurado() || !Array.isArray(fileIds) || !fileIds.length) return saida;
+
+  var unicos = [];
+  var visto = {};
+  fileIds.forEach(function (id) {
+    var s = String(id || '');
+    if (s && !visto[s]) { visto[s] = true; unicos.push(s); }
+  });
+  if (!unicos.length) return saida;
+
+  try {
+    var lista = unicos.map(function (id) { return '"' + id + '"'; }).join(',');
+    var r = supabaseBuscar('arquivos_publicados',
+      'select=file_id,url,atualizado_em&file_id=in.(' + encodeURIComponent(lista)
+      + ')&order=atualizado_em.asc');
+    if (!r.ok || !Array.isArray(r.dados)) return saida;
+    r.dados.forEach(function (linha) {
+      if (!linha.file_id || !linha.url) return;
+      if (!saida[linha.file_id]) saida[linha.file_id] = [];
+      saida[linha.file_id].push({
+        url: linha.url,
+        atualizadoEm: Number(linha.atualizado_em) || 0
+      });
+    });
+  } catch (err) {
+    // Sem histórico, o seletor mostra só o que o Drive tem — que é
+    // exatamente como era antes disto existir.
+  }
+  return saida;
+}
+
+/**
  * @param {string[]} fileIds
  * @param {Object<string,number>} [atualizadosPorId] fileId → data de
  *   modificação no Drive. Quem já sabe (a fila de conferência lista a
