@@ -2002,13 +2002,27 @@ function corteDoLogPlays() {
   return new Date().getTime() - LOG_PLAYS_RETENCAO_DIAS * 24 * 60 * 60 * 1000;
 }
 
+/**
+ * A coluna "data" guarda um texto "yyyy-MM-dd" (registrarPlay), mas o
+ * Sheets promove sozinho um texto com essa cara pra uma célula de DATA de
+ * verdade — aí `getValues()` devolve um objeto Date, não o texto que foi
+ * escrito. `String(dataDeVerdade)` vira "Tue Aug 11 2026 00:00:00
+ * GMT-0300 (...)", que nunca bate com o texto puro guardado no Supabase.
+ * Isso não perde o play (a linha continua lá) — só fazia a conferência
+ * (supabaseConferir) acusar diferença numa linha que é a mesma dos dois
+ * lados. Normaliza de volta pro mesmo "yyyy-MM-dd" nos dois casos.
+ */
 function playDaLinha(linha) {
+  var bruto = linha[4];
+  var data = (bruto instanceof Date)
+    ? Utilities.formatDate(bruto, 'America/Sao_Paulo', 'yyyy-MM-dd')
+    : String(bruto || '');
   return {
     task_id: String(linha[0] || ''),
     titulo: String(linha[1] || ''),
     designer: String(linha[2] || ''),
     quando: Number(linha[3]) || 0,
-    data: String(linha[4] || '')
+    data: data
   };
 }
 
