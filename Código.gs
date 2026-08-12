@@ -522,7 +522,10 @@ function handleRequest(e, method) {
       } else if (body.acao === 'buscarImagemCheiaDrive') {
         output = buscarImagemCheiaDrive(body.fileId);
       } else if (body.acao === 'urlsPublicasDasPecas') {
-        output = urlsPublicasDasPecas(body.fileIds);
+        // `atualizados` (fileId -> data no Drive) é opcional: quem tem o
+        // dado manda, e aí a cópia devolvida é garantidamente a da versão
+        // certa. Ver o aviso em urlsPublicasDasPecas, Storage.gs.
+        output = urlsPublicasDasPecas(body.fileIds, body.atualizados);
       } else if (body.acao === 'entrarEmFoco') {
         output = entrarEmFoco(body.designer, body.ateQuando);
       } else if (body.acao === 'sairDoFoco') {

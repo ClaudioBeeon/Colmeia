@@ -646,7 +646,14 @@ function buscarAprovacaoPublica(codigo) {
     // megabytes de texto. É onde isso mais vale — a página do cliente é
     // aberta muitas vezes, frequentemente em rede de celular ruim, e o
     // navegador dele passa a guardar a imagem entre uma visita e outra.
-    var urlPublica = urlPublicaDaPeca(id);
+    //
+    // ⚠️ A DATA VAI JUNTO, e não é opcional (2026-08-11). O arquivo já
+    // está aberto aqui, então `getLastUpdated()` é de graça — e é ela que
+    // garante que o cliente veja a versão que está no Drive AGORA. Sem
+    // isso, o designer subia a alteração, o id do arquivo continuava o
+    // mesmo, e o link seguia mostrando a arte anterior: foi o erro que
+    // chegou num cliente de verdade.
+    var urlPublica = urlPublicaDaPeca(id, arquivo.getLastUpdated().getTime());
     if (urlPublica) {
       return { nome: arquivo.getName(), mimeType: tipo, ehVideo: false, url: urlPublica };
     }

@@ -496,6 +496,12 @@ function listarConferenciasPendentes() {
       versaoPedida: versaoPedida,
       versaoAtual: versaoAtual,
       totalVersoes: atual ? atual.versoes.length : 1,
+      // Quando o arquivo mudou NO DRIVE. Vem de graça da listagem da pasta
+      // e viaja até o Storage: é o que identifica a versão da cópia
+      // publicada (ver urlPublicaDaPeca, Storage.gs). Sem ela, uma peça
+      // substituída continuaria mostrando a arte antiga — o erro que
+      // chegou num cliente em 2026-08-11.
+      atualizadoEm: ultima ? ultima.atualizadoEm : 0,
       // `versaoPedida` 0 significa "não sei" (linha antiga, célula vazia),
       // não "versão zero" — e nesse caso QUALQUER arquivo na pasta parecia
       // versão nova, acendendo o aviso pra sempre numa peça em que ninguém

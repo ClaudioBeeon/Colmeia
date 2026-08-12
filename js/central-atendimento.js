@@ -1219,12 +1219,17 @@ async function centralRecarregarBeeLine(btn) {
   }
 }
 
-async function centralCarregarMiniaturaTimeline(fileId, el) {
+async function centralCarregarMiniaturaTimeline(fileId, el, atualizadoEm) {
+  // A chave carrega a versão (ver centralChaveDaPeca): a mesma peça
+  // substituída no Drive tem chave diferente, então a arte nova não vem
+  // presa no cache da antiga.
+  const chave = centralChaveDaPeca(fileId, atualizadoEm);
+
   // Pelo Storage primeiro (2026-08-11): as URLs já vieram todas numa
   // chamada só, então aqui não há ida ao servidor nenhuma — é só apontar
   // a <img> pro CDN, que o navegador guarda por um ano. Ver o bloco "AS
   // IMAGENS DA LISTA" mais abaixo.
-  const url = centralUrlsDePecas.get(fileId);
+  const url = centralUrlsDePecas.get(chave);
   if (url) {
     if (!el.isConnected) return;
     el.style.backgroundImage = `url("${url}")`;
@@ -1234,8 +1239,8 @@ async function centralCarregarMiniaturaTimeline(fileId, el) {
   // Reserva, e ela tem que continuar existindo: vídeo não vai pro Storage
   // de propósito, imagem recém-subida só entra no lote seguinte, e o
   // Storage pode estar desligado.
-  if (centralThumbsBase64.has(fileId)) {
-    const guardado = centralThumbsBase64.get(fileId);
+  if (centralThumbsBase64.has(chave)) {
+    const guardado = centralThumbsBase64.get(chave);
     if (!el.isConnected) return;
     if (guardado) el.style.backgroundImage = guardado;
     else el.remove();
@@ -1243,7 +1248,7 @@ async function centralCarregarMiniaturaTimeline(fileId, el) {
   }
 
   const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
-  centralThumbsBase64.set(fileId, (data && data.ok && data.base64)
+  centralThumbsBase64.set(chave, (data && data.ok && data.base64)
     ? `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")` : "");
   if (!el.isConnected) return; // saiu da tela (redesenhou) enquanto a miniatura vinha
   if (!data || !data.ok || !data.base64) {
@@ -2581,6 +2586,21 @@ function centralGrupoArteDoItem(it, daFila) {
 }
 
 /**
+ * Quando essa arte mudou no Drive. Anda SEMPRE junto do fileId (ver
+ * centralChaveDaPeca): é o par que identifica a versão, e sem ele uma
+ * peça substituída continuaria mostrando a arte antiga.
+ *
+ * Só a fila de conferência sabe disso — ela lista a pasta e recebe a data
+ * de graça. Nas aprovações já enviadas devolve 0, e aí o comportamento é
+ * o de antes: vale a cópia mais nova que estiver publicada.
+ */
+function centralGrupoVersaoDoItem(it, daFila) {
+  if (!daFila) return 0;
+  const primeira = (it.pecas || [])[0] || {};
+  return Number(primeira.atualizadoEm) || 0;
+}
+
+/**
  * Separa as peças em seções, do jeito que o interruptor pedir.
  *
  * POR DATA (padrão) — uma seção por quantidade de dias esperando, das
@@ -2686,6 +2706,7 @@ function centralGrupoCartaoPecaHTML(it, i, daFila) {
   const limite = typeof APROVACAO_DIAS_ALERTA === "number" ? APROVACAO_DIAS_ALERTA : 3;
   const dias = centralDiasDesde(centralGrupoQuandoDoItem(it));
   const arte = centralGrupoArteDoItem(it, daFila);
+        const versaoArte = centralGrupoVersaoDoItem(it, daFila);
   const historico = CENTRAL_GRUPOS[centralGrupoAtual].historico;
   // O subtítulo diz o que a seção NÃO está dizendo: agrupado por data
   // mostra o cliente; agrupado por cliente, o cliente já está no
@@ -2700,7 +2721,7 @@ function centralGrupoCartaoPecaHTML(it, i, daFila) {
     <button type="button" class="central-grupo-li ${ativa ? "ativa" : ""} ${marcada ? "marcada" : ""}"
             data-central-li="${i}">
       ${centralGrupoSelecionando ? `<span class="central-grupo-cx" aria-hidden="true">✓</span>` : ""}
-      <span class="central-grupo-li-arte tipo-${centralTipoDaPeca(it)}" ${arte ? `data-central-li-thumb="${escaparHTML(arte)}"` : ""}></span>
+      <span class="central-grupo-li-arte tipo-${centralTipoDaPeca(it)}" ${arte ? `data-central-li-thumb="${escaparHTML(arte)}" data-central-li-ver="${versaoArte}"` : ""}></span>
       <span class="central-grupo-li-t">
         <span class="central-grupo-li-nome">${escaparHTML(centralGrupoNomeDoItem(it, daFila))}</span>
         <span class="central-grupo-li-sub">${escaparHTML(sub)}</span>
@@ -2829,7 +2850,8 @@ function centralGrupoRenderLista(itens, daFila) {
             <span class="central-grupo-gm-tiras">
               ${amostra.map(it => {
                 const arte = centralGrupoArteDoItem(it, daFila);
-                return `<span class="central-grupo-gm-tira" ${arte ? `data-central-li-thumb="${escaparHTML(arte)}"` : ""}></span>`;
+        const versaoArte = centralGrupoVersaoDoItem(it, daFila);
+                return `<span class="central-grupo-gm-tira" ${arte ? `data-central-li-thumb="${escaparHTML(arte)}" data-central-li-ver="${versaoArte}"` : ""}></span>`;
               }).join("")}
               ${resto > 0 ? `<span class="central-grupo-gm-mais">+${resto}</span>` : ""}
             </span>
@@ -2882,11 +2904,16 @@ function centralGrupoRenderLista(itens, daFila) {
   // centralGarantirUrlsDasPecas). O que não estiver publicado cai no
   // base64 de sempre, individualmente.
   const alvos = [...lista.querySelectorAll("[data-central-li-thumb]")];
-  const ids = alvos.map(el => el.dataset.centralLiThumb).filter(Boolean);
-  centralGarantirUrlsDasPecas(ids).then(() => {
+  // A versão anda junto do id (data-central-li-ver): é o par que
+  // identifica a arte, e sem ele uma peça substituída no Drive ficaria
+  // presa na imagem antiga. Ver centralChaveDaPeca.
+  const versao = el => Number(el.dataset.centralLiVer) || 0;
+  const pecasNaTela = alvos.filter(el => el.dataset.centralLiThumb)
+    .map(el => ({ fileId: el.dataset.centralLiThumb, atualizadoEm: versao(el) }));
+  centralGarantirUrlsDasPecas(pecasNaTela).then(() => {
     alvos.forEach(el => {
       if (!el.isConnected) return;
-      centralPintarImagemDaPeca(el.dataset.centralLiThumb, el);
+      centralPintarImagemDaPeca(el.dataset.centralLiThumb, el, versao(el));
     });
   });
 }
@@ -3136,9 +3163,10 @@ function centralGrupoRenderPrevia(it, daFila) {
     if (itensDoGm.length > 1) {
       tiras = `<div class="central-grupo-pv-tiras">${itensDoGm.map((x, i) => {
         const arte = centralGrupoArteDoItem(x, daFila);
+        const versaoArte = centralGrupoVersaoDoItem(x, daFila);
         const ativa = centralGrupoChaveDoItem(x) === centralGrupoSelecionado;
         return `<button type="button" class="central-grupo-pv-tira ${ativa ? "on" : ""}" data-central-pv-tira="${i}"
-                        ${arte ? `data-central-li-thumb="${escaparHTML(arte)}"` : ""}
+                        ${arte ? `data-central-li-thumb="${escaparHTML(arte)}" data-central-li-ver="${versaoArte}"` : ""}
                         title="${escaparHTML(centralGrupoNomeDoItem(x, daFila))}"></button>`;
       }).join("")}</div>`;
     }
@@ -3168,8 +3196,12 @@ function centralGrupoRenderPrevia(it, daFila) {
   // As miniaturas da fila usam o MESMO caminho da lista (Storage primeiro).
   const tirasEls = [...alvo.querySelectorAll(".central-grupo-pv-tira[data-central-li-thumb]")];
   if (tirasEls.length) {
-    centralGarantirUrlsDasPecas(tirasEls.map(e => e.dataset.centralLiThumb)).then(() => {
-      tirasEls.forEach(e => e.isConnected && centralPintarImagemDaPeca(e.dataset.centralLiThumb, e));
+    const verTira = e => Number(e.dataset.centralLiVer) || 0;
+    centralGarantirUrlsDasPecas(tirasEls.map(e => ({
+      fileId: e.dataset.centralLiThumb, atualizadoEm: verTira(e),
+    }))).then(() => {
+      tirasEls.forEach(e => e.isConnected
+        && centralPintarImagemDaPeca(e.dataset.centralLiThumb, e, verTira(e)));
     });
   }
   alvo.querySelectorAll("[data-central-pv-tira]").forEach(b => {
@@ -3348,47 +3380,80 @@ function centralQuandoCurto(quandoMs) {
 // Ver o mesmo cuidado em buscarImagemCheiaDrive, Drive.gs.
 // ===================================================================
 
-// fileId → url do Storage (ou "" quando já sabemos que não tem). Vive pela
-// sessão inteira: a mesma peça aparece em vários grupos e em todo
-// redesenho, e perguntar de novo é justamente o que deixava tudo lento.
+// CHAVE = fileId + a data em que o arquivo mudou no Drive, nunca só o
+// fileId (corrigido em 2026-08-11). O designer SUBSTITUI o arquivo no
+// Drive mantendo o mesmo id: com a chave antiga, a peça alterada seguia
+// mostrando a arte velha até a pessoa recarregar a página — a mesma
+// família de erro que fez um cliente ver a versão anterior no link de
+// aprovação. Ver urlPublicaDaPeca, Storage.gs.
 const centralUrlsDePecas = new Map();
-// fileId → base64 já buscado, pro que não está no Storage. Mesmo motivo.
+// Mesma chave, pelo mesmo motivo: base64 do que não está no Storage.
 const centralThumbsBase64 = new Map();
 
+/** A identidade de uma versão da peça — é sempre isto que vira chave. */
+function centralChaveDaPeca(fileId, atualizadoEm) {
+  return `${fileId}::${Number(atualizadoEm) || 0}`;
+}
+
 /**
- * Preenche o que der com as URLs do Storage, numa chamada só, e devolve
- * quem sobrou sem imagem (pra quem chama decidir se busca o base64).
- * Só pergunta pelos fileIds que ainda não conhece.
+ * Preenche o que der com as URLs do Storage, numa chamada só.
+ * `pecas` é uma lista de `{fileId, atualizadoEm}` — a data vai junto pro
+ * backend, que só devolve a cópia DAQUELA versão.
  */
-async function centralGarantirUrlsDasPecas(fileIds) {
-  const faltando = [...new Set(fileIds.filter(id => id && !centralUrlsDePecas.has(id)))];
+async function centralGarantirUrlsDasPecas(pecas) {
+  // Aceita tanto a lista de objetos quanto a de ids crua, pra não quebrar
+  // nenhum chamador antigo enquanto todos migram.
+  const lista = (pecas || []).map(p => (typeof p === "string" ? { fileId: p, atualizadoEm: 0 } : p))
+    .filter(p => p && p.fileId);
+
+  const faltando = [];
+  const vistos = new Set();
+  lista.forEach(p => {
+    const chave = centralChaveDaPeca(p.fileId, p.atualizadoEm);
+    if (centralUrlsDePecas.has(chave) || vistos.has(chave)) return;
+    vistos.add(chave);
+    faltando.push(p);
+  });
   if (!faltando.length) return;
-  const data = await chamarBackend({ acao: "urlsPublicasDasPecas", fileIds: faltando });
+
+  const atualizados = {};
+  faltando.forEach(p => { if (p.atualizadoEm) atualizados[p.fileId] = Number(p.atualizadoEm); });
+
+  const data = await chamarBackend({
+    acao: "urlsPublicasDasPecas",
+    fileIds: faltando.map(p => p.fileId),
+    atualizados,
+  });
   const urls = (data && data.ok && data.urls) || {};
   // Marca TODAS as perguntadas, inclusive as que voltaram sem url: sem
   // isso, uma peça sem imagem no Storage (vídeo, por exemplo) seria
   // perguntada de novo a cada redesenho — o problema que isto veio
   // resolver. `""` quer dizer "já perguntei, não tem".
-  faltando.forEach(id => centralUrlsDePecas.set(id, urls[id] || ""));
+  faltando.forEach(p => {
+    centralUrlsDePecas.set(centralChaveDaPeca(p.fileId, p.atualizadoEm), urls[p.fileId] || "");
+  });
 }
 
 /** Põe a imagem no elemento, do jeito mais barato que der. */
-async function centralPintarImagemDaPeca(fileId, el) {
+async function centralPintarImagemDaPeca(fileId, el, atualizadoEm) {
   if (!fileId || !el) return;
+  // Mesma regra do resto: a chave carrega a versão, senão a peça
+  // substituída no Drive fica presa na arte antiga (ver centralChaveDaPeca).
+  const chave = centralChaveDaPeca(fileId, atualizadoEm);
 
-  const url = centralUrlsDePecas.get(fileId);
+  const url = centralUrlsDePecas.get(chave);
   if (url) { el.style.backgroundImage = `url("${url}")`; return; }
 
   // Reserva: o base64 de sempre, guardado pra não repetir a busca.
-  if (centralThumbsBase64.has(fileId)) {
-    const b = centralThumbsBase64.get(fileId);
+  if (centralThumbsBase64.has(chave)) {
+    const b = centralThumbsBase64.get(chave);
     if (b) el.style.backgroundImage = b;
     return;
   }
   const data = await chamarBackend({ acao: "buscarThumbnailDrive", fileId });
   const pronto = (data && data.ok && data.base64)
     ? `url("data:${data.mimeType || "image/jpeg"};base64,${data.base64}")` : "";
-  centralThumbsBase64.set(fileId, pronto);
+  centralThumbsBase64.set(chave, pronto);
   if (!el.isConnected) return;   // a lista foi redesenhada enquanto vinha
   if (pronto) el.style.backgroundImage = pronto;
 }

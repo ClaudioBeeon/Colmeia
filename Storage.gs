@@ -56,14 +56,33 @@ var PUBLICADOS_RETENCAO_DIAS = 120;
  * de rede). Quem chama tem que continuar funcionando pelo caminho antigo
  * do base64: esta é uma melhoria de velocidade, não uma dependência nova.
  */
-function urlPublicaDaPeca(fileId) {
+/**
+ * @param {string} fileId
+ * @param {number} [atualizadoEm] Quando o arquivo foi modificado no Drive
+ *   (epoch ms). Quem já tem esse dado em mãos — a fila de conferência
+ *   lista a pasta e recebe `atualizadoEm` de graça — deve passar, pra
+ *   poupar uma ida ao Drive. Sem ele, é lido aqui.
+ *
+ * ⚠️ A DATA É PARTE DA IDENTIDADE DA CÓPIA, não um detalhe (2026-08-11).
+ * O designer SUBSTITUI o arquivo no Drive mantendo o mesmo id: conteúdo
+ * novo, id igual. Antes, a busca era só por `file_id`, achava a linha
+ * antiga e devolvia a cópia velha — foi assim que um cliente recebeu o
+ * link de aprovação e viu a arte anterior à alteração que ele mesmo tinha
+ * pedido. Procurando por `file_id + atualizado_em`, arquivo substituído
+ * não casa com nada e é publicado de novo, com outro UUID.
+ */
+function urlPublicaDaPeca(fileId, atualizadoEm) {
   if (!fileId || !supabaseConfigurado()) return null;
-
-  var jaTem = urlPublicadaGuardada(fileId);
-  if (jaTem) return jaTem;
 
   try {
     var arquivo = DriveApp.getFileById(fileId);
+    // Só a data, antes de qualquer coisa cara: `getBlob()` baixa os bytes,
+    // e na maioria das chamadas a cópia já existe e não precisamos deles.
+    var quandoDrive = Number(atualizadoEm) || arquivo.getLastUpdated().getTime();
+
+    var jaTem = urlPublicadaGuardada(fileId, quandoDrive);
+    if (jaTem) return jaTem;
+
     var blob = arquivo.getBlob();
     var tipo = blob.getContentType() || 'application/octet-stream';
 
@@ -86,8 +105,11 @@ function urlPublicaDaPeca(fileId) {
         headers: {
           'apikey': SUPABASE_KEY,
           'Authorization': 'Bearer ' + SUPABASE_KEY,
-          // Um ano de cache no navegador: o conteúdo daquele caminho nunca
-          // muda — versão nova da peça é outro arquivo, com outro UUID.
+          // Um ano de cache no navegador. Isto agora é VERDADE: o caminho
+          // carrega um UUID novo a cada publicação, e a busca é por
+          // `file_id + atualizado_em` — então versão nova é sempre outro
+          // endereço, e este aqui de fato nunca muda de conteúdo. (Era
+          // exatamente isso que estava errado antes de 2026-08-11.)
           'Cache-Control': 'max-age=31536000'
         },
         muteHttpExceptions: true
@@ -96,7 +118,7 @@ function urlPublicaDaPeca(fileId) {
     if (resposta.getResponseCode() < 200 || resposta.getResponseCode() >= 300) return null;
 
     var url = SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BALDE + '/' + caminho;
-    guardarUrlPublicada(fileId, caminho, url);
+    guardarUrlPublicada(fileId, caminho, url, quandoDrive);
     return url;
   } catch (err) {
     return null; // segue pelo base64
@@ -114,16 +136,50 @@ function nomeSeguroParaStorage(nome) {
     .slice(0, 80);
 }
 
-function urlPublicadaGuardada(fileId) {
+/** A cópia DESTA versão do arquivo, se ela já existir no balde. */
+function urlPublicadaGuardada(fileId, atualizadoEm) {
   var r = supabaseBuscar('arquivos_publicados',
-    'select=url&file_id=eq.' + encodeURIComponent(String(fileId)) + '&limit=1');
+    'select=url&file_id=eq.' + encodeURIComponent(String(fileId))
+    + '&atualizado_em=eq.' + encodeURIComponent(String(Number(atualizadoEm) || 0))
+    + '&limit=1');
   if (!r.ok || !Array.isArray(r.dados) || !r.dados.length) return null;
   return r.dados[0].url || null;
 }
 
-function guardarUrlPublicada(fileId, caminho, url) {
+function guardarUrlPublicada(fileId, caminho, url, atualizadoEm) {
   supabaseSalvar('arquivos_publicados', {
-    file_id: String(fileId), caminho: caminho, url: url, quando: new Date().getTime()
+    file_id: String(fileId), caminho: caminho, url: url,
+    // `quando` é quando o Colmeia publicou (é o que a limpeza dos 120 dias
+    // usa). `atualizado_em` é quando o arquivo mudou NO DRIVE — e é essa
+    // que identifica a versão.
+    quando: new Date().getTime(),
+    atualizado_em: Number(atualizadoEm) || 0
+  });
+}
+
+/**
+ * Todas as cópias já publicadas de uma peça, da mais nova pra mais velha.
+ *
+ * O Drive guarda só a última (o designer substitui o arquivo), então esta
+ * é a única memória que existe das versões anteriores — é daqui que sai o
+ * "v1, v2" do card.
+ */
+function versoesPublicadasDaPeca(fileId) {
+  if (!fileId || !supabaseConfigurado()) return [];
+  var r = supabaseBuscar('arquivos_publicados',
+    'select=url,atualizado_em,quando&file_id=eq.' + encodeURIComponent(String(fileId))
+    + '&order=atualizado_em.desc');
+  if (!r.ok || !Array.isArray(r.dados)) return [];
+  var total = r.dados.length;
+  return r.dados.map(function (linha, i) {
+    return {
+      url: linha.url,
+      atualizadoEm: Number(linha.atualizado_em) || 0,
+      // A mais antiga é a v1; a mais nova tem o número maior. Como a lista
+      // vem em ordem decrescente, o índice conta ao contrário.
+      versao: total - i,
+      atual: i === 0
+    };
   });
 }
 
@@ -160,10 +216,26 @@ function guardarUrlPublicada(fileId, caminho, url) {
  */
 var STORAGE_MAX_PUBLICAR_POR_VEZ = 12;
 
-function urlsPublicasDasPecas(fileIds) {
+/**
+ * @param {string[]} fileIds
+ * @param {Object<string,number>} [atualizadosPorId] fileId → data de
+ *   modificação no Drive. Quem já sabe (a fila de conferência lista a
+ *   pasta e recebe isso de graça) passa; quem não sabe deixa vazio, e aí
+ *   cada peça que faltar é resolvida lendo o Drive dentro de
+ *   `urlPublicaDaPeca`.
+ *
+ * ⚠️ Sem `atualizadosPorId`, a consulta em lote não tem como saber se a
+ * cópia guardada ainda vale — ela devolve a MAIS NOVA que existe no
+ * balde. Isso é seguro pra uma LISTA (a tela mostra miniatura; se estiver
+ * um passo atrás, a próxima visita já corrige), mas não seria pro link do
+ * cliente — e por isso `buscarAprovacaoPublica` não usa esta função: ela
+ * chama `urlPublicaDaPeca` peça por peça, com a data em mãos.
+ */
+function urlsPublicasDasPecas(fileIds, atualizadosPorId) {
   var saida = {};
   if (!Array.isArray(fileIds) || !fileIds.length) return { ok: true, urls: saida };
   if (!supabaseConfigurado()) return { ok: true, urls: saida };
+  atualizadosPorId = atualizadosPorId || {};
 
   // Sem repetidos: a mesma peça pode aparecer duas vezes na lista (um
   // arquivo que está em dois lotes, por exemplo).
@@ -180,10 +252,21 @@ function urlsPublicasDasPecas(fileIds) {
   try {
     var lista = unicos.map(function (id) { return '"' + id + '"'; }).join(',');
     var r = supabaseBuscar('arquivos_publicados',
-      'select=file_id,url&file_id=in.(' + encodeURIComponent(lista) + ')');
+      'select=file_id,url,atualizado_em&file_id=in.(' + encodeURIComponent(lista)
+      + ')&order=atualizado_em.desc');
     if (r.ok && Array.isArray(r.dados)) {
+      var melhor = {}; // fileId -> a data da cópia que escolhemos
       r.dados.forEach(function (linha) {
-        if (linha.file_id && linha.url) saida[linha.file_id] = linha.url;
+        if (!linha.file_id || !linha.url) return;
+        var data = Number(linha.atualizado_em) || 0;
+        var esperada = atualizadosPorId[linha.file_id];
+        // Quando quem chamou sabe a data do Drive, só serve a cópia
+        // DAQUELA versão — cópia de versão antiga é justamente o erro que
+        // isto conserta. Sem saber, fica a mais nova publicada.
+        if (esperada && data !== Number(esperada)) return;
+        if (melhor[linha.file_id] !== undefined && melhor[linha.file_id] >= data) return;
+        melhor[linha.file_id] = data;
+        saida[linha.file_id] = linha.url;
       });
     }
   } catch (err) {
@@ -195,7 +278,7 @@ function urlsPublicasDasPecas(fileIds) {
   var publicadas = 0;
   for (var i = 0; i < unicos.length && publicadas < STORAGE_MAX_PUBLICAR_POR_VEZ; i++) {
     if (saida[unicos[i]]) continue;
-    var url = urlPublicaDaPeca(unicos[i]);   // devolve null em vídeo e em falha
+    var url = urlPublicaDaPeca(unicos[i], atualizadosPorId[unicos[i]]); // null em vídeo e em falha
     if (url) { saida[unicos[i]] = url; publicadas++; }
   }
 
