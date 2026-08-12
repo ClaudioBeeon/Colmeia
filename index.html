@@ -34,14 +34,14 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-12g">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-12g">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-12g">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-12g">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-12g">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-12g">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-12g">
-<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-12g">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-12h">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-12h">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-12h">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-12h">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-12h">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-12h">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-12h">
+<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-12h">
 </head>
 <body>
 
@@ -770,39 +770,6 @@
             <div class="pnl-esforco-lista" id="pnlEsforcoLista"></div>
           </div>
         </div>
-      </div>
-    </section>
-
-    <!-- ============ PÁGINA "COORDENAÇÃO" (2026-08-12) ============
-         Atalho de URL (colmeia.beeon.com.br/coordenacao) só pra quem
-         coordena o atendimento (Cláudio, João Paulo, Lucas — ver
-         souCoordenadorDoAtendimento, js/login-boot.js) — e só quando
-         entrou pelo Google (EMAIL_LOGADO preenchido), não pela chave de
-         acesso ou pelo código do atendimento: são os únicos dois jeitos
-         de entrar que não provam QUEM é a pessoa de verdade. Ver o gate
-         em buildCoordenacaoPage (js/pagina-repasse.js), que já segue o
-         mesmo padrão da Fila de repasse (bounce pro kanban se não pode).
-         Três cartões, sem ícone fixo na sidebar de propósito — é um link
-         direto pra quem já sabe que existe, não uma opção de menu a mais
-         pra todo mundo ver. -->
-    <section class="app-page" id="page-coordenacao" hidden>
-      <p class="coord-intro">Atalho só pra quem coordena o atendimento — a Central, o Painel de Designers e os clientes agrupados, num lugar só.</p>
-      <div class="coord-grid">
-        <button type="button" class="coord-card" id="coordCardCentral">
-          <span class="coord-card-icone"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 9.5h18" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 13.5h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-          <span class="coord-card-titulo">Central do Atendimento</span>
-          <span class="coord-card-desc">Fila de hoje, radar de clientes, aprovações e métricas.</span>
-        </button>
-        <button type="button" class="coord-card" data-coord-ir="painel-designers">
-          <span class="coord-card-icone"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="4" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="15" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/></svg></span>
-          <span class="coord-card-titulo">Painel de Designers</span>
-          <span class="coord-card-desc">Designers, clientes de cada um e o esforço de hoje.</span>
-        </button>
-        <button type="button" class="coord-card" data-coord-ir="atendimento">
-          <span class="coord-card-icone"><svg viewBox="0 0 24 24" fill="none"><circle cx="8.5" cy="8" r="2.8" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="9.5" r="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14.5 14.3c2.4.3 4 2 4 4.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-          <span class="coord-card-titulo">Clientes por atendimento</span>
-          <span class="coord-card-desc">Todos os clientes, agrupados por quem atende.</span>
-        </button>
       </div>
     </section>
 
@@ -1615,6 +1582,29 @@
           <span class="central-nav-label">Painel de Designers</span>
         </button>
       </div>
+
+      <!-- Pra João Paulo e Lucas (2026-08-12) — mesmo padrão visual do bloco
+           acima (ícone + hover expande o rótulo), mas com só os 3 destinos
+           que eles coordenam, não os 8 da sidebar inteira (isso é só do
+           Cláudio, ver o bloco de cima). Mostrado/escondido em
+           abrirCentralAtendimento (js/central-atendimento.js). O primeiro
+           ("Central do Atendimento") não navega pra lugar nenhum — é só o
+           "você está aqui", já que esta barra só aparece DENTRO da Central. -->
+      <div class="central-nav-divisor" id="centralSidebarCoordNav" hidden>
+        <span class="central-nav-divisor-txt">Coordenação</span>
+        <span class="central-nav-ic active central-nav-ic-atual">
+          <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 9.5h18" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 13.5h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+          <span class="central-nav-label">Central do Atendimento</span>
+        </span>
+        <button type="button" class="central-nav-ic" data-central-ir-pagina="painel-designers">
+          <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="4" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="15" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/></svg></span>
+          <span class="central-nav-label">Painel de Designers</span>
+        </button>
+        <button type="button" class="central-nav-ic" data-central-ir-pagina="atendimento">
+          <span class="central-nav-icon-circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="8.5" cy="8" r="2.8" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="9.5" r="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14.5 14.3c2.4.3 4 2 4 4.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+          <span class="central-nav-label">Clientes por atendimento</span>
+        </button>
+      </div>
     </nav>
     <div class="central-sidebar-profile">
       <span class="central-sidebar-avatar" id="centralAvatarIniciais"></span>
@@ -1944,34 +1934,34 @@
      abertura do app: se ele demorar ou não carregar, a tela de login
      continua funcionando com a chave de acesso de sempre. -->
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="js/config.js?v=2026-08-12g"></script>
-<script src="js/fila-offline.js?v=2026-08-12g"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-12g"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-12g"></script>
-<script src="js/kanban-polling.js?v=2026-08-12g"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-12g"></script>
-<script src="js/regras-briefing.js?v=2026-08-12g"></script>
-<script src="js/kanban-board.js?v=2026-08-12g"></script>
-<script src="js/clientes-hub.js?v=2026-08-12g"></script>
-<script src="js/chat-comentarios.js?v=2026-08-12g"></script>
-<script src="js/detalhe-modal.js?v=2026-08-12g"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-12g"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-12g"></script>
-<script src="js/bee.js?v=2026-08-12g"></script>
-<script src="js/paginas-designers.js?v=2026-08-12g"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-12g"></script>
-<script src="js/pagina-repasse.js?v=2026-08-12g"></script>
-<script src="js/pagina-horas.js?v=2026-08-12g"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-12g"></script>
-<script src="js/paleta-comando.js?v=2026-08-12g"></script>
-<script src="js/roteador-url.js?v=2026-08-12g"></script>
-<script src="js/detalhe-historia.js?v=2026-08-12g"></script>
-<script src="js/modo-foco.js?v=2026-08-12g"></script>
-<script src="js/pagina-bee.js?v=2026-08-12g"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-12g"></script>
-<script src="js/central-atendimento.js?v=2026-08-12g"></script>
-<script src="js/central-atencao.js?v=2026-08-12g"></script>
-<script src="js/pagina-painel-designers.js?v=2026-08-12g"></script>
-<script src="js/login-boot.js?v=2026-08-12g"></script>
+<script src="js/config.js?v=2026-08-12h"></script>
+<script src="js/fila-offline.js?v=2026-08-12h"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-12h"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-12h"></script>
+<script src="js/kanban-polling.js?v=2026-08-12h"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-12h"></script>
+<script src="js/regras-briefing.js?v=2026-08-12h"></script>
+<script src="js/kanban-board.js?v=2026-08-12h"></script>
+<script src="js/clientes-hub.js?v=2026-08-12h"></script>
+<script src="js/chat-comentarios.js?v=2026-08-12h"></script>
+<script src="js/detalhe-modal.js?v=2026-08-12h"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-12h"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-12h"></script>
+<script src="js/bee.js?v=2026-08-12h"></script>
+<script src="js/paginas-designers.js?v=2026-08-12h"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-12h"></script>
+<script src="js/pagina-repasse.js?v=2026-08-12h"></script>
+<script src="js/pagina-horas.js?v=2026-08-12h"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-12h"></script>
+<script src="js/paleta-comando.js?v=2026-08-12h"></script>
+<script src="js/roteador-url.js?v=2026-08-12h"></script>
+<script src="js/detalhe-historia.js?v=2026-08-12h"></script>
+<script src="js/modo-foco.js?v=2026-08-12h"></script>
+<script src="js/pagina-bee.js?v=2026-08-12h"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-12h"></script>
+<script src="js/central-atendimento.js?v=2026-08-12h"></script>
+<script src="js/central-atencao.js?v=2026-08-12h"></script>
+<script src="js/pagina-painel-designers.js?v=2026-08-12h"></script>
+<script src="js/login-boot.js?v=2026-08-12h"></script>
 </body>
 </html>

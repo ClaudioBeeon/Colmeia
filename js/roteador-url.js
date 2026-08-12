@@ -326,6 +326,18 @@ function roteadorAoFecharConferencia() {
  * abrir a tarefa por cima) não podem escrever por cima da URL que já
  * está certa — ela é a ENTRADA desta função, não uma consequência dela.
  */
+/**
+ * O gate de /coordenacao: o nome bate com um dos três coordenadores E a
+ * pessoa entrou pelo Google (EMAIL_LOGADO preenchido — a chave de acesso
+ * sozinha não prova quem é a pessoa). Ver o comentário grande em
+ * js/pagina-repasse.js (buildCoordenacaoPage, o caminho de reserva pra
+ * quando essa rota chega por popstate em vez do carregamento inicial).
+ */
+function roteadorAcessoLiberadoParaCoordenacao() {
+  return typeof EMAIL_LOGADO !== "undefined" && !!EMAIL_LOGADO
+    && typeof souCoordenadorDoAtendimento === "function" && souCoordenadorDoAtendimento();
+}
+
 async function roteadorAbrirRotaInicial() {
   const rota = roteadorInterpretarRota();
   roteadorReagindoAoHistorico = true;
@@ -360,6 +372,21 @@ async function roteadorAbrirRotaInicial() {
       // conferência cair na Central do atendimento responsável em vez de
       // numa fila crua — ver apvFecharConferencia, js/pagina-aprovacao.js.
       apvVeioDeLinkDireto = true;
+    } else if (rota.tipo === "pagina" && rota.pagina === "coordenacao") {
+      // /coordenacao não mostra escolha nenhuma — cai direto na Central
+      // (pedido do Cláudio, 2026-08-12: "cai direto na central, mas ter os
+      // 3 ícones na lateral esquerda... pra alternar"). O kanban já é a
+      // página visível por padrão (ninguém chamou mostrarPagina ainda
+      // nesta carga), então nem precisa ser mostrado à parte — só a
+      // Central entra por cima. O trio de ícones pra alternar entre
+      // Central/Painel de Designers/Clientes por atendimento mora DENTRO
+      // da Central (ver #centralSidebarCoordNav, abrirCentralAtendimento
+      // em js/central-atendimento.js).
+      if (roteadorAcessoLiberadoParaCoordenacao() && typeof abrirCentralAtendimento === "function") {
+        abrirCentralAtendimento();
+      } else {
+        mostrarPagina("kanban");
+      }
     } else if (rota.tipo === "pagina") {
       mostrarPagina(rota.pagina);
     } else {
@@ -389,6 +416,14 @@ window.addEventListener("popstate", async () => {
       if (painelAberto) closeDetail();
       mostrarPagina("aprovacao");
       if (typeof apvAbrirConferencia === "function") await apvAbrirConferencia(rota.id, rota.peca);
+    } else if (rota.tipo === "pagina" && rota.pagina === "coordenacao") {
+      if (painelAberto) closeDetail();
+      if (conferenciaAberta && typeof apvFecharConferencia === "function") apvFecharConferencia();
+      if (roteadorAcessoLiberadoParaCoordenacao() && typeof abrirCentralAtendimento === "function") {
+        abrirCentralAtendimento();
+      } else {
+        mostrarPagina("kanban");
+      }
     } else {
       if (painelAberto) closeDetail();
       if (conferenciaAberta && typeof apvFecharConferencia === "function") apvFecharConferencia();

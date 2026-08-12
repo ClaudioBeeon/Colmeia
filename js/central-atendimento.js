@@ -84,11 +84,19 @@ function abrirCentralAtendimento() {
   // horas...), não só coordenação. ⚠️ Chegou a ser ampliada pros outros
   // coordenadores em 2026-08-12 e revertida no mesmo dia (o Cláudio
   // corrigiu: "não, o menu deles é só Central/Painel de Designers/Clientes
-  // por atendimento — só esses 3") — o caminho certo pra João Paulo e
-  // Lucas é a página /coordenacao (3 cartões, ver index.html/
-  // js/pagina-repasse.js), não esta barra de 8 botões.
+  // por atendimento — só esses 3") — quem coordena mas não é o Cláudio usa
+  // o bloco `#centralSidebarCoordNav` logo abaixo, com só os 3.
   const extraNav = document.getElementById("centralSidebarExtraNav");
   if (extraNav) extraNav.hidden = !(typeof souClaudio === "function" && souClaudio());
+
+  // O trio de ícones pra João Paulo e Lucas alternarem entre Central/Painel
+  // de Designers/Clientes por atendimento (2026-08-12, pedido do Cláudio:
+  // "os 3 ícones na lateral esquerda... mesmo padrão do Colmeia"). Mesma
+  // classe `.central-nav-ic`/hover-expande-o-rótulo do bloco de cima —
+  // só com 3 botões em vez de 8. Não aparece pro Cláudio (ele já tem o
+  // bloco de cima, que inclui os mesmos 3 destinos e mais 5).
+  const coordNav = document.getElementById("centralSidebarCoordNav");
+  if (coordNav) coordNav.hidden = !(souCoord && !(typeof souClaudio === "function" && souClaudio()));
 
   centralLigarEventosUmaVez();
 

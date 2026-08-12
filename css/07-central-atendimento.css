@@ -100,6 +100,11 @@
 .central-nav-label { font-size: 13.5px; font-weight: 500; opacity: 0; transition: opacity var(--dur-fast) var(--ease-apple); }
 .central-sidebar:hover .central-nav-label { opacity: 1; transition-delay: 0.08s; }
 
+/* O "você está aqui" do trio de ícones do João Paulo/Lucas
+   (#centralSidebarCoordNav) — um <span>, não <button>: não navega pra
+   lugar nenhum, já que essa barra só existe DENTRO da própria Central. */
+.central-nav-ic-atual { cursor: default; }
+
 .central-sidebar-profile {
   margin-top: auto; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 2px; flex-shrink: 0;
 }
