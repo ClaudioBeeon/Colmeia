@@ -149,6 +149,17 @@
 }
 .central-date-pill svg { width: 14px; height: 14px; flex-shrink: 0; }
 
+/* "Atualizando" — mesmo formato do pill de data, cor amarela suave pra
+   diferenciar sem competir com o resto da barra preta. Ícone gira com a
+   MESMA animação já usada no botão de recarregar a BeeLine. */
+.central-atualizando-pill {
+  display: flex; align-items: center; gap: 8px; background: rgba(255,199,0,0.14); color: var(--kanban-yellow, #FFC700);
+  border-radius: 999px; padding: 9px 16px; font-size: 12.5px; font-weight: 600; white-space: nowrap; flex-shrink: 0;
+}
+.central-atualizando-pill[hidden] { display: none; }
+.central-atualizando-pill svg { width: 14px; height: 14px; flex-shrink: 0; animation: centralTlGira .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .central-atualizando-pill svg { animation: none; } }
+
 /* As 4 abas (Hoje/Radar/Aprovações/Métricas), SUBIRAM da sidebar branca
    pra dentro da barra preta (2026-08-11). Reaproveitam a MESMA classe
    `.central-nav-ic` que a sidebar ainda usa (pro bloco extra do Cláudio,

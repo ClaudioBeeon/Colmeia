@@ -42,6 +42,86 @@ let centralAbaAtiva = "hoje";
 // — pra Laura/Manu/Giovanna nunca muda (elas nem veem o seletor).
 let centralFiltroPessoa = "";
 
+// ===== "Foto" da Central salva no navegador (2026-08-12) =====
+//
+// Mesmo padrão do quadro principal (restaurarSnapshotDoQuadro/
+// salvarSnapshotDoQuadro, js/pessoas-fotos.js): a Central sempre partia
+// do zero a cada abertura/F5 — fila, aprovações e as imagens do feed e
+// da BeeLine, tudo buscado de novo, com só um "Carregando..." na tela
+// até a rede responder. Pedido do Cláudio: guardar a última foto boa e
+// mostrar ela na hora, com a versão de verdade chegando por trás (e um
+// aviso pequeno de "Atualizando…" enquanto isso — ver centralMostrarAtualizando).
+//
+// As imagens (URLs do Storage) ficam num snapshot À PARTE (chave
+// própria): são muitas entradas pequenas, cresceriam sem parar se
+// misturadas com o resto — um teto e uma chave própria facilitam podar
+// só essa parte sem mexer no resto da foto.
+const SNAPSHOT_CENTRAL_KEY = "colmeia_snapshot_central_v1";
+const SNAPSHOT_CENTRAL_VALIDADE_MS = 24 * 60 * 60 * 1000; // fila de dias atrás não ajuda ninguém
+const SNAPSHOT_CENTRAL_IMGS_KEY = "colmeia_snapshot_central_imgs_v1";
+const SNAPSHOT_CENTRAL_IMGS_MAX = 300; // teto de segurança pro espaço do navegador
+
+function centralSalvarSnapshot() {
+  if (!DESIGNER_LOGADO) return;
+  try {
+    localStorage.setItem(SNAPSHOT_CENTRAL_KEY, JSON.stringify({
+      designer: DESIGNER_LOGADO,
+      quando: Date.now(),
+      fila: centralFilaCache,
+      aprovacoes: centralAprovacoesCache,
+    }));
+  } catch (err) {
+    // Espaço cheio ou aba privada: sem a foto guardada, a Central só
+    // volta a abrir do zero — não é um problema, é o comportamento de
+    // antes desta função existir. Limpa qualquer sobra pela metade.
+    try { localStorage.removeItem(SNAPSHOT_CENTRAL_KEY); } catch (e) { /* sem problema */ }
+  }
+}
+
+/** true se restaurou algo — quem chama decide o que fazer com isso. */
+function centralRestaurarSnapshot() {
+  if (!DESIGNER_LOGADO) return false;
+  let salvo = null;
+  try { salvo = JSON.parse(localStorage.getItem(SNAPSHOT_CENTRAL_KEY) || "null"); }
+  catch (err) { return false; }
+  if (!salvo || !nomesCorrespondem(salvo.designer, DESIGNER_LOGADO)) return false;
+  if (!salvo.quando || (Date.now() - salvo.quando) > SNAPSHOT_CENTRAL_VALIDADE_MS) return false;
+  if (!Array.isArray(salvo.fila) && !Array.isArray(salvo.aprovacoes)) return false;
+
+  centralFilaCache = Array.isArray(salvo.fila) ? salvo.fila : [];
+  centralAprovacoesCache = Array.isArray(salvo.aprovacoes) ? salvo.aprovacoes : [];
+  centralRestaurarSnapshotDeImagens();
+  return true;
+}
+
+/** Chamado sempre que `centralUrlsDePecas` aprende URLs novas (ver centralGarantirUrlsDasPecas). */
+function centralSalvarSnapshotDeImagens() {
+  try {
+    // Só as mais recentes — sem teto, isso cresceria pra sempre.
+    const entradas = Array.from(centralUrlsDePecas.entries()).slice(-SNAPSHOT_CENTRAL_IMGS_MAX);
+    localStorage.setItem(SNAPSHOT_CENTRAL_IMGS_KEY, JSON.stringify(entradas));
+  } catch (err) {
+    try { localStorage.removeItem(SNAPSHOT_CENTRAL_IMGS_KEY); } catch (e) { /* sem problema */ }
+  }
+}
+
+function centralRestaurarSnapshotDeImagens() {
+  try {
+    const entradas = JSON.parse(localStorage.getItem(SNAPSHOT_CENTRAL_IMGS_KEY) || "null");
+    if (!Array.isArray(entradas)) return;
+    // A CHAVE já carrega fileId+data (centralChaveDaPeca) — uma peça
+    // alterada no Drive vira uma chave nova, então uma entrada velha
+    // aqui nunca é lida de novo por engano; não precisa de validade.
+    entradas.forEach(par => { if (Array.isArray(par) && par[0]) centralUrlsDePecas.set(par[0], par[1] || ""); });
+  } catch (err) { /* sem problema, só não teve foto de imagem pra restaurar */ }
+}
+
+/** A pílula amarela "Atualizando…" no topo — só faz sentido quando a Central abriu com uma foto salva. */
+function centralMostrarAtualizando(mostrar) {
+  const el = document.getElementById("centralAtualizandoPill");
+  if (el) el.hidden = !mostrar;
+}
+
 // Ligado no carregamento do script (mesmo padrão do #sidebarLogout,
 // js/login-boot.js) — não pode esperar a Central abrir uma vez pra só
 // então funcionar, senão o Cláudio nunca conseguiria abrir a primeira vez.
@@ -102,6 +182,13 @@ function abrirCentralAtendimento() {
 
   overlay.hidden = false;
   if (!centralCarregado) {
+    // A foto salva (se tiver uma boa) desenha a tela NA HORA, antes da
+    // rede sequer responder — centralCarregarDados() continua rodando
+    // por trás e substitui quando a versão de verdade chegar.
+    if (centralRestaurarSnapshot()) {
+      centralCarregado = true;
+      centralRenderTudo();
+    }
     centralCarregarDados();
   } else {
     // Reabriu (o Cláudio saiu e voltou) — redesenha com o que já tinha,
@@ -350,6 +437,8 @@ function centralTrocarAba(aba) {
  * - calendário → só o bloco do calendário, que se desenha sozinho.
  */
 async function centralCarregarDados() {
+  centralMostrarAtualizando(true);
+
   // Sai na frente e não é esperado por ninguém: o calendário se desenha
   // sozinho quando chega (centralRenderCalendario espera esta promessa).
   centralGarantirPostagens();
@@ -376,6 +465,8 @@ async function centralCarregarDados() {
 
   centralCarregado = true;
   centralRenderTudo();
+  centralSalvarSnapshot();
+  centralMostrarAtualizando(false);
 
   // Se os pedidos de atenção ainda não tinham chegado na hora do desenho,
   // a pílula é redesenhada acima por conta própria — nada a esperar aqui.
@@ -3718,9 +3809,15 @@ async function centralGarantirUrlsDasPecas(pecas) {
   // isso, uma peça sem imagem no Storage (vídeo, por exemplo) seria
   // perguntada de novo a cada redesenho — o problema que isto veio
   // resolver. `""` quer dizer "já perguntei, não tem".
+  let aprendeuUrlDeVerdade = false;
   faltando.forEach(p => {
-    centralUrlsDePecas.set(centralChaveDaPeca(p.fileId, p.atualizadoEm), urls[p.fileId] || "");
+    const url = urls[p.fileId] || "";
+    if (url) aprendeuUrlDeVerdade = true;
+    centralUrlsDePecas.set(centralChaveDaPeca(p.fileId, p.atualizadoEm), url);
   });
+  // Só grava a foto quando aprendeu URL de verdade nova — entrada vazia
+  // ("sem imagem no Storage") não vale a escrita no navegador.
+  if (aprendeuUrlDeVerdade) centralSalvarSnapshotDeImagens();
 }
 
 /** Põe a imagem no elemento, do jeito mais barato que der. */
