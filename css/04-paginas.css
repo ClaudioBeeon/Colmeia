@@ -457,6 +457,29 @@ body.card-aberto .quick-access-panel { display: none; }
 .wf-line.done { background: #2F9E44; }
 .detail-header-pill .wf-line { background: #4A4B54; }
 
+/* A animação de avançar/desfazer a sequência (ver animarMudancaDaSequencia,
+   js/detalhe-modal.js) — pedido do Cláudio (2026-08-13): a troca de
+   estado tem que SE SENTIR, não só aparecer pronta. */
+@keyframes wfDotPop {
+  0% { transform: scale(0.65); }
+  55% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+.wf-dot-pop { animation: wfDotPop var(--dur-base) var(--ease-apple-spring); }
+
+@keyframes wfCheckPop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.wf-check-pop { animation: wfCheckPop var(--dur-base) var(--ease-apple-spring); }
+
+@keyframes wfLineGrow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.wf-line-pop { transform-origin: left; animation: wfLineGrow var(--dur-base) var(--ease-apple); }
+
 .tipo-tag-icon { font-size: 16px; }
 
 .nav-arrow.nav-deliver {

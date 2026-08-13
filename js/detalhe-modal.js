@@ -267,8 +267,38 @@ function wireWorkflowArrows(task) {
   if (prevBtn) {
     prevBtn.addEventListener("click", async () => {
       prevBtn.disabled = true;
-      await pararCronometroAoTransferir(task);
-      const novoResponsavel = await desfazerWorkflowNoBackend(task.id);
+
+      // MUDA A TELA JÁ (2026-08-13, pedido do Cláudio: "assim que eu
+      // clicar já muda, se der errado desfaz depois, não quero ficar
+      // esperando"). Antes disso a animação só rodava DEPOIS de esperar
+      // `pararCronometroAoTransferir` terminar — e aquele `await` é uma
+      // ida de verdade ao Runrun.it (pausar o cronômetro), que com a fila
+      // do Apps Script congestionada passava de segundos parado sem nada
+      // acontecer na tela. Agora a troca visual é a PRIMEIRA coisa, antes
+      // de qualquer `await`; se o Runrun.it recusar, `carregarSequencia`
+      // no fim busca o estado real e desfaz sozinha.
+      if (task.sequencia && task.sequencia.length) {
+        const atualIdx = task.sequencia.findIndex(s => s.atual);
+        if (atualIdx > 0) {
+          task.sequencia[atualIdx].atual = false;
+          task.sequencia[atualIdx - 1].atual = true;
+          task.sequencia[atualIdx - 1].concluido = false;
+          const seqEl = document.getElementById("workflowSeqGroup");
+          if (seqEl) {
+            seqEl.innerHTML = renderSequenciaHTML(task);
+            wireWorkflowArrows(task);
+            animarMudancaDaSequencia(seqEl);
+          }
+        }
+      }
+
+      // As duas idas ao Runrun.it correm JUNTAS (nenhuma espera a outra
+      // pra começar) — a tela já mudou, então não tem mais nada visual
+      // dependendo delas; é só a confirmação de verdade chegando por trás.
+      const [, novoResponsavel] = await Promise.all([
+        pararCronometroAoTransferir(task),
+        desfazerWorkflowNoBackend(task.id),
+      ]);
       if (novoResponsavel) {
         task.assignee = novoResponsavel;
         task.assigneeAvatarUrl = null;
@@ -283,7 +313,6 @@ function wireWorkflowArrows(task) {
   if (nextBtn) {
     nextBtn.addEventListener("click", async () => {
       nextBtn.disabled = true;
-      await pararCronometroAoTransferir(task);
 
       // Guarda quem estava com a tarefa ANTES de mexer em qualquer coisa
       // (nem a animação otimista logo abaixo ainda) — usado depois pra
@@ -293,10 +322,11 @@ function wireWorkflowArrows(task) {
       const atualIdxAntesDeTudo = task.sequencia && task.sequencia.length ? task.sequencia.findIndex(s => s.atual) : -1;
       const nomeAtualAntes = atualIdxAntesDeTudo !== -1 ? task.sequencia[atualIdxAntesDeTudo].nome : null;
 
-      // Animação otimista: já mostra a transferência acontecendo na
-      // hora (mesmo sem confirmação do Runrun.it ainda) — se a chamada
-      // de baixo falhar, o carregarSequencia final busca o estado real
-      // e desfaz a animação sozinho.
+      // MUDA A TELA JÁ, antes de qualquer `await` (mesmo motivo do botão
+      // de desfazer, acima): já mostra a transferência acontecendo na
+      // hora, mesmo sem confirmação nenhuma do Runrun.it ainda — se a
+      // chamada de baixo falhar, o carregarSequencia final busca o estado
+      // real e desfaz a animação sozinho.
       if (task.sequencia && task.sequencia.length) {
         const atualIdx = task.sequencia.findIndex(s => s.atual);
         if (atualIdx !== -1 && atualIdx < task.sequencia.length - 1) {
@@ -307,11 +337,19 @@ function wireWorkflowArrows(task) {
           if (seqEl) {
             seqEl.innerHTML = renderSequenciaHTML(task);
             wireWorkflowArrows(task);
+            animarMudancaDaSequencia(seqEl);
           }
         }
       }
 
-      const resultadoAvanco = await avancarWorkflowNoBackend(task.id);
+      // Pausar o cronômetro e avançar de verdade no Runrun.it acontecem
+      // JUNTOS (não um esperando o outro terminar) — é o que tira o maior
+      // pedaço da espera, já que a tela nem depende mais dessas duas
+      // respostas pra parecer que "aconteceu".
+      const [, resultadoAvanco] = await Promise.all([
+        pararCronometroAoTransferir(task),
+        avancarWorkflowNoBackend(task.id),
+      ]);
       if (resultadoAvanco.novoResponsavel) {
         task.assignee = resultadoAvanco.novoResponsavel;
         task.assigneeAvatarUrl = null;
@@ -475,6 +513,27 @@ function wireWorkflowArrows(task) {
       });
     }
   }
+}
+
+/**
+ * A "animação bem legal" pedida pelo Cláudio (2026-08-13) pra quando a
+ * sequência avança/desfaz na hora do clique: um "pop" na bolinha que
+ * virou a atual, o ✓ estourando na que acabou de ficar concluída, e a
+ * linha entre elas crescendo da esquerda pra direita — em vez de só
+ * aparecer tudo já pronto, sem transição nenhuma (o `innerHTML` inteiro é
+ * trocado a cada clique, então CSS `transition` sozinho não pega: os
+ * elementos nascem já no estado novo, não têm "de onde" transicionar).
+ * Chamado logo depois de redesenhar `#workflowSeqGroup` com o estado
+ * otimista, tanto no avançar quanto no desfazer.
+ */
+function animarMudancaDaSequencia(seqEl) {
+  const dotAtual = seqEl.querySelector(".wf-dot.current");
+  if (dotAtual) {
+    dotAtual.classList.add("wf-dot-pop");
+    dotAtual.addEventListener("animationend", () => dotAtual.classList.remove("wf-dot-pop"), { once: true });
+  }
+  seqEl.querySelectorAll(".wf-check").forEach(c => c.classList.add("wf-check-pop"));
+  seqEl.querySelectorAll(".wf-line.done").forEach(l => l.classList.add("wf-line-pop"));
 }
 
 /**
