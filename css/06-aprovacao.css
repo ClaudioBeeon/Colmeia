@@ -973,8 +973,9 @@
 
    Sem subtítulo explicativo: o bloco ficava alto demais no meio de uma
    coluna que é toda de controles curtos (pedido do Cláudio). Depois de
-   usado, o rótulo vira "Acessar página de aprovação" — mesma ideia do
-   "Criar pasta do card" → "Acessar pasta do card" logo acima. */
+   usado, ele fica VERDE e diz "Revisão enviada", com um "Copiar link da
+   revisão" logo abaixo (ver .apv-pedir-btn-enviado). Clicar continua
+   abrindo a página de aprovação — só deixou de ser o rótulo. */
 .apv-pedir-btn {
   width: 100%; display: flex; align-items: center; gap: 10px;
   padding: 11px 13px; cursor: pointer; text-align: left;
@@ -992,6 +993,34 @@
 }
 .apv-pedir-btn-icone svg { width: 15px; height: 15px; }
 .apv-pedir-btn-txt { font-size: 13px; font-weight: 600; line-height: 1.3; }
+
+/* Já mandada pra conferência (2026-08-13): VERDE e dizendo "Revisão
+   enviada" — o estado na cara, em vez do antigo "Acessar página de
+   aprovação", que dizia o que o botão faz e escondia o que aconteceu.
+   `--success` existe em css/01-base.css; o fundo é uma versão suave dele
+   feita na hora (não existe --success-soft, mesma situação já resolvida
+   assim em 07-central-atendimento.css e no .pnl-modal). */
+.apv-pedir-btn-enviado {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, var(--card-bg));
+}
+.apv-pedir-btn-enviado:hover { border-color: var(--success); box-shadow: var(--shadow-card); }
+.apv-pedir-btn-enviado .apv-pedir-btn-icone { background: var(--success); color: #fff; }
+.apv-pedir-btn-enviado .apv-pedir-btn-txt { color: var(--success); }
+
+/* Copiar o link da revisão — o que a pessoa faz logo depois de mandar.
+   Irmão visual do "Copiar link da pasta" (css/03-detalhe.css). */
+.apv-copiar-link-btn {
+  width: 100%; margin-top: 6px; display: flex; align-items: center; gap: 7px;
+  padding: 8px 11px; cursor: pointer; text-align: left;
+  background: transparent; border: 1px dashed var(--border);
+  border-radius: var(--radius-md); color: var(--text-secondary);
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  transition: color var(--dur-fast) var(--ease-apple),
+              border-color var(--dur-fast) var(--ease-apple);
+}
+.apv-copiar-link-btn:hover { color: var(--text-primary); border-color: var(--success); }
+.apv-copiar-link-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 
 /* ----- "Mover o card mãe para Aprovação do Cliente" -----
    Fica logo acima dos botões de envio porque é uma consequência DELES:

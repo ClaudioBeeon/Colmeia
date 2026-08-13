@@ -220,6 +220,19 @@ async function renderNotificacoesUpload(task) {
     .sort()
     .join("|");
 
+  // Subiu peça: já vai vasculhando a pasta em segundo plano, pra quando a
+  // pessoa clicar em "Enviar para revisão" (ou pedir isso pra Bee) não ter
+  // que esperar a varredura — ver prepararPecasParaRevisao,
+  // js/pagina-aprovacao.js. Silencioso: não mexe em nada da tela.
+  //
+  // `forcar` quando o conjunto de arquivos MUDOU: senão uma peça que
+  // acabou de subir ficaria de fora da lista já preparada, e a pessoa
+  // mandaria pra revisão sem ela — errar aqui é pior que esperar.
+  if (typeof prepararPecasParaRevisao === "function" && task._chaveUploadPreparada !== chaveConjunto) {
+    task._chaveUploadPreparada = chaveConjunto;
+    prepararPecasParaRevisao(task, { forcar: true });
+  }
+
   // Já mostrando esse MESMO conjunto de arquivos? Não redesenha de novo
   // a cada checagem de 8s — só piscaria a tela à toa.
   const jaMostrando = document.getElementById("beeUploadAviso");

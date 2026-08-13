@@ -2901,26 +2901,83 @@ async function pedirAprovacaoDoAtendimento(task, btn, nomesPecas) {
  * que faz a tela perceber sozinha quando chega uma versão nova depois do
  * pedido.
  */
+// ===== Adiantar a procura das peças (2026-08-13, pedido do Cláudio) =====
+//
+// "A Bee ou clicar em enviar para revisão demora muito." A demora não é o
+// registro em si — é a VARREDURA DA PASTA no Drive (`listarVersoesDasPecas`)
+// que só começava depois do clique. Como o Colmeia já fica de olho na
+// pasta a cada 8 segundos pra avisar de upload novo (renderNotificacoesUpload,
+// js/notificacoes-uploads.js), dá pra fazer essa varredura ANTES, quando
+// a peça sobe — aí o clique só paga o que sobrou, que é rápido.
+//
+// ⚠️ NÃO se adianta o LOTE (o link da conferência): ele aponta pra um
+// conjunto específico de peças, e criá-lo antes da pessoa escolher quais
+// vão significaria registrar uma conferência que ninguém pediu. Adianta-se
+// a PROCURA, que é a parte cara e não decide nada.
+const PREPARO_REVISAO_VALIDADE_MS = 3 * 60 * 1000;
+const _preparoRevisaoEmVoo = new Map();
+
+/** As peças já procuradas pra essa tarefa, se ainda valem. */
+function pecasJaProcuradas(task) {
+  const p = task && task._pecasParaRevisao;
+  if (!p || !p.quando) return null;
+  if (Date.now() - p.quando > PREPARO_REVISAO_VALIDADE_MS) return null;
+  return p.pecas;
+}
+
+/**
+ * Vasculha a pasta do card em segundo plano e guarda o resultado na
+ * tarefa. Silenciosa de propósito: não mexe em botão, não avisa nada, não
+ * atrapalha se falhar — é só adiantar trabalho.
+ */
+function prepararPecasParaRevisao(task, opcoes) {
+  if (!task || !task.id) return Promise.resolve();
+  if (!(opcoes && opcoes.forcar) && pecasJaProcuradas(task)) return Promise.resolve();
+  const chave = String(task.id);
+  if (_preparoRevisaoEmVoo.has(chave)) return _preparoRevisaoEmVoo.get(chave);
+
+  const promessa = (async () => {
+    const data = await chamarBackend({ acao: "listarVersoesDasPecas", taskId: task.id });
+    if (!data || !data.ok || !Array.isArray(data.pecas)) return;
+    const guardado = { pecas: data.pecas, quando: Date.now() };
+    task._pecasParaRevisao = guardado;
+    // A varredura do quadro pode ter trocado o objeto no meio do caminho
+    // — carimba no que está na tela também (mesma lição do
+    // `_conferenciaInfo`).
+    const naTela = tasks[detailIdx];
+    if (naTela && String(naTela.id) === chave && naTela !== task) naTela._pecasParaRevisao = guardado;
+  })().finally(() => _preparoRevisaoEmVoo.delete(chave));
+
+  _preparoRevisaoEmVoo.set(chave, promessa);
+  return promessa;
+}
+
 async function escolherPecasParaRevisao(task, btn) {
-  const original = btn ? btn.innerHTML : "";
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Procurando peças...";
+  // Já procurado em segundo plano? Segue direto, sem espera nenhuma.
+  let pecas = pecasJaProcuradas(task);
+
+  if (!pecas) {
+    const original = btn ? btn.innerHTML : "";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Procurando peças...";
+    }
+
+    const data = await chamarBackend({ acao: "listarVersoesDasPecas", taskId: task.id });
+
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+
+    if (!data || !data.ok) {
+      mostrarToast((data && data.error) || "Não consegui procurar a pasta do card agora.", "erro");
+      return false;
+    }
+    pecas = data.pecas || [];
+    task._pecasParaRevisao = { pecas: pecas, quando: Date.now() };
   }
 
-  const data = await chamarBackend({ acao: "listarVersoesDasPecas", taskId: task.id });
-
-  if (btn) {
-    btn.disabled = false;
-    btn.innerHTML = original;
-  }
-
-  if (!data || !data.ok) {
-    mostrarToast((data && data.error) || "Não consegui procurar a pasta do card agora.", "erro");
-    return false;
-  }
-
-  const pecas = data.pecas || [];
   if (!pecas.length) {
     mostrarToast("Não encontrei nenhuma imagem ou vídeo na pasta do card pra mandar pra revisão.", "erro");
     return false;
@@ -3032,10 +3089,46 @@ async function idsDaFamiliaDaTarefa(task) {
 }
 
 function marcarBotaoComoJaEnviado(btn, taskId, loteId) {
-  if (typeof roteadorLinkDaConferencia !== "function") return;
-  btn.dataset.linkRevisao = roteadorLinkDaConferencia(taskId, loteId);
+  if (!btn || typeof roteadorLinkDaConferencia !== "function") return;
+  const link = roteadorLinkDaConferencia(taskId, loteId);
+  btn.dataset.linkRevisao = link;
+
+  // Verde + "Revisão enviada" (2026-08-13, pedido do Cláudio). Antes o
+  // botão virava "Acessar página de aprovação", que conta o que ele FAZ e
+  // esconde o que ACONTECEU — quem batia o olho não sabia se já tinha
+  // mandado ou não. Estado primeiro; o atalho continua existindo (clicar
+  // no botão abre a página), só deixou de ser o rótulo.
+  btn.classList.add("apv-pedir-btn-enviado");
   const label = document.getElementById("apvPedirBtnLabel");
-  if (label) label.textContent = "Acessar página de aprovação";
+  if (label) label.textContent = "Revisão enviada";
+
+  // E o que a pessoa realmente faz em seguida: copiar o link pra mandar
+  // pro atendimento. Botão próprio, irmão do de copiar link da pasta do
+  // card (mostrarPillCopiarLinkDaPasta, js/chat-comentarios.js).
+  const bloco = btn.parentElement;
+  if (!bloco || document.getElementById("apvCopiarLinkBtn")) return;
+  const copiar = document.createElement("button");
+  copiar.type = "button";
+  copiar.id = "apvCopiarLinkBtn";
+  copiar.className = "apv-copiar-link-btn";
+  copiar.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none"><path d="M9 12a4 4 0 004 4h1a4 4 0 000-8h-1M15 12a4 4 0 00-4-4H10a4 4 0 000 8h1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Copiar link da revisão</span>
+  `;
+  copiar.addEventListener("click", async ev => {
+    ev.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(link);
+      const txt = copiar.querySelector("span");
+      if (txt) {
+        txt.textContent = "Link copiado!";
+        setTimeout(() => { if (txt.isConnected) txt.textContent = "Copiar link da revisão"; }, 1800);
+      }
+    } catch (err) {
+      mostrarToast("Não consegui copiar. O link é: " + link, "erro");
+    }
+  });
+  bloco.appendChild(copiar);
 }
 
 /**

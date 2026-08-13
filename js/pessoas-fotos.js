@@ -800,6 +800,13 @@ async function atualizarKanbanEmBackground() {
         // que isso era "pra sobreviver à varredura do quadro" — só que não
         // sobrevivia, porque dependia desta linha, que não existia.
         if (antiga._conferenciaInfo !== undefined) nova._conferenciaInfo = antiga._conferenciaInfo;
+        // As peças já vasculhadas na pasta do card, adiantadas em segundo
+        // plano quando a peça sobe (ver prepararPecasParaRevisao,
+        // js/pagina-aprovacao.js) — sem preservar, a varredura do quadro
+        // jogaria fora justamente o trabalho que foi adiantado pra o
+        // clique em "Enviar para revisão" ser instantâneo.
+        if (antiga._pecasParaRevisao !== undefined) nova._pecasParaRevisao = antiga._pecasParaRevisao;
+        if (antiga._chaveUploadPreparada !== undefined) nova._chaveUploadPreparada = antiga._chaveUploadPreparada;
         // Mesmo problema do timerSeconds acima, mas pro "está rodando":
         // o Runrun.it às vezes demora alguns segundos pra confirmar o
         // play/pause (mesmo já tendo aceitado a chamada) — sem essa
