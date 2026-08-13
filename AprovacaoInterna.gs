@@ -809,12 +809,71 @@ function mandarPastaDoErickParaConferencia(tarefa, folderId) {
     Logger.log('[Erick] tarefa ' + tarefa.id + ' ("' + tarefa.title + '"): pasta ' + folderId + ' nao tem nenhum arquivo com nome parecido com o titulo da tarefa -- pode ser uma pasta compartilhada entre varias pecas, nada foi enviado por seguranca.');
     return;
   }
+
+  // Todas as peças achadas nesta pasta vieram do MESMO comentário, do
+  // MESMO pedido -- um lote só, um link só, exatamente como já acontece
+  // quando o atendimento escolhe várias peças na tela normal
+  // (pedirConferenciaInterna, mais acima). Antes cada peça ganhava seu
+  // próprio `loteId` aqui dentro, e uma pasta com Feed + Stories + Reels
+  // virava 3 links (3 comentários) separados pra tarefa que era um pedido
+  // só (2026-08-13, reportado pelo Cláudio: "enche de link").
+  var loteId = gerarLoteIdAleatorio();
+  var pecasEnviadas = [];
   nomes.forEach(function (nome) {
-    mandarPecaDoErickParaConferencia(tarefa, grupos[nome].fileId);
+    var nomePeca = mandarPecaDoErickParaConferencia(tarefa, grupos[nome].fileId, loteId);
+    if (nomePeca) pecasEnviadas.push(nomePeca);
   });
+  if (pecasEnviadas.length) comentarLoteDoErick(tarefa, loteId, pecasEnviadas);
 }
 
-function mandarPecaDoErickParaConferencia(tarefa, fileId) {
+/** Mesmo alfabeto/tamanho de sempre (ver pedirConferenciaInterna, mais acima). */
+function gerarLoteIdAleatorio() {
+  var loteId = '';
+  for (var iLote = 0; iLote < 6; iLote++) {
+    loteId += ALFABETO_CODIGO_APROVACAO.charAt(Math.floor(Math.random() * ALFABETO_CODIGO_APROVACAO.length));
+  }
+  return loteId;
+}
+
+/**
+ * Posta UM comentário (na tarefa e, acumulado, no card mãe) cobrindo
+ * TODAS as peças de um lote — usado tanto pro caso de arquivo único
+ * (`mandarPecaDoErickParaConferencia` chamando sozinho) quanto pro caso
+ * de pasta com várias peças (`mandarPastaDoErickParaConferencia`, uma vez
+ * só no fim, depois de gravar todas as linhas do lote).
+ */
+function comentarLoteDoErick(tarefa, loteId, nomesPecas) {
+  var link = COLMEIA_URL_PUBLICA + '?t=' + encodeURIComponent(tarefa.id) + '&p=' + encodeURIComponent(loteId);
+  var rotulo = nomesPecas.length > 1 ? nomesPecas.join(', ') : nomesPecas[0];
+  var texto = rotulo + (nomesPecas.length > 1 ? ' estão prontas pra revisão: ' : ' está pronta pra revisão: ') + link;
+  adicionarComentario(tarefa.id, texto, 'Erick');
+
+  // Repete no card mãe (2026-08-12, pedido do Cláudio: "igual a Bee
+  // faz") — mas só ACUMULA aqui, não dispara na hora: várias subtarefas
+  // irmãs entregues juntas (mesmo card mãe) viraram 8 comentários
+  // repetidos nele antes disso, uma bagunça. Quem dispara de verdade,
+  // UM comentário juntando tudo, é dispararComentariosDeCardMaeAcumulados,
+  // uma vez no fim da rodada.
+  if (tarefa.parentTaskId) {
+    if (!_erickCardMaeAcumulado[tarefa.parentTaskId]) _erickCardMaeAcumulado[tarefa.parentTaskId] = [];
+    _erickCardMaeAcumulado[tarefa.parentTaskId].push({ nomePeca: rotulo, link: link });
+  }
+
+  Logger.log('[Erick] tarefa ' + tarefa.id + ': ' + nomesPecas.length + ' peca(s) num lote so (' + loteId + '), comentei uma vez -- ' + link);
+}
+
+/**
+ * Grava UMA peça na fila de conferência. Devolve o `nomePeca` quando deu
+ * certo (pra quem chamou saber que entrou), ou `null` quando pulou.
+ *
+ * `loteIdForcado`: quando vem de uma pasta com várias peças
+ * (`mandarPastaDoErickParaConferencia`), todas compartilham o MESMO lote
+ * — quem comenta é o chamador, uma vez só pro lote inteiro
+ * (`comentarLoteDoErick`). Sem ele (arquivo único colado direto no
+ * comentário), esta função gera seu próprio lote e comenta sozinha, na
+ * hora — o caminho de sempre.
+ */
+function mandarPecaDoErickParaConferencia(tarefa, fileId, loteIdForcado) {
   // Já foi processado antes? (mesma tarefa + mesmo arquivo já na fila,
   // aprovado ou devolvido) — dedupe por fileId, não por nomePeca (ver o
   // comentário grande no topo desta seção pro motivo).
@@ -822,7 +881,7 @@ function mandarPecaDoErickParaConferencia(tarefa, fileId) {
   for (var i = 1; i < linhas.length; i++) {
     if (String(linhas[i][0]) === String(tarefa.id) && String(linhas[i][6]) === String(fileId)) {
       Logger.log('[Erick] tarefa ' + tarefa.id + ': arquivo ' + fileId + ' ja estava na fila, pulei.');
-      return;
+      return null;
     }
   }
 
@@ -831,22 +890,18 @@ function mandarPecaDoErickParaConferencia(tarefa, fileId) {
     arquivo = DriveApp.getFileById(fileId);
   } catch (e) {
     Logger.log('[Erick] tarefa ' + tarefa.id + ': nao consegui abrir o arquivo ' + fileId + ' (link quebrado, apagado, ou sem permissao) -> ' + e);
-    return;
+    return null;
   }
   var mimeType = arquivo.getMimeType();
   if (!ehTipoDePecaAceito(mimeType)) {
     Logger.log('[Erick] tarefa ' + tarefa.id + ': arquivo ' + fileId + ' (' + arquivo.getName() + ') tem tipo "' + mimeType + '", nao e imagem/video aceito -- pulei.');
-    return;
+    return null;
   }
 
   var nomeArquivo = arquivo.getName();
   var nomePeca = nomeBaseDaPeca(nomeArquivo);
   var versao = versaoDoArquivo(nomeArquivo) || 1;
-
-  var loteId = '';
-  for (var iLote = 0; iLote < 6; iLote++) {
-    loteId += ALFABETO_CODIGO_APROVACAO.charAt(Math.floor(Math.random() * ALFABETO_CODIGO_APROVACAO.length));
-  }
+  var loteId = loteIdForcado || gerarLoteIdAleatorio();
 
   var valores = [
     String(tarefa.id), tarefa.client || '', tarefa.title || '', nomePeca,
@@ -871,25 +926,13 @@ function mandarPecaDoErickParaConferencia(tarefa, fileId) {
     lock.releaseLock();
   }
 
-  // O comentário sai SOZINHO, como Erick — diferente do resto do app (a
-  // Bee só deixa o texto rascunhado pro designer clicar em enviar): aqui
-  // não existe designer nenhum no Colmeia pra dar esse clique.
-  var link = COLMEIA_URL_PUBLICA + '?t=' + encodeURIComponent(tarefa.id) + '&p=' + encodeURIComponent(loteId);
-  var texto = nomePeca + ' está pronta pra revisão: ' + link;
-  adicionarComentario(tarefa.id, texto, 'Erick');
-
-  // Repete no card mãe (2026-08-12, pedido do Cláudio: "igual a Bee
-  // faz") — mas só ACUMULA aqui, não dispara na hora: várias subtarefas
-  // irmãs entregues juntas (mesmo card mãe) viraram 8 comentários
-  // repetidos nele antes disso, uma bagunça. Quem dispara de verdade,
-  // UM comentário juntando tudo, é dispararComentariosDeCardMaeAcumulados,
-  // uma vez no fim da rodada.
-  if (tarefa.parentTaskId) {
-    if (!_erickCardMaeAcumulado[tarefa.parentTaskId]) _erickCardMaeAcumulado[tarefa.parentTaskId] = [];
-    _erickCardMaeAcumulado[tarefa.parentTaskId].push({ nomePeca: nomePeca, link: link });
+  if (!loteIdForcado) {
+    // Arquivo único colado direto (não veio de uma pasta com várias
+    // peças): comenta sozinho, na hora, como sempre foi.
+    comentarLoteDoErick(tarefa, loteId, [nomePeca]);
   }
 
-  Logger.log('[Erick] tarefa ' + tarefa.id + ': peca "' + nomePeca + '" entrou na fila e comentei -- ' + link);
+  return nomePeca;
 }
 
 /**
