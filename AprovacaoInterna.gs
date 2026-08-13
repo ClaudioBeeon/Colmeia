@@ -267,6 +267,15 @@ function invalidarCacheDeVersoesDasPecas(taskId) {
 function listarVersoesDasPecasSemCache(taskId) {
   var pastaInfo = buscarPastaSalvaDoCard(taskId);
   if (!pastaInfo.ok || !pastaInfo.url) {
+    // Designer que não usa o Colmeia (o Erick, que ainda cola o link do
+    // Drive num comentário do Runrun.it) nunca clica em "Criar pasta do
+    // card" -- não existe pasta vinculada e por esse caminho nunca vai
+    // existir. Mas se a peça já está na fila de conferência, a automação
+    // (verificarLinksDoErickNoRunrun, mais abaixo neste arquivo) já achou
+    // o arquivo certo no Drive e gravou o file_id na hora -- monta a
+    // lista a partir DESSA linha, sem escanear pasta nenhuma.
+    var pelaFila = listarVersoesDasPecasPelaFila(taskId);
+    if (pelaFila.ok && pelaFila.pecas.length) return pelaFila;
     return { ok: false, error: 'Essa tarefa ainda não tem uma pasta do card vinculada no Drive. Crie a pasta do card primeiro.' };
   }
 
@@ -318,6 +327,54 @@ function listarVersoesDasPecasSemCache(taskId) {
 
   pecas.sort(function (a, b) { return b.ultima.atualizadoEm - a.ultima.atualizadoEm; });
   return { ok: true, pecas: pecas, pastaUrl: pastaInfo.url };
+}
+
+/**
+ * Fallback de `listarVersoesDasPecasSemCache` pra quando não existe
+ * "pasta do card" vinculada (2026-08-13, caso do Erick). A automação já
+ * validou o arquivo (é imagem/vídeo aceito, o nome bate com o título da
+ * tarefa) e gravou `file_id`/`nome_arquivo`/`mime_type` na fila de
+ * conferência no momento em que achou o link no comentário -- aqui é só
+ * reconstruir a mesma peça a partir dessa linha, no mesmo formato que o
+ * resto da tela espera, sem escanear pasta nenhuma (nem existe pasta pra
+ * escanear).
+ *
+ * Só tem UMA versão por peça nesse caminho (a automação não sabe de
+ * versões antigas, só do arquivo que está no comentário de agora) --
+ * `juntarVersoesDoStorage` ainda entra pra completar com o histórico do
+ * Storage, se existir.
+ */
+function listarVersoesDasPecasPelaFila(taskId) {
+  var linhas = linhasDaConferencia();
+  var grupos = {};
+  for (var i = 1; i < linhas.length; i++) {
+    var linha = linhas[i];
+    if (String(linha[0]) !== String(taskId)) continue;
+    var nomePeca = String(linha[3] || '');
+    var fileId = String(linha[6] || '');
+    if (!nomePeca || !fileId) continue;
+    if (!grupos[nomePeca]) grupos[nomePeca] = [];
+    var quando = new Date(linha[10]).getTime();
+    grupos[nomePeca].push({
+      fileId: fileId,
+      nome: String(linha[7] || nomePeca),
+      mimeType: String(linha[8] || ''),
+      versao: linha[9] || null,
+      atualizadoEm: quando || Date.now()
+    });
+  }
+
+  var pecas = Object.keys(grupos).map(function (nomePeca) {
+    var versoes = grupos[nomePeca];
+    versoes.sort(function (a, b) { return a.atualizadoEm - b.atualizadoEm; });
+    versoes.forEach(function (v, idx) { v.ordem = idx + 1; });
+    return { nomePeca: nomePeca, versoes: versoes, ultima: versoes[versoes.length - 1] };
+  });
+  if (!pecas.length) return { ok: false, error: 'Não achei essa peça na fila de conferência.' };
+
+  juntarVersoesDoStorage(pecas);
+  pecas.sort(function (a, b) { return b.ultima.atualizadoEm - a.ultima.atualizadoEm; });
+  return { ok: true, pecas: pecas, pastaUrl: '' };
 }
 
 /**
