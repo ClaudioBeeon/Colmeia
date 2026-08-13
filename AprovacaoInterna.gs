@@ -893,6 +893,61 @@ function mandarPecaDoErickParaConferencia(tarefa, fileId) {
 }
 
 /**
+ * SÓ LEITURA — roda manualmente pelo editor do Apps Script pra entender
+ * por que uma tarefa específica do Erick não acha a peça na conferência
+ * (2026-08-13). Mostra: o que está gravado na fila de conferência pra
+ * essa tarefa, se existe pasta do card salva (não devia, no caso dele) e
+ * todos os comentários dele nessa tarefa com os links de Drive
+ * reconhecidos -- pra decidir se vale reprocessar com
+ * `reprocessarTarefaDoErick`.
+ */
+function diagnosticoLinkErick(taskId) {
+  var linhas = linhasDaConferencia();
+  var doTask = [];
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) === String(taskId)) doTask.push(linhas[i]);
+  }
+  Logger.log('[Erick][diagnostico] tarefa ' + taskId + ': ' + doTask.length + ' linha(s) na fila de conferencia -- ' + JSON.stringify(doTask));
+
+  var pastaInfo = buscarPastaSalvaDoCard(taskId);
+  Logger.log('[Erick][diagnostico] pasta do card salva: ' + JSON.stringify(pastaInfo));
+
+  var r = listarComentarios(taskId);
+  if (!r.ok) {
+    Logger.log('[Erick][diagnostico] nao consegui ler os comentarios dessa tarefa: ' + r.error);
+    return;
+  }
+  var doErick = r.comentarios.filter(function (c) { return ehErick(c.autor); });
+  Logger.log('[Erick][diagnostico] ' + doErick.length + ' comentario(s) do Erick nesta tarefa.');
+  doErick.forEach(function (c) {
+    var links = String(c.texto || '').match(ERICK_LINK_DRIVE_REGEX);
+    Logger.log('[Erick][diagnostico] comentario ' + c.id + (links ? ' (tem link de Drive)' : ' (sem link de Drive)') + ': ' + String(c.texto || '').slice(0, 300));
+  });
+}
+
+/**
+ * Reprocessa UMA tarefa do Erick na mão, sem esperar o gatilho de 10 em
+ * 10 minutos — usa exatamente o mesmo caminho da varredura automática
+ * (`processarComentariosDoErick`), só que numa tarefa só. Seguro rodar de
+ * novo: o dedupe por (taskId, fileId) evita duplicar a linha na fila; o
+ * único efeito colateral possível é comentar de novo se a linha tinha
+ * sido apagada da fila mas o comentário de antes ainda estiver lá --
+ * conferir com `diagnosticoLinkErick` antes, se tiver dúvida.
+ */
+function reprocessarTarefaDoErick(taskId) {
+  var t = runrunFetch('/tasks/' + taskId);
+  if (!t || t.erroFetch) {
+    Logger.log('[Erick] nao consegui ler a tarefa ' + taskId + ' no Runrun.it.');
+    return;
+  }
+  _erickCardMaeAcumulado = {};
+  var tarefa = transformarTarefaParaColmeia(t, 'Erick', null);
+  processarComentariosDoErick(tarefa);
+  dispararComentariosDeCardMaeAcumulados();
+  Logger.log('[Erick] reprocessei a tarefa ' + taskId + ' na mao.');
+}
+
+/**
  * RODAR UMA ÚNICA VEZ, manualmente, pelo editor do Apps Script — mesmo
  * padrão de configurarGatilhoBackup (Drive.gs). Configura o gatilho que
  * faz verificarLinksDoErickNoRunrun rodar sozinha a cada 10 minutos.
