@@ -54,13 +54,25 @@ function openDetail(idx, entradaAnimacao) {
   childrenOpen = false;
   descMaeAberta = false;
   anexosAberta = false;
-  // Subtarefa de ALTERAÇÃO abre direto no contexto, não na Descrição (que
-  // nessas subtarefas costuma ser genérica ou vazia): a aba "Tarefa
-  // original" já vem aberta do lado da descrição, e o chat já abre na
-  // "Linha do tempo" (são painéis diferentes, então dá pra fazer as duas
-  // coisas ao mesmo tempo). Qualquer outra tarefa segue abrindo como antes.
+  // Subtarefa de ALTERAÇÃO abre na Descrição, igual qualquer outra tarefa
+  // — NÃO na aba "Tarefa original" (2026-08-13, relatado pelo Cláudio: "o
+  // pedido de ajuste está na descrição").
+  //
+  // Isso já foi diferente de propósito (a ideia era que a descrição dessas
+  // subtarefas "costuma ser genérica ou vazia"), mas essa premissa não é
+  // mais verdade: `devolverParaDesigner` (AprovacaoInterna.gs) grava o
+  // MOTIVO do ajuste (+ os pontos marcados na peça) direto na descrição da
+  // subtarefa, no momento em que ela é criada — é o mesmo motivo que faz
+  // `renderDevolucaoNoCard` (js/detalhe-alteracao.js) desenhar a peça
+  // marcada no TOPO da descrição, fora de qualquer aba, com o comentário
+  // "isso não é contexto de apoio, é a instrução principal". Abrir por
+  // padrão em "Tarefa original" escondia exatamente esse conteúdo atrás
+  // de um clique.
+  //
+  // Continua abrindo o chat em "Todos os comentários" (mais rápido que
+  // "Linha do tempo") — essa parte não tinha relação com o bug.
   const abrirNoContextoDeAlteracao = ehTarefaDeAlteracao(tasks[Number(idx)]);
-  originalAberta = abrirNoContextoDeAlteracao;
+  originalAberta = false;
   fecharChatPanel();
   renderDetail();
   const panel = document.getElementById("taskDetail");
