@@ -211,32 +211,25 @@ function beeResumo(taskId, idOriginal) {
 function chamarGeminiTexto(prompt, modelo) {
   modelo = modelo || GEMINI_MODEL;
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent';
-  var res = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'x-goog-api-key': GEMINI_API_KEY },
-    payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    muteHttpExceptions: true
-  });
-  var codigo = res.getResponseCode();
-  var parsed;
-  try {
-    parsed = JSON.parse(res.getContentText());
-  } catch (e) {
-    return { ok: false, error: 'Resposta inesperada do Gemini (status ' + codigo + ').' };
-  }
+  var payload = { contents: [{ parts: [{ text: prompt }] }] };
+  // Mesmo núcleo com tentativas e espera crescente que chamarGemini usa
+  // (ver o comentário grande em IA.gs) — a conversa da Bee sofre do MESMO
+  // "High demand" que o briefing, só que sem cache pra disfarçar (é uma
+  // pergunta nova a cada vez).
+  var r = gemini_fetchComRetentativas(url, payload);
+
   // Nome de modelo que não existe (o Google devolve 404, às vezes 400):
   // em vez de deixar a Bee muda, cai no modelo rápido, que sempre existe.
   // Isso protege o dia em que o nome do modelo forte mudar do lado do
   // Google — a conversa fica mais rasa, mas continua funcionando.
-  if ((codigo === 404 || codigo === 400) && modelo !== GEMINI_MODEL) {
-    Logger.log('Modelo "' + modelo + '" indisponível, usando ' + GEMINI_MODEL + '. Resposta: ' + res.getContentText().substring(0, 200));
+  if ((r.codigo === 404 || r.codigo === 400) && modelo !== GEMINI_MODEL) {
+    Logger.log('Modelo "' + modelo + '" indisponível, usando ' + GEMINI_MODEL + '.');
     return chamarGeminiTexto(prompt, GEMINI_MODEL);
   }
-  if (codigo < 200 || codigo >= 300) {
-    return { ok: false, error: (parsed.error && parsed.error.message) || ('Gemini recusou (status ' + codigo + ').') };
+  if (r.codigo < 200 || r.codigo >= 300) {
+    return { ok: false, error: (r.parsed && r.parsed.error && r.parsed.error.message) || r.erro || ('Gemini recusou (status ' + r.codigo + ').') };
   }
-  var c = parsed.candidates && parsed.candidates[0];
+  var c = r.parsed.candidates && r.parsed.candidates[0];
   var texto = c && c.content && c.content.parts && c.content.parts[0] && c.content.parts[0].text;
   if (!texto) return { ok: false, error: 'Gemini não devolveu nenhum texto.' };
   return { ok: true, texto: texto };

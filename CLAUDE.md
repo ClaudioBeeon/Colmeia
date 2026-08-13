@@ -1780,6 +1780,53 @@ Três camadas já feitas, todas **remédio, não cura**:
 `abrirCardMaeCompleto` existem justamente pra juntar o que era separado. Uma busca nova em
 `openDetail` que espere outra terminar custa um lugar a mais na fila, em sequência, pra todo mundo.
 
+## "High demand" do Gemini — retry, fallback pro Groq e o buraco no cache (2026-08-13)
+
+O Cláudio relatou que, mesmo com o card abrindo rápido, o painel do **briefing** (o organizado pela
+IA) sempre aparecia "Carregando briefing..." por uns 5s, às vezes com erro "High demand".
+
+**Causa 1 — buraco no que eu mesmo tinha construído.** `buscarEGuardarDetalhe`
+(js/cache-tarefas.js) pré-carregava o conteúdo do card e o resumo da Bee, mas **esqueceu o
+briefing**. Corrigido: agora ele também busca `gerarBriefing` e guarda o HTML pronto — usando
+`montarBriefingDaTarefaHTML` (js/regras-briefing.js), extraída da montagem do briefing pra ser uma
+função PURA (sem tocar em `document`), justamente pra poder rodar tanto na abertura ao vivo quanto
+no pré-carregamento de uma tarefa que ainda nem foi aberta. ⚠️ Existe uma outra
+`montarBriefingHTML` (sem sufixo) em js/pagina-aprovacao.js, de outra tela (a aprovação do
+cliente), com formato de dados diferente — são funções DIFERENTES por causa do JS não ter
+namespace; uma colidiu com a outra na primeira versão deste conserto (a que carregasse por último
+vencia, calada, sem erro nenhum), e só apareceu no teste no navegador. Nunca renomeie uma de volta
+pra bater com a outra.
+
+**Causa 2 — zero resiliência nas chamadas ao Gemini.** "High demand" é o Gemini devolvendo 503
+(sobrecarregado) — erro transitório e documentado
+([ai.google.dev/gemini-api/docs/troubleshooting](https://ai.google.dev/gemini-api/docs/troubleshooting)),
+pro qual a orientação oficial é tentar de novo com espera crescente. O Apps Script não tem SDK, e
+`chamarGemini`/`chamarGeminiComImagens`/`chamarGeminiTexto` nunca tentavam de novo — um 503 virava
+erro na hora pro designer. Agora as três passam por `gemini_fetchComRetentativas` (IA.gs): até 3
+tentativas, espera exponencial com jitter (fórmula oficial do Google: `min(base*2^n + jitter,
+teto)`), só pra 429/503/falha de rede — nunca pra erro de pedido (400 etc, que não se resolve
+tentando de novo).
+
+**A camada extra: fallback pro Groq.** `chamarGemini` existe desde antes uma função `chamarGroq`
+com a MESMA assinatura (prompt in, `{ok,dados}` out) — parecia feita pra isto e nunca tinha sido
+ligada (código morto). Agora, se o Gemini continuar transitoriamente indisponível depois de
+esgotar as tentativas, `chamarGemini` cai pro Groq antes de desistir — troca de FORNECEDOR, não só
+espera o mesmo fornecedor "desafogar" (o Google fala em 30–60 min em picos de demanda).
+`chamarGeminiComImagens` (vision) e `chamarGeminiTexto` (conversa da Bee) só ganham o retry, sem
+fallback — não existe substituto compatível pra imagem, e a conversa livre não usa modo JSON.
+
+⚠️ **`GROQ_MODEL` foi atualizado** de `llama-3.3-70b-versatile` (aposentado pela Groq em
+17/06/2026) pra `openai/gpt-oss-120b`, o substituto que a própria Groq recomenda pra quem usava o
+70b — confirmado que aceita o mesmo `response_format: json_object` que o Colmeia já usa.
+
+Testado: 25+ asserções num sandbox Node carregando IA.gs/Bee.gs de verdade (sucesso sem retry,
+503→recupera na 2ª tentativa medindo a janela do backoff, 429×2→recupera na 3ª com a espera
+CRESCENDO, esgotou sem Groq→erro limpo sem tentar mais nada, esgotou COM Groq→cai pro Groq e traz
+a resposta dele no modelo certo, 400→desiste na hora sem retry nem fallback, falha de rede
+(exceção) também tenta de novo, e o `chamarGeminiTexto` preservando a troca de modelo em 404). E no
+navegador: o "Carregando briefing..." saindo em 30ms em vez de esperar a rede, com o HTML
+idêntico ao que a abertura ao vivo produziria.
+
 **A cura seria ler do Supabase em vez do Apps Script — e ela NÃO está pronta pra fazer.** Duas
 barreiras reais, medidas em 2026-08-13:
 

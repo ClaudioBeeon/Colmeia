@@ -687,6 +687,84 @@ function wireBriefingCopyButtons(resultEl) {
   });
 }
 
+/**
+ * Monta o HTML do briefing organizado a partir da resposta do backend
+ * (`{ ok, briefing }`) — SEM tocar em `document`. Existe separado de
+ * `gerarBriefingComIA` (2026-08-13) pra o pré-carregamento em fila/hover
+ * (`buscarEGuardarDetalhe`, js/cache-tarefas.js) poder montar e guardar o
+ * MESMO html de uma tarefa que ainda nem foi aberta — sem isso, o
+ * briefing sempre esperava a pessoa clicar pra só então buscar e montar,
+ * e era exatamente esse o motivo do "Carregando briefing..." persistente.
+ */
+function montarBriefingDaTarefaHTML(data) {
+  const b = data.briefing || {};
+  const plataformas = b.plataformas || [];
+  const formatos = b.formatos || [];
+  const resumo = b.resumo || "";
+  // Campos dinâmicos — a IA identifica sozinha quais perguntas existem
+  // na descrição (varia de tarefa pra tarefa) e devolve a resposta de
+  // cada uma, exatamente como está escrita (nunca reescrita).
+  const campos = (b.campos || []).filter(c => !ehCampoDuplicadoDePlataformaOuFormato(c.pergunta));
+
+  // O campo de "texto na arte" ganha destaque especial (o designer vai
+  // copiar isso direto pra peça) — identificado pela pergunta conter
+  // as palavras "texto" e "arte", não importa a redação exata.
+  const idxDestaque = campos.findIndex(c => ehCampoTextoNaArte(c.pergunta) && c.resposta);
+  const campoDestaque = idxDestaque !== -1 ? campos[idxDestaque] : null;
+  const camposSecundarios = campos.filter((c, i) => i !== idxDestaque);
+
+  return `
+    <span class="bee-selo-mini" title="Organizado pela Bee">${beeIcon}</span>
+    ${(plataformas.length || formatos.length) ? `
+      <div class="ai-briefing-tags">
+        ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${escaparHTML(p)}</span>`).join("")}
+        ${formatos.map((f, i) => `<div class="format-box format-box-sm ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${escaparHTML(f)}</div>`).join("")}
+      </div>
+    ` : ""}
+    ${resumo ? `<p class="ai-briefing-resumo">${escaparHTML(resumo)}</p>` : ""}
+    ${campoDestaque ? `
+      <div class="ai-briefing-destaque">
+        <div class="ai-briefing-destaque-corpo">
+          <p class="ai-briefing-destaque-label">${escaparHTML(campoDestaque.pergunta)}</p>
+          <p class="ai-briefing-destaque-valor">${escaparHTML(campoDestaque.resposta)}</p>
+          ${blocoVersaoOriginalHTML(campoDestaque.resposta, campoDestaque.respostaOriginal)}
+        </div>
+        <button type="button" class="ai-briefing-copy-btn" data-texto="${escaparHTML(campoDestaque.resposta).replace(/"/g, "&quot;")}" title="Copiar texto">
+          <svg viewBox="0 0 24 24" fill="none" width="15" height="15"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>
+        </button>
+      </div>
+    ` : ""}
+    ${(() => {
+      const preenchidos = camposSecundarios.filter(c => !respostaEhVazia(c.resposta));
+      const vazios = camposSecundarios.filter(c => respostaEhVazia(c.resposta));
+      return `
+        ${preenchidos.length ? `
+          <div class="ai-briefing-preenchidos">
+            ${preenchidos.map(c => `
+              <div class="ai-briefing-cat ${categoriaCampoBriefing(c.pergunta)}">
+                <div class="ai-briefing-cat-head">
+                  <span class="ai-briefing-cat-icon">${c.pergunta.trim().charAt(0).toUpperCase()}</span>
+                  <span class="ai-briefing-cat-label">${escaparHTML(c.pergunta)}</span>
+                </div>
+                <div class="ai-briefing-cat-corpo">
+                  <div class="ai-briefing-cat-valor">${renderValorCampo(c.resposta)}</div>
+                  ${blocoVersaoOriginalHTML(c.resposta, c.respostaOriginal)}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        ` : ""}
+        ${vazios.length ? `
+          <div class="ai-briefing-vazios">
+            <span class="ai-briefing-vazios-label">Vazios</span>
+            ${vazios.map(c => `<span class="ai-briefing-vazio-bolha" title="${escaparHTML(c.pergunta)}">${c.pergunta.trim().charAt(0).toUpperCase()}</span>`).join("")}
+          </div>
+        ` : ""}
+      `;
+    })()}
+  `;
+}
+
 async function gerarBriefingComIA(task) {
   if (!document.getElementById("briefingResult")) return;
 
@@ -748,72 +826,7 @@ async function gerarBriefingComIA(task) {
       return;
     }
 
-    const b = data.briefing || {};
-    const plataformas = b.plataformas || [];
-    const formatos = b.formatos || [];
-    const resumo = b.resumo || "";
-    // Campos dinâmicos — a IA identifica sozinha quais perguntas existem
-    // na descrição (varia de tarefa pra tarefa) e devolve a resposta de
-    // cada uma, exatamente como está escrita (nunca reescrita).
-    const campos = (b.campos || []).filter(c => !ehCampoDuplicadoDePlataformaOuFormato(c.pergunta));
-
-    // O campo de "texto na arte" ganha destaque especial (o designer vai
-    // copiar isso direto pra peça) — identificado pela pergunta conter
-    // as palavras "texto" e "arte", não importa a redação exata.
-    const idxDestaque = campos.findIndex(c => ehCampoTextoNaArte(c.pergunta) && c.resposta);
-    const campoDestaque = idxDestaque !== -1 ? campos[idxDestaque] : null;
-    const camposSecundarios = campos.filter((c, i) => i !== idxDestaque);
-
-    resultEl.innerHTML = `
-      <span class="bee-selo-mini" title="Organizado pela Bee">${beeIcon}</span>
-      ${(plataformas.length || formatos.length) ? `
-        <div class="ai-briefing-tags">
-          ${plataformas.map(p => `<span class="ai-briefing-plataforma-tag">${escaparHTML(p)}</span>`).join("")}
-          ${formatos.map((f, i) => `<div class="format-box format-box-sm ${CORES_FORMATO_BOX[i % CORES_FORMATO_BOX.length]}">${escaparHTML(f)}</div>`).join("")}
-        </div>
-      ` : ""}
-      ${resumo ? `<p class="ai-briefing-resumo">${escaparHTML(resumo)}</p>` : ""}
-      ${campoDestaque ? `
-        <div class="ai-briefing-destaque">
-          <div class="ai-briefing-destaque-corpo">
-            <p class="ai-briefing-destaque-label">${escaparHTML(campoDestaque.pergunta)}</p>
-            <p class="ai-briefing-destaque-valor">${escaparHTML(campoDestaque.resposta)}</p>
-            ${blocoVersaoOriginalHTML(campoDestaque.resposta, campoDestaque.respostaOriginal)}
-          </div>
-          <button type="button" class="ai-briefing-copy-btn" data-texto="${escaparHTML(campoDestaque.resposta).replace(/"/g, "&quot;")}" title="Copiar texto">
-            <svg viewBox="0 0 24 24" fill="none" width="15" height="15"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>
-          </button>
-        </div>
-      ` : ""}
-      ${(() => {
-        const preenchidos = camposSecundarios.filter(c => !respostaEhVazia(c.resposta));
-        const vazios = camposSecundarios.filter(c => respostaEhVazia(c.resposta));
-        return `
-          ${preenchidos.length ? `
-            <div class="ai-briefing-preenchidos">
-              ${preenchidos.map(c => `
-                <div class="ai-briefing-cat ${categoriaCampoBriefing(c.pergunta)}">
-                  <div class="ai-briefing-cat-head">
-                    <span class="ai-briefing-cat-icon">${c.pergunta.trim().charAt(0).toUpperCase()}</span>
-                    <span class="ai-briefing-cat-label">${escaparHTML(c.pergunta)}</span>
-                  </div>
-                  <div class="ai-briefing-cat-corpo">
-                    <div class="ai-briefing-cat-valor">${renderValorCampo(c.resposta)}</div>
-                    ${blocoVersaoOriginalHTML(c.resposta, c.respostaOriginal)}
-                  </div>
-                </div>
-              `).join("")}
-            </div>
-          ` : ""}
-          ${vazios.length ? `
-            <div class="ai-briefing-vazios">
-              <span class="ai-briefing-vazios-label">Vazios</span>
-              ${vazios.map(c => `<span class="ai-briefing-vazio-bolha" title="${escaparHTML(c.pergunta)}">${c.pergunta.trim().charAt(0).toUpperCase()}</span>`).join("")}
-            </div>
-          ` : ""}
-        `;
-      })()}
-    `;
+    resultEl.innerHTML = montarBriefingDaTarefaHTML(data);
 
     task.briefingHTML = resultEl.innerHTML; // guarda pronto — não perde mais em re-renders (ex: ao dar play)
     // E também no navegador, pra sobreviver ao F5 e ao dia seguinte.

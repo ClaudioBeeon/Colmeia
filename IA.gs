@@ -53,33 +53,111 @@ function chamarGroq(prompt) {
   return { ok: true, dados: dados };
 }
 
+// ============ Resiliência das chamadas ao Gemini (2026-08-13) ============
+//
+// Por quê: "High demand" é o Gemini devolvendo 503 (UNAVALIABLE, modelo
+// sobrecarregado) — um erro TRANSITÓRIO e bem documentado, não uma falha
+// de configuração. A orientação oficial do Google pra 429 (RESOURCE_EXHAUSTED)
+// e 503 é tentar de novo com espera crescente — os SDKs oficiais (Python,
+// etc) já fazem isso sozinhos por padrão. O Apps Script não tem SDK, então
+// isso não existia aqui: cada 503 virava, na hora, um "Não consegui gerar
+// o briefing" pro designer — mesmo sabendo que na maioria das vezes a
+// PRÓXIMA tentativa, poucos segundos depois, passaria.
+// Fonte: https://ai.google.dev/gemini-api/docs/troubleshooting
+//
+// A fórmula é a mesma que o Google recomenda pro Cloud em geral: espera =
+// min(base * 2^tentativa + jitter, teto) — o jitter (um tanto aleatório)
+// existe pra várias pessoas clicando "abrir tarefa" ao mesmo tempo não
+// tentarem de novo todas no MESMO milissegundo.
+var GEMINI_MAX_TENTATIVAS = 3;
+var GEMINI_BACKOFF_BASE_MS = 900;
+var GEMINI_BACKOFF_TETO_MS = 6000;
+
+function gemini_codigoTransitorio(codigo) {
+  return codigo === 429 || codigo === 503 || codigo === 0;
+}
+
+function gemini_esperarAntesDeTentarDeNovo(tentativa) {
+  var exponencial = GEMINI_BACKOFF_BASE_MS * Math.pow(2, tentativa - 1);
+  var jitter = Math.floor(Math.random() * 400);
+  Utilities.sleep(Math.min(exponencial + jitter, GEMINI_BACKOFF_TETO_MS));
+}
+
+/**
+ * A ida de verdade ao Gemini, JÁ COM as tentativas — usada por chamarGemini,
+ * chamarGeminiComImagens (ambas aqui) e chamarGeminiTexto (Bee.gs). Cada
+ * uma dessas monta o `payload` do jeito que precisa (texto puro, com
+ * imagem, com/sem responseMimeType) e interpreta a resposta à sua
+ * maneira — esta função só garante que a IDA foi tentada de verdade
+ * antes de devolver um erro.
+ *
+ * Devolve { codigo, parsed, erro }. `parsed` pode vir null se a resposta
+ * não for JSON válido (acontece raramente, ex: página de erro HTML).
+ */
+function gemini_fetchComRetentativas(url, payload) {
+  var codigo = 0, parsed = null, erro = null;
+  for (var tentativa = 1; tentativa <= GEMINI_MAX_TENTATIVAS; tentativa++) {
+    var res;
+    try {
+      res = UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { 'x-goog-api-key': GEMINI_API_KEY },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
+    } catch (e) {
+      // Nem chegou a responder (DNS, timeout de rede) — mesmo tratamento
+      // de erro de rede que runrunFetch já dá pro Runrun.it.
+      codigo = 0;
+      erro = String((e && e.message) || e);
+      if (tentativa < GEMINI_MAX_TENTATIVAS) { gemini_esperarAntesDeTentarDeNovo(tentativa); continue; }
+      break;
+    }
+
+    codigo = res.getResponseCode();
+    try {
+      parsed = JSON.parse(res.getContentText());
+    } catch (e) {
+      parsed = null;
+      erro = 'Resposta inesperada do Gemini (status ' + codigo + ').';
+    }
+
+    if (codigo >= 200 && codigo < 300) return { codigo: codigo, parsed: parsed, erro: null };
+
+    if (gemini_codigoTransitorio(codigo) && tentativa < GEMINI_MAX_TENTATIVAS) {
+      gemini_esperarAntesDeTentarDeNovo(tentativa);
+      continue;
+    }
+    break; // erro definitivo (400/401/403/404...) ou acabaram as tentativas
+  }
+  return { codigo: codigo, parsed: parsed, erro: erro };
+}
+
 function chamarGemini(prompt) {
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent';
   var payload = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { responseMimeType: 'application/json' }
   };
-  var res = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'x-goog-api-key': GEMINI_API_KEY },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-  var codigo = res.getResponseCode();
-  var corpo = res.getContentText();
+  var r = gemini_fetchComRetentativas(url, payload);
 
-  var parsed;
-  try {
-    parsed = JSON.parse(corpo);
-  } catch (e) {
-    return { ok: false, error: 'Resposta inesperada do Gemini (status ' + codigo + ').' };
+  if (r.codigo < 200 || r.codigo >= 300) {
+    var msgFalha = (r.parsed && r.parsed.error && r.parsed.error.message) || r.erro || ('Gemini recusou (status ' + r.codigo + ').');
+    // Esgotou as tentativas e ainda é transitório (sobrecarga, não erro de
+    // pedido): cai pro Groq antes de desistir de vez. chamarGroq tem a
+    // MESMA assinatura (prompt in, {ok,dados} out) de propósito — dá pra
+    // trocar uma pela outra sem quem chamou saber a diferença. Continua
+    // funcionando mesmo se GROQ_API_KEY não estiver configurada (o Groq
+    // devolve erro próprio nesse caso, tratado como qualquer outra falha).
+    if (gemini_codigoTransitorio(r.codigo) && GROQ_API_KEY) {
+      Logger.log('Gemini indisponível (status ' + r.codigo + ') depois de ' + GEMINI_MAX_TENTATIVAS + ' tentativas — caindo pro Groq.');
+      return chamarGroq(prompt);
+    }
+    return { ok: false, error: msgFalha };
   }
-  if (codigo < 200 || codigo >= 300) {
-    var msg = (parsed.error && parsed.error.message) || ('Gemini recusou (status ' + codigo + ').');
-    return { ok: false, error: msg };
-  }
-  var candidato = parsed.candidates && parsed.candidates[0];
+
+  var candidato = r.parsed.candidates && r.parsed.candidates[0];
   var texto = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0] && candidato.content.parts[0].text;
   if (!texto) return { ok: false, error: 'Gemini não devolveu nenhum texto.' };
 
@@ -112,27 +190,16 @@ function chamarGeminiComImagens(prompt, imagens) {
     contents: [{ parts: partes }],
     generationConfig: { responseMimeType: 'application/json' }
   };
-  var res = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'x-goog-api-key': GEMINI_API_KEY },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-  var codigo = res.getResponseCode();
-  var corpo = res.getContentText();
+  // Mesmas tentativas com espera crescente que chamarGemini usa (ver o
+  // comentário grande logo acima dela) — SEM cair pro Groq aqui: análise
+  // de imagem é Gemini vision, o Groq não tem substituto compatível.
+  var r = gemini_fetchComRetentativas(url, payload);
 
-  var parsed;
-  try {
-    parsed = JSON.parse(corpo);
-  } catch (e) {
-    return { ok: false, error: 'Resposta inesperada do Gemini (status ' + codigo + ').' };
-  }
-  if (codigo < 200 || codigo >= 300) {
-    var msg = (parsed.error && parsed.error.message) || ('Gemini recusou (status ' + codigo + ').');
+  if (r.codigo < 200 || r.codigo >= 300) {
+    var msg = (r.parsed && r.parsed.error && r.parsed.error.message) || r.erro || ('Gemini recusou (status ' + r.codigo + ').');
     return { ok: false, error: msg };
   }
-  var candidato = parsed.candidates && parsed.candidates[0];
+  var candidato = r.parsed.candidates && r.parsed.candidates[0];
   var texto = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0] && candidato.content.parts[0].text;
   if (!texto) return { ok: false, error: 'Gemini não devolveu nenhum texto.' };
 

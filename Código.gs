@@ -60,7 +60,12 @@
 // dos textos dela.
 var RUNRUN_APP_KEY = PropertiesService.getScriptProperties().getProperty('RUNRUN_APP_KEY');
 var GROQ_API_KEY = PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY');
-var GROQ_MODEL = 'llama-3.3-70b-versatile';
+// A Groq aposentou o llama-3.3-70b-versatile em 17/06/2026 (aviso deles:
+// https://console.groq.com/docs/deprecations) — trocado pelo substituto
+// que a própria Groq recomenda pra quem usava o 70b. Só entra em jogo
+// quando o Gemini está fora do ar/sobrecarregado (ver chamarGemini,
+// IA.gs) — antes disso era código morto, nunca chamado.
+var GROQ_MODEL = 'openai/gpt-oss-120b';
 var GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
 // Modelo RÁPIDO: usado em tudo que é leitura/resumo (briefing, frase do
 // dia, a primeira fala da Bee). Essas coisas acontecem enquanto a pessoa

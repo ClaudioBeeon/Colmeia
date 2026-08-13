@@ -283,7 +283,14 @@ async function buscarEGuardarDetalhe(t, pausaMs) {
   const guardado = await lerDetalheDoCache(t.id);
   const faltaAbrir = !guardado || !guardado.abrir;
   const faltaBee = !guardado || !guardado.beeResumo;
-  if (!faltaAbrir && !faltaBee) return; // já temos tudo
+  // O briefing (o painel "organizado pela IA") tinha ficado de fora daqui
+  // (2026-08-13) — por isso ele SEMPRE aparecia "Carregando briefing..."
+  // mesmo em tarefa já pré-carregada: o card e o resumo da Bee vinham do
+  // cache, mas o briefing sempre ia buscar na hora, ao vivo, e essa é a
+  // chamada mais lenta e mais sujeita a "High demand" (ver
+  // gemini_fetchComRetentativas, IA.gs).
+  const faltaBriefing = !guardado || !guardado.briefingHTML;
+  if (!faltaAbrir && !faltaBee && !faltaBriefing) return; // já temos tudo
 
   if (faltaAbrir) {
     try {
@@ -313,6 +320,26 @@ async function buscarEGuardarDetalhe(t, pausaMs) {
       // tentados de novo quando a pessoa abrir de verdade.
       if (r && r.ok && !r.semMaterial && r.resumo) {
         await guardarDetalheNoCache(t.id, { beeResumo: r.resumo });
+      }
+    } catch (err) { /* segue pra próxima */ }
+    if (pausaMs) await new Promise(r => setTimeout(r, pausaMs));
+  }
+
+  // O briefing (o painel "organizado pela IA") é a chamada mais lenta de
+  // todas — pensa em cima da descrição — e a que mais sofre com o
+  // Gemini sobrecarregado (ver "High demand" em IA.gs). `montarBriefingDaTarefaHTML`
+  // (js/regras-briefing.js) é a MESMA função que a abertura ao vivo usa,
+  // então o que fica guardado aqui é byte a byte o que a pessoa veria se
+  // esperasse a resposta na hora.
+  if (faltaBriefing) {
+    try {
+      const r = await chamarBackend({ acao: "gerarBriefing", taskId: t.id });
+      // Só guarda o CAMINHO DE SUCESSO (briefing montado de verdade).
+      // Erro e "sem descrição" ficam de fora de propósito: um soluço na
+      // pré-carga não pode virar "essa tarefa não tem descrição" pra
+      // sempre — tem que tentar de novo quando a pessoa abrir de fato.
+      if (r && r.ok && !r.semDescricao && r.briefing && typeof montarBriefingDaTarefaHTML === "function") {
+        await guardarDetalheNoCache(t.id, { briefingHTML: montarBriefingDaTarefaHTML(r) });
       }
     } catch (err) { /* segue pra próxima */ }
     if (pausaMs) await new Promise(r => setTimeout(r, pausaMs));
