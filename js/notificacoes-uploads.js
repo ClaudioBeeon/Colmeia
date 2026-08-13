@@ -439,10 +439,101 @@ function mostrarPromptRepetirComentario(task, texto) {
   });
 }
 
+// ===== A FOTO DO PAINEL-DESIGNERS-BEEON, GUARDADA NO NAVEGADOR (2026-08-13) =====
+//
+// O PROBLEMA QUE ISTO RESOLVE, EM DOIS ATOS:
+//
+// 1. "Meus clientes" ficava preso pra sempre em "Carregando..." — sem
+//    erro nenhum na tela, sem saída. `painelBeeonData` começa `null` e só
+//    vira alguma coisa quando este fetch termina; se ele nunca terminar
+//    (rede engasgada, VPN, proxy — o `fetch` do navegador NÃO tem prazo
+//    próprio, ele espera pra sempre por padrão), a tela também espera pra
+//    sempre. Não achei o motivo exato do engasgo no ambiente do Cláudio —
+//    testado daqui, o mesmo endereço responde normal — mas o app não
+//    pode depender de a rede dele nunca falhar.
+// 2. "Toda vez que dou refresh demora muuuito" — cada F5 começava do
+//    zero, sem nada na tela até a resposta chegar. O quadro do designer
+//    já resolveu o mesmo problema com uma foto local (SNAPSHOT_QUADRO_KEY,
+//    js/pessoas-fotos.js) — aqui é a mesma ideia, pro mesmo motivo.
+//
+// A SOLUÇÃO, em três partes:
+//   a) PRAZO no fetch (AbortController, mesmo padrão de chamarBackend em
+//      js/config.js) — 20s é generoso, mas é um FIM, que é o que faltava.
+//   b) FOTO em localStorage, válida por 1 dia (pedido do Cláudio) — a
+//      tela mostra ela na hora, e o fetch de verdade atualiza por cima
+//      quando chegar. F5 nunca mais começa vazio.
+//   c) ATUALIZA SOZINHO a cada 5 minutos (ver o `setInterval` no fim
+//      deste arquivo) — pedido do Cláudio: "ir atualizando sozinho".
+//
+// ⚠️ Erro vira TELA DE ERRO só quando não há NADA pra mostrar (nem
+// resposta nova, nem foto guardada) — é exatamente esse o caso que
+// ficava preso sem saída. Havendo qualquer coisa pra mostrar, mesmo
+// desatualizada, mostrar é sempre melhor que travar (mesma filosofia do
+// aviso "Runrun.it fora do ar" no quadro: nunca esconder o que já se tem).
+const PAINEL_BEEON_SNAPSHOT_KEY = "colmeia_snapshot_painel_beeon_v1";
+const PAINEL_BEEON_SNAPSHOT_VALIDADE_MS = 24 * 60 * 60 * 1000; // 1 dia
+const PAINEL_BEEON_TIMEOUT_MS = 20000;
+const PAINEL_BEEON_REFRESH_MS = 5 * 60 * 1000;
+
+let painelBeeonCarregando = false;
+// true só quando a busca falhou E não sobrou NADA pra mostrar (nem uma
+// foto velha) — é o gatilho da tela de erro em buildClientsPage().
+let painelBeeonErro = false;
+
+/**
+ * A última foto boa, se existir e não estiver velha demais. Chamada antes
+ * do fetch, pra a tela nunca abrir vazia.
+ */
+function restaurarSnapshotDoPainelBeeon() {
+  try {
+    const salvo = JSON.parse(localStorage.getItem(PAINEL_BEEON_SNAPSHOT_KEY) || "null");
+    if (!salvo || !salvo.quando || !salvo.data) return false;
+    if (Date.now() - salvo.quando > PAINEL_BEEON_SNAPSHOT_VALIDADE_MS) return false;
+    painelBeeonData = salvo.data;
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function salvarSnapshotDoPainelBeeon() {
+  if (!painelBeeonData) return;
+  try {
+    localStorage.setItem(PAINEL_BEEON_SNAPSHOT_KEY, JSON.stringify({ quando: Date.now(), data: painelBeeonData }));
+  } catch (err) {
+    // Espaço do navegador cheio, ou aba privada: sem foto guardada, só
+    // volta a abrir do zero da próxima vez — não é motivo pra travar nada.
+  }
+}
+
+/**
+ * Botão "Tentar de novo" da tela de erro — chamado de três lugares
+ * (buildClientsPage, buildAtendimentoPage, renderPainelClientes), por
+ * isso redesenha os três: só o `onclick` sabe qual botão foi clicado, não
+ * qual tela precisa atualizar.
+ */
+function tentarDeNovoPainelBeeon() {
+  painelBeeonErro = false;
+  // Volta pro "Carregando..." na hora, sem esperar o fetch.
+  buildClientsPage();
+  buildAtendimentoPage();
+  if (typeof configTabAtiva !== "undefined" && configTabAtiva === "clientes" && typeof renderPainelClientes === "function") {
+    renderPainelClientes();
+  }
+  carregarDadosPainelBeeon();
+}
+
 async function carregarDadosPainelBeeon() {
   if (!PAINEL_BEEON_API_URL) return;
+  // Chamada de novo enquanto a de antes ainda não voltou (o refresh
+  // automático pode cair em cima de um F5 recente) — não empilha pedido.
+  if (painelBeeonCarregando) return;
+  painelBeeonCarregando = true;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PAINEL_BEEON_TIMEOUT_MS);
   try {
-    const res = await fetch(PAINEL_BEEON_API_URL);
+    const res = await fetch(PAINEL_BEEON_API_URL, { signal: controller.signal });
     const resposta = await res.json();
     if (!resposta.ok) {
       console.error("Erro ao buscar dados do painel-designers-beeon:", resposta.error);
@@ -468,6 +559,8 @@ async function carregarDadosPainelBeeon() {
       colors: resposta.data.colors || {}, // designer -> {bg, fg}
       homeOffice: resposta.data.homeOffice || {}, // designer -> quantos já usou (0-6)
     };
+    painelBeeonErro = false;
+    salvarSnapshotDoPainelBeeon();
 
     // Depois de carregado, atualiza as páginas que dependem desses dados.
     // A bolinha da barra lateral também: a foto de quem está logado pode
@@ -478,6 +571,12 @@ async function carregarDadosPainelBeeon() {
     buildAtendimentoPage();
     buildTiposPage();
     if (!document.getElementById("page-horas").hidden && typeof carregarAtividadesRecentesHoras === "function") carregarAtividadesRecentesHoras();
+    // A aba "Clientes" das Configurações do coordenador também depende
+    // deste dado — mesmo cuidado de "só redesenha se ainda estiver na
+    // tela" que carregarPastasDriveSeNecessario já usa logo ali em cima.
+    if (typeof configTabAtiva !== "undefined" && configTabAtiva === "clientes" && typeof renderPainelClientes === "function") {
+      renderPainelClientes();
+    }
     // A Central do Atendimento filtra por cliente→atendimento usando esse
     // mesmo painelBeeonData (ver centralClienteEhDoLogado, js/central-atendimento.js)
     // — se ela já tiver aberto e carregado ANTES desses dados chegarem
@@ -488,9 +587,31 @@ async function carregarDadosPainelBeeon() {
       centralRenderTudo();
     }
   } catch (err) {
+    // `AbortError` é o timeout estourando — mesma causa provável do
+    // travamento que isto veio corrigir, só que agora com um fim.
     console.error("Falha ao conectar com o painel-designers-beeon:", err);
+    // Só vira ERRO NA TELA se não sobrou nada pra mostrar. Com uma foto
+    // (deste boot ou de um F5 anterior), a tela fica como está — desatualizada,
+    // mas de pé — e o próximo refresh automático tenta de novo sozinho.
+    if (!painelBeeonData) {
+      painelBeeonErro = true;
+      buildClientsPage();
+      buildAtendimentoPage();
+      buildTiposPage();
+    }
+  } finally {
+    clearTimeout(timeout);
+    painelBeeonCarregando = false;
   }
 }
+
+// Atualiza sozinho de tempos em tempos (pedido do Cláudio) — mesmo padrão
+// do poll do quadro (js/kanban-polling.js): trava por DESIGNER_LOGADO pra
+// uma aba esquecida na tela de login não ficar buscando à toa pra sempre.
+setInterval(() => {
+  if (!DESIGNER_LOGADO) return;
+  carregarDadosPainelBeeon();
+}, PAINEL_BEEON_REFRESH_MS);
 
 /**
  * Tenta achar a foto de um designer nos dados vindos do painel-beeon.

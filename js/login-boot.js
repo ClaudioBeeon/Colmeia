@@ -94,6 +94,16 @@ function iniciarAppPosLogin() {
   if (typeof roteadorAbrirRotaInicial === "function") roteadorAbrirRotaInicial();
   else mostrarPagina("kanban");
   carregarTarefasReais();
+  // A foto de ontem (ou de um F5 recente) aparece ANTES do fetch de
+  // verdade — é o que faz "Meus clientes" nunca abrir na tela de
+  // "Carregando..." quando já se tem alguma coisa pra mostrar. Ver o
+  // comentário grande em cima de carregarDadosPainelBeeon,
+  // js/notificacoes-uploads.js.
+  if (typeof restaurarSnapshotDoPainelBeeon === "function" && restaurarSnapshotDoPainelBeeon()) {
+    buildClientsPage();
+    buildAtendimentoPage();
+    buildTiposPage();
+  }
   carregarDadosPainelBeeon();
   carregarPessoasSalvas();
   carregarLinksClientes();

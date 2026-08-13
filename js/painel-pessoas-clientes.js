@@ -492,7 +492,12 @@ function renderPainelClientes() {
   const body = document.getElementById("peopleModalBody");
 
   if (!painelBeeonData) {
-    body.innerHTML = `<p class="workflow-seq-empty">Carregando clientes do painel-designers-beeon...</p>`;
+    // Mesmo cuidado de pdPlaceholderSemDadoDoPainelBeeon
+    // (js/paginas-designers.js): erro com botão, não spinner pra sempre.
+    body.innerHTML = typeof painelBeeonErro !== "undefined" && painelBeeonErro
+      ? `<p class="workflow-seq-empty">Não consegui carregar os clientes do painel-designers-beeon agora.
+           <button type="button" class="repasse-btn" onclick="tentarDeNovoPainelBeeon()" style="margin-left:8px">Tentar de novo</button></p>`
+      : `<p class="workflow-seq-empty">Carregando clientes do painel-designers-beeon...</p>`;
     return;
   }
 

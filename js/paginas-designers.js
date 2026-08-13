@@ -311,12 +311,31 @@ function mcClientCardHTML(cliente, designer, servicos, souCoordenador) {
  * verdade do painel-designers-beeon (state[designer]), com foto quando
  * disponível. Clicar num card abre o hub do cliente (abrirHubDoCliente).
  */
+/**
+ * O placeholder de "sem dado do painel-beeon ainda" — usado por
+ * `buildClientsPage` e `buildAtendimentoPage`.
+ *
+ * ⚠️ ERRO COM BOTÃO, NÃO SPINNER PRA SEMPRE (2026-08-13). Antes, uma
+ * busca que nunca terminava (rede engasgada) deixava a tela presa em
+ * "Carregando..." sem saída nenhuma — nem erro, nem como tentar de novo
+ * sem dar F5. Ver o comentário grande em cima de carregarDadosPainelBeeon,
+ * js/notificacoes-uploads.js.
+ */
+function pdPlaceholderSemDadoDoPainelBeeon() {
+  return typeof painelBeeonErro !== "undefined" && painelBeeonErro
+    ? `<div class="placeholder-box"><span>⚠️</span>
+         <p>Não consegui carregar os clientes do painel-designers-beeon agora.</p>
+         <button type="button" class="repasse-btn" onclick="tentarDeNovoPainelBeeon()">Tentar de novo</button>
+       </div>`
+    : `<div class="placeholder-box"><span>⏳</span><p>Carregando clientes do painel-designers-beeon...</p></div>`;
+}
+
 function buildClientsPage() {
   const grid = document.getElementById("clientsGrid");
   if (!grid) return;
 
   if (!painelBeeonData) {
-    grid.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando clientes do painel-designers-beeon...</p></div>`;
+    grid.innerHTML = pdPlaceholderSemDadoDoPainelBeeon();
     return;
   }
 
@@ -511,7 +530,7 @@ function buildAtendimentoPage() {
   if (!grid) return;
 
   if (!painelBeeonData) {
-    grid.innerHTML = `<div class="placeholder-box"><span>⏳</span><p>Carregando clientes do painel-designers-beeon...</p></div>`;
+    grid.innerHTML = pdPlaceholderSemDadoDoPainelBeeon();
     return;
   }
 
