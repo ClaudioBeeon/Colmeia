@@ -555,9 +555,74 @@ const ACOES_DEMORADAS = [
   "painelListarClientesParaVinculo",
 ];
 
+/**
+ * Vale a pena bater no backend AGORA, numa atualização automática?
+ *
+ * Duas condições: tem alguém logado, e a aba está à vista.
+ *
+ * O "à vista" é a parte nova (2026-08-13) e é a que mais pesa: cada aba
+ * aberta do Colmeia buscava o QUADRO INTEIRO a cada 60 segundos, mais os
+ * avisos de 5 em 5 e as reuniões de 3 em 3 — mesmo minimizada, mesmo
+ * esquecida atrás de outras coisas desde a manhã. Como o Web App roda
+ * como USER_DEPLOYING, tudo isso entra na MESMA fila de execução do Apps
+ * Script que atende os cliques de quem está trabalhando de verdade. Com
+ * meia dúzia de abas esquecidas pelo escritório, é fila cheia o dia
+ * inteiro sem ninguém ter pedido nada — e foi por isso que o Erick ficou
+ * esperando 1 minuto pra abrir uma tarefa.
+ *
+ * ⚠️ Isto vale só pro que é AUTOMÁTICO. Nada que a pessoa pediu (clicar,
+ * comentar, dar play) passa por aqui: se ela agiu, o pedido vai, ponto.
+ *
+ * Quem pausa por causa disso deve atualizar assim que a aba voltar — ver
+ * os `visibilitychange` em js/kanban-polling.js. Sem isso, a pessoa
+ * voltaria pra um quadro parado no tempo, que é pior que o problema.
+ */
+function podeBaterNoBackendAgora() {
+  if (typeof DESIGNER_LOGADO === "undefined" || !DESIGNER_LOGADO) return false;
+  if (typeof document !== "undefined" && document.hidden) return false;
+  return true;
+}
+
+/**
+ * Anota no PostHog quanto tempo um pedido ao backend demorou.
+ *
+ * Por que existe (2026-08-13): o Erick relatou "1 minuto pra abrir tarefa"
+ * e ninguém mais via isso. A gente tem uma TEORIA (o Web App roda como
+ * USER_DEPLOYING, então os pedidos de todas as pessoas entram na mesma
+ * fila do Apps Script, e quem clica com a fila cheia espera) — mas teoria
+ * não é medida. Sem isto aqui, a única forma de saber se melhorou é
+ * esperar alguém reclamar de novo.
+ *
+ * Como o PostHog já sabe quem é a pessoa (posthog.identify no login), dá
+ * pra abrir por pessoa, por ação e por horário — que é exatamente o
+ * recorte que responde "é a fila ou é a internet do Erick?".
+ *
+ * Nunca estoura: se o PostHog não carregou (bloqueador de anúncio, por
+ * exemplo), isso simplesmente não faz nada.
+ */
+function medirChamadaDoBackend(acao, comecouEm, resultado) {
+  try {
+    if (typeof posthog === "undefined" || !posthog || !posthog.capture) return;
+    const ms = Math.round(performance.now() - comecouEm);
+    posthog.capture("backend_chamada", {
+      acao: acao || "(sem acao)",
+      ms: ms,
+      // Faixas prontas pra montar gráfico sem precisar calcular na mão.
+      faixa: ms < 1000 ? "menos de 1s"
+           : ms < 3000 ? "1 a 3s"
+           : ms < 10000 ? "3 a 10s"
+           : ms < 30000 ? "10 a 30s"
+           : "mais de 30s",
+      deu_certo: !!(resultado && resultado.ok),
+      motivo: resultado && resultado.error ? String(resultado.error).slice(0, 120) : null,
+    });
+  } catch (err) { /* medir nunca pode quebrar o app */ }
+}
+
 async function chamarBackend(corpo, opcoes) {
   opcoes = opcoes || {};
   if (!COLMEIA_API_URL) return { ok: false, semRede: true, error: "Backend não configurado." };
+  const _comecouEm = performance.now();
 
   // Quem está pedindo isso, de verdade — vai em TODA chamada, sem
   // precisar lembrar disso em cada um dos ~50 lugares que chamam
@@ -595,11 +660,14 @@ async function chamarBackend(corpo, opcoes) {
       data = await res.json();
     } catch (parseErr) {
       console.error(`Resposta do backend não é JSON em "${corpo.acao}" (HTTP ${res.status}):`, parseErr);
-      return { ok: false, error: `O servidor respondeu de um jeito inesperado (${res.status}). Tenta de novo.` };
+      const rNaoJson = { ok: false, error: `O servidor respondeu de um jeito inesperado (${res.status}). Tenta de novo.` };
+      medirChamadaDoBackend(corpo.acao, _comecouEm, rNaoJson);
+      return rNaoJson;
     }
     if (data && data.ok === false && data.error) {
       console.error(`Backend recusou "${corpo.acao}":`, data.error);
     }
+    medirChamadaDoBackend(corpo.acao, _comecouEm, data);
     return data;
   } catch (err) {
     // AbortError = estourou o prazo; TypeError = não conseguiu nem sair
@@ -607,7 +675,11 @@ async function chamarBackend(corpo, opcoes) {
     // pergunta não chegou ao servidor, então não sabemos a resposta.
     const motivo = err && err.name === "AbortError" ? "demorou demais" : "falha de conexão";
     console.error(`Não consegui falar com o backend em "${corpo.acao}" (${motivo}):`, err);
-    return { ok: false, semRede: true, error: motivo };
+    const rFalha = { ok: false, semRede: true, error: motivo };
+    // O caso que MAIS importa medir: é aqui que cai o pedido que estourou
+    // o prazo — exatamente a experiência que o Erick descreveu.
+    medirChamadaDoBackend(corpo.acao, _comecouEm, rFalha);
+    return rFalha;
   } finally {
     clearTimeout(timeout);
   }
@@ -632,13 +704,20 @@ async function chamarBackendGet(query, opcoes) {
   if (!COLMEIA_API_URL) return { ok: false, semRede: true, error: "Backend não configurado." };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), opcoes.timeoutMs || TIMEOUT_LONGO_MS);
+  // O nome que vai pro PostHog: "?tipo=tarefas" vira "GET tarefas".
+  const _acaoGet = "GET " + String(query || "").replace(/^\?tipo=/, "");
+  const _comecouEm = performance.now();
   try {
     const res = await fetch(COLMEIA_API_URL + query, { signal: controller.signal });
-    return await res.json();
+    const data = await res.json();
+    medirChamadaDoBackend(_acaoGet, _comecouEm, data);
+    return data;
   } catch (err) {
     const motivo = err && err.name === "AbortError" ? "demorou demais" : "falha de conexão";
     console.error(`Não consegui buscar o quadro (${motivo}):`, err);
-    return { ok: false, semRede: true, error: motivo };
+    const rFalha = { ok: false, semRede: true, error: motivo };
+    medirChamadaDoBackend(_acaoGet, _comecouEm, rFalha);
+    return rFalha;
   } finally {
     clearTimeout(timeout);
   }

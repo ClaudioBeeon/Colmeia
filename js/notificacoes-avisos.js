@@ -660,7 +660,13 @@ async function atualizarBadgeAvisos() {
   _primeiraChecagemAvisos = false;
 }
 atualizarBadgeAvisos();
-setInterval(atualizarBadgeAvisos, 5 * 60 * 1000); // a cada 5 minutos
+// Só com a aba à vista (ver podeBaterNoBackendAgora, js/config.js): aviso
+// do coordenador que chega com a aba escondida não é lido por ninguém
+// mesmo, e o pedido pesa na mesma fila de quem está trabalhando.
+setInterval(() => {
+  if (!podeBaterNoBackendAgora()) return;
+  atualizarBadgeAvisos();
+}, 5 * 60 * 1000); // a cada 5 minutos
 
 // ===== Reuniões da Google Agenda =====
 // Avisa (pop-up na pílula) quando uma reunião de hoje está prestes a
@@ -765,7 +771,14 @@ async function verificarReunioesProximas() {
   }
 }
 verificarReunioesProximas();
-setInterval(verificarReunioesProximas, 3 * 60 * 1000); // a cada 3 minutos
+// Com a aba escondida não adianta checar: o aviso de reunião aparece na
+// pílula, que ninguém está vendo. E o `visibilitychange` logo abaixo já
+// rechecava na volta desde antes disso — então nada se perde, só para de
+// pesar na fila do Apps Script enquanto ninguém olha.
+setInterval(() => {
+  if (!podeBaterNoBackendAgora()) return;
+  verificarReunioesProximas();
+}, 3 * 60 * 1000); // a cada 3 minutos
 // Rechecha na hora assim que a aba volta a ficar em foco — o momento
 // mais comum de ter acabado de aceitar um convite em outra aba/app e
 // voltado pro Colmeia, sem precisar esperar até 3 min pelo próximo poll.

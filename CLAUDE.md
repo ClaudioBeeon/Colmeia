@@ -1737,6 +1737,63 @@ uma conferência que ignorasse isso acusaria milhares de linhas "faltando" no ba
 **`testarSupabase()`** roda direto no editor do Apps Script e diz se as chaves estão certas — usar
 antes de pôr qualquer tabela na lista.
 
+## Por que o card demora a abrir — a fila do Apps Script (2026-08-13)
+
+O Erick relatou "1 minuto pra abrir tarefa"; o Cláudio e o Gustavo não viam isso. **Não é o
+computador dele.**
+
+`appsscript.json` publica o Web App com `"executeAs": "USER_DEPLOYING"` — ou seja, TODO pedido de
+TODA pessoa roda como a mesma conta Google. O Apps Script atende poucas execuções simultâneas por
+conta, então tudo entra numa **fila única**: os cliques de quem está trabalhando, os polls
+automáticos de cada aba aberta, e as escritas (que ainda por cima pegam `pegarTravaDaPlanilha`,
+uma trava que serializa o resto). Quem clica com a fila cheia espera. Parece "só o Erick" porque
+ele trabalha no horário de pico — mas é "quem tiver azar".
+
+**Isso também explica** o "Meus clientes" travado em Carregando (2026-08-13) e provavelmente outros
+relatos de lentidão sem causa aparente. Antes de investigar um novo caso como bug isolado, checar
+se não é mais um sintoma disto.
+
+Três camadas já feitas, todas **remédio, não cura**:
+
+1. **Cache no servidor** (`runrunFetchCacheado`, RunrunLeitura.gs) — sequência de responsáveis
+   (10 min, compartilhada entre tarefas do mesmo workflow) e descrição (5 min). Escrever pelo
+   Colmeia limpa na hora (`esquecerSequenciaCacheada`/`esquecerDescricaoCacheada`, RunrunEscrita.gs).
+   **Nunca cachear comentário nem cronômetro.**
+2. **Cache no navegador** (`js/cache-tarefas.js`) — IndexedDB com o conteúdo do card, o briefing e o
+   resumo da Bee por 1 dia, mais pré-carga em fila de hoje/atrasadas. Ver o cabeçalho do arquivo.
+3. **Polls só com a aba à vista** (`podeBaterNoBackendAgora`, js/config.js) — quadro (60s), avisos
+   (5min), reuniões (3min) e painel-beeon (5min) param com a aba escondida e voltam no
+   `visibilitychange`. Vale **só pro automático**: nada que a pessoa pediu passa por essa trava.
+
+**A cura seria ler do Supabase em vez do Apps Script — e ela NÃO está pronta pra fazer.** Duas
+barreiras reais, medidas em 2026-08-13:
+
+- **O dado não está lá.** As 12 tabelas do Supabase são dado que o próprio Colmeia produz (feed,
+  aprovações, conferências, bee_chat...). Descrição/comentários/sequência moram no Runrun.it. Ler
+  do Supabase exige antes construir e manter uma cópia sincronizada do Runrun.it — projeto de
+  semanas, e que cria a classe de bug "o Colmeia mostra diferente do Runrun".
+- **O navegador não pode falar com esse banco, de propósito.** RLS ligado e zero policies; só a
+  `service_role` passa, e ela ignora todas as permissões (por isso vive só nas propriedades do
+  Apps Script). Abrir pro navegador exige chave `anon` + policies + **autenticação de verdade** —
+  e o Web App hoje é `ANONYMOUS_ACCESS`. Sem resolver a autenticação primeiro, seria expor os
+  briefings de todos os clientes na internet aberta.
+
+Ordem certa, se um dia for feito: autenticação → cópia do Runrun → troca da leitura.
+
+## Medir antes de adivinhar: `backend_chamada` no PostHog (2026-08-13)
+
+`medirChamadaDoBackend` (js/config.js) anota no PostHog **todo** pedido ao backend, nos dois funis
+(`chamarBackend` e `chamarBackendGet`): `acao`, `ms`, `faixa` (menos de 1s / 1 a 3s / 3 a 10s /
+10 a 30s / mais de 30s), `deu_certo` e `motivo`. Como o `posthog.identify` já roda no login, dá
+pra abrir **por pessoa, por ação e por horário**.
+
+Existe porque a explicação da fila acima é uma **teoria bem fundamentada, não uma medida** — e sem
+isso a única forma de saber se um conserto funcionou era esperar alguém reclamar de novo. Duas
+perguntas que ela responde: "é a fila ou é a internet do Erick?" e "o cache resolveu?".
+
+Nunca derruba o app: PostHog bloqueado, quebrado ou sem `capture` só faz a medição não acontecer
+(testado nos três casos).
+
 ## Monitoramento: erros e uso das telas (2026-08-10)
 
 `Monitoramento.gs` + o bloco no topo de `js/config.js` + `supabase/07-monitoramento.sql`.

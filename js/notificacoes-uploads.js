@@ -606,10 +606,12 @@ async function carregarDadosPainelBeeon() {
 }
 
 // Atualiza sozinho de tempos em tempos (pedido do Cláudio) — mesmo padrão
-// do poll do quadro (js/kanban-polling.js): trava por DESIGNER_LOGADO pra
-// uma aba esquecida na tela de login não ficar buscando à toa pra sempre.
+// do poll do quadro (js/kanban-polling.js): só busca com alguém logado E
+// com a aba à vista (ver podeBaterNoBackendAgora, js/config.js). Como
+// existe cache local de 1 dia, uma aba que ficou escondida a manhã toda
+// tem o que mostrar na hora que voltar, e o dado fresco chega logo atrás.
 setInterval(() => {
-  if (!DESIGNER_LOGADO) return;
+  if (!podeBaterNoBackendAgora()) return;
   carregarDadosPainelBeeon();
 }, PAINEL_BEEON_REFRESH_MS);
 

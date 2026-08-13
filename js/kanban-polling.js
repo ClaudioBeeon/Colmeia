@@ -32,13 +32,38 @@ function agendarAtualizacaoKanban() {
 
 // Além de atualizar depois de cada ação, também atualiza sozinho de
 // tempos em tempos (pega mudanças feitas por outras pessoas do time).
-// A checagem de DESIGNER_LOGADO evita ficar buscando o quadro inteiro a
-// cada minuto com a tela de login aberta, sem ninguém logado — um
-// navegador esquecido nessa tela consumia servidor pra sempre à toa.
+// A checagem de podeBaterNoBackendAgora() (js/config.js) evita dois
+// desperdícios: buscar o quadro inteiro com a tela de login aberta, sem
+// ninguém logado, e — desde 2026-08-13 — continuar buscando com a aba
+// escondida. Este era o maior consumidor da fila do Apps Script: o quadro
+// INTEIRO, de cada aba aberta do escritório, todo minuto, olhando ou não.
 setInterval(() => {
-  if (!DESIGNER_LOGADO) return;
+  if (!podeBaterNoBackendAgora()) return;
   atualizarKanbanEmBackground();
 }, 60000);
+
+// A outra metade da moeda: voltou pra aba, atualiza NA HORA.
+//
+// Sem isto, pausar o poll seria trocar um problema por outro — a pessoa
+// voltaria de uma reunião e olharia pra um quadro de 40 minutos atrás,
+// achando que está vendo o de agora. É o pior tipo de erro: silencioso e
+// convincente. Com isto, o quadro fica parado só enquanto ninguém está
+// vendo, e volta a valer no instante em que alguém olha.
+//
+// `_ultimaAtualizacaoDoQuadro` evita rajada: alternar entre abas várias
+// vezes seguidas (o que todo mundo faz) dispararia uma busca do quadro
+// inteiro a cada alternância. Menos de 30 segundos desde a última, deixa
+// quieto — o poll normal já cobre.
+let _ultimaAtualizacaoDoQuadro = 0;
+const INTERVALO_MINIMO_AO_VOLTAR_MS = 30000;
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  if (!podeBaterNoBackendAgora()) return;
+  if (Date.now() - _ultimaAtualizacaoDoQuadro < INTERVALO_MINIMO_AO_VOLTAR_MS) return;
+  _ultimaAtualizacaoDoQuadro = Date.now();
+  atualizarKanbanEmBackground();
+});
 
 async function salvarPrioridadeNoBackend(taskId, prioridade) {
   if (!COLMEIA_API_URL || COLMEIA_API_URL.indexOf("COLE_AQUI") !== -1 || !taskId) return;
