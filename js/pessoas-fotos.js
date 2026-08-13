@@ -774,6 +774,21 @@ async function atualizarKanbanEmBackground() {
         // tudo de novo pro servidor na próxima abertura do card, mesmo já
         // tendo o resultado pronto.
         if (antiga.briefingHTML !== undefined) nova.briefingHTML = antiga.briefingHTML;
+        // ⚠️ E TUDO MAIS que o card carrega sob demanda (2026-08-13).
+        // Faltavam estes três, e o efeito era silencioso: como
+        // `descricaoTexto` é a PRIMEIRA mensagem de "Todos os comentários"
+        // e da "Linha do tempo" (ver pseudoComentarioDescricao), ela
+        // simplesmente sumia dessas listas depois de qualquer ação — a
+        // atualização automática roda 900ms depois de cada clique, não só
+        // de 60 em 60s. `_resumoAlteracaoHTML` e `pastaUrlSalva` davam no
+        // mesmo: eram rebuscados à toa.
+        //
+        // Regra pra quem mexer aqui depois: campo que o card enche sob
+        // demanda tem que entrar nesta lista, senão ele nasce vazio a cada
+        // atualização e ninguém percebe — não dá erro, só some da tela.
+        if (antiga.descricaoTexto !== undefined) nova.descricaoTexto = antiga.descricaoTexto;
+        if (antiga._resumoAlteracaoHTML !== undefined) nova._resumoAlteracaoHTML = antiga._resumoAlteracaoHTML;
+        if (antiga.pastaUrlSalva !== undefined) nova.pastaUrlSalva = antiga.pastaUrlSalva;
         // Mesmo problema do timerSeconds acima, mas pro "está rodando":
         // o Runrun.it às vezes demora alguns segundos pra confirmar o
         // play/pause (mesmo já tendo aceitado a chamada) — sem essa

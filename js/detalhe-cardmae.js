@@ -70,13 +70,32 @@ const cardMaeCache = new Map();
 
 /**
  * Busca o card mãe (e já deixa os comentários dele cacheados também,
- * ver chatMaeCache em js/chat-comentarios.js) assim que uma subtarefa
+ * ver a fonte única em js/chat-comentarios.js) assim que uma subtarefa
  * termina de abrir — sem esperar a pessoa clicar na seta pra cima.
  * Assim, quando ela clicar de verdade, abrirCardMae já acha tudo pronto
  * (abre na hora, sem esperar o Runrun.it responder de novo) e a aba
  * "Comentários card mãe" do chat também já nasce carregada.
  */
-async function precarregarCardMaeEmBackground(taskId) {
+// Buscas de card mãe EM VOO agora — id -> a mesma Promise.
+//
+// Sem isto, duas partes do app pedindo o card mãe ao mesmo tempo (o
+// openDetail e o renderDevolucaoNoCard, nas alterações) disparavam DUAS
+// buscas idênticas: a trava `cardMaeCache.has(...)` não segura nada
+// porque nenhuma das duas terminou ainda quando a outra começa. Guardando
+// a Promise, a segunda chamada espera a primeira em vez de abrir outra —
+// é o mesmo remédio já usado em `filhosEmVoo`, logo abaixo.
+const cardMaeEmVoo = new Map();
+
+function precarregarCardMaeEmBackground(taskId) {
+  if (cardMaeCache.has(taskId)) return Promise.resolve();
+  const chave = String(taskId);
+  if (cardMaeEmVoo.has(chave)) return cardMaeEmVoo.get(chave);
+  const promessa = _precarregarCardMaeDeVerdade(taskId).finally(() => cardMaeEmVoo.delete(chave));
+  cardMaeEmVoo.set(chave, promessa);
+  return promessa;
+}
+
+async function _precarregarCardMaeDeVerdade(taskId) {
   if (cardMaeCache.has(taskId)) return;
 
   // UMA ida traz o card mãe, os comentários, a sequência e a descrição
@@ -90,9 +109,12 @@ async function precarregarCardMaeEmBackground(taskId) {
     if (!tudo.temPai) return;
     cardMaeCache.set(taskId, { ok: true, temPai: true, cardMae: tudo.cardMae, subtarefas: tudo.subtarefas || [] });
     podarCacheMap(cardMaeCache, MAX_ITENS_CACHE_CARDMAE);
-    if (!chatMaeCache.has(taskId) && Array.isArray(tudo.comentarios)) {
-      chatMaeCache.set(taskId, { id: tudo.cardMae.id, title: tudo.cardMae.title, comments: tudo.comentarios });
-      podarCacheMap(chatMaeCache, MAX_ITENS_CACHE_CARDMAE);
+    // Os comentários do card mãe vão pra FONTE ÚNICA, sob o id DELE (ver
+    // o bloco "A FONTE ÚNICA" em js/chat-comentarios.js) — não num cache
+    // separado indexado pela subtarefa, como já foi. Assim a aba "Card
+    // mãe" e a lista unificada leem exatamente o mesmo dado.
+    if (Array.isArray(tudo.comentarios) && typeof guardarFonteDeComentarios === "function") {
+      guardarFonteDeComentarios(tudo.cardMae.id, tudo.comentarios);
     }
     return;
   }
@@ -109,17 +131,14 @@ async function precarregarCardMaeEmQuatroIdas(taskId) {
   if (!resultado.ok || !resultado.temPai) return;
   cardMaeCache.set(taskId, resultado);
   podarCacheMap(cardMaeCache, MAX_ITENS_CACHE_CARDMAE);
-  if (!chatMaeCache.has(taskId)) {
+  if (comentariosDaFonte(resultado.cardMae.id) === null) {
     const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
-    // Só guarda em cache se a resposta CHEGOU (`null` = não chegou, ver
-    // buscarComentariosDoBackend). Guardar uma lista vazia aqui deixaria a
-    // aba "Comentários card mãe" vazia até trocar de tarefa, mesmo com a
+    // Só registra se a resposta CHEGOU (`null` = não chegou, ver
+    // buscarComentariosDoBackend). Registrar uma lista vazia aqui deixaria
+    // a aba "Comentários card mãe" vazia até trocar de tarefa, mesmo com a
     // internet já de volta — este é um pré-carregamento silencioso, então
-    // é melhor não ter cache do que ter cache errado.
-    if (comentarios !== null) {
-      chatMaeCache.set(taskId, { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios });
-      podarCacheMap(chatMaeCache, MAX_ITENS_CACHE_CARDMAE);
-    }
+    // é melhor não ter nada do que ter dado errado.
+    if (comentarios !== null) guardarFonteDeComentarios(resultado.cardMae.id, comentarios);
   }
   // Já aproveita e busca a Sequência de responsáveis do card mãe
   // também, em segundo plano — assim, se a pessoa concluir a subtarefa

@@ -1460,16 +1460,7 @@ function abrirTarefaParaColmeia(taskId) {
   if (Array.isArray(comentariosCrus)) {
     comentarios = comentariosCrus
       .filter(function (c) { return !c.is_system_message; })
-      .map(function (c) {
-        var autor = c.commenter_name || c.user_name || (c.user_id ? formatarNomeSlug(c.user_id) : null) || 'Desconhecido';
-        return {
-          id: c.id,
-          autor: autor,
-          texto: c.text || c.description || '',
-          data: c.created_at || c.date || null,
-          reactions: c.reactions || []
-        };
-      })
+      .map(comentarioParaColmeia)
       .sort(function (a, b) { return new Date(a.data || 0) - new Date(b.data || 0); });
 
     comentariosCrus.forEach(function (c) {
@@ -1552,6 +1543,29 @@ function buscarTarefaCompleta(taskId) {
     ok: true,
     tarefa: transformarTarefaParaColmeia(t),
     temSubtarefas: !!(t.subtask_ids && t.subtask_ids.length)
+  };
+}
+
+/**
+ * Um comentário cru do Runrun.it no formato que o Colmeia usa.
+ *
+ * Existe separado (2026-08-13) porque o MESMO formato é montado em três
+ * lugares — abrirTarefaParaColmeia, abrirCardMaeCompleto e agora
+ * adicionarComentario, que passou a devolver o comentário recém-criado
+ * pra o front-end não precisar rebuscar a conversa inteira depois de
+ * enviar (ver o item A da auditoria dos comentários no CLAUDE.md).
+ * Formatos "parecidos" aqui apareceriam como bolha faltando autor ou
+ * hora, só em um dos caminhos.
+ */
+function comentarioParaColmeia(c) {
+  if (!c) return null;
+  var autor = c.commenter_name || c.user_name || (c.user_id ? formatarNomeSlug(c.user_id) : null) || 'Desconhecido';
+  return {
+    id: c.id,
+    autor: autor,
+    texto: c.text || c.description || '',
+    data: c.created_at || c.date || null,
+    reactions: c.reactions || []
   };
 }
 
@@ -1664,16 +1678,7 @@ function abrirCardMaeCompleto(subtaskId) {
   if (Array.isArray(comentariosCrus)) {
     comentarios = comentariosCrus
       .filter(function (c) { return !c.is_system_message; })
-      .map(function (c) {
-        var autor = c.commenter_name || c.user_name || (c.user_id ? formatarNomeSlug(c.user_id) : null) || 'Desconhecido';
-        return {
-          id: c.id,
-          autor: autor,
-          texto: c.text || c.description || '',
-          data: c.created_at || c.date || null,
-          reactions: c.reactions || []
-        };
-      })
+      .map(comentarioParaColmeia)
       .sort(function (a, b) { return new Date(a.data || 0) - new Date(b.data || 0); });
   }
 

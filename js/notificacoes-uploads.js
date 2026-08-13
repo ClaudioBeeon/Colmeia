@@ -418,14 +418,18 @@ function mostrarPromptRepetirComentario(task, texto) {
     redesenhar(`<p>Enviando pro card mãe...</p>`);
     const resultado = await enviarComentarioNoBackend(task.parentTaskId, texto);
     if (resultado.ok && !resultado.enfileirado) {
-      // O comentário já foi pro Runrun.it certinho, mas a aba "Card mãe" do
-      // chat (js/chat-comentarios.js) guarda os comentários em cache
-      // (chatMaeCache) pra não rebuscar toda vez que troca de aba — sem
-      // invalidar aqui, o comentário novo só apareceria depois de recarregar
-      // a página inteira.
-      chatMaeCache.delete(task.id);
-      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id) {
-        recarregarThreadAtiva();
+      // O comentário foi pro card mãe: acrescenta na FONTE ÚNICA dele (ver
+      // js/chat-comentarios.js), sem rebuscar nada. Toda tela que mostra
+      // comentários do card mãe — a aba "Card mãe" e as duas listas
+      // unificadas — é calculada dessa fonte, então todas passam a mostrar
+      // o comentário novo de uma vez só.
+      if (resultado.comentario && typeof acrescentarComentarioNaFonte === "function") {
+        acrescentarComentarioNaFonte(task.parentTaskId, resultado.comentario);
+      } else if (typeof fontesDeComentarios !== "undefined") {
+        fontesDeComentarios.delete(String(task.parentTaskId)); // sem o objeto: força rebuscar
+      }
+      if (tasks[detailIdx] && tasks[detailIdx].id === task.id && typeof redesenharThreadAtiva === "function") {
+        redesenharThreadAtiva();
       }
     }
     // ⚠️ "enfileirado" NÃO é falha — é "sem internet agora, vai sozinho

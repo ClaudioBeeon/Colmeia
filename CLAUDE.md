@@ -1842,6 +1842,57 @@ barreiras reais, medidas em 2026-08-13:
 
 Ordem certa, se um dia for feito: autenticação → cópia do Runrun → troca da leitura.
 
+## Auditoria dos comentários — o que mudou e as regras que ficaram (2026-08-13)
+
+O Cláudio relatou: comentários piscando, "Todos os comentários"/"Card mãe" piscando e voltando,
+demora ao comentar, "muita coisa ali não funciona direito". A auditoria achou **cinco** problemas,
+e dois deles eram **arquiteturais** — mais cache teria piorado, não melhorado.
+
+### As três regras que nasceram daqui
+
+**1. Guarda-se INGREDIENTE, nunca MISTURA.** Existia cache das listas já montadas
+(`todos-<id>-bee`, `linha-<id>-bee`) *separado* dos comentários que as formavam. Dado derivado em
+cache **sempre** desanda da fonte — era por isso que os comentários do card mãe sumiam da lista
+unificada e a descrição caía fora. Agora existe **uma fonte única** (`fontesDeComentarios`,
+js/chat-comentarios.js) com os comentários de cada tarefa, e as duas listas unificadas são
+**calculadas na hora** (`montarMergeDeComentarios`) — ordenar 3 listas pequenas custa menos de 1ms.
+O `chatMaeCache` (comentários do card mãe indexados pela *subtarefa*) **deixou de existir**: era
+uma segunda cópia do mesmo dado, e era ela que discordava.
+
+**2. Depois de uma ação sua, NÃO se rebusca.** `adicionarComentario` (RunrunEscrita.gs) devolvia
+`{ok:true}` seco, jogando fora o comentário que o Runrun.it já responde. Por causa disso o
+front-end rebuscava a conversa inteira depois de cada envio — e, nas abas unificadas,
+`recarregarThreadAtiva` remontava tudo, buscando de novo a tarefa original, o card mãe, a Bee e os
+eventos: **~5 idas ao servidor pra mostrar o que a pessoa acabou de escrever**. Agora o backend
+devolve `comentario` (via `comentarioParaColmeia`, RunrunLeitura.gs), o front-end faz
+`acrescentarComentarioNaFonte` + `redesenharThreadAtiva`, e o envio custa **zero** chamadas. Sem o
+objeto (backend antigo, resposta sem corpo) cai no caminho de sempre.
+
+**3. Atualizar a lista é mexer no que mudou, não redesenhar tudo.** `pintarThread` fazia
+`innerHTML = html` inteiro, o que joga fora o estado interno dos elementos que continuavam iguais
+(rolagem, animação, seleção) e **redisparava `carregarImagensDaDescricao` em todas as imagens
+coladas**. Agora `casarComentariosNaThread` casa cada bolha pelo `data-comment-id` que o
+`renderComentariosHTML` já escrevia, e só encosta em quem mudou; imagem só é buscada nos elementos
+que entraram. Avaliei o [morphdom](https://github.com/patrick-steele-idem/morphdom) (é o que Turbo
+e Shopify usam) — pra uma lista ordenada que quase só cresce, ~50 linhas próprias resolvem sem
+trazer dependência num projeto sem bundler.
+
+### Os três bugs pontuais que vieram junto
+
+- **A lista unificada não esperava o card mãe.** `abrirThreadTodos` montava a mistura enquanto
+  `precarregarCardMaeEmBackground` ainda estava a caminho, e **nada remontava depois** — os
+  comentários do card mãe não entravam, pra nunca mais. `garantirFontesDeComentarios` agora espera.
+- **Chamadas duplicadas.** `precarregarCardMaeEmBackground` não tinha trava de "em voo" (a de
+  `cardMaeCache.has` não segura nada enquanto a primeira não terminou), então openDetail e
+  `renderDevolucaoNoCard` disparavam duas buscas idênticas; e `verificarPastaJaSalva` caía no
+  caminho ANTIGO de 4 idas. Abrir um card foi de **13 chamadas (com duplicatas) pra 9, sem
+  nenhuma repetida**.
+- **Campos sumindo na atualização automática.** `atualizarKanbanEmBackground` preservava `comments`
+  e `briefingHTML` mas **não** `descricaoTexto`, `_resumoAlteracaoHTML` nem `pastaUrlSalva`. Como a
+  descrição é a primeira mensagem das listas unificadas, ela sumia de lá 900ms depois de qualquer
+  clique. ⚠️ **Campo que o card enche sob demanda TEM que entrar nessa lista de preservação** —
+  senão nasce vazio a cada atualização, sem erro nenhum, e ninguém percebe.
+
 ## Medir antes de adivinhar: `backend_chamada` no PostHog (2026-08-13)
 
 `medirChamadaDoBackend` (js/config.js) anota no PostHog **todo** pedido ao backend, nos dois funis

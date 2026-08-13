@@ -17,7 +17,10 @@ let anexosAberta = false;
 // sem o interruptor ligado (ver chatMostrarBeeNoUnificado abaixo).
 let chatThreadAtivo = "aqui";
 let chatAlvoTaskId = null;    // id de quem recebe o próximo comentário enviado
-const chatMaeCache = new Map(); // taskId (da subtarefa) -> {id, title, comments}
+// (2026-08-13) O antigo `chatMaeCache` — comentários do card mãe indexados
+// pela SUBTAREFA — deixou de existir: era uma segunda cópia do mesmo dado,
+// e era ela que discordava da lista unificada. Os comentários do card mãe
+// agora vivem na fonte única, sob o id DELE, como os de qualquer tarefa.
 
 // Teto pros caches que vivem em Map na memória (esse e o cardMaeCache em
 // js/detalhe-cardmae.js). Sem teto eles nunca eram limpos: numa aba aberta
@@ -87,6 +90,73 @@ function guardarComentariosNoCacheLocal(chave, comentarios) {
   }
 }
 
+// ===== A FONTE ÚNICA dos comentários (2026-08-13) =====
+//
+// ⚠️ REGRA: guarda-se INGREDIENTE, nunca MISTURA.
+//
+// Antes, "Todos os comentários" e "Linha do tempo" eram guardados já
+// prontos, em chaves próprias ("todos-<id>-bee", "linha-<id>-bee"). Como a
+// mistura era guardada SEPARADA dos ingredientes, as duas desandavam: o
+// card mãe sumia da lista unificada, a descrição caía fora depois de
+// qualquer ação, e não havia um lugar só pra corrigir. Era dado derivado
+// em cache — o erro clássico.
+//
+// Agora existe UM lugar com os comentários de cada tarefa (a própria, a
+// original, o card mãe), e as duas listas unificadas são CALCULADAS na
+// hora, toda vez. Custa uma ordenação de 3 listas pequenas — menos de um
+// milissegundo — e em troca é impossível a mistura discordar da fonte.
+const fontesDeComentarios = new Map(); // String(taskId) -> comentarios[]
+
+/** Os comentários que já conhecemos dessa tarefa (memória → navegador → null). */
+function comentariosDaFonte(taskId) {
+  if (!taskId) return null;
+  const chave = String(taskId);
+  if (fontesDeComentarios.has(chave)) return fontesDeComentarios.get(chave);
+  const doNavegador = comentariosDoCacheLocal(chave);
+  if (doNavegador) {
+    fontesDeComentarios.set(chave, doNavegador);
+    return doNavegador;
+  }
+  return null;
+}
+
+/**
+ * Registra os comentários de uma tarefa — o ÚNICO caminho de escrita.
+ * Guarda na memória e no navegador, e mantém `task.comments` em dia
+ * quando a tarefa está carregada (ele continua sendo lido em vários
+ * lugares; aqui é só pra os dois nunca discordarem).
+ */
+function guardarFonteDeComentarios(taskId, comentarios) {
+  if (!taskId || !Array.isArray(comentarios)) return;
+  fontesDeComentarios.set(String(taskId), comentarios);
+  guardarComentariosNoCacheLocal(taskId, comentarios);
+  const t = typeof tasks !== "undefined" && Array.isArray(tasks)
+    ? tasks.find(x => String(x.id) === String(taskId))
+    : null;
+  if (t) t.comments = comentarios;
+  podarCacheMap(fontesDeComentarios, MAX_TAREFAS_CACHE_CHAT);
+}
+
+/**
+ * Acrescenta UM comentário à fonte de uma tarefa, sem buscar nada.
+ *
+ * É o coração do item A: quando você envia um comentário, o Runrun.it já
+ * devolve o comentário criado (id e horário de verdade) — então não existe
+ * motivo pra perguntar de novo o que acabamos de escrever. Se já houver um
+ * comentário com o mesmo id, atualiza no lugar em vez de duplicar (é o que
+ * torna seguro chamar isso mais de uma vez).
+ */
+function acrescentarComentarioNaFonte(taskId, comentario) {
+  if (!taskId || !comentario || !comentario.id) return;
+  const atuais = comentariosDaFonte(taskId) || [];
+  const i = atuais.findIndex(c => String(c.id) === String(comentario.id));
+  const novos = atuais.slice();
+  if (i === -1) novos.push(comentario);
+  else novos[i] = comentario;
+  novos.sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0));
+  guardarFonteDeComentarios(taskId, novos);
+}
+
 /**
  * Desenha uma lista de mensagens na thread SEM piscar.
  *
@@ -119,16 +189,97 @@ function pintarThread(thread, html, opcoes) {
   }
   const estavaNoFim = (thread.scrollHeight - thread.scrollTop - thread.clientHeight) < 60;
   const posicaoAntes = thread.scrollTop;
-  thread.innerHTML = html;
+
+  const novos = casarComentariosNaThread(thread, html);
+
   thread._htmlPintado = html;
   wireExcluirComentario();
   // Print colado na descrição/num comentário: busca a imagem de verdade
   // pelo backend (o navegador sozinho não consegue — ver
-  // carregarImagensDaDescricao).
-  carregarImagensDaDescricao(thread);
+  // carregarImagensDaDescricao). Só nos elementos NOVOS: antes isso rodava
+  // na thread inteira a cada repintura, remandando ao servidor as mesmas
+  // imagens que já estavam na tela.
+  novos.forEach(el => carregarImagensDaDescricao(el));
   if (rolarPraBaixo || estavaNoFim) thread.scrollTop = thread.scrollHeight;
   else thread.scrollTop = posicaoAntes;
   return true;
+}
+
+/**
+ * Transforma o que está na thread no desenho novo mexendo SÓ no que mudou
+ * (2026-08-13, item B da auditoria dos comentários).
+ *
+ * Por que não `innerHTML = html` direto: trocar o HTML inteiro joga fora
+ * todo o estado interno dos elementos que continuavam iguais — posição da
+ * rolagem, animação em andamento, texto selecionado — e, no Colmeia,
+ * ainda fazia `carregarImagensDaDescricao` rebaixar TODAS as imagens
+ * coladas nos comentários a cada atualização. Como quase toda atualização
+ * aqui é "chegou mais um comentário no fim", redesenhar os outros trinta
+ * era desperdício puro.
+ *
+ * A identidade de cada bolha é o `data-comment-id` que o
+ * renderComentariosHTML já escrevia — não precisou inventar chave nova.
+ * Quem não tem id (as mensagens de "Carregando...", "Nenhum comentário
+ * ainda") cai no caminho antigo, que pra elas é o certo mesmo.
+ *
+ * Devolve os elementos que ENTRARAM agora (pra só neles buscar imagem).
+ */
+function casarComentariosNaThread(thread, html) {
+  const molde = document.createElement("div");
+  molde.innerHTML = html;
+
+  const novasBolhas = Array.from(molde.children);
+  const todasTemId = novasBolhas.length > 0 && novasBolhas.every(el => el.dataset && el.dataset.commentId);
+  const atuais = Array.from(thread.children);
+  const atuaisTemId = atuais.every(el => el.dataset && el.dataset.commentId);
+
+  // Lista virando aviso (ou o contrário): troca tudo, é mais simples e
+  // acontece raramente. Thread vazia segue pelo caminho de baixo — ali
+  // "tudo é novo", que é exatamente o que ele já faz.
+  if (!todasTemId || !atuaisTemId) {
+    thread.innerHTML = html;
+    return [thread];
+  }
+
+  const sobrando = new Map();
+  atuais.forEach(el => sobrando.set(el.dataset.commentId, el));
+
+  // Decide, pra cada posição, QUAL elemento fica: o que já estava (quando
+  // idêntico) ou o recém-desenhado.
+  const entraram = [];
+  const finais = novasBolhas.map(nova => {
+    const id = nova.dataset.commentId;
+    const existente = sobrando.get(id);
+    sobrando.delete(id);
+    if (!existente) { entraram.push(nova); return nova; }
+    // Mudou de verdade (editaram o texto, entrou uma reação)? Troca só
+    // essa bolha. Igual = o elemento antigo continua na tela, intocado.
+    if (existente.outerHTML !== nova.outerHTML) {
+      existente.replaceWith(nova);
+      entraram.push(nova);
+      return nova;
+    }
+    return existente;
+  });
+
+  // Põe na ordem certa. `insertBefore` num nó que já está no lugar certo
+  // seria mexer à toa — por isso a checagem de posição, feita quando o
+  // elemento JÁ está na thread (era esse o bug da primeira versão: eu
+  // olhava a vizinhança do nó enquanto ele ainda estava no molde).
+  let referencia = null;
+  for (let i = finais.length - 1; i >= 0; i--) {
+    const el = finais[i];
+    if (el.parentNode !== thread || el.nextSibling !== referencia) {
+      thread.insertBefore(el, referencia);
+    }
+    referencia = el;
+  }
+
+  // Sobrou na tela quem não existe mais no desenho novo (comentário
+  // excluído): sai.
+  sobrando.forEach(el => { if (el.parentNode === thread) el.remove(); });
+
+  return entraram;
 }
 
 // ===== Sub-pills logo abaixo do cabeçalho (Comentários/Card mãe/Todos
@@ -242,43 +393,47 @@ async function abrirThreadDoCardMae(task) {
   const avisosMae = document.getElementById("beeInlineAvisos");
   if (avisosMae) avisosMae.innerHTML = "";
 
-  let cache = chatMaeCache.get(task.id);
-  // Já vi essa conversa antes neste navegador? Mostra ela na hora, e a
-  // busca de verdade acontece logo abaixo sem apagar nada.
-  if (!cache && thread) {
-    const guardados = comentariosDoCacheLocal("mae-" + task.id);
-    if (guardados) pintarThread(thread, renderComentariosHTML({ id: task.id, comments: guardados }), { rolarPraBaixo: true });
-    else pintarThread(thread, `<p class="comments-empty">Carregando comentários do card mãe...</p>`);
-  }
-  if (!cache) {
-    const resultado = await buscarCardMaeDoBackend(task.id);
-    if (!resultado.ok || !resultado.temPai) {
-      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id && thread) {
-        pintarThread(thread, `<p class="comments-empty">Essa tarefa não tem card mãe.</p>`);
-      }
-      return;
+  // Descobre QUEM é o card mãe (isso sim precisa de uma ida, se ainda não
+  // souber). Os COMENTÁRIOS dele vêm da fonte única, igual a qualquer
+  // outra tarefa — não existe mais um cache separado só pra eles.
+  let idMae = idDaMaeSeConhecido(task);
+  if (!idMae && task.parentTaskId) {
+    if (thread) {
+      const jaConhecidos = comentariosDaFonte(task.parentTaskId);
+      if (jaConhecidos) pintarThread(thread, renderComentariosHTML({ id: task.parentTaskId, comments: jaConhecidos }), { rolarPraBaixo: true });
+      else pintarThread(thread, `<p class="comments-empty">Carregando comentários do card mãe...</p>`);
     }
-    const comentarios = await buscarComentariosDoBackend(resultado.cardMae.id);
+    await precarregarCardMaeEmBackground(task.id);
+    idMae = idDaMaeSeConhecido(task);
+  }
+  if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return;
+
+  if (!idMae) {
+    if (thread) pintarThread(thread, `<p class="comments-empty">Essa tarefa não tem card mãe.</p>`);
+    return;
+  }
+  chatAlvoTaskId = idMae;
+
+  // Mostra o que já se sabe (o abrirCardMaeCompleto já traz os
+  // comentários junto), e só busca se realmente não tiver nada.
+  if (thread && comentariosDaFonte(idMae)) {
+    pintarThread(thread, renderComentariosHTML({ id: idMae, comments: comentariosDaFonte(idMae) }), { rolarPraBaixo: true });
+  }
+  if (comentariosDaFonte(idMae) === null) {
+    if (thread) pintarThread(thread, `<p class="comments-empty">Carregando comentários do card mãe...</p>`);
+    const comentarios = await buscarComentariosDoBackend(idMae);
+    // `null` = não deu pra perguntar. Não registra e não apaga o que está
+    // na tela — ver buscarComentariosDoBackend.
     if (comentarios === null) {
-      // Não deu pra perguntar. Sai SEM guardar em cache — senão a lista
-      // vazia ficaria grudada como se fosse a verdade até trocar de tarefa
-      // (ver buscarComentariosDoBackend). E não apaga o que já está na
-      // tela: se veio do cache do navegador, continua valendo mais do que
-      // um aviso de erro.
-      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id && thread
-          && !comentariosDoCacheLocal("mae-" + task.id)) {
+      if (chatThreadAtivo === "mae" && tasks[detailIdx] && tasks[detailIdx].id === task.id && thread) {
         pintarThread(thread, `<p class="comments-empty">Não consegui carregar os comentários do card mãe agora.</p>`);
       }
       return;
     }
-    cache = { id: resultado.cardMae.id, title: resultado.cardMae.title, comments: comentarios };
-    chatMaeCache.set(task.id, cache);
-    podarCacheMap(chatMaeCache, MAX_ITENS_CACHE_CARDMAE);
-    guardarComentariosNoCacheLocal("mae-" + task.id, comentarios);
+    guardarFonteDeComentarios(idMae, comentarios);
   }
   if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return; // trocou de aba/tarefa enquanto carregava
-  chatAlvoTaskId = cache.id;
-  if (thread) pintarThread(thread, renderComentariosHTML({ id: cache.id, comments: cache.comments }));
+  if (thread) pintarThread(thread, renderComentariosHTML({ id: idMae, comments: comentariosDaFonte(idMae) || [] }));
 }
 
 // ===== "Todos os comentários" e "Linha do tempo" — os dois merges =====
@@ -314,35 +469,60 @@ let chatMostrarBeeNoUnificado = lerPreferenciaBeeUnificado();
  * `null` em cada ponta que falhou (pra quem chama saber que a lista
  * está incompleta, não vazia de verdade).
  */
-async function buscarFontesDeComentarios(task) {
+/**
+ * Qual é o id do card mãe dessa tarefa, se já souber. Só leitura — não
+ * dispara busca nenhuma.
+ */
+function idDaMaeSeConhecido(task) {
+  const infoMae = cardMaeCache.get(task.id);
+  return (infoMae && infoMae.ok && infoMae.temPai) ? infoMae.cardMae.id : null;
+}
+
+/**
+ * Busca as fontes que ainda FALTAM e registra cada uma. Não devolve nada:
+ * quem chama redesenha a partir da fonte única depois.
+ *
+ * Espera o card mãe terminar de carregar (`precarregarCardMaeEmBackground`)
+ * antes de decidir que "não tem mãe" — sem isso, a lista unificada era
+ * montada enquanto ele ainda estava a caminho e os comentários dele
+ * simplesmente não entravam, pra nunca mais (2026-08-13).
+ */
+async function garantirFontesDeComentarios(task) {
   const taskId = task.id;
+
+  if (task.parentTaskId && !cardMaeCache.has(taskId)) {
+    await precarregarCardMaeEmBackground(taskId);
+  }
+
   const original = acharTarefaOriginalDaAlteracao(task);
-  const infoMae = cardMaeCache.get(taskId);
+  const idMae = idDaMaeSeConhecido(task);
 
-  const [aqui, deOriginal, deMae] = await Promise.all([
-    task.comments !== undefined ? Promise.resolve(task.comments) : buscarComentariosDoBackend(taskId),
-    original ? buscarComentariosDoBackend(original.id) : Promise.resolve([]),
-    (infoMae && infoMae.ok && infoMae.temPai)
-      ? (chatMaeCache.has(taskId) ? Promise.resolve(chatMaeCache.get(taskId).comments) : buscarComentariosDoBackend(infoMae.cardMae.id))
-      : Promise.resolve([]),
-  ]);
+  const aBuscar = [];
+  if (comentariosDaFonte(taskId) === null) aBuscar.push(taskId);
+  if (original && comentariosDaFonte(original.id) === null) aBuscar.push(original.id);
+  if (idMae && comentariosDaFonte(idMae) === null) aBuscar.push(idMae);
 
-  return {
-    aqui, deOriginal, deMae,
-    temOriginal: !!original,
-    temMae: !!(infoMae && infoMae.ok && infoMae.temPai),
-  };
+  const resultados = await Promise.all(aBuscar.map(id => buscarComentariosDoBackend(id)));
+  let algumaFalhou = false;
+  resultados.forEach((lista, i) => {
+    // `null` = não deu pra perguntar. Não registra — senão uma piscada de
+    // internet viraria "essa tarefa não tem comentário" até trocar de card.
+    if (lista === null) { algumaFalhou = true; return; }
+    guardarFonteDeComentarios(aBuscar[i], lista);
+  });
+
+  if (chatMostrarBeeNoUnificado && beeConversas.get(taskId) === undefined) {
+    const historico = await chamarBackend({ acao: "beeHistorico", taskId });
+    if (historico && historico.ok) beeConversas.set(taskId, historico.conversa || []);
+  }
+
+  return { algumaFalhou };
 }
 
 /** Conversa com a Bee (se o interruptor estiver ligado), no mesmo formato de comentário. */
-async function buscarBeeComoComentarios(task) {
+function beeComoComentarios(task) {
   if (!chatMostrarBeeNoUnificado) return [];
-  let conversa = beeConversas.get(task.id);
-  if (conversa === undefined) {
-    const historico = await chamarBackend({ acao: "beeHistorico", taskId: task.id });
-    conversa = (historico && historico.ok) ? (historico.conversa || []) : null;
-    if (conversa !== null) beeConversas.set(task.id, conversa);
-  }
+  const conversa = beeConversas.get(task.id);
   if (!conversa) return [];
   return conversa.map((m, i) => ({
     id: "bee-" + i,
@@ -353,6 +533,10 @@ async function buscarBeeComoComentarios(task) {
     _somenteLeitura: true,
   }));
 }
+
+// Eventos do sistema já buscados, por tarefa — mesma ideia da fonte única
+// dos comentários: guarda o ingrediente, monta a mistura na hora.
+const eventosPorTarefa = new Map();
 
 /** Monta os pseudo-comentários dos eventos do sistema (ver js/detalhe-historia.js). */
 async function buscarEventosComoComentarios(task) {
@@ -401,92 +585,83 @@ function idDoCardMae(task) {
   return (infoMae && infoMae.ok && infoMae.temPai) ? infoMae.cardMae.id : null;
 }
 
-async function abrirThreadTodos(task) {
-  chatThreadAtivo = "todos";
+/**
+ * A lista unificada, CALCULADA AGORA a partir da fonte única. Função pura
+ * e síncrona: não busca nada, não toca na tela. É o coração do item C —
+ * como ela roda toda vez que a tela é desenhada, a mistura nunca fica
+ * velha em relação aos ingredientes.
+ */
+function montarMergeDeComentarios(task, comEventos) {
+  const original = acharTarefaOriginalDaAlteracao(task);
+  const idMae = idDaMaeSeConhecido(task);
+  const partes = [
+    pseudoComentarioDescricao(task),
+    (comentariosDaFonte(task.id) || []).map(c => Object.assign({}, c, { _origem: "Nesta tarefa" })),
+    (original ? (comentariosDaFonte(original.id) || []) : []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })),
+    (idMae ? (comentariosDaFonte(idMae) || []) : []).map(c => Object.assign({}, c, { _origem: "Card mãe" })),
+    beeComoComentarios(task),
+  ];
+  if (comEventos) partes.push(eventosPorTarefa.get(String(task.id)) || []);
+  return juntarEOrdenar(partes);
+}
+
+/** Desenha a lista unificada com o que já se sabe, sem esperar rede. */
+function desenharThreadUnificada(task, comEventos, opcoes) {
+  const thread = document.getElementById("commentsThread");
+  if (!thread) return;
+  const juntos = montarMergeDeComentarios(task, comEventos);
+  if (juntos.length) {
+    pintarThread(thread, renderComentariosHTML({ id: task.id, comments: juntos }), opcoes);
+    return;
+  }
+  // Nada ainda: só diz "carregando" se de fato ainda não temos a fonte
+  // principal. Se já temos e ela está vazia, a verdade é "não tem nada".
+  const aindaBuscando = comentariosDaFonte(task.id) === null;
+  pintarThread(thread, aindaBuscando
+    ? `<p class="comments-empty">${comEventos ? "Montando a linha do tempo..." : "Juntando os comentários..."}</p>`
+    : `<p class="comments-empty">${comEventos ? "Ainda não tem nada pra mostrar aqui." : "Nenhum comentário em lugar nenhum ainda."}</p>`);
+}
+
+/** O caminho comum de "Todos os comentários" e "Linha do tempo". */
+async function abrirThreadUnificada(task, comEventos) {
+  chatThreadAtivo = comEventos ? "linha" : "todos";
   chatAlvoTaskId = task.id;
   marcarAbaBeeAtiva(false);
   atualizarCampoParaBee(false);
   atualizarSubpillsAtivas();
-  const thread = document.getElementById("commentsThread");
-  const avisosTudo = document.getElementById("beeInlineAvisos");
-  if (avisosTudo) avisosTudo.innerHTML = "";
+  const avisos = document.getElementById("beeInlineAvisos");
+  if (avisos) avisos.innerHTML = "";
 
   const taskId = task.id;
-  const chaveCache = "todos-" + taskId + (chatMostrarBeeNoUnificado ? "-bee" : "");
-  if (thread) {
-    const guardados = comentariosDoCacheLocal(chaveCache);
-    if (guardados) pintarThread(thread, renderComentariosHTML({ id: taskId, comments: guardados }), { rolarPraBaixo: true });
-    else pintarThread(thread, `<p class="comments-empty">Juntando os comentários...</p>`);
+  const aba = chatThreadAtivo;
+
+  // 1) Na hora, com tudo que já se sabe (memória + navegador).
+  desenharThreadUnificada(task, comEventos, { rolarPraBaixo: true });
+
+  // 2) Busca só o que falta.
+  const pendentes = [garantirFontesDeComentarios(task)];
+  if (comEventos && !eventosPorTarefa.has(String(taskId))) {
+    pendentes.push(buscarEventosComoComentarios(task).then(evs => {
+      if (evs !== null) eventosPorTarefa.set(String(taskId), evs);
+    }));
   }
+  const [resultado] = await Promise.all(pendentes);
 
-  const [fontes, bee] = await Promise.all([buscarFontesDeComentarios(task), buscarBeeComoComentarios(task)]);
-  if (chatThreadAtivo !== "todos" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
-
-  const algumaFalhou = fontes.aqui === null || fontes.deOriginal === null || fontes.deMae === null;
-  const juntos = juntarEOrdenar([
-    pseudoComentarioDescricao(task),
-    (fontes.aqui || []).map(c => Object.assign({}, c, { _origem: "Nesta tarefa" })),
-    (fontes.deOriginal || []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })),
-    (fontes.deMae || []).map(c => Object.assign({}, c, { _origem: "Card mãe" })),
-    bee,
-  ]);
-
-  if (!algumaFalhou && juntos.length) guardarComentariosNoCacheLocal(chaveCache, juntos);
-
-  if (thread) {
-    let html;
-    if (juntos.length) html = renderComentariosHTML({ id: taskId, comments: juntos });
-    else if (algumaFalhou) html = `<p class="comments-empty">Não consegui juntar os comentários agora.</p>`;
-    else html = `<p class="comments-empty">Nenhum comentário em lugar nenhum ainda.</p>`;
-    pintarThread(thread, html);
-  }
-}
-
-async function abrirThreadLinha(task) {
-  chatThreadAtivo = "linha";
-  chatAlvoTaskId = task.id;
-  marcarAbaBeeAtiva(false);
-  atualizarCampoParaBee(false);
-  atualizarSubpillsAtivas();
+  // 3) Redesenha com o que chegou. Como o desenho é sempre calculado da
+  //    fonte, se nada mudou o pintarThread não encosta na tela.
+  if (chatThreadAtivo !== aba || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
   const thread = document.getElementById("commentsThread");
-  const avisosLinha = document.getElementById("beeInlineAvisos");
-  if (avisosLinha) avisosLinha.innerHTML = "";
-
-  const taskId = task.id;
-  const chaveCache = "linha-" + taskId + (chatMostrarBeeNoUnificado ? "-bee" : "");
-  if (thread) {
-    const guardados = comentariosDoCacheLocal(chaveCache);
-    if (guardados) pintarThread(thread, renderComentariosHTML({ id: taskId, comments: guardados }), { rolarPraBaixo: true });
-    else pintarThread(thread, `<p class="comments-empty">Montando a linha do tempo...</p>`);
+  if (!thread) return;
+  const juntos = montarMergeDeComentarios(task, comEventos);
+  if (!juntos.length && resultado && resultado.algumaFalhou) {
+    pintarThread(thread, `<p class="comments-empty">${comEventos ? "Não consegui montar a linha do tempo agora." : "Não consegui juntar os comentários agora."}</p>`);
+    return;
   }
-
-  const [fontes, bee, eventos] = await Promise.all([
-    buscarFontesDeComentarios(task),
-    buscarBeeComoComentarios(task),
-    buscarEventosComoComentarios(task),
-  ]);
-  if (chatThreadAtivo !== "linha" || !tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
-
-  const algumaFalhou = fontes.aqui === null || fontes.deOriginal === null || fontes.deMae === null || eventos === null;
-  const juntos = juntarEOrdenar([
-    pseudoComentarioDescricao(task),
-    (fontes.aqui || []).map(c => Object.assign({}, c, { _origem: "Nesta tarefa" })),
-    (fontes.deOriginal || []).map(c => Object.assign({}, c, { _origem: "Tarefa original" })),
-    (fontes.deMae || []).map(c => Object.assign({}, c, { _origem: "Card mãe" })),
-    bee,
-    eventos || [],
-  ]);
-
-  if (!algumaFalhou && juntos.length) guardarComentariosNoCacheLocal(chaveCache, juntos);
-
-  if (thread) {
-    let html;
-    if (juntos.length) html = renderComentariosHTML({ id: taskId, comments: juntos });
-    else if (algumaFalhou) html = `<p class="comments-empty">Não consegui montar a linha do tempo agora.</p>`;
-    else html = `<p class="comments-empty">Ainda não tem nada pra mostrar aqui.</p>`;
-    pintarThread(thread, html);
-  }
+  desenharThreadUnificada(task, comEventos);
 }
+
+function abrirThreadTodos(task) { return abrirThreadUnificada(task, false); }
+function abrirThreadLinha(task) { return abrirThreadUnificada(task, true); }
 
 /** Liga/desliga os comentários da Bee no merge e redesenha na hora, sem rebuscar nada. */
 function alternarBeeNoUnificado(mostrar) {
@@ -505,31 +680,43 @@ function alternarBeeNoUnificado(mostrar) {
  */
 async function recarregarThreadAtiva() {
   const task = tasks[detailIdx];
-  if (chatThreadAtivo === "todos" || chatThreadAtivo === "linha") {
-    // Rebusca os comentários da própria tarefa (é onde a pessoa mais
-    // provavelmente acabou de escrever) e remonta o merge inteiro. Se a
-    // rebusca não chegar (`null`), mantém o que já tinha — ver
-    // buscarComentariosDoBackend.
-    const rebuscados = await buscarComentariosDoBackend(task.id);
-    if (rebuscados !== null) task.comments = rebuscados;
-    if (chatThreadAtivo === "todos") await abrirThreadTodos(task);
-    else await abrirThreadLinha(task);
-    return;
-  }
-  if (chatThreadAtivo === "aqui") {
-    await carregarComentarios(task);
-    return;
-  }
-  const cache = chatMaeCache.get(task.id);
-  if (!cache) return;
-  const comentariosMae = await buscarComentariosDoBackend(cache.id);
-  if (comentariosMae === null) return; // não chegou: preserva o que está na tela
-  cache.comments = comentariosMae;
-  chatMaeCache.set(task.id, cache);
-  guardarComentariosNoCacheLocal("mae-" + task.id, comentariosMae);
-  if (chatThreadAtivo !== "mae" || !tasks[detailIdx] || tasks[detailIdx].id !== task.id) return;
+  if (!task) return;
+  const alvo = chatThreadAtivo === "mae" ? idDaMaeSeConhecido(task) : task.id;
+  if (!alvo) return;
+
+  // UMA busca só, sempre da mesma fonte — e a tela é recalculada a partir
+  // dela. Antes, nas abas unificadas isso rebuscava os comentários E
+  // remontava a mistura do zero (que ia buscar de novo a tarefa original,
+  // o card mãe, a Bee e os eventos): ~5 idas ao servidor pra mostrar uma
+  // mensagem que já estava na tela.
+  const rebuscados = await buscarComentariosDoBackend(alvo);
+  if (rebuscados === null) return; // não chegou: preserva o que está na tela
+  guardarFonteDeComentarios(alvo, rebuscados);
+  redesenharThreadAtiva();
+}
+
+/**
+ * Redesenha a aba aberta agora a partir da fonte única, SEM buscar nada.
+ * É o caminho que o envio de comentário usa (ver item A) — e como tudo é
+ * calculado da mesma fonte, o `pintarThread` só encosta na tela no que
+ * mudou de verdade.
+ */
+function redesenharThreadAtiva() {
+  const task = tasks[detailIdx];
+  if (!task) return;
   const thread = document.getElementById("commentsThread");
-  if (thread) pintarThread(thread, renderComentariosHTML({ id: cache.id, comments: cache.comments }));
+  if (!thread) return;
+
+  if (chatThreadAtivo === "todos") { desenharThreadUnificada(task, false); return; }
+  if (chatThreadAtivo === "linha") { desenharThreadUnificada(task, true); return; }
+  if (chatThreadAtivo === "mae") {
+    const idMae = idDaMaeSeConhecido(task);
+    if (idMae) pintarThread(thread, renderComentariosHTML({ id: idMae, comments: comentariosDaFonte(idMae) || [] }));
+    return;
+  }
+  const daTarefa = comentariosDaFonte(task.id);
+  if (daTarefa) task.comments = daTarefa;
+  pintarThread(thread, renderComentariosHTML(task));
 }
 
 /**
@@ -957,7 +1144,7 @@ async function carregarComentarios(task) {
   // — ver comentário acima do porquê.
   if (minhaVez !== _cargaComentariosSeq) return;
   task.comments = comentarios;
-  guardarComentariosNoCacheLocal(taskId, comentarios);
+  guardarFonteDeComentarios(taskId, comentarios);
   // Só atualiza a tela se o usuário ainda estiver vendo essa mesma tarefa
   // (compara por ID, não por referência — ver comentário em carregarDescricao).
   if (tasks[detailIdx] && tasks[detailIdx].id === taskId) {
@@ -1092,6 +1279,9 @@ function aplicarDadosDaTarefa(task, data, taskId, veioDoCache) {
 
   // --- Comentários ---
   task.comments = data.comentarios || [];
+  // Registra na fonte única (ver o bloco "A FONTE ÚNICA" no topo): é dela
+  // que "Todos os comentários" e a "Linha do tempo" são calculados.
+  if (!veioDoCache) guardarFonteDeComentarios(taskId, task.comments);
 
   // --- Pasta do Drive (veio de leitura na planilha, sem tocar no Drive) ---
   if (data.pastaUrl !== undefined) task.pastaUrlSalva = data.pastaUrl;
@@ -1626,7 +1816,14 @@ async function verificarPastaJaSalva(task, btn) {
         // o risco de criar uma pasta duplicada (buscarOuHerdarPastaCard).
         let idsRelacionados = [];
         if (task.parentTaskId) {
-          const cardMaeInfo = cardMaeCache.get(task.id) || await buscarCardMaeDoBackend(task.id);
+          // ESPERA a busca que o openDetail já disparou em vez de abrir
+          // outra (2026-08-13): antes, o `|| await buscarCardMaeDoBackend`
+          // aqui caía no caminho ANTIGO — 4 idas ao servidor — sempre que
+          // chegasse antes da outra terminar, que é o caso normal. Agora
+          // precarregarCardMaeEmBackground devolve a MESMA promessa pra
+          // quem chegar no meio (ver cardMaeEmVoo, js/detalhe-cardmae.js).
+          await precarregarCardMaeEmBackground(task.id);
+          const cardMaeInfo = cardMaeCache.get(task.id);
           if (cardMaeInfo && cardMaeInfo.ok && cardMaeInfo.temPai && cardMaeInfo.cardMae) {
             idsRelacionados = [cardMaeInfo.cardMae.id, ...(cardMaeInfo.subtarefas || []).map(s => s.id)]
               .filter(id => String(id) !== String(task.id));

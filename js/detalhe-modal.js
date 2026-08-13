@@ -1461,12 +1461,29 @@ function renderDetail() {
       mostrarToast("Sem internet agora. Guardei o comentário e mando sozinho quando a conexão voltar.", "erro");
     } else if (ok) {
       // Confirma visualmente (some o opaco/pendente) até a lista real
-      // (com a bolha de verdade vinda do Runrun.it) substituir tudo.
+      // substituir tudo.
       if (bolhaTemporaria) bolhaTemporaria.classList.remove("pending");
-      // ESPERA a thread recarregar antes de oferecer o "repetir no card
-      // mãe?" — a recarga redesenha a conversa e levava o aviso junto,
-      // então ele aparecia e sumia num piscar.
-      await recarregarThreadAtiva();
+      // O comentário criado JÁ VEIO na resposta do envio (ver
+      // adicionarComentario, RunrunEscrita.gs): acrescenta ele na fonte
+      // única e redesenha a partir dela — SEM rebuscar nada. Antes, aqui
+      // ia uma rebusca da conversa (e, nas abas unificadas, uma remontagem
+      // que buscava de novo a tarefa original, o card mãe, a Bee e os
+      // eventos): ~5 idas ao servidor pra mostrar o que a pessoa acabou de
+      // escrever e que já estava na tela — a "piscada ao comentar".
+      //
+      // Sem o objeto (backend antigo, ou o Runrun.it respondendo sem
+      // corpo), cai no caminho de sempre — nada quebra, só volta a ser
+      // lento nesse caso.
+      if (resultado.comentario && typeof acrescentarComentarioNaFonte === "function") {
+        acrescentarComentarioNaFonte(alvoId, resultado.comentario);
+        if (bolhaTemporaria) bolhaTemporaria.remove(); // a definitiva entra no lugar
+        redesenharThreadAtiva();
+      } else {
+        // ESPERA a thread recarregar antes de oferecer o "repetir no card
+        // mãe?" — a recarga redesenha a conversa e levava o aviso junto,
+        // então ele aparecia e sumia num piscar.
+        await recarregarThreadAtiva();
+      }
       agendarAtualizacaoKanban();
       if (ofereceRepetir && task.parentTaskId && texto) mostrarPromptRepetirComentario(task, textoParaEnviar);
       // Link do Drive colado num comentário normal (sem arrastar

@@ -84,7 +84,17 @@ function adicionarComentario(taskId, texto, autor) {
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou o comentário (status ' + resultado.status + ').' };
   }
-  return { ok: true };
+  // DEVOLVE o comentário criado (2026-08-13). O Runrun.it já responde com
+  // ele — id e horário de verdade — e isso vinha sendo jogado fora, com o
+  // `return { ok: true }` seco de antes. Por causa disso, o front-end
+  // tinha que REBUSCAR a conversa inteira depois de cada envio só pra
+  // descobrir o que ele mesmo acabou de escrever: era a "piscada ao
+  // comentar" e ~5 idas ao servidor por mensagem (ver o item A da
+  // auditoria dos comentários no CLAUDE.md).
+  //
+  // `comentario` pode vir null se o Runrun.it responder 2xx sem corpo —
+  // o front-end trata isso caindo no caminho antigo, de rebuscar.
+  return { ok: true, comentario: comentarioParaColmeia(resultado.body) };
 }
 
 function excluirComentario(commentId, autor) {

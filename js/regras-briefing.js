@@ -927,7 +927,12 @@ async function enviarComentarioNoBackend(taskId, texto) {
       tituloDaTarefa: t ? t.title : "",
     }, "enviar o comentário");
     if (!data.ok) console.error("Runrun.it recusou o comentário:", data.error);
-    return { ok: data.ok, enfileirado: !!data.enfileirado, error: data.error };
+    // `comentario` = o comentário recém-criado, já no formato do Colmeia
+    // (ver adicionarComentario, RunrunEscrita.gs). É ele que permite
+    // mostrar a mensagem definitiva SEM rebuscar a conversa. Vem
+    // `undefined` de um backend antigo ou quando a ação foi enfileirada —
+    // nos dois casos quem chama cai no caminho de sempre.
+    return { ok: data.ok, enfileirado: !!data.enfileirado, error: data.error, comentario: data.comentario };
   } catch (err) {
     console.error("Falha ao enviar comentário pro Runrun.it:", err);
     return { ok: false };
