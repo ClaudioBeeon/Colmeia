@@ -156,12 +156,33 @@ function adicionarComentarioComAnexo(taskId, texto, nomeArquivo, mimeType, base6
 
 // ============ MOVER ETAPA, DATA E REATRIBUIR ============
 
+/**
+ * Descobre o workflow_id de uma tarefa pra poder limpar o cache da
+ * sequência dela depois de avançar/desfazer. `runrunPost` da ação em si
+ * não devolve o workflow_id no corpo — só o novo responsável — então
+ * precisa de uma leitura extra da tarefa.
+ */
+function workflowIdDaTarefa(taskId) {
+  var tarefa = runrunFetch('/tasks/' + taskId);
+  return (tarefa && !tarefa.erroFetch) ? tarefa.workflow_id : null;
+}
+
 function avancarWorkflowTarefa(taskId, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
   var resultado = runrunPost('/tasks/' + taskId + '/complete_workflow_step', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou avançar a sequência (status ' + resultado.status + '). Talvez essa tarefa não tenha uma Sequência de responsáveis configurada.' };
   }
+  // ⚠️ Sem isso, a próxima leitura da sequência (buscarSequenciaResponsaveis,
+  // usada por carregarSequencia/recarregarRegraCardMaeNoPill pra
+  // reconciliar depois da animação otimista) servia o cache de 10 min de
+  // ANTES do avanço — a tela mostrava certo na hora e, uns segundos
+  // depois, "voltava sozinha" pro estado velho (2026-08-13, relatado pelo
+  // Cláudio: "no Runrun.it funcionou... no Colmeia voltou pra mim
+  // sozinho"). `adicionarPessoaNaRegra`/`removerDaRegra`, mais abaixo,
+  // já faziam essa limpeza — só avançar/desfazer tinham ficado de fora.
+  var workflowId = workflowIdDaTarefa(taskId);
+  if (workflowId) esquecerSequenciaCacheada(workflowId);
   return { ok: true, novoResponsavel: resultado.body ? resultado.body.responsible_name : null };
 }
 
@@ -171,6 +192,9 @@ function desfazerWorkflowTarefa(taskId, autor) {
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou desfazer (status ' + resultado.status + ').' };
   }
+  // Mesmo motivo do avançar, acima.
+  var workflowId = workflowIdDaTarefa(taskId);
+  if (workflowId) esquecerSequenciaCacheada(workflowId);
   return { ok: true, novoResponsavel: resultado.body ? resultado.body.responsible_name : null };
 }
 
