@@ -442,6 +442,39 @@ async function atualizarBadgeAprovacao() {
 // ---------------------------------------------------------------------------
 
 /**
+ * Alguns navegadores/redes (extensão, VPN, proxy corporativo) trocam o
+ * método do pedido no meio do caminho e o POST chega no backend como um
+ * GET puro — aí ele responde com o texto genérico do doGet ("Use
+ * ?tipo=tarefas..."), que não tem nada a ver com a peça (2026-08-13,
+ * achado com a Laura: funcionou normal noutro navegador, então não é bug
+ * do dado, é algo na conexão dela). Reconhece essa assinatura exata pra
+ * tratar como "problema de conexão", igual `caiuARede` já trata quando o
+ * pedido nem chega a responder.
+ */
+function apvPareceProblemaDeConexao(data) {
+  return caiuARede(data) || !!(data && data.error && String(data.error).indexOf("?tipo=tarefas") !== -1);
+}
+
+/**
+ * A caixa "não consegui carregar" que aparece no lugar da peça. Quando
+ * parece problema de conexão (ver `apvPareceProblemaDeConexao`), mostra
+ * uma mensagem que qualquer um do atendimento entende (não o texto cru
+ * do backend) e um botão de recarregar — sem precisar saber apertar F5.
+ */
+function apvErroDeCarregamentoHTML(data) {
+  if (apvPareceProblemaDeConexao(data)) {
+    return `
+      <div class="apv-vazio">
+        Algo na sua conexão impediu de carregar essa peça agora.
+        <br>A peça continua na fila, não se perdeu.
+        <br><br>
+        <button type="button" class="apv-btn apv-btn-primario apv-btn-p" onclick="location.reload()">Recarregar a página</button>
+      </div>`;
+  }
+  return `<div class="apv-vazio">${escaparHTML(data && data.error || "Não consegui carregar essa peça.")}</div>`;
+}
+
+/**
  * Abre o overlay de conferência de uma peça.
  *
  * A entrada é em DOIS PASSOS, igual ao pop-up de tarefa: primeiro `visible`
@@ -564,12 +597,7 @@ async function apvAbrirConferencia(taskId, loteId) {
   const data = await chamarBackend({ acao: "dadosDaConferencia", taskId, loteId });
 
   if (caiuARede(data) || !data.ok) {
-    document.getElementById("apvPalcoSlot").innerHTML = `
-      <div class="apv-vazio">${escaparHTML(
-        caiuARede(data)
-          ? "Não consegui falar com o servidor agora. A peça continua na fila — tenta de novo em instantes."
-          : (data.error || "Não consegui carregar essa peça.")
-      )}</div>`;
+    document.getElementById("apvPalcoSlot").innerHTML = apvErroDeCarregamentoHTML(data);
     return;
   }
 
@@ -1381,10 +1409,16 @@ async function apvMostrarNoPalco(peca, versao) {
   // normal agora; `base64` continua atendendo o que não é imagem (o
   // preview de HTML logo abaixo) e quando a publicação não deu certo.
   if (!data || !data.ok || (!data.url && !data.base64)) {
+    // Mesma assinatura de "o pedido chegou torto no backend" da conferência
+    // (ver apvPareceProblemaDeConexao) -- aqui o botão de recarregar entra
+    // JUNTO com o link do Drive (que continua valendo pra quando o arquivo
+    // é que sumiu de verdade), não no lugar dele.
     slotAgora.innerHTML = `
       <div class="apv-vazio">
         Não consegui carregar essa peça pra mostrar aqui.
+        ${apvPareceProblemaDeConexao(data) ? '<br>Pode ser algo na sua conexão -- tenta recarregar.' : ''}
         <br><br>
+        ${apvPareceProblemaDeConexao(data) ? '<button type="button" class="apv-btn apv-btn-primario apv-btn-p" onclick="location.reload()">Recarregar a página</button> ' : ''}
         <a class="apv-palco-drive" href="https://drive.google.com/file/d/${encodeURIComponent(arquivo.fileId)}/view" target="_blank" rel="noopener">Abrir no Drive</a>
       </div>`;
     return;
