@@ -266,6 +266,17 @@ function wireWorkflowArrows(task) {
   const nextBtn = grupo ? grupo.querySelector("#navNextArrow") : null;
   if (prevBtn) {
     prevBtn.addEventListener("click", async () => {
+      // Trava contra clique duplo (2026-08-13, bug real: mostrar a
+      // animação JÁ, antes do backend confirmar, tem um efeito colateral
+      // — o botão de baixo é recriado do zero no redesenho otimista, e um
+      // segundo clique durante a espera caía no botão NOVO, que nasce sem
+      // `disabled`. Dois avanços seguidos empurravam a sequência dois
+      // passos de uma vez (relatado pelo Cláudio: acabou entregando a
+      // tarefa, que era pra ficar com a próxima pessoa). O campo mora no
+      // `task` (não no botão) porque é o `task` que sobrevive à
+      // recriação do botão a cada redesenho.
+      if (task._sequenciaAcaoEmAndamento) return;
+      task._sequenciaAcaoEmAndamento = true;
       prevBtn.disabled = true;
 
       // MUDA A TELA JÁ (2026-08-13, pedido do Cláudio: "assim que eu
@@ -308,10 +319,15 @@ function wireWorkflowArrows(task) {
       // Sincroniza com o Runrun.it de verdade — se a chamada acima
       // falhou, isso já devolve a sequência real (volta sozinho).
       await carregarSequencia(task);
+      task._sequenciaAcaoEmAndamento = false;
     });
   }
   if (nextBtn) {
     nextBtn.addEventListener("click", async () => {
+      // Trava contra clique duplo — mesmo motivo do botão de desfazer,
+      // acima (ver o comentário grande lá).
+      if (task._sequenciaAcaoEmAndamento) return;
+      task._sequenciaAcaoEmAndamento = true;
       nextBtn.disabled = true;
 
       // Guarda quem estava com a tarefa ANTES de mexer em qualquer coisa
@@ -365,6 +381,7 @@ function wireWorkflowArrows(task) {
       const nomeAtualDepois = atualIdxDepois !== -1 ? task.sequencia[atualIdxDepois].nome : null;
       const realmenteNaoAvancou = nomeAtualDepois === nomeAtualAntes;
       if (!resultadoAvanco.ok && realmenteNaoAvancou) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
+      task._sequenciaAcaoEmAndamento = false;
     });
   }
   const addPersonBtn = grupo ? grupo.querySelector("#navAddPersonBtn") : null;

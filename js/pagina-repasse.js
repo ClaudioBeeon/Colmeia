@@ -704,9 +704,12 @@ function repasseLiberarAcao(t) {
 async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
   t = tarefaRepasseViva(t);
   if (repasseAcaoJaEmAndamento(t)) return;
-  await pararCronometroAoTransferir(t); // se por acaso estava rodando, para antes de repassar
-  t = tarefaRepasseViva(t);
 
+  // MUDA A TELA JÁ, antes de qualquer `await` (2026-08-13, pedido do
+  // Cláudio: mesmo bug do pill da tarefa aberta — `pararCronometroAoTransferir`
+  // é uma ida de verdade ao Runrun.it, e esperar ela terminar ANTES do
+  // redesenho otimista fazia a fileira de fotinhos ficar parada por
+  // segundos, parecendo travada).
   const sequenciaAntes = t.sequencia ? t.sequencia.map(s => ({ ...s })) : t.sequencia;
   const entregueAntes = t._repasseEntregue;
   if (t.sequencia && t.sequencia.length) {
@@ -721,7 +724,13 @@ async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
   montarSequenciaCard(t);
 
   try {
-    const resultado = await avancarWorkflowNoBackend(t.id);
+    // Pausar o cronômetro (se estava rodando) e avançar de verdade correm
+    // JUNTOS, não um esperando o outro — a tela já mudou, não depende
+    // mais dessas respostas pra parecer que "aconteceu".
+    const [, resultado] = await Promise.all([
+      pararCronometroAoTransferir(t),
+      avancarWorkflowNoBackend(t.id),
+    ]);
     t = tarefaRepasseViva(t);
     if (resultado.ok) {
       repasseRecemAvancados.add(t.id);
@@ -747,15 +756,16 @@ async function confirmarEAvancarSequenciaCard(t, btn, proximo) {
 async function confirmarEntregaDiretaCard(t, btn) {
   t = tarefaRepasseViva(t);
   if (repasseAcaoJaEmAndamento(t)) return;
-  await pararCronometroAoTransferir(t); // se por acaso estava rodando, para antes de entregar
-  t = tarefaRepasseViva(t);
 
   const entregueAntes = t._repasseEntregue;
   t._repasseEntregue = true;
   montarSequenciaCard(t);
 
   try {
-    const ok = await entregarTarefaNoBackend(t.id);
+    const [, ok] = await Promise.all([
+      pararCronometroAoTransferir(t), // se por acaso estava rodando, para antes de entregar
+      entregarTarefaNoBackend(t.id),
+    ]);
     t = tarefaRepasseViva(t);
     if (ok) {
       repasseRecemAvancados.add(t.id);
