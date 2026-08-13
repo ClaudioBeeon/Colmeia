@@ -2976,15 +2976,26 @@ async function verificarRevisaoJaEnviada(task, btn) {
   });
   if (!data || !data.ok || caiuARede(data)) return;
 
-  // Trocou de tarefa enquanto carregava? Compara por id, nunca por
-  // referência (bug recorrente do CLAUDE.md), e busca o botão de novo.
-  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return;
-  const btnAgora = document.getElementById("apvPedirBtn");
-  if (!btnAgora) return;
-
+  // ⚠️ GRAVA O ESTADO ANTES de mexer na tela, e sem depender dela.
+  //
+  // Antes, esta função saía mais cedo quando o botão "Enviar para revisão"
+  // não estava no DOM naquele instante — e ia embora SEM registrar o
+  // `_conferenciaInfo`. Quem pergunta "essa peça já foi mandada?" sem ter
+  // botão nenhum na mão (o freio do Entregar,
+  // confirmarLinkDeAprovacaoAntesDeEntregar) recebia "não sei" e acusava
+  // "ainda não reconheci o link de aprovação" mesmo com o servidor tendo
+  // respondido que SIM. Saber e mostrar são duas coisas: o que a tela
+  // está exibindo agora não pode decidir o que a gente sabe.
   const c = data.conferencia;
+  const aindaNaMesma = tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId);
   task._conferenciaInfo = c ? { taskId: c.taskId, loteId: c.loteId || c.nomePeca || "" } : null;
-  if (c) marcarBotaoComoJaEnviado(btnAgora, c.taskId, c.loteId || c.nomePeca);
+  // A tarefa pode ter sido trocada por um objeto novo pela varredura do
+  // quadro no meio da busca — carimba nos dois pra não perder a resposta.
+  if (aindaNaMesma && tasks[detailIdx] !== task) tasks[detailIdx]._conferenciaInfo = task._conferenciaInfo;
+
+  if (!aindaNaMesma) return;
+  const btnAgora = document.getElementById("apvPedirBtn");
+  if (c && btnAgora) marcarBotaoComoJaEnviado(btnAgora, c.taskId, c.loteId || c.nomePeca);
 }
 
 /**

@@ -789,6 +789,17 @@ async function atualizarKanbanEmBackground() {
         if (antiga.descricaoTexto !== undefined) nova.descricaoTexto = antiga.descricaoTexto;
         if (antiga._resumoAlteracaoHTML !== undefined) nova._resumoAlteracaoHTML = antiga._resumoAlteracaoHTML;
         if (antiga.pastaUrlSalva !== undefined) nova.pastaUrlSalva = antiga.pastaUrlSalva;
+        // "Essa peça já foi mandada pra conferência?" (ver
+        // verificarRevisaoJaEnviada, js/pagina-aprovacao.js). Faltava aqui,
+        // e o efeito era o pior possível: mandar pra revisão dispara uma
+        // atualização do quadro 900ms depois — que apagava justamente a
+        // marca de "já mandei". Aí, ao clicar em Entregar, o Colmeia
+        // acusava "ainda não reconheci o link de aprovação" pra uma peça
+        // que a pessoa TINHA acabado de mandar (relatado pelo Cláudio,
+        // 2026-08-13). O comentário lá em pedirConferenciaInterna já dizia
+        // que isso era "pra sobreviver à varredura do quadro" — só que não
+        // sobrevivia, porque dependia desta linha, que não existia.
+        if (antiga._conferenciaInfo !== undefined) nova._conferenciaInfo = antiga._conferenciaInfo;
         // Mesmo problema do timerSeconds acima, mas pro "está rodando":
         // o Runrun.it às vezes demora alguns segundos pra confirmar o
         // play/pause (mesmo já tendo aceitado a chamada) — sem essa
