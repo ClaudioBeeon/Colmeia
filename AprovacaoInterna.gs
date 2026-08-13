@@ -969,6 +969,23 @@ function diagnosticoLinkErick(taskId) {
 }
 
 /**
+ * Mesma ideia de `diagnosticoLinkErick`, só que pra TODAS as 11 tarefas
+ * afetadas pelo incidente de uma vez (2026-08-13) -- o Cláudio reportou
+ * que não é só uma tarefa com o link quebrado, é "todas que criamos o
+ * link". Roda pelo editor do Apps Script e cola o log inteiro de volta.
+ */
+function diagnosticoGeralErick() {
+  ERICK_TAREFAS_AFETADAS_20260812.forEach(function (taskId) {
+    Logger.log('===== tarefa ' + taskId + ' =====');
+    try {
+      diagnosticoLinkErick(taskId);
+    } catch (e) {
+      Logger.log('[Erick][diagnostico] tarefa ' + taskId + ': erro rodando o diagnostico -> ' + e);
+    }
+  });
+}
+
+/**
  * Reprocessa UMA tarefa do Erick na mão, sem esperar o gatilho de 10 em
  * 10 minutos — usa exatamente o mesmo caminho da varredura automática
  * (`processarComentariosDoErick`), só que numa tarefa só. Seguro rodar de
