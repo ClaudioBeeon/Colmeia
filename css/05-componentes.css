@@ -1551,6 +1551,22 @@ button.bee-card-resultado-clicavel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.09
 }
 .pecas-escolha-confirmar:hover { filter: brightness(0.96); }
 
+/* Freio antes de entregar sem link de aprovação reconhecido (ver
+   confirmarLinkDeAprovacaoAntesDeEntregar, js/detalhe-modal.js) — mesmo
+   cartão flutuante do .pecas-escolha-menu, só com texto + dois botões em
+   vez da lista de checkboxes. */
+.aviso-link-menu { max-height: none; }
+.aviso-link-texto {
+  font-size: 12.5px; line-height: 1.45; color: var(--text-secondary);
+  padding: 0 9px 8px;
+}
+.aviso-link-secundario {
+  margin-top: 6px; border: 1px solid var(--border); border-radius: 10px; padding: 9px;
+  background: transparent; color: var(--text-secondary); cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+}
+.aviso-link-secundario:hover { background: var(--page-bg); color: var(--text-primary); }
+
 /* Lista de links já existentes pra essa tarefa (ver
    abrirLinksExistentesDeAprovacao, js/detalhe-modal.js) — mesmo cartão
    flutuante do pecas-escolha-menu, cada linha com nome/status + copiar/excluir. */

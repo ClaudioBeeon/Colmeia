@@ -352,6 +352,13 @@ function wireWorkflowArrows(task) {
       });
     } else {
       deliverBtn.addEventListener("click", async () => {
+        // Freio de segurança (2026-08-13, pedido do Cláudio): entregar uma
+        // peça sem que o link de aprovação tenha sido reconhecido pelo
+        // Colmeia é o erro que este freio existe pra pegar. Só interrompe
+        // quando faz sentido perguntar — sem isso, some direto.
+        const podeEntregar = await confirmarLinkDeAprovacaoAntesDeEntregar(task, deliverBtn);
+        if (!podeEntregar) return;
+
         // Tudo isso acontece NA HORA, antes de qualquer resposta do
         // Runrun.it: já marca como entregue e já sobe o carrossel do pill
         // mostrando "Entregue ✓" (mesma técnica do fluxo de transferir
@@ -456,6 +463,104 @@ function wireWorkflowArrows(task) {
       });
     }
   }
+}
+
+/**
+ * Freio de segurança antes de marcar a tarefa como ENTREGUE (2026-08-13,
+ * pedido do Cláudio): se ela tem peça (pasta do card com arquivo) e o
+ * Colmeia ainda não reconheceu que foi mandada pra conferência do
+ * atendimento, interrompe com a escolha "entregar assim mesmo" ou "gerar
+ * link de aprovação" — em vez de deixar a peça sair de cena sem que
+ * ninguém tenha pedido a conferência dela.
+ *
+ * Reaproveita o MESMO estado que já controla o botão "Enviar para
+ * revisão"/"Acessar página de aprovação" (`task._conferenciaInfo`, ver
+ * verificarRevisaoJaEnviada em js/pagina-aprovacao.js) — não existe uma
+ * segunda fonte de verdade pra "isso já foi mandado?".
+ *
+ * Só interrompe quando faz sentido: tarefa sem pasta/peça nenhuma
+ * (reunião, ajuste interno, tarefa administrativa...) segue direto, sem
+ * perguntar nada — é o "só quem tem peça" que o Cláudio pediu.
+ *
+ * Devolve `true` quando pode entregar na hora (já tinha reconhecido, ou
+ * a pessoa escolheu "entregar assim mesmo"), `false` quando parou pra
+ * perguntar — escolher "gerar link" NÃO entrega sozinho depois: a pessoa
+ * clica em "Entregar" de novo quando quiser (aí já não interrompe mais).
+ */
+async function confirmarLinkDeAprovacaoAntesDeEntregar(task, deliverBtn) {
+  if (!task || !task.id) return true;
+
+  if (task._conferenciaInfo === undefined) {
+    await verificarRevisaoJaEnviada(task, document.getElementById("apvPedirBtn"));
+  }
+  if (task._conferenciaInfo) return true; // já reconheceu, segue normal
+
+  const dataPecas = await chamarBackend({ acao: "listarVersoesDasPecas", taskId: task.id });
+  // Sem pasta ou sem nenhuma peça pra essa tarefa: não é o tipo de tarefa
+  // que passa por conferência — segue sem perguntar.
+  if (!dataPecas || !dataPecas.ok || !(dataPecas.pecas || []).length) return true;
+
+  // As duas idas ao servidor acima levam um tempinho — confere se ainda é
+  // esta tarefa que está na tela antes de interromper (bug recorrente do
+  // CLAUDE.md: nunca decidir em cima de uma tarefa que já não é mais a
+  // que está aberta).
+  if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return true;
+
+  return new Promise(resolve => abrirAvisoLinkNaoReconhecido(task, deliverBtn, resolve));
+}
+
+/**
+ * O popup do freio acima — mesmo vocabulário visual de abrirEscolhaDePeca
+ * (cartão flutuante ancorado no botão que abriu, mais abaixo neste
+ * arquivo).
+ */
+function abrirAvisoLinkNaoReconhecido(task, btn, resolve) {
+  document.getElementById("pecasEscolhaMenu")?.remove();
+  const rect = btn.getBoundingClientRect();
+  const menu = document.createElement("div");
+  menu.id = "pecasEscolhaMenu";
+  menu.className = "pecas-escolha-menu aviso-link-menu";
+  menu.style.left = Math.round(Math.max(8, rect.right - 260)) + "px";
+  menu.innerHTML = `
+    <div class="pecas-escolha-titulo">Ainda não reconheci o link de aprovação</div>
+    <div class="aviso-link-texto">Essa peça ainda não foi mandada pra conferência do atendimento. Quer entregar assim mesmo, ou gerar o link agora?</div>
+    <button type="button" class="pecas-escolha-confirmar" id="avisoLinkGerar">Gerar link de aprovação</button>
+    <button type="button" class="aviso-link-secundario" id="avisoLinkEnviar">Entregar assim mesmo</button>
+  `;
+  document.body.appendChild(menu);
+
+  const alturaMenu = menu.getBoundingClientRect().height;
+  const topIdeal = rect.bottom + 6;
+  const top = (topIdeal + alturaMenu > window.innerHeight - 8)
+    ? Math.max(8, window.innerHeight - 8 - alturaMenu)
+    : topIdeal;
+  menu.style.top = Math.round(top) + "px";
+
+  let decidido = false;
+  const fecharSeForaDoMenu = e => {
+    if (menu.isConnected && !menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener("click", fecharSeForaDoMenu, true);
+      // Fechou sem escolher (clicou fora): trata como "não decidiu ainda",
+      // não entrega — mais seguro que assumir qualquer um dos dois lados.
+      if (!decidido) { decidido = true; resolve(false); }
+    }
+  };
+  setTimeout(() => document.addEventListener("click", fecharSeForaDoMenu, true), 0);
+
+  menu.querySelector("#avisoLinkEnviar").addEventListener("click", () => {
+    decidido = true;
+    menu.remove();
+    resolve(true);
+  });
+  menu.querySelector("#avisoLinkGerar").addEventListener("click", async () => {
+    decidido = true;
+    menu.remove();
+    resolve(false);
+    if (typeof escolherPecasParaRevisao === "function") {
+      await escolherPecasParaRevisao(task, document.getElementById("apvPedirBtn"));
+    }
+  });
 }
 
 /**
