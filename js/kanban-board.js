@@ -164,14 +164,25 @@ function buildBoard() {
   // Kanban. Antes, por estar dentro de #page-kanban, ele sumia junto
   // quando essa página ficava "hidden" (ex: ao clicar num card na Fila
   // de repasse) — daí o pop-up só aparecia depois de navegar de volta
-  // pro Kanban. Remove qualquer painel antigo (de um buildBoard()
-  // anterior) antes de criar o novo, pra não duplicar o id.
-  const panelAntigo = document.getElementById("taskDetail");
-  if (panelAntigo) panelAntigo.remove();
-  const panel = document.createElement("div");
-  panel.className = "task-detail";
-  panel.id = "taskDetail";
-  document.body.appendChild(panel);
+  // pro Kanban.
+  //
+  // ⚠️ SÓ CRIA SE AINDA NÃO EXISTIR (2026-08-13, bug real: link direto
+  // pra tarefa que fecha sozinho). buildBoard() roda mais de uma vez na
+  // vida da página (poll de fundo, troca de foto etc.) — antes disso,
+  // TODA chamada apagava o painel antigo e criava um novo do zero. Se
+  // isso acontecesse bem no meio de abrirTarefaPorId() (o roteador de URL
+  // abrindo um link direto, ex: colmeia.beeon.com.br/114867), a animação
+  // de "Buscando a tarefa..." que tinha acabado de ser escrita no painel
+  // era arrancada da tela junto com o painel velho — parecia a caixinha
+  // fechar sozinha. O painel não precisa nascer vazio a cada rodada: o
+  // conteúdo dele é sempre gerenciado à parte (openDetail/closeDetail/
+  // mostrarCardEmBranco), nunca por buildBoard() — só falta ele EXISTIR.
+  if (!document.getElementById("taskDetail")) {
+    const panel = document.createElement("div");
+    panel.className = "task-detail";
+    panel.id = "taskDetail";
+    document.body.appendChild(panel);
+  }
 
   boardEl.querySelectorAll(".column-sort-ic").forEach(group => {
     const key = group.dataset.col;

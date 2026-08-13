@@ -1792,21 +1792,27 @@ document.addEventListener("keydown", e => {
  * card") e posta um comentário avisando — sem precisar abrir o Drive nem
  * escrever nada.
  *
- * TUDO ligado no `document` (nunca é recriado), não no `#taskDetail` —
- * bug encontrado em 2026-08-04: `#taskDetail` É recriado do zero a cada
- * `buildBoard()` (js/kanban-board.js, remove o painel antigo e cria um
- * elemento novo com o mesmo id). `wireArrastarArquivoParaCard()` só roda
- * UMA vez, na carga do script — antes de `buildBoard()` sequer ter
- * rodado — então o `document.getElementById("taskDetail")` daquela hora
- * dava `null` e a função saía sem religar nada em lugar nenhum. Todo
- * drop, mesmo com o card aberto de verdade, caía direto na rede de
- * segurança (o aviso "abra uma tarefa primeiro"), porque não existia
- * NENHUM escutador preso no painel de verdade.
+ * TUDO ligado no `document`, não no `#taskDetail` — bug encontrado em
+ * 2026-08-04: até essa data, `#taskDetail` era recriado do zero a cada
+ * `buildBoard()` (js/kanban-board.js, removia o painel antigo e criava um
+ * elemento novo com o mesmo id, TODA vez que rodava — poll de fundo
+ * incluso). `wireArrastarArquivoParaCard()` só roda UMA vez, na carga do
+ * script — antes de `buildBoard()` sequer ter rodado — então o
+ * `document.getElementById("taskDetail")` daquela hora dava `null` e a
+ * função saía sem religar nada em lugar nenhum. Todo drop, mesmo com o
+ * card aberto de verdade, caía direto na rede de segurança (o aviso "abra
+ * uma tarefa primeiro"), porque não existia NENHUM escutador preso no
+ * painel de verdade.
  *
- * A troca: em vez de escutar no painel (que muda de identidade), escuta
- * no `document` sempre, e cada evento decide na hora se o mouse está
- * `.closest("#taskDetail")` ou não — funciona não importa quantas vezes
- * o painel for recriado depois.
+ * A troca: em vez de escutar no painel, escuta no `document` sempre, e
+ * cada evento decide na hora se o mouse está `.closest("#taskDetail")`
+ * ou não. `buildBoard()` HOJE (2026-08-13) só cria o painel se ele ainda
+ * não existir — não recria mais a cada rodada (era a causa de um bug
+ * parecido: link direto pra tarefa que fechava sozinho, o painel sendo
+ * arrancado da tela no meio do carregamento) — mas o padrão de escutar no
+ * `document` continua sendo o certo aqui: mais simples que reconciliar o
+ * listener toda vez que o painel precisar ser recriado por qualquer outro
+ * motivo no futuro.
  */
 const LIMITE_UPLOAD_ARRASTADO_BYTES = 30 * 1024 * 1024; // 30MB — folgado pra imagem/PSD comum, sem travar o navegador com vídeo grande
 

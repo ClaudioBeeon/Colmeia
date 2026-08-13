@@ -88,6 +88,29 @@ function paletaTarefaRodando() {
   return tasks.find(t => t.running) || null;
 }
 
+// Reconhece um link de tarefa do Runrun.it colado (com ou sem o prefixo
+// de idioma, "pt-BR/tasks/..." — visto nos dois formatos) ou o id puro
+// digitado sozinho (2026-08-13, pedido do Cláudio: as tarefas chegam pelo
+// Discord com o link do Runrun.it, e tirar só o número na mão pra colar
+// em colmeia.beeon.com.br/<id> era o trabalho que isso substitui).
+const PALETA_RUNRUN_URL_REGEX = /runrun\.it\/(?:[a-z]{2}-[A-Z]{2}\/)?tasks\/(\d+)/i;
+
+function paletaIdDeLinkOuTexto(texto) {
+  const t = String(texto || "").trim();
+  if (!t) return null;
+  const mUrl = t.match(PALETA_RUNRUN_URL_REGEX);
+  if (mUrl) return mUrl[1];
+  // Id puro (sem link) — só a partir de 3 dígitos, pra não confundir com
+  // um número qualquer que a pessoa esteja digitando por outro motivo.
+  return /^\d{3,}$/.test(t) ? t : null;
+}
+
+/** Abre a tarefa pelo id, indo pro quadro antes se estiver em outra página. */
+function paletaAbrirTarefaPorId(id) {
+  if (document.getElementById("page-kanban").hidden) mostrarPagina("kanban");
+  abrirTarefaPorId(id);
+}
+
 /** A tarefa do card que está aberto agora, se tiver algum aberto. */
 function paletaTarefaAberta() {
   if (detailIdx === null || detailIdx === undefined) return null;
@@ -105,6 +128,21 @@ function paletaTarefaAberta() {
 function paletaMontarLinhas(termo) {
   const linhas = [];
   const t = termo.trim();
+
+  // ---------- 0. Colou o link (ou o id) de uma tarefa do Runrun.it ----------
+  // Fica em primeiro, sozinha: é a única coisa que faz sentido fazer com
+  // um link colado, e ninguém pesquisa nada digitando uma URL inteira.
+  const idColado = paletaIdDeLinkOuTexto(t);
+  if (idColado) {
+    linhas.push({
+      grupo: "Abrir do Runrun.it",
+      icone: "link",
+      titulo: "Abrir a tarefa " + idColado,
+      subtitulo: "cola o link do Runrun.it (ou só o número) que ela abre aqui",
+      atalho: "abrir",
+      executar: () => paletaAbrirTarefaPorId(idColado),
+    });
+  }
 
   // ---------- 1. Ações contextuais ----------
   // Só entram na lista quando existe alvo pra elas. Uma ação que não tem
