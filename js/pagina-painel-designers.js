@@ -970,6 +970,83 @@ function pnlFecharModal() {
   pnlAddContexto = null;
 }
 
+/**
+ * Reatribuir atendimento em massa: quando alguém do atendimento sai
+ * (ex: Giovanna) e outra pessoa assume a carteira dela (ex: Vitória), em
+ * vez de editar cliente por cliente (clique no nome do atendimento em
+ * cada card), troca todo mundo de uma vez só aqui.
+ */
+function pnlAbrirModalReatribuir() {
+  const nomesAtuais = new Set();
+  Object.values(pnlState).forEach(lista => {
+    (lista || []).forEach(c => { if (c.atend) nomesAtuais.add(c.atend); });
+  });
+  const opcoes = Array.from(nomesAtuais).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  pnlAddContexto = { tipo: "reatribuir" };
+  document.getElementById("pnlModalTitulo").textContent = "Reatribuir atendimento";
+  document.getElementById("pnlModalCorpo").innerHTML = `
+    <div class="pnl-modal-campo">
+      <label>De (atendimento atual)</label>
+      <select id="pnlReatribuirDe">
+        ${opcoes.length
+          ? opcoes.map(n => `<option value="${escaparHTML(n)}">${escaparHTML(n)}</option>`).join("")
+          : `<option value="">Nenhum atendimento cadastrado ainda</option>`}
+      </select>
+    </div>
+    <div class="pnl-modal-campo">
+      <label>Para (novo atendimento)</label>
+      <input type="text" id="pnlReatribuirPara" placeholder="Ex: Vitória" list="pnlReatribuirParaLista">
+      <datalist id="pnlReatribuirParaLista">
+        ${opcoes.map(n => `<option value="${escaparHTML(n)}">`).join("")}
+      </datalist>
+    </div>
+    <p class="pnl-modal-aviso" id="pnlReatribuirAviso"></p>
+    <div class="pnl-modal-acoes">
+      <button type="button" class="pnl-btn-secundario" id="pnlModalCancelar">Cancelar</button>
+      <button type="button" class="pnl-btn-primario" id="pnlModalConfirmar">Reatribuir</button>
+    </div>
+  `;
+  document.getElementById("pnlModalOverlay").hidden = false;
+  document.getElementById("pnlModalCancelar").addEventListener("click", pnlFecharModal);
+  document.getElementById("pnlModalConfirmar").addEventListener("click", pnlSubmitReatribuir);
+
+  const atualizarAviso = () => {
+    const de = document.getElementById("pnlReatribuirDe").value;
+    const qtd = Object.values(pnlState).reduce((soma, lista) =>
+      soma + (lista || []).filter(c => c.atend === de).length, 0);
+    const aviso = document.getElementById("pnlReatribuirAviso");
+    if (aviso) {
+      aviso.textContent = de
+        ? `${qtd} cliente${qtd === 1 ? "" : "s"} ${qtd === 1 ? "está" : "estão"} com "${de}" hoje.`
+        : "";
+    }
+  };
+  document.getElementById("pnlReatribuirDe")?.addEventListener("change", atualizarAviso);
+  atualizarAviso();
+  document.getElementById("pnlReatribuirPara").focus();
+}
+
+function pnlSubmitReatribuir() {
+  const de = document.getElementById("pnlReatribuirDe").value;
+  const para = document.getElementById("pnlReatribuirPara").value.trim();
+  if (!de) { mostrarToast("Não tem ninguém pra reatribuir ainda.", "erro"); return; }
+  if (!para) { mostrarToast("Escreve o nome de quem vai assumir.", "erro"); return; }
+  if (para === de) { mostrarToast("Já é essa pessoa — escreve outro nome.", "erro"); return; }
+
+  let trocados = 0;
+  Object.values(pnlState).forEach(lista => {
+    (lista || []).forEach(c => {
+      if (c.atend === de) { c.atend = para; trocados++; }
+    });
+  });
+
+  pnlFecharModal();
+  pnlRenderTudo();
+  pnlAgendarSalvar();
+  mostrarToast(`${trocados} cliente${trocados === 1 ? "" : "s"} de "${de}" ${trocados === 1 ? "passou" : "passaram"} pra "${para}".`, "sucesso");
+}
+
 // ===== Modal de tarefas =====
 // Duas formas de abrir: genérica (pnlAbrirTarefasModal — lista simples ou
 // com abas, ex: cliente/designer/Atrasadas) e a de Esforço (pnlAbrirEsforcoModal
@@ -1296,6 +1373,8 @@ function pnlLigarControlesUmaVez() {
       else pnlAbrirModalCliente(null);
     });
   });
+
+  document.getElementById("pnlReatribuirBtn")?.addEventListener("click", pnlAbrirModalReatribuir);
 
   document.getElementById("pnlModalFechar")?.addEventListener("click", pnlFecharModal);
   document.getElementById("pnlModalOverlay")?.addEventListener("click", ev => {
