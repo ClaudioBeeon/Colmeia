@@ -162,6 +162,52 @@ function runrunFetchAll(caminhos) {
   });
 }
 
+/**
+ * Como runrunFetch, mas guarda a resposta no CacheService por alguns
+ * minutos — e o cache é COMPARTILHADO entre todo mundo (é o cache do
+ * script, não de uma pessoa).
+ *
+ * Por que existe (2026-08-13, reclamação do Erick de "1 minuto pra abrir
+ * tarefa"): o Web App roda como USER_DEPLOYING, ou seja, TODOS os pedidos
+ * de TODAS as pessoas entram na mesma fila de execução do Apps Script.
+ * Cada ida ao Runrun.it que a gente economiza aqui é fila que anda mais
+ * rápido pra todo mundo, não só pra quem pediu.
+ *
+ * ⚠️ SÓ para leitura que pode estar alguns minutos velha. NUNCA use isso
+ * pra comentários nem pro cronômetro: os dois têm que ser do segundo
+ * atual, e mostrar comentário velho é pior que demorar.
+ */
+function runrunFetchCacheado(caminho, segundos) {
+  var cache;
+  try {
+    cache = CacheService.getScriptCache();
+  } catch (e) {
+    // Sem cache disponível: segue a vida buscando direto.
+    return runrunFetch(caminho);
+  }
+
+  var chave = 'rrfetch_' + hashTexto(caminho);
+  try {
+    var guardado = cache.get(chave);
+    if (guardado) return JSON.parse(guardado);
+  } catch (e) { /* cache corrompido: busca de novo, sem drama */ }
+
+  var resposta = runrunFetch(caminho);
+  // Não guarda erro: senão um soluço do Runrun.it ficaria grudado pelos
+  // minutos seguintes, transformando uma falha de 1 segundo em 10 minutos
+  // de tela quebrada pra todo mundo.
+  if (resposta && !resposta.erroFetch) {
+    try {
+      var texto = JSON.stringify(resposta);
+      // O CacheService recusa valor acima de ~100KB. Descrição gigante
+      // (com imagem embutida em base64, que acontece) estoura isso — aí
+      // simplesmente não cacheia, em vez de explodir.
+      if (texto.length < 90000) cache.put(chave, texto, segundos || 300);
+    } catch (e) { /* não deu pra guardar: a resposta já está pronta mesmo */ }
+  }
+  return resposta;
+}
+
 function runrunRequest(caminho, metodo, payload, token) {
   var opcoes = {
     method: metodo,
@@ -1384,9 +1430,14 @@ function abrirTarefaParaColmeia(taskId) {
 
   // Rodada 2: a sequência de responsáveis, que só dá pra pedir depois de
   // saber o workflow_id (que veio na tarefa acima).
+  // Cacheada (2026-08-13): a sequência quase nunca muda, e MUITAS tarefas
+  // dividem o mesmo workflow — então o cache de uma pessoa abrindo um card
+  // já economiza a ida ao Runrun.it de todo mundo que abrir outro card do
+  // mesmo fluxo. Quando alguém MEXE na sequência pelo Colmeia, o cache é
+  // limpo na hora (ver esquecerSequenciaCacheada, RunrunEscrita.gs).
   var sequencia = [];
   if (tarefaCrua.workflow_id) {
-    var elementos = runrunFetch('/workflows/' + tarefaCrua.workflow_id + '/workflow_elements');
+    var elementos = runrunFetchCacheado('/workflows/' + tarefaCrua.workflow_id + '/workflow_elements', 600);
     if (Array.isArray(elementos)) {
       sequencia = elementos
         .sort(function (a, b) { return a.order - b.order; })
@@ -1577,7 +1628,7 @@ function buscarSequenciaResponsaveis(taskId) {
     return { ok: true, sequencia: [] };
   }
 
-  var elementos = runrunFetch('/workflows/' + tarefa.workflow_id + '/workflow_elements');
+  var elementos = runrunFetchCacheado('/workflows/' + tarefa.workflow_id + '/workflow_elements', 600);
   if (!Array.isArray(elementos)) {
     return { ok: false, error: 'Resposta inesperada do Runrun.it ao buscar a sequência.' };
   }

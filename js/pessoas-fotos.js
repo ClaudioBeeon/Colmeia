@@ -578,6 +578,19 @@ async function carregarTarefasReais() {
     render();
     verificarNotificacoes();
     atualizarBadgeRepasse();
+    // Com o quadro na tela, começa a buscar em segundo plano o DETALHE das
+    // tarefas de hoje e das atrasadas, pra elas abrirem na hora quando a
+    // pessoa clicar (ver js/cache-tarefas.js). Espera 10 segundos de
+    // propósito: nos primeiros segundos o app ainda está buscando um monte
+    // de coisa (pessoas, clientes, painel...), e entrar na fila do Apps
+    // Script junto com tudo isso atrasaria o que a pessoa está esperando
+    // AGORA pra adiantar o que ela talvez clique daqui a pouco.
+    if (typeof precarregarDetalhesDoDia === "function") {
+      setTimeout(() => {
+        limparDetalhesVelhosDoCache();
+        precarregarDetalhesDoDia();
+      }, 10000);
+    }
   } catch (err) {
     console.error("Falha ao conectar com o backend do Colmeia:", err);
     tasks = tasksFake;

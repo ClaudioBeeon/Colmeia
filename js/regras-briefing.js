@@ -698,6 +698,25 @@ async function gerarBriefingComIA(task) {
   }
 
   try {
+    // Briefing guardado no navegador (ver js/cache-tarefas.js): aparece na
+    // hora e continua sendo conferido por trás. Só preenche se a tarefa
+    // ainda não tem nada na tela — nunca sobrescreve um briefing que já
+    // foi desenhado nesta sessão.
+    if (task.briefingHTML === undefined && typeof lerDetalheDoCache === "function") {
+      try {
+        const guardado = await lerDetalheDoCache(task.id);
+        const elCache = document.getElementById("briefingResult");
+        const taskDaVez = tasks[detailIdx];
+        if (guardado && guardado.briefingHTML && elCache && taskDaVez
+            && String(taskDaVez.id) === String(task.id)) {
+          elCache.innerHTML = guardado.briefingHTML;
+          task.briefingHTML = guardado.briefingHTML;
+          wireBriefingCopyButtons(elCache);
+          wireBriefingVersaoOriginalToggles(elCache);
+        }
+      } catch (err) { /* sem cache: segue no caminho normal */ }
+    }
+
     const data = await chamarBackend({ acao: "gerarBriefing", taskId: task.id });
 
     // Se o usuário já trocou de tarefa enquanto isso carregava, não
@@ -794,6 +813,13 @@ async function gerarBriefingComIA(task) {
     `;
 
     task.briefingHTML = resultEl.innerHTML; // guarda pronto — não perde mais em re-renders (ex: ao dar play)
+    // E também no navegador, pra sobreviver ao F5 e ao dia seguinte.
+    // Só o briefing MONTADO (este caminho de sucesso): as mensagens de
+    // erro e de "sem descrição" acima ficam de fora de propósito, senão
+    // um soluço de hoje viraria "essa tarefa não tem descrição" pra sempre.
+    if (typeof guardarDetalheNoCache === "function") {
+      guardarDetalheNoCache(task.id, { briefingHTML: task.briefingHTML });
+    }
     wireBriefingCopyButtons(resultEl);
     wireBriefingVersaoOriginalToggles(resultEl);
   } catch (err) {

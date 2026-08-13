@@ -114,60 +114,66 @@ arquivos que vêm depois dela na lista — se sim, ou move os dois juntos, ou aj
 Arquivos, na ordem em que são carregados (`js/`):
 1. `config.js` — ícones SVG, `columnsDef`, URLs da API, nomes de meses, avisinhos
    (toast/ilha/pílula) e o painel de diagnóstico (Ctrl+Shift+D).
-2. `fila-offline.js` — `enviarEscritaNoBackend()`: toda ação de escrita que pode chegar
+2. `cache-tarefas.js` — o cache do DETALHE das tarefas no navegador (IndexedDB): guarda o
+   conteúdo do card (`abrirTarefa`), o briefing e o resumo da Bee por 1 dia, e pré-carrega
+   em fila as tarefas de hoje e as atrasadas. Existe porque o Web App roda como
+   `USER_DEPLOYING` — todos os pedidos de todo mundo entram na MESMA fila do Apps Script,
+   e quem clica com a fila cheia espera (relato do Erick, 2026-08-13). É remédio, não cura:
+   a cura é ler do Supabase em vez do Apps Script.
+3. `fila-offline.js` — `enviarEscritaNoBackend()`: toda ação de escrita que pode chegar
    atrasada sem problema passa por aqui. Se a internet estiver fora, fica guardada no
    navegador e vai sozinha quando voltar. Play/pause e avançar/entregar NÃO entram na fila
    de propósito (ver comentário no topo do arquivo).
-3. `notificacoes-uploads.js` — checagem de upload em segundo plano, prompt de "repetir comentário".
-4. `pessoas-fotos.js` — fotos de designers/atendimento, `avatarHTML`, `mapearTarefaDoBackend(t)`
+4. `notificacoes-uploads.js` — checagem de upload em segundo plano, prompt de "repetir comentário".
+5. `pessoas-fotos.js` — fotos de designers/atendimento, `avatarHTML`, `mapearTarefaDoBackend(t)`
    (normaliza dados vindos do backend), `calcularEstimatePct`.
-5. `kanban-polling.js` — `agendarAtualizacaoKanban()`, `atualizarKanbanEmBackground()` (poll do quadro).
-6. `painel-pessoas-clientes.js` — painel de Configurações, abas Pessoas e Clientes.
-7. `regras-briefing.js` — regras de tarefa, geração de briefing por IA (`gerarBriefingComIA`).
-8. `kanban-board.js` — `buildBoard()`, `render()`, `cardHTML()`, drag and drop do quadro.
-9. `clientes-hub.js` — links/hub por cliente (Drive, banco de imagens, etc.).
-10. `chat-comentarios.js` — chat flutuante (`abrirChatPanel`, `abrirThreadAqui`), comentários,
+6. `kanban-polling.js` — `agendarAtualizacaoKanban()`, `atualizarKanbanEmBackground()` (poll do quadro).
+7. `painel-pessoas-clientes.js` — painel de Configurações, abas Pessoas e Clientes.
+8. `regras-briefing.js` — regras de tarefa, geração de briefing por IA (`gerarBriefingComIA`).
+9. `kanban-board.js` — `buildBoard()`, `render()`, `cardHTML()`, drag and drop do quadro.
+10. `clientes-hub.js` — links/hub por cliente (Drive, banco de imagens, etc.).
+11. `chat-comentarios.js` — chat flutuante (`abrirChatPanel`, `abrirThreadAqui`), comentários,
    edição de entrega desejada.
-11. `detalhe-modal.js` — `openDetail(idx)`, `renderDetail()`, `closeDetail()`, `applyCommentsState()`,
+12. `detalhe-modal.js` — `openDetail(idx)`, `renderDetail()`, `closeDetail()`, `applyCommentsState()`,
     a sequência de responsáveis do cabeçalho (`renderSequenciaHTML`/`wireWorkflowArrows`), o menu de
     etapa, o cronômetro de 1s e o modo escuro. (Base do pop-up de detalhe da tarefa.)
-12. `detalhe-cardmae.js` — fluxo do CARD MÃE: `buscarCardMaeDoBackend`, `abrirCardMae`,
+13. `detalhe-cardmae.js` — fluxo do CARD MÃE: `buscarCardMaeDoBackend`, `abrirCardMae`,
     `precarregarCardMaeEmBackground`, aba "Descrição card mãe" e o "carrossel" do pill do cabeçalho
     (entregue → transferir o card mãe → editar a regra dele ali mesmo).
-13. `detalhe-alteracao.js` — subtarefas de ALTERAÇÃO: `ehTarefaDeAlteracao`,
+14. `detalhe-alteracao.js` — subtarefas de ALTERAÇÃO: `ehTarefaDeAlteracao`,
     `acharTarefaOriginalDaAlteracao`, `nomeDaPecaOriginalRapido` (usado no card do quadro),
     `carregarResumoDaAlteracao` (resumo por IA do que mudou) e a aba "Tarefa original".
-14. `bee.js` — a **Bee** no chat da tarefa. O painel de comentários tem dois chats, escolhidos
+15. `bee.js` — a **Bee** no chat da tarefa. O painel de comentários tem dois chats, escolhidos
     pelos ícones do topo: "Comentários" (vai pro Runrun.it) e "Bee" (fica só no Colmeia) — a
     separação é proposital, o pior erro possível seria mandar pro cliente uma pergunta que era pra
     ela. A primeira fala dela é o resumo do que a tarefa pede, com etiqueta de origem clicável em
     cada item (`irParaOrigemDoItem` pula pra mensagem exata e acende ela). **Nada daqui vai pro
     Runrun.it sozinho**: `mandarMensagemProRunrun` só joga o texto no campo pra revisar.
-15. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
+16. `paginas-designers.js` — painel dos designers (tempo médio por cliente), página "Meus clientes"
     e "Clientes por atendimento".
-16. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
-17. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
-18. `pagina-horas.js` — página "Minhas horas" (tem cronômetro próprio de 1s, desligado ao sair).
-19. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
-20. `paleta-comando.js` — a **paleta de comando** (Ctrl+Espaço). Ver seção própria abaixo.
-21. `roteador-url.js` — link direto pra tarefa/página pela URL (`/11503`, `/minhas-horas`). Ver
+17. `pagina-tipos-runrun.js` — página "Tipos de tarefas" e "Runrun completo".
+18. `pagina-repasse.js` — página "Fila de repasse", `mostrarPagina(page)` (troca de página do app).
+19. `pagina-horas.js` — página "Minhas horas" (tem cronômetro próprio de 1s, desligado ao sair).
+20. `notificacoes-avisos.js` — notificações de comentário não lido, avisos do coordenador.
+21. `paleta-comando.js` — a **paleta de comando** (Ctrl+Espaço). Ver seção própria abaixo.
+22. `roteador-url.js` — link direto pra tarefa/página pela URL (`/11503`, `/minhas-horas`). Ver
     seção própria abaixo.
-22. `detalhe-historia.js` — os **eventos do sistema** (criada, começou a trabalhar, arquivo, entregue)
+23. `detalhe-historia.js` — os **eventos do sistema** (criada, começou a trabalhar, arquivo, entregue)
     que alimentam a pílula "Linha do tempo" do painel de comentários. Ver seção própria abaixo.
-23. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
-24. `pagina-bee.js` — a página **Bee** (feed de atividades + o painel de verdade da Bee do lado).
+24. `modo-foco.js` — o **modo foco** (sessão de trabalho por tempo marcado). Ver seção própria abaixo.
+25. `pagina-bee.js` — a página **Bee** (feed de atividades + o painel de verdade da Bee do lado).
     Ver seção própria abaixo.
-25. `pagina-aprovacao.js` — a **aprovação interna do atendimento** (a fila, a conferência, o envio
+26. `pagina-aprovacao.js` — a **aprovação interna do atendimento** (a fila, a conferência, o envio
     e a devolução), mais `pedirAprovacaoDoAtendimento`, o ponto único por onde uma peça entra na
     fila. Ver seção própria abaixo.
-26. `central-atendimento.js` — a **Central do Atendimento** (overlay próprio: abas Hoje, Radar de
+27. `central-atendimento.js` — a **Central do Atendimento** (overlay próprio: abas Hoje, Radar de
     clientes, Aprovações e Minhas métricas, mais o calendário de postagens e o pop-up dos grupos).
-27. `central-atencao.js` — a pílula **"Precisa de atenção"** no rodapé da Timeline da Central e a
+28. `central-atencao.js` — a pílula **"Precisa de atenção"** no rodapé da Timeline da Central e a
     revisão que ela abre. Ver seção própria abaixo.
-28. `pagina-painel-designers.js` — a página **Painel de Designers** (a tela principal do projeto
+29. `pagina-painel-designers.js` — a página **Painel de Designers** (a tela principal do projeto
     irmão painel-designers-beeon, trazida pra dentro do Colmeia) e a aba "Vincular clientes" das
     Configurações do coordenador. Ver seção própria abaixo.
-29. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
+30. `login-boot.js` — tela de login, restaurar sessão salva, ponto de partida do app.
 
 É grande ainda mesmo dividido — usar grep dentro de `js/` em vez de ler um arquivo inteiro quando
 só precisar achar uma função.

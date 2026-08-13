@@ -24,6 +24,7 @@ const path = require("path");
 // Ordem documentada no CLAUDE.md, seção "Estrutura do frontend (js/)".
 const ORDEM_ESPERADA = [
   "js/config.js",
+  "js/cache-tarefas.js",
   "js/fila-offline.js",
   "js/notificacoes-uploads.js",
   "js/pessoas-fotos.js",

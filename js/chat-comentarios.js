@@ -1007,6 +1007,21 @@ async function carregarTudoDaTarefa(task) {
   // fazendo um pedido próprio em paralelo à toa.
   task._abrindoTudo = true;
 
+  // Se essa tarefa já foi vista (ou pré-carregada de manhã, ver
+  // precarregarDetalhesDoDia em js/cache-tarefas.js), desenha o guardado
+  // NA HORA e segue buscando o de verdade por trás — o padrão "mostra o
+  // que tem, confere depois". Sem isso, o card fica em branco durante
+  // toda a espera da fila do Apps Script, que é a reclamação do Erick.
+  if (typeof lerDetalheDoCache === "function") {
+    try {
+      const guardado = await lerDetalheDoCache(taskId);
+      if (guardado && guardado.abrir && tasks[detailIdx]
+          && String(tasks[detailIdx].id) === String(taskId)) {
+        aplicarDadosDaTarefa(task, guardado.abrir, taskId, true);
+      }
+    } catch (err) { /* sem cache: segue no caminho normal */ }
+  }
+
   const data = await chamarBackend({ acao: "abrirTarefa", taskId });
   task._abrindoTudo = false;
 
@@ -1026,16 +1041,43 @@ async function carregarTudoDaTarefa(task) {
     return;
   }
 
+  aplicarDadosDaTarefa(task, data, taskId, false);
+
+  // Guarda pra próxima abertura (dela ou de outro dia). Sem await: o card
+  // já está desenhado, e escrever no banco local não é problema de
+  // ninguém que esteja esperando.
+  if (typeof guardarDetalheNoCache === "function") {
+    guardarDetalheNoCache(taskId, { abrir: data });
+  }
+}
+
+/**
+ * Joga os dados de `abrirTarefa` no card. Existe separado porque roda
+ * DUAS vezes por abertura: uma com o que estava guardado no navegador
+ * (instantâneo) e outra com o que chegou do servidor (a verdade).
+ *
+ * @param {boolean} veioDoCache quando true, os dados podem estar velhos —
+ *   e aí tem coisa que é melhor NÃO mexer (ver o cronômetro abaixo).
+ */
+function aplicarDadosDaTarefa(task, data, taskId, veioDoCache) {
   // Trocou de tarefa enquanto carregava? Compara por id, nunca por
   // referência (bug recorrente do CLAUDE.md).
   const aindaNaMesma = () => tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId);
 
   // --- Cronômetro: nunca deixa o tempo voltar pra trás ---
-  const fresco = mapearTarefaDoBackend(data.tarefa);
-  task.timerSeconds = Math.max(task.timerSeconds || 0, fresco.timerSeconds);
-  task.tempoMedioMinutos = fresco.tempoMedioMinutos;
-  task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
-  task.attachmentsCount = fresco.attachmentsCount;
+  // Do cache, o cronômetro NÃO entra: o tempo é do segundo atual, não de
+  // quando a foto foi tirada. É a mesma lição do snapshot do quadro, que
+  // restaura tudo menos o `running` (ver restaurarSnapshotDoQuadro).
+  // O mapearTarefaDoBackend fica DENTRO deste if de propósito: o resultado
+  // dele só serve aqui, e rodá-lo por fora fazia o desenho instantâneo
+  // inteiro morrer caso o que estivesse guardado viesse capenga.
+  if (!veioDoCache) {
+    const fresco = mapearTarefaDoBackend(data.tarefa);
+    task.timerSeconds = Math.max(task.timerSeconds || 0, fresco.timerSeconds);
+    task.tempoMedioMinutos = fresco.tempoMedioMinutos;
+    task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
+    task.attachmentsCount = fresco.attachmentsCount;
+  }
 
   // --- Sequência de responsáveis ---
   task.sequencia = data.sequencia || [];

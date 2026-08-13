@@ -699,10 +699,24 @@ async function buscarCardMaeDoBackend(taskId) {
  * direto numa etapa normal (ex: "Revisão"), sem passar pela etapa
  * "Card mãe" nem ter sido aberta a partir de uma subtarefa dela.
  */
+// Quais tarefas já têm uma busca de subtarefas EM VOO agora. Desde que a
+// abertura do card passou a acontecer duas vezes (uma com o cache local,
+// outra com a resposta do servidor — ver aplicarDadosDaTarefa em
+// js/chat-comentarios.js), sem isso as duas disparavam a mesma busca e
+// gastavam dois lugares na fila do Apps Script pra trazer a mesma coisa.
+const filhosEmVoo = new Set();
+
 async function carregarFilhosSeForCardMae(task) {
   if (!task.id || task.isMotherCard || task.parentTaskId) return;
   const taskId = task.id;
-  const resultado = await buscarSubtarefasDoCardMaeNoBackend(taskId);
+  if (filhosEmVoo.has(String(taskId))) return;
+  filhosEmVoo.add(String(taskId));
+  let resultado;
+  try {
+    resultado = await buscarSubtarefasDoCardMaeNoBackend(taskId);
+  } finally {
+    filhosEmVoo.delete(String(taskId));
+  }
   if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(taskId)) return; // usuário já trocou de tarefa
   if (!resultado.ok || !resultado.ehCardMae) return;
   tasks[detailIdx].isMotherCard = true;

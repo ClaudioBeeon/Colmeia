@@ -107,17 +107,45 @@ async function carregarBeeDaTarefa(task) {
     const original = typeof acharTarefaOriginalDaAlteracao === "function"
       ? acharTarefaOriginalDaAlteracao(task)
       : null;
+
+    // Se já temos o resumo guardado no navegador (ver js/cache-tarefas.js),
+    // mostra ele NA HORA e segue buscando o de verdade por trás. O resumo
+    // é uma chamada de IA — a espera mais longa do card — e antes ele só
+    // vivia na memória desta aba, sumindo a cada F5.
+    // A CONVERSA (beeHistorico) nunca vem do cache de propósito: ela muda
+    // quando alguém escreve, e conversa velha é pior que conversa lenta.
+    if (!beeResumos.has(taskId) && typeof lerDetalheDoCache === "function") {
+      try {
+        const guardado = await lerDetalheDoCache(taskId);
+        if (guardado && guardado.beeResumo && !beeResumos.has(taskId)) {
+          beeResumos.set(taskId, guardado.beeResumo);
+          if (chatThreadAtivo === "bee" && tasks[detailIdx]
+              && String(tasks[detailIdx].id) === String(taskId)) {
+            desenharThreadBee(tasks[detailIdx]);
+          }
+        }
+      } catch (err) { /* sem cache: segue no caminho normal */ }
+    }
+
     const [resumo, historico] = await Promise.all([
       chamarBackend({ acao: "beeResumo", taskId, idOriginal: original ? original.id : null }),
       chamarBackend({ acao: "beeHistorico", taskId }),
     ]);
 
     if (!resumo || !resumo.ok) {
-      beeResumos.set(taskId, { erro: (resumo && resumo.error) || "Não consegui ler essa tarefa agora." });
+      // Deu erro AGORA, mas se a gente já tinha um resumo guardado, ele
+      // continua valendo mais do que uma mensagem de erro na cara da
+      // pessoa — mesma regra do quadro, que segura a última foto boa.
+      if (!beeResumos.has(taskId)) {
+        beeResumos.set(taskId, { erro: (resumo && resumo.error) || "Não consegui ler essa tarefa agora." });
+      }
     } else if (resumo.semMaterial) {
       beeResumos.set(taskId, { semMaterial: true });
     } else {
       beeResumos.set(taskId, resumo.resumo || { itens: [] });
+      if (typeof guardarDetalheNoCache === "function" && resumo.resumo) {
+        guardarDetalheNoCache(taskId, { beeResumo: resumo.resumo });
+      }
     }
     if (historico && historico.ok) beeConversas.set(taskId, historico.conversa || []);
     else if (!beeConversas.has(taskId)) beeConversas.set(taskId, []);

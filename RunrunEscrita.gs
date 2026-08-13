@@ -36,9 +36,35 @@ function pausarTarefa(taskId, autor) {
   return { ok: true };
 }
 
+/**
+ * Apaga do cache compartilhado uma leitura que acabou de ficar velha
+ * (ver runrunFetchCacheado, RunrunLeitura.gs). Sem isso, quem editasse a
+ * descrição ou a regra veria o valor ANTIGO voltar por alguns minutos —
+ * o clássico "salvei e não mudou nada".
+ */
+function esquecerLeituraCacheada(caminho) {
+  try {
+    CacheService.getScriptCache().remove('rrfetch_' + hashTexto(caminho));
+  } catch (e) { /* sem cache pra limpar, segue */ }
+}
+
+function esquecerDescricaoCacheada(taskId) {
+  esquecerLeituraCacheada('/tasks/' + taskId + '/description');
+}
+
+function esquecerSequenciaCacheada(workflowId) {
+  esquecerLeituraCacheada('/workflows/' + workflowId + '/workflow_elements');
+}
+
 function salvarDescricao(taskId, texto, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
   var token = tokenRunrunDoAutor(autor);
+
+  // Antes de tudo: o que estiver guardado sobre essa descrição já morreu.
+  // Limpa ANTES de escrever (e não depois) porque se a escrita der certo
+  // mas o código quebrar no meio do caminho, é melhor ter cache de menos
+  // do que cache errado.
+  esquecerDescricaoCacheada(taskId);
 
   var tentativa1 = runrunRequest('/tasks/' + taskId + '/description', 'put', { description: texto }, token);
   if (tentativa1.ok) return { ok: true };
@@ -194,6 +220,7 @@ function diagnosticoCriarWorkflowTeste() {
 
 function adicionarPessoaNaRegra(workflowId, userId, autor) {
   if (!workflowId || !userId) return { ok: false, error: 'workflowId ou userId ausente.' };
+  esquecerSequenciaCacheada(workflowId);
   var resultado = runrunRequest('/workflows/' + workflowId + '/workflow_elements', 'post', { user_id: userId }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou adicionar na regra (status ' + resultado.status + ').' };
@@ -203,6 +230,7 @@ function adicionarPessoaNaRegra(workflowId, userId, autor) {
 
 function removerDaRegra(workflowId, elementId, autor) {
   if (!workflowId || !elementId) return { ok: false, error: 'workflowId ou elementId ausente.' };
+  esquecerSequenciaCacheada(workflowId);
   var resultado = runrunRequest('/workflows/' + workflowId + '/workflow_elements/' + elementId, 'delete', null, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou remover da regra (status ' + resultado.status + ').' };

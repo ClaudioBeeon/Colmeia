@@ -218,7 +218,14 @@ function salvarBriefingCacheado(taskId, hash, briefing) {
 function gerarBriefingDaTarefa(taskId) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
 
-  var bruto = runrunFetch('/tasks/' + taskId + '/description');
+  // Cacheada (2026-08-13): esta leitura acontece TODA vez que um card
+  // abre — inclusive quando o briefing já está pronto na aba "Briefings",
+  // porque é a descrição que forma o hash que procura o cache. Ou seja:
+  // era uma ida ao Runrun.it paga sempre, até no caminho mais rápido.
+  // Com o cache, abrir o mesmo card de novo (ou outra pessoa abrindo o
+  // mesmo card) não paga mais nada. Escrever descrição pelo Colmeia limpa
+  // isso na hora (ver esquecerDescricaoCacheada, RunrunEscrita.gs).
+  var bruto = runrunFetchCacheado('/tasks/' + taskId + '/description', 300);
   var descricaoHtml = '';
   if (typeof bruto === 'string') {
     descricaoHtml = bruto;
