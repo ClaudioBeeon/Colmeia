@@ -231,6 +231,72 @@ function criarPastaDoCardNoDrive(cliente, tituloCard, taskId, projeto) {
   }
 }
 
+// 30 dias: dá conta de qualquer atraso normal entre subir a peça e mandar
+// pra revisão, sem virar uma varredura que pega arquivo velho de outro
+// card do mesmo mês só porque o nome parece com o de agora.
+var PUBLICACOES_SOLTAS_JANELA_DIAS = 30;
+
+/**
+ * Arquivos soltos na pasta de Publicações do cliente (ano/mês, não a
+ * pasta específica do card) cujo nome tem a ver com o título da tarefa —
+ * fallback pra quando o designer subiu a peça direto ali em vez de usar
+ * "Criar pasta do card" (2026-08-13, pedido do Cláudio: "às vezes o
+ * designer criou a pasta fora"). Chamado só quando a pasta do card não
+ * tem nada — ver listarVersoesDasPecasSemCache, AprovacaoInterna.gs.
+ *
+ * Mesmo filtro por nome do caminho do Erick
+ * (mandarPastaDoErickParaConferencia, AprovacaoInterna.gs): só entra
+ * arquivo cujo nome-base bate com o título da tarefa, senão pegaria peça
+ * de QUALQUER outro card do mesmo cliente no mesmo mês. E só arquivo
+ * RECENTE (ver PUBLICACOES_SOLTAS_JANELA_DIAS) — sem isso um nome
+ * genérico ("Feed", "Stories") acharia arquivo de um card antigo,
+ * completamente sem relação.
+ */
+function arquivosSoltosNaPublicacoesDoCliente(cliente, tituloTarefa, projeto) {
+  if (!cliente || !tituloTarefa) return [];
+  try {
+    var beeonFolder = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
+    var clientesFolder = (beeonFolder.getName() === 'Clientes') ? beeonFolder : getSubfolderPorNome(beeonFolder, 'Clientes');
+    if (!clientesFolder) return [];
+    var pastaCliente = acharPastaDoCliente(clientesFolder, cliente);
+    if (!pastaCliente) return [];
+    var pastaPublicacoes = acharPastaDePublicacoesDoCliente(pastaCliente, cliente);
+    if (!pastaPublicacoes) return [];
+
+    // Mesma conta de ano/mês de criarPastaDoCardNoDrive: usa o mês do
+    // projeto (campo [MAIO26] etc.) quando dá, senão o mês de hoje.
+    var agora = new Date();
+    var mesDoProjeto = extrairMesAnoDoProjeto(projeto);
+    var ano = String(mesDoProjeto ? mesDoProjeto.ano : agora.getFullYear());
+    var mesIndex = mesDoProjeto ? mesDoProjeto.mesIndex : agora.getMonth();
+    var pastaAno = getSubfolderParecida(pastaPublicacoes, ano);
+    if (!pastaAno) return [];
+    var pastaMes = getSubfolderParecida(pastaAno, MESES_PT[mesIndex]);
+    if (!pastaMes) return [];
+
+    var corte = agora.getTime() - PUBLICACOES_SOLTAS_JANELA_DIAS * 24 * 60 * 60 * 1000;
+    var alvoNormalizado = normalizarNomeParaComparar(tituloTarefa);
+    var achados = [];
+    var arquivos = pastaMes.getFiles();
+    while (arquivos.hasNext()) {
+      var arq = arquivos.next();
+      if (!ehTipoDePecaAceito(arq.getMimeType())) continue;
+      var atualizadoEm = arq.getLastUpdated().getTime();
+      if (atualizadoEm < corte) continue;
+      var nome = arq.getName();
+      var base = typeof nomeBaseDaPeca === 'function' ? nomeBaseDaPeca(nome) : nome;
+      var baseNormalizada = normalizarNomeParaComparar(base);
+      var bate = alvoNormalizado && baseNormalizada &&
+        (alvoNormalizado.indexOf(baseNormalizada) !== -1 || baseNormalizada.indexOf(alvoNormalizado) !== -1);
+      if (!bate) continue;
+      achados.push({ fileId: arq.getId(), nome: nome, mimeType: arq.getMimeType(), atualizadoEm: atualizadoEm });
+    }
+    return achados;
+  } catch (e) {
+    return [];
+  }
+}
+
 /**
  * Vincula manualmente a pasta certa do Drive numa tarefa — pra quando a
  * detecção/criação automática (criarPastaDoCardNoDrive) erra o caminho

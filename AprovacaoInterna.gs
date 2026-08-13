@@ -264,47 +264,18 @@ function invalidarCacheDeVersoesDasPecas(taskId) {
   } catch (e) { /* sem cache pra limpar */ }
 }
 
-function listarVersoesDasPecasSemCache(taskId) {
-  var pastaInfo = buscarPastaSalvaDoCard(taskId);
-  if (!pastaInfo.ok || !pastaInfo.url) {
-    // Designer que não usa o Colmeia (o Erick, que ainda cola o link do
-    // Drive num comentário do Runrun.it) nunca clica em "Criar pasta do
-    // card" -- não existe pasta vinculada e por esse caminho nunca vai
-    // existir. Mas se a peça já está na fila de conferência, a automação
-    // (verificarLinksDoErickNoRunrun, mais abaixo neste arquivo) já achou
-    // o arquivo certo no Drive e gravou o file_id na hora -- monta a
-    // lista a partir DESSA linha, sem escanear pasta nenhuma.
-    var pelaFila = listarVersoesDasPecasPelaFila(taskId);
-    if (pelaFila.ok && pelaFila.pecas.length) return pelaFila;
-    return { ok: false, error: 'Essa tarefa ainda não tem uma pasta do card vinculada no Drive. Crie a pasta do card primeiro.' };
-  }
-
-  var pasta;
-  try {
-    pasta = DriveApp.getFolderById(extrairIdDeUrlDrive(pastaInfo.url));
-  } catch (e) {
-    return { ok: false, error: 'Não consegui acessar a pasta do card no Drive.' };
-  }
-
+/** Agrupa uma lista crua de arquivos {fileId,nome,mimeType,atualizadoEm} em peças (mesma lógica de sempre). */
+function agruparArquivosEmPecas(arquivosCrus) {
   var grupos = {};
-  var arquivos = pasta.getFiles();
-  while (arquivos.hasNext()) {
-    var arq = arquivos.next();
-    var tipo = arq.getMimeType();
-    if (!ehTipoDePecaAceito(tipo)) continue;
-    var nome = arq.getName();
-    var base = nomeBaseDaPeca(nome);
+  arquivosCrus.forEach(function (arq) {
+    var base = nomeBaseDaPeca(arq.nome);
     if (!grupos[base]) grupos[base] = [];
     grupos[base].push({
-      fileId: arq.getId(),
-      nome: nome,
-      mimeType: tipo,
-      versao: versaoDoArquivo(nome),
-      atualizadoEm: arq.getLastUpdated().getTime()
+      fileId: arq.fileId, nome: arq.nome, mimeType: arq.mimeType,
+      versao: versaoDoArquivo(arq.nome), atualizadoEm: arq.atualizadoEm
     });
-  }
-
-  var pecas = Object.keys(grupos).map(function (base) {
+  });
+  return Object.keys(grupos).map(function (base) {
     var versoes = grupos[base];
     // Sem "- vN" no nome, a ordem de subida é a única noção de versão que
     // existe — por isso o desempate é pela data do arquivo.
@@ -316,17 +287,66 @@ function listarVersoesDasPecasSemCache(taskId) {
     // versão nenhuma: o seletor precisa de algo pra mostrar de qualquer
     // jeito, e "v1/v2" pela ordem de subida é honesto.
     versoes.forEach(function (v, i) { v.ordem = i + 1; });
-    return {
-      nomePeca: base,
-      versoes: versoes,
-      ultima: versoes[versoes.length - 1]
-    };
+    return { nomePeca: base, versoes: versoes, ultima: versoes[versoes.length - 1] };
   });
+}
 
-  juntarVersoesDoStorage(pecas);
+function listarVersoesDasPecasSemCache(taskId) {
+  var pastaInfo = buscarPastaSalvaDoCard(taskId);
+  var pecas = [];
 
-  pecas.sort(function (a, b) { return b.ultima.atualizadoEm - a.ultima.atualizadoEm; });
-  return { ok: true, pecas: pecas, pastaUrl: pastaInfo.url };
+  if (pastaInfo.ok && pastaInfo.url) {
+    var pasta;
+    try {
+      pasta = DriveApp.getFolderById(extrairIdDeUrlDrive(pastaInfo.url));
+    } catch (e) {
+      return { ok: false, error: 'Não consegui acessar a pasta do card no Drive.' };
+    }
+    var arquivosCrus = [];
+    var arquivos = pasta.getFiles();
+    while (arquivos.hasNext()) {
+      var arq = arquivos.next();
+      if (!ehTipoDePecaAceito(arq.getMimeType())) continue;
+      arquivosCrus.push({ fileId: arq.getId(), nome: arq.getName(), mimeType: arq.getMimeType(), atualizadoEm: arq.getLastUpdated().getTime() });
+    }
+    pecas = agruparArquivosEmPecas(arquivosCrus);
+  }
+
+  if (pecas.length) {
+    juntarVersoesDoStorage(pecas);
+    pecas.sort(function (a, b) { return b.ultima.atualizadoEm - a.ultima.atualizadoEm; });
+    return { ok: true, pecas: pecas, pastaUrl: pastaInfo.url };
+  }
+
+  // Pasta do card sem nada (ou sem pasta nenhuma vinculada) -- dois
+  // fallbacks, nessa ordem:
+  //
+  // 1. A fila de conferência (caso do Erick: nunca abre o Colmeia, nunca
+  //    tem pasta do card, a automação já achou o arquivo e gravou o
+  //    file_id na hora -- ver o comentário de listarVersoesDasPecasPelaFila).
+  var pelaFila = listarVersoesDasPecasPelaFila(taskId);
+  if (pelaFila.ok && pelaFila.pecas.length) return pelaFila;
+
+  // 2. Solto na pasta de Publicações do cliente, não na pasta específica
+  //    do card (2026-08-13, pedido do Cláudio: "às vezes o designer criou
+  //    a pasta fora"). Precisa de cliente/título/projeto, que essa função
+  //    não recebe -- busca a tarefa no Runrun.it só quando chega até aqui
+  //    (os dois caminhos rápidos de cima não pagam esse custo).
+  var tarefa = runrunFetch('/tasks/' + taskId);
+  if (tarefa && !tarefa.erroFetch) {
+    var arquivosSoltos = arquivosSoltosNaPublicacoesDoCliente(tarefa.client_name, tarefa.title, extrairNomeProjeto(tarefa));
+    var pecasSoltas = agruparArquivosEmPecas(arquivosSoltos);
+    if (pecasSoltas.length) {
+      juntarVersoesDoStorage(pecasSoltas);
+      pecasSoltas.sort(function (a, b) { return b.ultima.atualizadoEm - a.ultima.atualizadoEm; });
+      return { ok: true, pecas: pecasSoltas, pastaUrl: pastaInfo.url || '' };
+    }
+  }
+
+  if (!pastaInfo.ok || !pastaInfo.url) {
+    return { ok: false, error: 'Essa tarefa ainda não tem uma pasta do card vinculada no Drive. Crie a pasta do card primeiro.' };
+  }
+  return { ok: false, error: 'Não encontrei nenhuma imagem ou vídeo pra essa tarefa — nem na pasta do card, nem solto na pasta de Publicações do cliente.' };
 }
 
 /**
