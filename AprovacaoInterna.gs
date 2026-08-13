@@ -334,12 +334,21 @@ function listarVersoesDasPecasSemCache(taskId) {
   //    (os dois caminhos rápidos de cima não pagam esse custo).
   var tarefa = runrunFetch('/tasks/' + taskId);
   if (tarefa && !tarefa.erroFetch) {
-    var arquivosSoltos = arquivosSoltosNaPublicacoesDoCliente(tarefa.client_name, tarefa.title, extrairNomeProjeto(tarefa));
-    var pecasSoltas = agruparArquivosEmPecas(arquivosSoltos);
+    var encontrado = arquivosSoltosNaPublicacoesDoCliente(tarefa.client_name, tarefa.title, extrairNomeProjeto(tarefa));
+    var pecasSoltas = agruparArquivosEmPecas(encontrado.arquivos);
     if (pecasSoltas.length) {
+      // Achou uma pasta com o nome da tarefa (o caso mais comum: o
+      // designer criou ela na mão) e a tarefa não tinha NENHUMA pasta
+      // vinculada ainda -- vincula de vez, então da próxima vez isso nem
+      // passa pelo fallback: vira o caminho rápido normal. Só quando não
+      // tinha nada salvo antes, pra nunca substituir por baixo dos panos
+      // uma pasta que alguém já vinculou de propósito.
+      if (encontrado.pastaEncontradaUrl && (!pastaInfo.ok || !pastaInfo.url)) {
+        salvarPastaDoCard(taskId, encontrado.pastaEncontradaUrl);
+      }
       juntarVersoesDoStorage(pecasSoltas);
       pecasSoltas.sort(function (a, b) { return b.ultima.atualizadoEm - a.ultima.atualizadoEm; });
-      return { ok: true, pecas: pecasSoltas, pastaUrl: pastaInfo.url || '' };
+      return { ok: true, pecas: pecasSoltas, pastaUrl: encontrado.pastaEncontradaUrl || pastaInfo.url || '' };
     }
   }
 

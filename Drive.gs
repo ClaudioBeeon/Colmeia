@@ -237,31 +237,61 @@ function criarPastaDoCardNoDrive(cliente, tituloCard, taskId, projeto) {
 var PUBLICACOES_SOLTAS_JANELA_DIAS = 30;
 
 /**
- * Arquivos soltos na pasta de Publicações do cliente (ano/mês, não a
- * pasta específica do card) cujo nome tem a ver com o título da tarefa —
- * fallback pra quando o designer subiu a peça direto ali em vez de usar
- * "Criar pasta do card" (2026-08-13, pedido do Cláudio: "às vezes o
- * designer criou a pasta fora"). Chamado só quando a pasta do card não
+ * Acha uma SUBpasta cujo nome tem a ver com `nomeAlvo` — parecido com
+ * `getSubfolderParecida`, mas por CONTÉM (nos dois sentidos), não só
+ * igualdade exata. Existe pra achar a pasta que o designer criou na mão
+ * com o nome da tarefa, mesmo com um sufixo/prefixo a mais (ex: pasta
+ * "Feed Instagram - Ajuste" pro título "Feed Instagram").
+ */
+function acharSubpastaComNomeParecido(pastaMae, nomeAlvo) {
+  var alvo = normalizarNomeParaComparar(nomeAlvo);
+  if (!alvo) return null;
+  var pastas = pastaMae.getFolders();
+  while (pastas.hasNext()) {
+    var p = pastas.next();
+    var nome = normalizarNomeParaComparar(p.getName());
+    if (nome && (nome.indexOf(alvo) !== -1 || alvo.indexOf(nome) !== -1)) return p;
+  }
+  return null;
+}
+
+/**
+ * Peça(s) soltas na pasta de Publicações do cliente (ano/mês), pra
+ * quando o designer subiu o arquivo direto ali em vez de usar "Criar
+ * pasta do card" (2026-08-13, pedido do Cláudio: "às vezes o designer
+ * criou a pasta fora"). Chamado só quando a pasta do card vinculada não
  * tem nada — ver listarVersoesDasPecasSemCache, AprovacaoInterna.gs.
  *
- * Mesmo filtro por nome do caminho do Erick
- * (mandarPastaDoErickParaConferencia, AprovacaoInterna.gs): só entra
- * arquivo cujo nome-base bate com o título da tarefa, senão pegaria peça
- * de QUALQUER outro card do mesmo cliente no mesmo mês. E só arquivo
- * RECENTE (ver PUBLICACOES_SOLTAS_JANELA_DIAS) — sem isso um nome
- * genérico ("Feed", "Stories") acharia arquivo de um card antigo,
- * completamente sem relação.
+ * DUAS tentativas, nessa ordem — a primeira é o caso mais comum:
+ *
+ * 1. Uma SUBPASTA dentro do ano/mês com o nome da tarefa. Na prática é o
+ *    que a maioria faz: cria a pasta na mão com o nome do card (só não
+ *    usou o botão do Colmeia pra isso), e dentro dela pode ter qualquer
+ *    nome de arquivo — não precisa bater com o título. Achando essa
+ *    pasta, ela é DEVOLVIDA junto (`pastaEncontradaUrl`): quem chama
+ *    aproveita pra vincular ela como "pasta do card" de vez
+ *    (`salvarPastaDoCard`), então da próxima vez nem precisa cair aqui.
+ * 2. Arquivo solto direto no ano/mês (sem pasta nenhuma), cujo nome-base
+ *    bate com o título da tarefa — mesmo filtro anti-contaminação do
+ *    caminho do Erick (mandarPastaDoErickParaConferencia,
+ *    AprovacaoInterna.gs): sem ele pegaria peça de QUALQUER outro card
+ *    do mesmo cliente no mesmo mês.
+ *
+ * Nos dois casos, só conta arquivo RECENTE (ver
+ * PUBLICACOES_SOLTAS_JANELA_DIAS) — sem isso um nome genérico ("Feed",
+ * "Stories") acharia peça de um card antigo, sem relação nenhuma com o
+ * pedido de agora.
  */
 function arquivosSoltosNaPublicacoesDoCliente(cliente, tituloTarefa, projeto) {
-  if (!cliente || !tituloTarefa) return [];
+  if (!cliente || !tituloTarefa) return { arquivos: [], pastaEncontradaUrl: null };
   try {
     var beeonFolder = DriveApp.getFolderById(ROOT_FOLDER_ID_DRIVE);
     var clientesFolder = (beeonFolder.getName() === 'Clientes') ? beeonFolder : getSubfolderPorNome(beeonFolder, 'Clientes');
-    if (!clientesFolder) return [];
+    if (!clientesFolder) return { arquivos: [], pastaEncontradaUrl: null };
     var pastaCliente = acharPastaDoCliente(clientesFolder, cliente);
-    if (!pastaCliente) return [];
+    if (!pastaCliente) return { arquivos: [], pastaEncontradaUrl: null };
     var pastaPublicacoes = acharPastaDePublicacoesDoCliente(pastaCliente, cliente);
-    if (!pastaPublicacoes) return [];
+    if (!pastaPublicacoes) return { arquivos: [], pastaEncontradaUrl: null };
 
     // Mesma conta de ano/mês de criarPastaDoCardNoDrive: usa o mês do
     // projeto (campo [MAIO26] etc.) quando dá, senão o mês de hoje.
@@ -270,11 +300,30 @@ function arquivosSoltosNaPublicacoesDoCliente(cliente, tituloTarefa, projeto) {
     var ano = String(mesDoProjeto ? mesDoProjeto.ano : agora.getFullYear());
     var mesIndex = mesDoProjeto ? mesDoProjeto.mesIndex : agora.getMonth();
     var pastaAno = getSubfolderParecida(pastaPublicacoes, ano);
-    if (!pastaAno) return [];
+    if (!pastaAno) return { arquivos: [], pastaEncontradaUrl: null };
     var pastaMes = getSubfolderParecida(pastaAno, MESES_PT[mesIndex]);
-    if (!pastaMes) return [];
+    if (!pastaMes) return { arquivos: [], pastaEncontradaUrl: null };
 
     var corte = agora.getTime() - PUBLICACOES_SOLTAS_JANELA_DIAS * 24 * 60 * 60 * 1000;
+
+    // Tentativa 1: subpasta com o nome da tarefa.
+    var pastaDaTarefa = acharSubpastaComNomeParecido(pastaMes, tituloTarefa);
+    if (pastaDaTarefa) {
+      var achadosNaSubpasta = [];
+      var arquivosDaSubpasta = pastaDaTarefa.getFiles();
+      while (arquivosDaSubpasta.hasNext()) {
+        var arqSub = arquivosDaSubpasta.next();
+        if (!ehTipoDePecaAceito(arqSub.getMimeType())) continue;
+        var quandoSub = arqSub.getLastUpdated().getTime();
+        if (quandoSub < corte) continue;
+        // Aqui NÃO filtra por nome do arquivo — a pasta já É a peça certa,
+        // pelo próprio nome dela.
+        achadosNaSubpasta.push({ fileId: arqSub.getId(), nome: arqSub.getName(), mimeType: arqSub.getMimeType(), atualizadoEm: quandoSub });
+      }
+      if (achadosNaSubpasta.length) return { arquivos: achadosNaSubpasta, pastaEncontradaUrl: pastaDaTarefa.getUrl() };
+    }
+
+    // Tentativa 2: arquivo solto direto no mês, nome batendo com o título.
     var alvoNormalizado = normalizarNomeParaComparar(tituloTarefa);
     var achados = [];
     var arquivos = pastaMes.getFiles();
@@ -291,9 +340,9 @@ function arquivosSoltosNaPublicacoesDoCliente(cliente, tituloTarefa, projeto) {
       if (!bate) continue;
       achados.push({ fileId: arq.getId(), nome: nome, mimeType: arq.getMimeType(), atualizadoEm: atualizadoEm });
     }
-    return achados;
+    return { arquivos: achados, pastaEncontradaUrl: null };
   } catch (e) {
-    return [];
+    return { arquivos: [], pastaEncontradaUrl: null };
   }
 }
 
