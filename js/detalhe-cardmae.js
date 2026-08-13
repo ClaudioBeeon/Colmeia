@@ -647,22 +647,66 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
   const prevBtn = face.querySelector("#navPrevArrow");
   if (prevBtn) {
     prevBtn.addEventListener("click", async () => {
+      // Mesma trava/mesmo conserto do pill da tarefa aberta (2026-08-13,
+      // relatado pelo Cláudio nesse exato fluxo — "transferir o card mãe
+      // ali dentro do pill"): a tela mudava só DEPOIS de esperar o
+      // backend, então ficava parada por segundos parecendo travada; e um
+      // segundo clique durante essa espera nem tinha trava nenhuma. Ver o
+      // comentário grande em wireWorkflowArrows, js/detalhe-modal.js.
+      if (cardMaeTask._sequenciaAcaoEmAndamento) return;
+      cardMaeTask._sequenciaAcaoEmAndamento = true;
       prevBtn.disabled = true;
-      await pararCronometroAoTransferir(cardMaeTask);
-      const novoResponsavel = await desfazerWorkflowNoBackend(cardMaeTask.id);
+
+      // Muda a tela JÁ, antes de qualquer `await`.
+      if (cardMaeTask.sequencia && cardMaeTask.sequencia.length) {
+        const atualIdx = cardMaeTask.sequencia.findIndex(s => s.atual);
+        if (atualIdx > 0) {
+          cardMaeTask.sequencia[atualIdx].atual = false;
+          cardMaeTask.sequencia[atualIdx - 1].atual = true;
+          cardMaeTask.sequencia[atualIdx - 1].concluido = false;
+          rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+          const seqEl = document.getElementById("pillCardMaeSeq");
+          if (seqEl) animarMudancaDaSequencia(seqEl);
+        }
+      }
+
+      const [, novoResponsavel] = await Promise.all([
+        pararCronometroAoTransferir(cardMaeTask),
+        desfazerWorkflowNoBackend(cardMaeTask.id),
+      ]);
       if (novoResponsavel) { cardMaeTask.assignee = novoResponsavel; agendarAtualizacaoKanban(); }
       await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
+      cardMaeTask._sequenciaAcaoEmAndamento = false;
     });
   }
   const nextBtn = face.querySelector("#navNextArrow");
   if (nextBtn) {
     nextBtn.addEventListener("click", async () => {
+      if (cardMaeTask._sequenciaAcaoEmAndamento) return;
+      cardMaeTask._sequenciaAcaoEmAndamento = true;
       nextBtn.disabled = true;
-      await pararCronometroAoTransferir(cardMaeTask);
-      const resultadoAvanco = await avancarWorkflowNoBackend(cardMaeTask.id);
+
+      // Muda a tela JÁ, antes de qualquer `await`.
+      if (cardMaeTask.sequencia && cardMaeTask.sequencia.length) {
+        const atualIdx = cardMaeTask.sequencia.findIndex(s => s.atual);
+        if (atualIdx !== -1 && atualIdx < cardMaeTask.sequencia.length - 1) {
+          cardMaeTask.sequencia[atualIdx].atual = false;
+          cardMaeTask.sequencia[atualIdx].concluido = true;
+          cardMaeTask.sequencia[atualIdx + 1].atual = true;
+          rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+          const seqEl = document.getElementById("pillCardMaeSeq");
+          if (seqEl) animarMudancaDaSequencia(seqEl);
+        }
+      }
+
+      const [, resultadoAvanco] = await Promise.all([
+        pararCronometroAoTransferir(cardMaeTask),
+        avancarWorkflowNoBackend(cardMaeTask.id),
+      ]);
       if (resultadoAvanco.novoResponsavel) { cardMaeTask.assignee = resultadoAvanco.novoResponsavel; agendarAtualizacaoKanban(); }
       if (!resultadoAvanco.ok) mostrarToast("Não consegui avançar a sequência do card mãe agora.", "erro");
       await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
+      cardMaeTask._sequenciaAcaoEmAndamento = false;
     });
   }
   const addPersonBtn = face.querySelector("#navAddPersonBtn");
@@ -672,15 +716,19 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
   const deliverBtn = face.querySelector("#navDeliverBtn");
   if (deliverBtn && !cardMaeTask.entregue) {
     deliverBtn.addEventListener("click", async () => {
+      if (cardMaeTask._sequenciaAcaoEmAndamento) return;
+      cardMaeTask._sequenciaAcaoEmAndamento = true;
       deliverBtn.disabled = true;
-      await pararCronometroAoTransferir(cardMaeTask);
-      let ok;
-      if (cardMaeTask.sequencia && cardMaeTask.sequencia.length > 0) {
-        const resultadoAvanco = await avancarWorkflowNoBackend(cardMaeTask.id);
-        ok = resultadoAvanco.ok;
-      } else {
-        ok = await entregarTarefaNoBackend(cardMaeTask.id);
-      }
+      // Pausar o cronômetro e entregar/avançar de verdade correm juntos
+      // (não um esperando o outro) — mesmo conserto de velocidade do
+      // avançar/desfazer acima.
+      const temSequencia = cardMaeTask.sequencia && cardMaeTask.sequencia.length > 0;
+      const [, ok] = await Promise.all([
+        pararCronometroAoTransferir(cardMaeTask),
+        temSequencia
+          ? avancarWorkflowNoBackend(cardMaeTask.id).then(r => r.ok)
+          : entregarTarefaNoBackend(cardMaeTask.id),
+      ]);
       if (ok) {
         mostrarToast("Card mãe entregue.");
         esconderFluxoCardMaeNoPill();
@@ -689,6 +737,7 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
         deliverBtn.disabled = false;
         mostrarToast("Não consegui entregar o card mãe agora.", "erro");
       }
+      cardMaeTask._sequenciaAcaoEmAndamento = false;
     });
   }
 }
