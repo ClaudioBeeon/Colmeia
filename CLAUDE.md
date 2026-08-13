@@ -1764,6 +1764,21 @@ Três camadas já feitas, todas **remédio, não cura**:
 3. **Polls só com a aba à vista** (`podeBaterNoBackendAgora`, js/config.js) — quadro (60s), avisos
    (5min), reuniões (3min) e painel-beeon (5min) param com a aba escondida e voltam no
    `visibilitychange`. Vale **só pro automático**: nada que a pessoa pediu passa por essa trava.
+4. **Fim do waterfall do card mãe** (`abrirCardMaeCompleto`, RunrunLeitura.gs) — eram QUATRO idas
+   do navegador em fila (`buscarCardMae` → `listarComentarios` → `buscarSequencia` →
+   `buscarDescricao`), sendo que as três últimas usam o mesmo id e não dependem uma da outra.
+   Agora é UMA ida, com as buscas ao Runrun.it em lote. `montarResumoSubtarefas` também parou de
+   buscar filha por filha (era `.map` com `runrunFetch` dentro: 8 subtarefas = 8 idas em
+   sequência). As chamadas antigas continuam existindo — são usadas em outros lugares e são a
+   **reserva** se o backend publicado ainda não conhecer a ação nova.
+5. **Passar o mouse já prepara** (`prepararTarefaAoPassarOMouse`, js/cache-tarefas.js) — cobre o
+   que a fila da manhã não pega (tarefa futura, tarefa recém-chegada). Espera 180ms de mouse
+   PARADO antes de buscar: sem isso, atravessar o quadro com o mouse viraria dezenas de pedidos.
+   Uma por vez, e nada com a aba escondida.
+
+⚠️ **Ao mexer na abertura do card, cuidado com o waterfall voltando.** O `abrirTarefa` e o
+`abrirCardMaeCompleto` existem justamente pra juntar o que era separado. Uma busca nova em
+`openDetail` que espere outra terminar custa um lugar a mais na fila, em sequência, pra todo mundo.
 
 **A cura seria ler do Supabase em vez do Apps Script — e ela NÃO está pronta pra fazer.** Duas
 barreiras reais, medidas em 2026-08-13:
@@ -1793,6 +1808,13 @@ perguntas que ela responde: "é a fila ou é a internet do Erick?" e "o cache re
 
 Nunca derruba o app: PostHog bloqueado, quebrado ou sem `capture` só faz a medição não acontecer
 (testado nos três casos).
+
+**O evento irmão: `cache_tarefa`** (`medirOrigemDoDado`, js/cache-tarefas.js). O `backend_chamada`
+diz quanto um pedido demorou, mas não diz se ele foi *preciso* — ou seja, sozinho ele não responde
+"o cache está funcionando?". Este responde: `parte` (`card`, `briefing`, `resumo_bee`) e `origem`
+(`cache` = apareceu na hora / `servidor` = esperou a fila). **A proporção cache/servidor é o número
+que diz se o pré-carregamento está pegando** — se estiver quase tudo em "servidor", a fila da manhã
+ou o hover não estão alcançando o que as pessoas realmente abrem.
 
 ## Monitoramento: erros e uso das telas (2026-08-10)
 

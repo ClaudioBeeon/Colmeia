@@ -324,6 +324,19 @@ function attachCardDragHandlers() {
     });
     card.addEventListener("dragend", () => card.classList.remove("dragging"));
     card.addEventListener("click", () => openDetail(card.dataset.idx));
+
+    // Parou o mouse em cima? Já vai preparando o conteúdo do card, pra o
+    // clique abrir na hora (ver prepararTarefaAoPassarOMouse,
+    // js/cache-tarefas.js — ele espera a pessoa PARAR antes de buscar
+    // nada, senão atravessar o quadro com o mouse viraria uma enxurrada
+    // de pedidos).
+    if (typeof prepararTarefaAoPassarOMouse === "function") {
+      card.addEventListener("mouseenter", () => {
+        const t = tasks[card.dataset.idx];
+        if (t && t.id) prepararTarefaAoPassarOMouse(t.id);
+      });
+      card.addEventListener("mouseleave", cancelarPreparoAoSairDoCard);
+    }
   });
 
   // ===== Menu de prioridade =====

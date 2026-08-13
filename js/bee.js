@@ -117,6 +117,9 @@ async function carregarBeeDaTarefa(task) {
     if (!beeResumos.has(taskId) && typeof lerDetalheDoCache === "function") {
       try {
         const guardado = await lerDetalheDoCache(taskId);
+        if (typeof medirOrigemDoDado === "function") {
+          medirOrigemDoDado("resumo_bee", guardado && guardado.beeResumo ? "cache" : "servidor");
+        }
         if (guardado && guardado.beeResumo && !beeResumos.has(taskId)) {
           beeResumos.set(taskId, guardado.beeResumo);
           if (chatThreadAtivo === "bee" && tasks[detailIdx]

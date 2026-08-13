@@ -707,6 +707,9 @@ async function gerarBriefingComIA(task) {
         const guardado = await lerDetalheDoCache(task.id);
         const elCache = document.getElementById("briefingResult");
         const taskDaVez = tasks[detailIdx];
+        if (typeof medirOrigemDoDado === "function") {
+          medirOrigemDoDado("briefing", guardado && guardado.briefingHTML ? "cache" : "servidor");
+        }
         if (guardado && guardado.briefingHTML && elCache && taskDaVez
             && String(taskDaVez.id) === String(task.id)) {
           elCache.innerHTML = guardado.briefingHTML;

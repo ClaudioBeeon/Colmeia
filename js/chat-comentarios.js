@@ -1012,14 +1012,21 @@ async function carregarTudoDaTarefa(task) {
   // NA HORA e segue buscando o de verdade por trás — o padrão "mostra o
   // que tem, confere depois". Sem isso, o card fica em branco durante
   // toda a espera da fila do Apps Script, que é a reclamação do Erick.
+  let _veioDoCache = false;
   if (typeof lerDetalheDoCache === "function") {
     try {
       const guardado = await lerDetalheDoCache(taskId);
       if (guardado && guardado.abrir && tasks[detailIdx]
           && String(tasks[detailIdx].id) === String(taskId)) {
         aplicarDadosDaTarefa(task, guardado.abrir, taskId, true);
+        _veioDoCache = true;
       }
     } catch (err) { /* sem cache: segue no caminho normal */ }
+  }
+  // "cache" = a pessoa viu o card na hora; "servidor" = teve que esperar
+  // a fila. É esta proporção que diz se o pré-carregamento está pegando.
+  if (typeof medirOrigemDoDado === "function") {
+    medirOrigemDoDado("card", _veioDoCache ? "cache" : "servidor");
   }
 
   const data = await chamarBackend({ acao: "abrirTarefa", taskId });

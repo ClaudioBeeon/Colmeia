@@ -1555,9 +1555,21 @@ function buscarTarefaCompleta(taskId) {
   };
 }
 
+/**
+ * O resumo de cada subtarefa de um card mãe.
+ *
+ * As buscas vão TODAS DE UMA VEZ (runrunFetchAll), não uma esperando a
+ * outra (2026-08-13). Antes era um `.map` com `runrunFetch` dentro, ou
+ * seja: um card mãe com 8 filhas fazia 8 idas ao Runrun.it em fila
+ * indiana, e o tempo total era a soma de todas. Como nada aqui depende do
+ * resultado da anterior, era espera pura — e era parte do "o card mãe
+ * demora" que o Cláudio relatou.
+ */
 function montarResumoSubtarefas(idsSubtarefas) {
-  return (idsSubtarefas || []).map(function (id) {
-    var t = runrunFetch('/tasks/' + id);
+  var ids = idsSubtarefas || [];
+  if (!ids.length) return [];
+  var respostas = runrunFetchAll(ids.map(function (id) { return '/tasks/' + id; }));
+  return respostas.map(function (t) {
     if (!t || t.erroFetch) return null;
     return {
       id: t.id,
@@ -1593,6 +1605,121 @@ function buscarCardMae(subtaskId) {
     temPai: true,
     cardMae: transformarTarefaParaColmeia(cardMaeRaw),
     subtarefas: montarResumoSubtarefas(cardMaeRaw.subtask_ids)
+  };
+}
+
+/**
+ * TUDO do card mãe de uma subtarefa, numa chamada só (2026-08-13).
+ *
+ * O que existia antes: o navegador fazia QUATRO idas ao Colmeia, uma
+ * esperando a outra (ver precarregarCardMaeEmBackground,
+ * js/detalhe-cardmae.js) — buscarCardMae, listarComentarios,
+ * buscarSequencia e buscarDescricao. As três últimas usam o MESMO id e
+ * não dependem uma da outra: era fila indiana por nada.
+ *
+ * Isso pesa o dobro aqui do que pareceria: como o Web App roda como
+ * USER_DEPLOYING, cada ida ocupa um lugar na fila ÚNICA de execução do
+ * Apps Script, compartilhada com todo mundo do time (ver a seção "Por que
+ * o card demora a abrir" no CLAUDE.md). Quatro idas = quatro lugares na
+ * fila, em sequência.
+ *
+ * Agora são três rodadas de buscas PARALELAS dentro de uma ida só:
+ *   1. a subtarefa (pra descobrir quem é a mãe)
+ *   2. a mãe + comentários dela + descrição dela  ← juntos
+ *   3. as subtarefas irmãs (juntas) + a sequência (que já vem cacheada)
+ *
+ * Mesmo formato de resposta das quatro chamadas antigas somadas, pra o
+ * front-end só precisar juntar — e as antigas continuam existindo, porque
+ * são usadas em outros lugares e são a reserva se esta ação não existir
+ * no backend publicado (ver o fallback em precarregarCardMaeEmBackground).
+ */
+function abrirCardMaeCompleto(subtaskId) {
+  if (!subtaskId) return { ok: false, error: 'subtaskId não informado.' };
+
+  var subtarefa = runrunFetch('/tasks/' + subtaskId);
+  if (!subtarefa || subtarefa.erroFetch) {
+    return { ok: false, error: 'Não consegui ler essa tarefa no Runrun.it.' };
+  }
+  if (!subtarefa.parent_task_id) return { ok: true, temPai: false };
+
+  var maeId = subtarefa.parent_task_id;
+
+  // Rodada 2: nada aqui depende de nada, então vão todos juntos.
+  var r = runrunFetchAll([
+    '/tasks/' + maeId,
+    '/tasks/' + maeId + '/comments',
+    '/tasks/' + maeId + '/description'
+  ]);
+  var maeRaw = r[0];
+  var comentariosCrus = r[1];
+  var descricaoCrua = r[2];
+
+  if (!maeRaw || maeRaw.erroFetch) {
+    return { ok: false, error: 'Não consegui ler o card mãe no Runrun.it.' };
+  }
+
+  // Comentários: mesmo tratamento de abrirTarefaParaColmeia (tira as
+  // mensagens do sistema e ordena do mais antigo pro mais novo).
+  var comentarios = [];
+  if (Array.isArray(comentariosCrus)) {
+    comentarios = comentariosCrus
+      .filter(function (c) { return !c.is_system_message; })
+      .map(function (c) {
+        var autor = c.commenter_name || c.user_name || (c.user_id ? formatarNomeSlug(c.user_id) : null) || 'Desconhecido';
+        return {
+          id: c.id,
+          autor: autor,
+          texto: c.text || c.description || '',
+          data: c.created_at || c.date || null,
+          reactions: c.reactions || []
+        };
+      })
+      .sort(function (a, b) { return new Date(a.data || 0) - new Date(b.data || 0); });
+  }
+
+  var descricao = '';
+  if (typeof descricaoCrua === 'string') {
+    descricao = descricaoCrua;
+  } else if (descricaoCrua && typeof descricaoCrua === 'object' && !descricaoCrua.erroFetch) {
+    descricao = descricaoCrua.description || descricaoCrua.text || descricaoCrua.html || descricaoCrua.content || '';
+  }
+
+  // Rodada 3: a sequência só dá pra pedir sabendo o workflow_id (que veio
+  // agora). Vem do cache compartilhado na maioria das vezes.
+  var sequencia = [];
+  if (maeRaw.workflow_id) {
+    var elementos = runrunFetchCacheado('/workflows/' + maeRaw.workflow_id + '/workflow_elements', 600);
+    if (Array.isArray(elementos)) {
+      // MESMO formato de abrirTarefaParaColmeia, campo por campo: é o que
+      // renderSequenciaHTML espera (`atual`, `concluido`, `ultimo`). Um
+      // formato "parecido" aqui faria a sequência do card mãe desenhar
+      // sem a marcação de quem está com ela agora.
+      sequencia = elementos
+        .sort(function (a, b) { return a.order - b.order; })
+        .map(function (el, i, lista) {
+          return {
+            id: el.id,
+            nome: el.user_name,
+            foto: el.user_avatar_url || null,
+            atual: !!el.is_current,
+            concluido: !!el.is_completed,
+            ultimo: i === lista.length - 1
+          };
+        });
+    }
+  }
+
+  var cardMae = transformarTarefaParaColmeia(maeRaw);
+  cardMae.descricao = descricao;
+  cardMae.sequencia = sequencia;
+  cardMae.workflowId = maeRaw.workflow_id || null;
+
+  return {
+    ok: true,
+    temPai: true,
+    cardMae: cardMae,
+    subtarefas: montarResumoSubtarefas(maeRaw.subtask_ids),
+    comentarios: comentarios
   };
 }
 

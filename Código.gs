@@ -289,6 +289,8 @@ function handleRequest(e, method) {
         output = buscarSequenciaResponsaveis(body.taskId);
       } else if (body.acao === 'buscarCardMae') {
         output = buscarCardMae(body.taskId);
+      } else if (body.acao === 'abrirCardMaeCompleto') {
+        output = abrirCardMaeCompleto(body.taskId);
       } else if (body.acao === 'buscarSubtarefasDoCardMae') {
         output = buscarSubtarefasDoCardMae(body.taskId);
       } else if (body.acao === 'buscarTarefaCompleta') {

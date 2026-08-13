@@ -92,6 +92,24 @@ function abrirBancoDoCacheDeTarefas() {
 }
 
 /**
+ * Anota no PostHog se o card abriu com dado guardado ou teve que esperar.
+ *
+ * Sem isto, a medição que já existe (`backend_chamada`, js/config.js) diz
+ * quanto cada pedido demorou, mas NÃO diz se o pedido foi preciso — ou
+ * seja, não dá pra responder "o cache está funcionando?". Aqui é o outro
+ * lado: de onde veio o que a pessoa está vendo.
+ *
+ * `origem`: "cache" (apareceu na hora), "servidor" (esperou a fila), e o
+ * `parte` diz o quê — o conteúdo do card, o briefing ou o resumo da Bee.
+ */
+function medirOrigemDoDado(parte, origem) {
+  try {
+    if (typeof posthog === "undefined" || !posthog || !posthog.capture) return;
+    posthog.capture("cache_tarefa", { parte: parte, origem: origem });
+  } catch (err) { /* medir nunca pode quebrar o app */ }
+}
+
+/**
  * Lê o que estiver guardado sobre uma tarefa. Devolve null se não tem
  * nada, se venceu, ou se foi guardado por OUTRA pessoa (o computador pode
  * ser compartilhado — mesma proteção do snapshot do quadro).
@@ -244,47 +262,109 @@ async function precarregarDetalhesDoDia() {
       if (!DESIGNER_LOGADO) break;
       if (document.hidden) break;
 
-      const guardado = await lerDetalheDoCache(t.id);
-      const faltaAbrir = !guardado || !guardado.abrir;
-      const faltaBee = !guardado || !guardado.beeResumo;
-      if (!faltaAbrir && !faltaBee) continue; // já temos tudo, pula
-
-      if (faltaAbrir) {
-        try {
-          const data = await chamarBackend({ acao: "abrirTarefa", taskId: t.id });
-          if (data && data.ok) await guardarDetalheNoCache(t.id, { abrir: data });
-        } catch (err) {
-          // Uma tarefa que não veio não estraga a fila — segue pra próxima.
-        }
-        await new Promise(r => setTimeout(r, PRECARGA_PAUSA_MS));
-      }
-
-      // O resumo da Bee é o mais caro de todos (é uma chamada de IA) e o
-      // mais frustrante de esperar, porque é a primeira coisa que o
-      // designer lê pra entender o que a tarefa pede. Ele só vivia na
-      // memória da aba, então sumia a cada F5 — agora fica guardado.
-      if (faltaBee) {
-        try {
-          const original = typeof acharTarefaOriginalDaAlteracao === "function"
-            ? acharTarefaOriginalDaAlteracao(t)
-            : null;
-          const r = await chamarBackend({
-            acao: "beeResumo",
-            taskId: t.id,
-            idOriginal: original ? original.id : null,
-          });
-          // Só guarda resposta boa: "deu erro" e "sem material" têm que
-          // ser tentados de novo quando a pessoa abrir de verdade.
-          if (r && r.ok && !r.semMaterial && r.resumo) {
-            await guardarDetalheNoCache(t.id, { beeResumo: r.resumo });
-          }
-        } catch (err) { /* segue pra próxima */ }
-        await new Promise(r => setTimeout(r, PRECARGA_PAUSA_MS));
-      }
+      await buscarEGuardarDetalhe(t, PRECARGA_PAUSA_MS);
     }
   } finally {
     precargaRodando = false;
   }
+}
+
+/**
+ * Busca o que falta de UMA tarefa e guarda. Usada pela fila da manhã e
+ * pelo passar-o-mouse — as duas precisam exatamente disso, e ter dois
+ * lugares fazendo o mesmo seria pedir pra elas divergirem com o tempo.
+ *
+ * @param {number} pausaMs respiro DEPOIS de cada pedido. A fila usa uma
+ *   pausa longa (ela tem o dia todo); o hover manda 0, porque ali a
+ *   pessoa está prestes a clicar.
+ */
+async function buscarEGuardarDetalhe(t, pausaMs) {
+  if (!t || !t.id) return;
+  const guardado = await lerDetalheDoCache(t.id);
+  const faltaAbrir = !guardado || !guardado.abrir;
+  const faltaBee = !guardado || !guardado.beeResumo;
+  if (!faltaAbrir && !faltaBee) return; // já temos tudo
+
+  if (faltaAbrir) {
+    try {
+      const data = await chamarBackend({ acao: "abrirTarefa", taskId: t.id });
+      if (data && data.ok) await guardarDetalheNoCache(t.id, { abrir: data });
+    } catch (err) {
+      // Uma tarefa que não veio não estraga a fila — segue pra próxima.
+    }
+    if (pausaMs) await new Promise(r => setTimeout(r, pausaMs));
+  }
+
+  // O resumo da Bee é o mais caro de todos (é uma chamada de IA) e o
+  // mais frustrante de esperar, porque é a primeira coisa que o
+  // designer lê pra entender o que a tarefa pede. Ele só vivia na
+  // memória da aba, então sumia a cada F5 — agora fica guardado.
+  if (faltaBee) {
+    try {
+      const original = typeof acharTarefaOriginalDaAlteracao === "function"
+        ? acharTarefaOriginalDaAlteracao(t)
+        : null;
+      const r = await chamarBackend({
+        acao: "beeResumo",
+        taskId: t.id,
+        idOriginal: original ? original.id : null,
+      });
+      // Só guarda resposta boa: "deu erro" e "sem material" têm que ser
+      // tentados de novo quando a pessoa abrir de verdade.
+      if (r && r.ok && !r.semMaterial && r.resumo) {
+        await guardarDetalheNoCache(t.id, { beeResumo: r.resumo });
+      }
+    } catch (err) { /* segue pra próxima */ }
+    if (pausaMs) await new Promise(r => setTimeout(r, pausaMs));
+  }
+}
+
+// ===== Passar o mouse já prepara a tarefa =====
+//
+// O sinal mais forte que existe de "vou abrir esta": a pessoa parou o
+// mouse em cima do card. A fila da manhã cobre hoje/atrasadas; isto cobre
+// o resto — tarefa futura, tarefa que acabou de chegar, tarefa que a fila
+// ainda não alcançou.
+//
+// Três cuidados pra isto não virar o problema que veio resolver:
+// - ESPERA a pessoa parar (ver PAUSA). Passar o mouse atravessando o
+//   quadro cruza dezenas de cards em um segundo; sem isso, cada um viraria
+//   um pedido, e a fila do Apps Script entupia na hora.
+// - UMA POR VEZ. Se já tem uma preparação em voo, a próxima espera.
+// - Nada com a aba escondida, nada sem alguém logado.
+
+const HOVER_PAUSA_MS = 180;   // quanto o mouse precisa ficar parado
+let _hoverTimer = null;
+let _hoverEmVoo = false;
+
+/**
+ * Chamado no mouseenter de cada card do quadro. Não faz nada na hora —
+ * só marca a intenção; quem decide é o relógio de HOVER_PAUSA_MS.
+ */
+function prepararTarefaAoPassarOMouse(taskId) {
+  if (!taskId) return;
+  clearTimeout(_hoverTimer);
+  _hoverTimer = setTimeout(async () => {
+    if (_hoverEmVoo) return;
+    if (typeof podeBaterNoBackendAgora === "function" && !podeBaterNoBackendAgora()) return;
+    const t = (typeof tasks !== "undefined" && Array.isArray(tasks))
+      ? tasks.find(x => String(x.id) === String(taskId))
+      : null;
+    if (!t) return;
+    _hoverEmVoo = true;
+    try {
+      // pausaMs 0: aqui a pessoa está a um clique de distância, não faz
+      // sentido dar respiro entre um pedido e outro.
+      await buscarEGuardarDetalhe(t, 0);
+    } finally {
+      _hoverEmVoo = false;
+    }
+  }, HOVER_PAUSA_MS);
+}
+
+/** Saiu de cima antes de completar a pausa: desiste, não era intenção. */
+function cancelarPreparoAoSairDoCard() {
+  clearTimeout(_hoverTimer);
 }
 
 // A fila para quando a aba fica escondida (pra não roubar lugar na fila do

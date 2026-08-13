@@ -78,6 +78,33 @@ const cardMaeCache = new Map();
  */
 async function precarregarCardMaeEmBackground(taskId) {
   if (cardMaeCache.has(taskId)) return;
+
+  // UMA ida traz o card mãe, os comentários, a sequência e a descrição
+  // (ver abrirCardMaeCompleto, RunrunLeitura.gs). Antes eram QUATRO, uma
+  // esperando a outra — e as três últimas nem dependiam uma da outra.
+  // Cada ida ocupa um lugar na fila única do Apps Script, então isso
+  // valia quatro lugares em sequência (ver "Por que o card demora a
+  // abrir" no CLAUDE.md).
+  const tudo = await chamarBackend({ acao: "abrirCardMaeCompleto", taskId });
+  if (tudo && tudo.ok) {
+    if (!tudo.temPai) return;
+    cardMaeCache.set(taskId, { ok: true, temPai: true, cardMae: tudo.cardMae, subtarefas: tudo.subtarefas || [] });
+    podarCacheMap(cardMaeCache, MAX_ITENS_CACHE_CARDMAE);
+    if (!chatMaeCache.has(taskId) && Array.isArray(tudo.comentarios)) {
+      chatMaeCache.set(taskId, { id: tudo.cardMae.id, title: tudo.cardMae.title, comments: tudo.comentarios });
+      podarCacheMap(chatMaeCache, MAX_ITENS_CACHE_CARDMAE);
+    }
+    return;
+  }
+
+  // Reserva: backend publicado ainda não conhece a ação nova (ou ela deu
+  // erro). Faz do jeito antigo, em quatro idas — mesmo padrão que
+  // carregarTudoDaTarefa usa pra "abrirTarefa".
+  await precarregarCardMaeEmQuatroIdas(taskId);
+}
+
+/** O caminho antigo, mantido como reserva. Ver o comentário acima. */
+async function precarregarCardMaeEmQuatroIdas(taskId) {
   const resultado = await buscarCardMaeDoBackend(taskId);
   if (!resultado.ok || !resultado.temPai) return;
   cardMaeCache.set(taskId, resultado);
