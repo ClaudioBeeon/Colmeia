@@ -168,3 +168,73 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") tentarEsvaziarFilaOffline();
 });
 setInterval(tentarEsvaziarFilaOffline, 30000);
+
+// ============================================
+// ESCRITAS OTIMISTAS: SEGURAR O QUE ACABOU DE MUDAR NA TELA
+// ============================================
+// O Colmeia muda a tela ANTES do Runrun.it confirmar (é o padrão do app
+// inteiro). Só que o quadro se atualiza sozinho 900ms depois de qualquer
+// clique (agendarAtualizacaoKanban) e de 60 em 60 segundos — e essa busca
+// traz o estado que o Runrun.it ainda tem, que é o ANTIGO, porque a escrita
+// nem chegou lá. Resultado: a mudança aparecia e sumia sozinha alguns
+// instantes depois ("aparece e volta", relatado pelo Cláudio no painel dos
+// designers).
+//
+// Cada conserto pontual disso virava mais uma linha na lista de campos
+// preservados de atualizarKanbanEmBackground (js/pessoas-fotos.js) — e a
+// lista só cresce, esquecer um campo novo não dá erro nenhum, só some da
+// tela. Aqui a coisa é ao contrário: quem faz a mudança otimista DECLARA
+// isso, e a varredura respeita a declaração sem precisar saber que campo é.
+//
+// É uma JANELA de tempo, não pra sempre: passados alguns segundos volta a
+// valer o que o Runrun.it diz — senão uma alteração feita por outra pessoa
+// (ou pelo próprio Runrun.it) nunca mais chegaria nesta tela.
+const ESCRITA_OTIMISTA_MS = 25000;
+
+/**
+ * "Mudei estes campos na tela agora; não deixe a varredura desfazer."
+ * Já aplica os valores também, pra quem chama não precisar fazer as duas
+ * coisas separadas e esquecer uma.
+ *
+ *   marcarEscritaOtimista(t, { dueISO: "2026-08-20", due: "20 ago" });
+ */
+function marcarEscritaOtimista(task, campos) {
+  if (!task || !campos) return;
+  if (!task._otimista) task._otimista = {};
+  const ate = Date.now() + ESCRITA_OTIMISTA_MS;
+  Object.keys(campos).forEach(campo => {
+    task[campo] = campos[campo];
+    task._otimista[campo] = ate;
+  });
+}
+
+/**
+ * O Runrun.it recusou e quem chamou já devolveu os valores antigos — tira a
+ * proteção na hora, senão a varredura ficaria segurando o valor ERRADO
+ * (o que a pessoa tentou pôr) pelo resto da janela.
+ */
+function desmarcarEscritaOtimista(task, nomesDosCampos) {
+  if (!task || !task._otimista) return;
+  nomesDosCampos.forEach(campo => { delete task._otimista[campo]; });
+}
+
+/**
+ * Chamado pela varredura do quadro pra cada tarefa: copia pro objeto novo
+ * os campos que ainda estão dentro da janela de proteção.
+ *
+ * Repare que NÃO se apaga a marca quando o Runrun.it confirma: logo depois
+ * de uma escrita, a leitura dele ainda devolve o valor velho por alguns
+ * segundos (é a mesma razão de o cronômetro ter a proteção dele). Deixar a
+ * janela vencer sozinha cobre os dois casos com uma regra só.
+ */
+function preservarEscritasOtimistas(antiga, nova) {
+  if (!antiga || !nova || !antiga._otimista) return;
+  const agora = Date.now();
+  const aindaValendo = {};
+  Object.keys(antiga._otimista).forEach(campo => {
+    if (antiga._otimista[campo] <= agora) return;
+    nova[campo] = antiga[campo];
+    aindaValendo[campo] = antiga._otimista[campo];
+  });
+  if (Object.keys(aindaValendo).length) nova._otimista = aindaValendo;
+}

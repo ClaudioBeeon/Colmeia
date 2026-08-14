@@ -309,11 +309,16 @@ function setupDragAndDrop() {
         const task = tasks[idx];
         const statusAntigo = task.status;
         if (statusAntigo === newStatus) return;
-        task.status = newStatus;
+        // Marcado como escrita otimista: a varredura do quadro roda 900ms
+        // depois e traz a coluna ANTIGA do Runrun.it (a escrita ainda está
+        // a caminho) — era isso que fazia o card arrastado dar uma
+        // "piscada" de volta pra coluna de origem. Ver js/fila-offline.js.
+        marcarEscritaOtimista(task, { status: newStatus });
         render();
         moverEtapaNoBackend(task.id, newStatus).then(ok => {
           if (!ok) {
             task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
+            desmarcarEscritaOtimista(task, ["status"]);
             render();
             // Sem esse aviso, o card só "voltava" sozinho pra coluna antiga
             // e ninguém entendia por quê (parecia bug do Colmeia).
@@ -401,20 +406,28 @@ function attachCardDragHandlers() {
       abrirCalendarioColmeia({
         ancoraEl: btn,
         valorInicial: task.dueISO || "",
-        onEscolher: async novaData => {
+        // Otimista: a data nova aparece no card na hora, sem "Salvando..."
+        // no meio. Se o Runrun.it recusar, volta sozinha e avisa — mesmo
+        // desenho das datas da fila de Repasse (salvarDataRepasseNoPill,
+        // js/pagina-repasse.js) e do painel dos designers.
+        onEscolher: novaData => {
           if (!novaData || novaData === task.dueISO) return;
-          wrap.innerHTML = `<span class="card-due-saving">Salvando...</span>`;
-          const ok = await alterarEntregaNoBackend(task.id, novaData);
-          if (!ok) {
-            render(); // volta a data antiga
-            mostrarToast("Não consegui alterar a Entrega Desejada agora.", "erro");
-            return;
-          }
+          const dueISOAntigo = task.dueISO;
+          const dueAntigo = task.due;
           const [ano, mes, dia] = novaData.split("-").map(Number);
-          task.dueISO = novaData;
-          task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+          marcarEscritaOtimista(task, {
+            dueISO: novaData,
+            due: `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`,
+          });
           render();
-          agendarAtualizacaoKanban();
+          alterarEntregaNoBackend(task.id, novaData).then(ok => {
+            if (ok) { agendarAtualizacaoKanban(); return; }
+            task.dueISO = dueISOAntigo;
+            task.due = dueAntigo;
+            desmarcarEscritaOtimista(task, ["dueISO", "due"]);
+            render();
+            mostrarToast("Não consegui alterar a Entrega Desejada agora.", "erro");
+          });
         },
       });
     });
@@ -441,21 +454,19 @@ function attachCardDragHandlers() {
         <div class="assignee-menu-loading">Carregando outras pessoas...</div>
       `;
 
-      menu.querySelector(".assignee-advance-btn").addEventListener("click", async ev => {
+      // Já vai buscando a sequência enquanto a pessoa lê o menu: é ela que
+      // permite trocar a foto do card NA HORA do clique em "Avançar", em vez
+      // de esperar o Runrun.it responder pra saber quem é o próximo. Um card
+      // que nunca foi aberto não tem essa lista carregada.
+      if (task.sequencia === undefined && typeof carregarSequencia === "function") carregarSequencia(task);
+
+      menu.querySelector(".assignee-advance-btn").addEventListener("click", ev => {
         ev.stopPropagation();
         menu.classList.remove("open");
-        await pararCronometroAoTransferir(task);
-        const resultadoAvanco = await avancarWorkflowNoBackend(task.id);
-        if (resultadoAvanco.novoResponsavel) {
-          task.assignee = resultadoAvanco.novoResponsavel;
-          task.assigneeAvatarUrl = null;
-          render();
-        }
-        if (resultadoAvanco.ok) {
-          agendarAtualizacaoKanban();
-        } else {
-          mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
-        }
+        // Mesma função das setas do modal "Ver regra" e do pill preto: muda
+        // a tela na hora, fala com o Runrun.it por trás e desfaz sozinha se
+        // ele recusar (ver avancarSequenciaOtimista, js/regras-briefing.js).
+        avancarSequenciaOtimista(task);
       });
 
       const usuarios = await buscarUsuariosRunrun();
@@ -472,21 +483,28 @@ function attachCardDragHandlers() {
         </button>
       `).join("");
       menu.querySelectorAll("button:not(.assignee-advance-btn)").forEach(opt => {
-        opt.addEventListener("click", async ev => {
+        opt.addEventListener("click", ev => {
           ev.stopPropagation();
           const nomeEscolhido = opt.dataset.userNome;
           menu.classList.remove("open");
+          // Otimista: a foto do card vira a da pessoa escolhida na hora — a
+          // lista do menu já traz o nome e a foto dela, então não tem nada
+          // que só o Runrun.it saiba responder aqui.
+          const assigneeAntigo = task.assignee;
+          const fotoAntiga = task.assigneeAvatarUrl;
+          const fotoNova = opt.querySelector(".avatar img") ? opt.querySelector(".avatar img").src : null;
+          marcarEscritaOtimista(task, { assignee: nomeEscolhido, assigneeAvatarUrl: fotoNova });
+          render();
           // 3º argumento: só alimenta o feed da aba Bee ("fulano te passou
           // a tarefa X") — ver reatribuirTarefaNoBackend em js/kanban-polling.js.
-          const ok = await reatribuirTarefaNoBackend(task.id, opt.dataset.userId, nomeEscolhido);
-          if (ok) {
-            task.assignee = nomeEscolhido;
-            task.assigneeAvatarUrl = null; // deixa a próxima carga real trazer a foto certa
+          reatribuirTarefaNoBackend(task.id, opt.dataset.userId, nomeEscolhido).then(ok => {
+            if (ok) { agendarAtualizacaoKanban(); return; }
+            task.assignee = assigneeAntigo;
+            task.assigneeAvatarUrl = fotoAntiga;
+            desmarcarEscritaOtimista(task, ["assignee", "assigneeAvatarUrl"]);
             render();
-            agendarAtualizacaoKanban();
-          } else {
             mostrarToast("Não consegui reatribuir essa tarefa agora. Tenta de novo em alguns segundos.", "erro");
-          }
+          });
         });
       });
     });

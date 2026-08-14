@@ -912,7 +912,11 @@ body.card-aberto .quick-access-panel { display: none; }
   max-height: 60px; overflow: hidden;
 }
 .rule-row.saindo { opacity: 0; transform: translateX(6px); max-height: 0; padding-top: 0; padding-bottom: 0; }
-.rule-row.pendente { opacity: 0.6; }
+
+/* `.pendente` NÃO apaga mais a linha (era `opacity: 0.6`). A pessoa foi
+   adicionada — o Colmeia já decidiu isso; esperar o Runrun.it confirmar é
+   assunto do app, não um estado que a pessoa precise ficar olhando. Ver o
+   comentário em renderModalRegra, js/regras-briefing.js. */
 
 .rule-row-spinner {
   width: 12px; height: 12px; border-radius: 50%;
@@ -921,6 +925,32 @@ body.card-aberto .quick-access-panel { display: none; }
   flex-shrink: 0;
 }
 @keyframes colmeia-spin { to { transform: rotate(360deg); } }
+
+/* ===== Animações da sequência dentro do modal "Ver regra" =====
+   (ver animarMudancaDaRegra / animarLinhaEntrando, js/regras-briefing.js) */
+@keyframes ruleRowVirouAtual {
+  0%   { transform: scale(0.97); box-shadow: 0 0 0 0 var(--kanban-yellow); }
+  55%  { transform: scale(1.02); box-shadow: 0 0 0 5px color-mix(in srgb, var(--kanban-yellow) 40%, transparent); }
+  100% { transform: scale(1); box-shadow: 0 0 0 1.5px var(--kanban-yellow); }
+}
+.rule-row-virou-atual { animation: ruleRowVirouAtual 480ms var(--ease-apple-spring); }
+
+@keyframes ruleStatusPop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.rule-row-status-pop { display: inline-block; animation: ruleStatusPop 420ms var(--ease-apple-spring); }
+
+@keyframes ruleRowEntrando {
+  0%   { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.rule-row-entrando { animation: ruleRowEntrando 320ms var(--ease-apple-spring); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rule-row-virou-atual, .rule-row-status-pop, .rule-row-entrando { animation: none; }
+}
 
 .avatar-flying {
   position: fixed;

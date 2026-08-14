@@ -9,8 +9,15 @@ function renderModalRegra(task) {
           <span class="rule-row-order">${i + 1}</span>
           ${avatarHTML(s.nome, "avatar-sm", s.foto)}
           <span class="rule-row-name">${s.nome}</span>
-          ${s.pendente ? `<span class="rule-row-spinner"></span>` :
-            s.concluido ? `<span class="rule-row-status done">Concluído</span>` :
+          ${/* Pessoa recém-adicionada (`pendente`) mostra "Aguardando" igual a
+                qualquer outra, NÃO um spinner cinza. Antes ela nascia apagada e
+                girando até o Runrun.it confirmar — que é exatamente a queixa do
+                Cláudio ("fica carregando em cinza até dar certo e demora um
+                pouco"): a espera do servidor virava um estado visual, quando o
+                app já tinha decidido que ela está na sequência. Se o Runrun.it
+                recusar, atualizarSequenciaEModal traz a lista real e a linha
+                some sozinha — que é o mesmo desfazer de sempre. */""}
+          ${s.concluido ? `<span class="rule-row-status done">Concluído</span>` :
             s.atual ? `<span class="rule-row-status current">Atual</span>` :
             `<span class="rule-row-status">Aguardando</span>`}
           ${(!s.concluido && !s.atual && !s.pendente) ? `
@@ -61,56 +68,9 @@ function renderModalRegra(task) {
   });
 
   const prevArrow = document.getElementById("ruleModalPrevArrow");
-  if (prevArrow && podeVoltar) {
-    prevArrow.addEventListener("click", async () => {
-      prevArrow.disabled = true;
-      await pararCronometroAoTransferir(task);
-      const novoResponsavel = await desfazerWorkflowNoBackend(task.id);
-      if (novoResponsavel) {
-        task.assignee = novoResponsavel;
-        task.assigneeAvatarUrl = null;
-        render();
-        agendarAtualizacaoKanban();
-        // Mesma proteção do botão de avançar direto no card da fila de
-        // Repasse (ver confirmarEAvancarSequenciaCard, js/pagina-repasse.js):
-        // sem isso, transferir por AQUI (dentro do modal "Ver regra") fazia
-        // o card sumir da fila sozinho assim que a atualização em segundo
-        // plano rodava, porque a tarefa deixava de ser seu "de verdade".
-        if (typeof repasseRecemAvancados !== "undefined") repasseRecemAvancados.add(task.id);
-      }
-      await atualizarSequenciaEModal(task); // sincroniza com o real — desfaz sozinho se recusou
-    });
-  }
+  if (prevArrow && podeVoltar) prevArrow.addEventListener("click", () => voltarSequenciaOtimista(task));
   const nextArrow = document.getElementById("ruleModalNextArrow");
-  if (nextArrow && podeAvancar) {
-    nextArrow.addEventListener("click", async () => {
-      nextArrow.disabled = true;
-      await pararCronometroAoTransferir(task);
-      // Guarda quem estava com a tarefa ANTES de tentar avançar, pra
-      // poder conferir com o estado real do Runrun.it depois — o
-      // Apps Script às vezes demora demais e devolve erro mesmo quando
-      // a transferência aconteceu de verdade do outro lado (ex: outras
-      // checagens em segundo plano sobrecarregando ele no mesmo
-      // instante). Sem essa conferência, o usuário via um "erro" que
-      // não era real.
-      const atualIdxAntes = (task.sequencia || []).findIndex(s => s.atual);
-      const nomeAtualAntes = atualIdxAntes !== -1 ? task.sequencia[atualIdxAntes].nome : null;
-      const resultado = await avancarWorkflowNoBackend(task.id);
-      if (resultado.novoResponsavel) {
-        task.assignee = resultado.novoResponsavel;
-        task.assigneeAvatarUrl = null;
-        render();
-        agendarAtualizacaoKanban();
-        // Ver comentário equivalente no prevArrow acima.
-        if (typeof repasseRecemAvancados !== "undefined") repasseRecemAvancados.add(task.id);
-      }
-      await atualizarSequenciaEModal(task); // sincroniza com o real ANTES de decidir se mostra erro
-      const atualIdxDepois = (task.sequencia || []).findIndex(s => s.atual);
-      const nomeAtualDepois = atualIdxDepois !== -1 ? task.sequencia[atualIdxDepois].nome : null;
-      const realmenteNaoAvancou = nomeAtualDepois === nomeAtualAntes;
-      if (!resultado.ok && realmenteNaoAvancou) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
-    });
-  }
+  if (nextArrow && podeAvancar) nextArrow.addEventListener("click", () => avancarSequenciaOtimista(task));
 
   document.getElementById("ruleAddSearch").addEventListener("input", e => {
     renderizarListaAdicionarRegra(task, usuariosParaAdicionarRegra, e.target.value);
@@ -133,10 +93,169 @@ function renderModalRegra(task) {
  * pra sempre, mesmo depois de já ter confirmado de verdade.
  */
 async function atualizarSequenciaEModal(task) {
+  const antes = assinaturaDaSequencia(task.sequencia);
   await carregarSequencia(task);
+  // Só repinta o modal se a resposta de verdade for DIFERENTE do que já
+  // está na tela. No caminho feliz (o Runrun.it confirmou exatamente o que
+  // a gente já mostrou), repintar não muda nada visualmente e ainda por
+  // cima pisca e derruba o que a pessoa tiver digitado na busca de pessoas
+  // — o "pisca rápido e volta" que o Cláudio já tinha relatado nos
+  // comentários, aqui do mesmo jeito.
+  if (assinaturaDaSequencia(task.sequencia) === antes) return;
   const overlay = document.getElementById("ruleModalOverlay");
   if (overlay && !overlay.hidden) renderModalRegra(task);
   renderRepasseCardSeAberta(task);
+}
+
+/** Texto curto que resume a sequência — quem é quem, quem é o atual, quem
+ *  já concluiu. Serve pra saber se algo mudou de verdade sem comparar
+ *  objeto por objeto. */
+function assinaturaDaSequencia(seq) {
+  if (!seq) return "";
+  return seq.map(s => `${s.id}:${s.nome}:${s.atual ? "A" : ""}${s.concluido ? "C" : ""}${s.pendente ? "P" : ""}`).join("|");
+}
+
+/**
+ * Avançar/voltar a sequência DENTRO do modal "Ver regra" — na hora do
+ * clique, sem esperar o Runrun.it (2026-08-14, queixa do Cláudio: "clico
+ * em transferir e demora, fica cinza carregando").
+ *
+ * Era o último lugar do app que ainda fazia do jeito antigo: desabilitava
+ * o botão, esperava o cronômetro parar (uma ida ao Runrun.it), esperava a
+ * transferência (outra ida) e ainda esperava recarregar a sequência
+ * (terceira ida) — três viagens EM FILA, cada uma passando pela mesma fila
+ * de execução do Apps Script. Daí os "5 segundos ou mais olhando pra tela
+ * achando que deu erro". As setas do pill preto do cabeçalho já tinham
+ * sido consertadas (ver wireWorkflowArrows, js/detalhe-modal.js); estas
+ * aqui seguem exatamente o mesmo desenho:
+ *
+ *   1. muda a lista e anima ANTES de qualquer `await`;
+ *   2. as duas idas ao Runrun.it correm juntas (Promise.all), não em fila;
+ *   3. no fim, busca o estado real — que confirma (e aí nem repinta) ou
+ *      desfaz sozinho.
+ */
+async function avancarSequenciaOtimista(task) {
+  if (task._sequenciaAcaoEmAndamento) return; // trava contra clique duplo — dois avanços de uma vez já causaram entrega indevida
+  task._sequenciaAcaoEmAndamento = true;
+  try {
+    const seq = task.sequencia || [];
+    const atualIdx = seq.findIndex(s => s.atual);
+    // Guarda quem estava com a tarefa ANTES: o Apps Script às vezes
+    // devolve erro mesmo tendo transferido de verdade (sobrecarga), e sem
+    // essa conferência a pessoa via um "erro" que não era real.
+    const nomeAtualAntes = atualIdx !== -1 ? seq[atualIdx].nome : null;
+
+    if (atualIdx !== -1 && atualIdx < seq.length - 1) {
+      seq[atualIdx].atual = false;
+      seq[atualIdx].concluido = true;
+      seq[atualIdx + 1].atual = true;
+      // A foto do card no quadro também troca AGORA — a sequência já diz
+      // quem é o próximo, não precisa perguntar isso pro Runrun.it. E usa
+      // a foto que a própria sequência traz (em vez de zerar e esperar a
+      // próxima carga), senão o avatar pisca pra inicial e volta.
+      marcarEscritaOtimista(task, {
+        assignee: seq[atualIdx + 1].nome,
+        assigneeAvatarUrl: seq[atualIdx + 1].foto || null,
+      });
+      redesenharSequenciaEmTudo(task, "avancar");
+      render();
+    }
+
+    const [, resultado] = await Promise.all([
+      pararCronometroAoTransferir(task),
+      avancarWorkflowNoBackend(task.id),
+    ]);
+    if (resultado.novoResponsavel) {
+      marcarEscritaOtimista(task, { assignee: resultado.novoResponsavel, assigneeAvatarUrl: null });
+      render();
+      agendarAtualizacaoKanban();
+      // Sem isso, transferir por AQUI fazia o card sumir da fila de Repasse
+      // sozinho assim que a atualização em segundo plano rodava, porque a
+      // tarefa deixava de ser "sua" (ver confirmarEAvancarSequenciaCard,
+      // js/pagina-repasse.js).
+      if (typeof repasseRecemAvancados !== "undefined") repasseRecemAvancados.add(task.id);
+    }
+    await atualizarSequenciaEModal(task);
+    const idxDepois = (task.sequencia || []).findIndex(s => s.atual);
+    const nomeDepois = idxDepois !== -1 ? task.sequencia[idxDepois].nome : null;
+    if (!resultado.ok && nomeDepois === nomeAtualAntes) {
+      mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
+    }
+  } finally {
+    task._sequenciaAcaoEmAndamento = false;
+  }
+}
+
+async function voltarSequenciaOtimista(task) {
+  if (task._sequenciaAcaoEmAndamento) return;
+  task._sequenciaAcaoEmAndamento = true;
+  try {
+    const seq = task.sequencia || [];
+    const atualIdx = seq.findIndex(s => s.atual);
+    if (atualIdx > 0) {
+      seq[atualIdx].atual = false;
+      seq[atualIdx - 1].atual = true;
+      seq[atualIdx - 1].concluido = false;
+      marcarEscritaOtimista(task, {
+        assignee: seq[atualIdx - 1].nome,
+        assigneeAvatarUrl: seq[atualIdx - 1].foto || null,
+      });
+      redesenharSequenciaEmTudo(task, "voltar");
+      render();
+    }
+
+    const [, novoResponsavel] = await Promise.all([
+      pararCronometroAoTransferir(task),
+      desfazerWorkflowNoBackend(task.id),
+    ]);
+    if (novoResponsavel) {
+      marcarEscritaOtimista(task, { assignee: novoResponsavel, assigneeAvatarUrl: null });
+      render();
+      agendarAtualizacaoKanban();
+      if (typeof repasseRecemAvancados !== "undefined") repasseRecemAvancados.add(task.id);
+    }
+    await atualizarSequenciaEModal(task); // confirma ou desfaz sozinho
+  } finally {
+    task._sequenciaAcaoEmAndamento = false;
+  }
+}
+
+/**
+ * A sequência aparece em três lugares ao mesmo tempo (a lista do modal, o
+ * pill preto do cabeçalho da tarefa e o card da fila de Repasse). Uma
+ * mudança otimista tem que chegar nos três no mesmo instante, senão a
+ * pessoa vê a lista mudar e o pill atrás dela continuar no estado antigo.
+ */
+function redesenharSequenciaEmTudo(task, direcao) {
+  const overlay = document.getElementById("ruleModalOverlay");
+  if (overlay && !overlay.hidden) {
+    renderModalRegra(task);
+    animarMudancaDaRegra(document.getElementById("ruleList"), direcao);
+  }
+  renderSequenciaNoHeaderSeAberta(task);
+  renderRepasseCardSeAberta(task);
+}
+
+/**
+ * A animação da lista do modal: a linha que virou "Atual" dá um pulinho e
+ * acende o anel amarelo, e o "Concluído" da que ficou pra trás estoura.
+ * Mesma ideia de animarMudancaDaSequencia (js/detalhe-modal.js), que faz
+ * isso pros pontinhos do pill — como o `innerHTML` inteiro é trocado a
+ * cada clique, os elementos nascem já no estado novo e `transition`
+ * sozinha não pega: tem que ser animação, entrando por classe.
+ */
+function animarMudancaDaRegra(lista, direcao) {
+  if (!lista) return;
+  const atual = lista.querySelector(".rule-row.current");
+  if (!atual) return;
+  atual.classList.add("rule-row-virou-atual");
+  atual.addEventListener("animationend", () => atual.classList.remove("rule-row-virou-atual"), { once: true });
+  const anterior = direcao === "avancar" ? atual.previousElementSibling : atual.nextElementSibling;
+  const marca = anterior && anterior.querySelector(".rule-row-status");
+  if (marca) marca.classList.add("rule-row-status-pop");
+  // Regra longa: a linha que virou a atual pode estar fora da parte
+  // visível da lista — sem isso a animação rodava onde ninguém via.
+  atual.scrollIntoView({ block: "nearest" });
 }
 
 function removerPessoaOtimista(task, elementId) {
@@ -249,6 +368,7 @@ function construirSequenciaOtimistaComNovaPessoa(task, usuario) {
 async function adicionarPessoaOtimista(task, usuario) {
   task.sequencia = construirSequenciaOtimistaComNovaPessoa(task, usuario);
   renderModalRegra(task);
+  animarLinhaEntrando(document.getElementById("ruleList"));
   renderSequenciaNoHeaderSeAberta(task);
   renderRepasseCardSeAberta(task);
 
@@ -280,7 +400,14 @@ async function adicionarPessoaOtimista(task, usuario) {
 function renderSequenciaNoHeaderSeAberta(task) {
   if (!tasks[detailIdx] || String(tasks[detailIdx].id) !== String(task.id)) return;
   const el = document.getElementById("workflowSeqGroup");
-  if (el) el.innerHTML = renderSequenciaHTML(task);
+  if (!el) return;
+  el.innerHTML = renderSequenciaHTML(task);
+  // Religar as setas é obrigatório: trocar o innerHTML cria botões NOVOS,
+  // que nascem sem nenhum clique ligado. Sem esta linha, mexer na
+  // sequência pelo modal deixava as setinhas do pill preto atrás dele
+  // mortas até a tarefa ser reaberta — dava pra clicar e não acontecia
+  // nada, sem erro nenhum.
+  if (typeof wireWorkflowArrows === "function") wireWorkflowArrows(task);
 }
 
 /**
@@ -302,6 +429,17 @@ function renderRepasseCardSeAberta(task) {
  * do botão até a lista da sequência, dando a sensação de que a pessoa
  * está entrando ali de verdade.
  */
+/** A linha recém-criada (a única `.pendente` da lista) entra deslizando —
+ *  fecha a história que animarPessoaSubindo começa: a fotinho voa do botão
+ *  até a lista, e é ESTA linha que ela vira ao chegar. */
+function animarLinhaEntrando(lista) {
+  if (!lista) return;
+  const nova = lista.querySelector(".rule-row.pendente");
+  if (!nova) return;
+  nova.classList.add("rule-row-entrando");
+  nova.addEventListener("animationend", () => nova.classList.remove("rule-row-entrando"), { once: true });
+}
+
 function animarPessoaSubindo(btn) {
   const lista = document.getElementById("ruleList");
   if (!lista) return;

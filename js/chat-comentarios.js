@@ -146,6 +146,78 @@ function guardarFonteDeComentarios(taskId, comentarios) {
  * comentário com o mesmo id, atualiza no lugar em vez de duplicar (é o que
  * torna seguro chamar isso mais de uma vez).
  */
+/**
+ * Acha um comentário em qualquer fonte já carregada (a da tarefa, a do
+ * card mãe) — reagir/editar/excluir só têm o id do comentário na mão, não
+ * sabem de qual das listas ele veio. Devolve o objeto DE DENTRO da fonte,
+ * de propósito: é ele que precisa ser alterado pra a mudança otimista
+ * sobreviver ao próximo redesenho (que recalcula tudo a partir das fontes
+ * — ver o comentário grande sobre fonte única lá em cima).
+ */
+function acharComentarioNasFontes(commentId) {
+  if (!commentId) return null;
+  const alvo = String(commentId);
+  for (const lista of fontesDeComentarios.values()) {
+    const achado = (lista || []).find(c => String(c.id) === alvo);
+    if (achado) return achado;
+  }
+  return null;
+}
+
+/** Tira um comentário de todas as fontes (usado pelo excluir otimista).
+ *  Devolve { taskId, indice, comentario } pra dar pra recolocar no lugar
+ *  exato se o Runrun.it recusar. */
+function tirarComentarioDasFontes(commentId) {
+  const alvo = String(commentId);
+  for (const [taskId, lista] of fontesDeComentarios.entries()) {
+    const i = (lista || []).findIndex(c => String(c.id) === alvo);
+    if (i === -1) continue;
+    const comentario = lista[i];
+    const novos = lista.slice();
+    novos.splice(i, 1);
+    guardarFonteDeComentarios(taskId, novos);
+    return { taskId, indice: i, comentario };
+  }
+  return null;
+}
+
+/** Recoloca um comentário no lugar de onde ele saiu (desfaz o excluir). */
+function devolverComentarioAFonte(guardado) {
+  if (!guardado) return;
+  const atuais = comentariosDaFonte(guardado.taskId) || [];
+  const novos = atuais.slice();
+  novos.splice(Math.min(guardado.indice, novos.length), 0, guardado.comentario);
+  guardarFonteDeComentarios(guardado.taskId, novos);
+}
+
+/**
+ * Aplica a reação na hora, do jeito que o Runrun.it vai aplicar: o mesmo
+ * emoji clicado duas vezes tira a reação (é como ele funciona), então a
+ * versão otimista também tem que alternar — senão clicar pra tirar
+ * mostraria o número SUBINDO até a resposta chegar e corrigir.
+ */
+function aplicarReacaoOtimista(comentario, emoji) {
+  const eu = (typeof DESIGNER_LOGADO !== "undefined" && DESIGNER_LOGADO) || "Você";
+  const mesmaPessoa = (a, b) => (typeof nomesCorrespondem === "function" ? nomesCorrespondem(a, b) : String(a) === String(b));
+  const lista = (comentario.reactions || []).map(r => ({ ...r, users: (r.users || []).slice() }));
+  const i = lista.findIndex(r => r.emoji === emoji);
+  if (i === -1) {
+    lista.push({ emoji, count: 1, users: [{ name: eu }] });
+    comentario.reactions = lista;
+    return;
+  }
+  const chip = lista[i];
+  if (chip.users.some(u => mesmaPessoa(u.name, eu))) {
+    chip.users = chip.users.filter(u => !mesmaPessoa(u.name, eu));
+    chip.count = Math.max(0, (chip.count || 1) - 1);
+    if (chip.count === 0) lista.splice(i, 1);
+  } else {
+    chip.users.push({ name: eu });
+    chip.count = (chip.count || 0) + 1;
+  }
+  comentario.reactions = lista;
+}
+
 function acrescentarComentarioNaFonte(taskId, comentario) {
   if (!taskId || !comentario || !comentario.id) return;
   const atuais = comentariosDaFonte(taskId) || [];
@@ -1942,32 +2014,36 @@ function wireEdicaoEntregaDesejada(task) {
     abrirCalendarioColmeia({
       ancoraEl: btn,
       valorInicial: task.dueISO || "",
-      onEscolher: async novaData => {
+      // Otimista: a data nova aparece na hora, sem "Salvando..." no meio.
+      onEscolher: novaData => {
         if (!novaData || novaData === task.dueISO) return;
-        const row = document.getElementById("dueDateRow");
-        if (row) row.innerHTML = `<span class="side-date-saving">Salvando...</span>`;
-        // Passa pela fila de ações: "a entrega é nesse dia" continua certo
-        // mesmo se chegar atrasado, então sem internet fica guardado e vai
-        // sozinho quando voltar (ver js/fila-offline.js). Antes essa era a
-        // única troca de data que NÃO usava a fila, por engano.
-        const data = await enviarEscritaNoBackend(
-          { acao: "alterarEntrega", taskId: task.id, novaData },
-          "mudar a entrega desejada"
-        );
-        if (!data.ok) {
-          const rowAgora = document.getElementById("dueDateRow");
-          if (rowAgora) rowAgora.innerHTML = `<span class="side-date-saving">${data.error ? String(data.error).slice(0, 40) : "Não consegui salvar"}</span>`;
-          setTimeout(() => renderDetail(), 1800);
-          return;
-        }
+        const dueISOAntigo = task.dueISO;
+        const dueAntigo = task.due;
         // Mantém sempre o mesmo padrão visual de antes (ex: "27 jul"),
         // nunca a data crua (AAAA-MM-DD) — isso é que ficava feio.
         const [ano, mes, dia] = novaData.split("-").map(Number);
-        task.dueISO = novaData;
-        task.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
+        marcarEscritaOtimista(task, {
+          dueISO: novaData,
+          due: `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`,
+        });
         renderDetail();
         render(); // atualiza a data no card do quadro também
-        agendarAtualizacaoKanban();
+
+        // Passa pela fila de ações: "a entrega é nesse dia" continua certo
+        // mesmo se chegar atrasado, então sem internet fica guardado e vai
+        // sozinho quando voltar (ver js/fila-offline.js).
+        enviarEscritaNoBackend(
+          { acao: "alterarEntrega", taskId: task.id, novaData },
+          "mudar a entrega desejada"
+        ).then(data => {
+          if (data && data.ok) { agendarAtualizacaoKanban(); return; }
+          task.dueISO = dueISOAntigo;
+          task.due = dueAntigo;
+          desmarcarEscritaOtimista(task, ["dueISO", "due"]);
+          if (tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) renderDetail();
+          render();
+          mostrarToast((data && data.error) ? String(data.error).slice(0, 60) : "Não consegui salvar a nova data.", "erro");
+        });
       },
     });
   });
@@ -1977,11 +2053,18 @@ function wireExcluirComentario() {
   document.querySelectorAll(".comment-delete-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (!confirm("Excluir esse comentário?")) return;
-      const bolha = btn.closest(".comment-bubble");
-      if (bolha) bolha.style.opacity = "0.4";
-      const ok = await excluirComentarioNoBackend(btn.dataset.commentId);
-      if (ok) recarregarThreadAtiva();
-      else if (bolha) bolha.style.opacity = "1";
+      // Otimista: o balão sai na hora. Antes ele ficava meio transparente
+      // esperando o Runrun.it — e depois ainda recarregava a conversa
+      // inteira pra sumir de verdade.
+      const commentId = btn.dataset.commentId;
+      const guardado = tirarComentarioDasFontes(commentId);
+      if (guardado) redesenharThreadAtiva();
+      const ok = await excluirComentarioNoBackend(commentId);
+      if (!ok) {
+        devolverComentarioAFonte(guardado);
+        redesenharThreadAtiva();
+        mostrarToast("Não consegui excluir esse comentário agora.", "erro");
+      }
     });
   });
 
@@ -1999,10 +2082,25 @@ function wireExcluirComentario() {
       if (picker.innerHTML === "") {
         picker.innerHTML = EMOJIS_REACAO.map(em => `<button type="button" class="emoji-opt">${em}</button>`).join("");
         picker.querySelectorAll(".emoji-opt").forEach(emojiBtn => {
-          emojiBtn.addEventListener("click", async () => {
+          emojiBtn.addEventListener("click", () => {
             picker.hidden = true;
-            const ok = await reagirComentarioNoBackend(btn.dataset.commentId, emojiBtn.textContent);
-            if (ok) recarregarThreadAtiva();
+            const commentId = btn.dataset.commentId;
+            const emoji = emojiBtn.textContent;
+            // Otimista: a reação aparece no balão na hora. Antes o emoji só
+            // surgia depois da resposta do Runrun.it E de uma RECARGA
+            // inteira da conversa — duas idas ao servidor pra mostrar uma
+            // carinha que a gente já sabia qual era.
+            const comentario = acharComentarioNasFontes(commentId);
+            const reacoesAntes = comentario ? (comentario.reactions || []).map(r => ({ ...r, users: (r.users || []).slice() })) : null;
+            if (comentario) {
+              aplicarReacaoOtimista(comentario, emoji);
+              redesenharThreadAtiva();
+            }
+            reagirComentarioNoBackend(commentId, emoji).then(ok => {
+              if (ok) return;
+              if (comentario) { comentario.reactions = reacoesAntes; redesenharThreadAtiva(); }
+              mostrarToast("Não consegui registrar sua reação agora.", "erro");
+            });
           });
         });
       }
@@ -2039,18 +2137,26 @@ function iniciarEdicaoComentario(commentId) {
   input.focus();
   input.setSelectionRange(input.value.length, input.value.length);
 
-  const salvar = async () => {
+  const salvar = () => {
     const novoTexto = input.value.trim();
     if (!novoTexto || novoTexto === comentario.texto) { cancelar(); return; }
-    textEl.innerHTML = `<p class="bee-vazio" style="padding:0;text-align:left;">Salvando...</p>`;
-    const ok = await editarComentarioNoBackend(commentId, novoTexto);
-    if (ok) {
-      comentario.texto = novoTexto;
-      recarregarThreadAtiva();
-    } else {
-      textEl.innerHTML = original;
+    // Otimista: o texto novo já fica valendo. Antes o balão virava
+    // "Salvando..." e a pessoa esperava a resposta pra ver o próprio texto.
+    // Mexe no comentário DA FONTE (não só no da tarefa aberta), senão o
+    // próximo redesenho recalcularia a partir da fonte e traria o texto
+    // velho de volta.
+    const naFonte = acharComentarioNasFontes(commentId) || comentario;
+    const textoAntes = naFonte.texto;
+    naFonte.texto = novoTexto;
+    comentario.texto = novoTexto;
+    redesenharThreadAtiva();
+    editarComentarioNoBackend(commentId, novoTexto).then(ok => {
+      if (ok) return;
+      naFonte.texto = textoAntes;
+      comentario.texto = textoAntes;
+      redesenharThreadAtiva();
       mostrarToast("Não consegui salvar a edição agora. Tenta de novo.", "erro");
-    }
+    });
   };
 
   textEl.querySelector(".comment-edit-cancelar").addEventListener("click", cancelar);

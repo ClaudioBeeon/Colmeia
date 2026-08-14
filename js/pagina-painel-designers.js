@@ -1115,13 +1115,14 @@ function pnlRenderTarefasModal() {
     </div>
   ` : "";
 
-  corpo.innerHTML = `
+  const estaveis = pnlListaEstavel(st, `aba:${st.abaAtiva || "-"}`, lista);
+  pnlPintarListaPreservandoRolagem(corpo, `
     ${abasHtml}
     <div class="pnl-tarefas-lista">
-      ${lista.length ? lista.map(t => pnlLinhaTarefaHTML(t, st.mostrarDesigner)).join("")
+      ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, st.mostrarDesigner, x.saiu)).join("")
         : `<div class="pnl-vazio">Nada aqui.</div>`}
     </div>
-  `;
+  `);
 
   corpo.querySelectorAll("[data-pnl-aba]").forEach(btn => {
     btn.addEventListener("click", () => { st.abaAtiva = btn.dataset.pnlAba; pnlRenderTarefasModal(); });
@@ -1164,7 +1165,8 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
     linhas.sort((a, b) => (a.dueISO || "9999").localeCompare(b.dueISO || "9999"));
   }
 
-  corpo.innerHTML = `
+  const estaveis = pnlListaEstavel(st, `esf:${st.filtroPessoa || "-"}:${st.ordenacao}`, linhas);
+  pnlPintarListaPreservandoRolagem(corpo, `
     ${tiraHtml}
     <div class="pnl-ordenar-row">
       <span class="pnl-ordenar-label">Ordenar por:</span>
@@ -1173,9 +1175,9 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
       <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba">Aba</button>
     </div>
     <div class="pnl-tarefas-lista">
-      ${linhas.length ? linhas.map(t => pnlLinhaTarefaHTML(t, true)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
+      ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
     </div>
-  `;
+  `);
 
   corpo.querySelectorAll("[data-pnl-esforco-filtro]").forEach(el => {
     el.addEventListener("click", () => {
@@ -1194,6 +1196,13 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
 /** Acha, em qualquer formato de estado do modal, a tarefa de verdade por id
  *  (pra editar data/etapa em cima do objeto real de tasksTodas). */
 function pnlAcharTarefaPorId(st, id) {
+  // Primeiro o objeto VIVO do quadro: a varredura em segundo plano troca as
+  // tarefas por objetos novos, e editar uma cópia velha mudaria um objeto
+  // que já não está em lugar nenhum (o mesmo bug de comparar por referência
+  // documentado no CLAUDE.md, só que na hora de escrever).
+  const viva = (typeof tasksTodas !== "undefined" ? tasksTodas : []).find(t => String(t.id) === String(id));
+  if (viva) return viva;
+
   const pools = [];
   if (st.lista) pools.push(st.lista);
   if (st.abas) st.abas.forEach(a => pools.push(a.lista));
@@ -1202,17 +1211,154 @@ function pnlAcharTarefaPorId(st, id) {
     const achada = pool.find(t => String(t.id) === String(id));
     if (achada) return achada;
   }
+  // Linha que já saiu da lista mas continua na tela (ver pnlListaEstavel).
+  if (st._linhasConhecidas) return st._linhasConhecidas.get(String(id)) || null;
   return null;
 }
 
 /** Depois de editar data/etapa, refaz os números que podem ter mudado —
- *  esforço/KPIs de Runrun.it — sem fechar o pop-up. */
-function pnlAtualizarTudoAposEditar(st) {
+ *  esforço/KPIs de Runrun.it — sem fechar o pop-up.
+ *
+ *  `confirmado` = a mudança já foi aceita pelo Runrun.it. Só aí é que vale
+ *  mandar o quadro se atualizar: pedir a atualização durante a mudança
+ *  otimista faria a busca voltar com o valor ANTIGO (a escrita ainda nem
+ *  chegou lá) — era um dos jeitos de a data "aparecer e voltar". */
+function pnlAtualizarTudoAposEditar(st, confirmado) {
   if (st.modoEsforco) st.esforco = pnlEsforcoPorResponsavel();
   pnlRenderTarefasModal();
   pnlRenderDesigners();
   pnlRenderRunrunKPIs();
-  if (typeof agendarAtualizacaoKanban === "function") agendarAtualizacaoKanban();
+  if (confirmado && typeof agendarAtualizacaoKanban === "function") agendarAtualizacaoKanban();
+}
+
+/**
+ * Troca a Entrega Desejada NA HORA, sem esperar o Runrun.it.
+ *
+ * O que era antes: o botão virava "Salvando...", a tela travava esperando
+ * a resposta e só então a lista se refazia. Como a lista é ordenada por
+ * data, a tarefa editada pulava de lugar (ou sumia da lista, se a data
+ * nova a tirasse de "atrasadas/hoje") no mesmo instante em que a pessoa
+ * ainda estava olhando pra ela — a queixa do Cláudio de "estou olhando
+ * uma, quando vejo ela foi pra cima sozinha e perdi ela".
+ *
+ * Agora são três coisas juntas, e é a combinação delas que resolve:
+ *   1. a data muda na hora (otimista) e volta sozinha só se o Runrun.it
+ *      recusar de verdade;
+ *   2. `marcarEscritaOtimista` impede a varredura automática do quadro de
+ *      trazer a data velha de volta nos segundos seguintes;
+ *   3. a ordem da lista fica CONGELADA enquanto o pop-up está aberto (ver
+ *      pnlListaEstavel) — a linha editada não sai do lugar nem some;
+ *      quando ela deixa de pertencer à lista, fica ali esmaecida com um
+ *      aviso, em vez de desaparecer debaixo do olho de quem editou.
+ */
+function pnlTrocarDataOtimista(st, t, novaData) {
+  if (!novaData || novaData === t.dueISO) return;
+  const dueISOAntigo = t.dueISO;
+  const dueAntigo = t.due;
+  const [ano, mes, dia] = novaData.split("-").map(Number);
+
+  marcarEscritaOtimista(t, {
+    dueISO: novaData,
+    due: `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`,
+  });
+  pnlAtualizarTudoAposEditar(st, false);
+  pnlPiscarLinhaDaTarefa(t.id);
+
+  enviarEscritaNoBackend({ acao: "alterarEntrega", taskId: t.id, novaData }, "mudar a entrega desejada")
+    .then(resultado => {
+      if (resultado && resultado.ok) {
+        if (pnlTarefasEstadoAtual === st && typeof agendarAtualizacaoKanban === "function") agendarAtualizacaoKanban();
+        return;
+      }
+      // Recusa de verdade — devolve a data antiga e tira a proteção, senão
+      // a varredura ficaria segurando o valor errado até a janela vencer.
+      t.dueISO = dueISOAntigo;
+      t.due = dueAntigo;
+      desmarcarEscritaOtimista(t, ["dueISO", "due"]);
+      if (pnlTarefasEstadoAtual === st) pnlAtualizarTudoAposEditar(st, false);
+      mostrarToast((resultado && resultado.error) ? String(resultado.error).slice(0, 60) : "Não consegui salvar a nova data.", "erro");
+    });
+}
+
+/** Pisca a linha da tarefa que acabou de mudar — é o que dá a sensação de
+ *  "pronto, mudou" sem nenhum "Salvando..." no meio. */
+function pnlPiscarLinhaDaTarefa(taskId) {
+  requestAnimationFrame(() => {
+    const linha = document.querySelector(`.pnl-tarefa-row[data-pnl-row-id="${CSS.escape(String(taskId))}"]`);
+    if (!linha) return;
+    linha.classList.remove("pnl-tarefa-row-mudou");
+    void linha.offsetWidth; // reinicia a animação se clicar duas vezes seguidas
+    linha.classList.add("pnl-tarefa-row-mudou");
+  });
+}
+
+/**
+ * ORDEM CONGELADA — a razão de existir: a lista do pop-up é ordenada por
+ * data/tempo/etapa, ou seja, por campos que a própria pessoa está editando
+ * ali dentro. Reordenar a cada edição é matematicamente certo e na prática
+ * insuportável: o item que você acabou de mexer pula de lugar, e o próximo
+ * que você ia mexer já não está mais onde estava.
+ *
+ * Então: a ordem é decidida UMA VEZ, quando a visão abre, e não muda mais
+ * enquanto o pop-up estiver aberto naquela visão. Trocar de aba, de filtro
+ * de pessoa ou de critério de ordenação é um pedido explícito de reordenar
+ * — aí sim recalcula (é a `chaveVisao`).
+ *
+ * Tarefa que deixou de pertencer à lista (mudou de data e saiu de "hoje",
+ * ou alguém a entregou do outro lado) NÃO some: continua na mesma linha,
+ * esmaecida, com o aviso de que já não está mais ali. Some de verdade só
+ * quando o pop-up for reaberto. Sumir na hora é o mesmo problema de pular
+ * de lugar, só que pior.
+ */
+function pnlListaEstavel(st, chaveVisao, linhas) {
+  const idsAgora = new Map(linhas.map(t => [String(t.id), t]));
+
+  if (st._ordemVisao !== chaveVisao) {
+    st._ordemVisao = chaveVisao;
+    st._ordemIds = linhas.map(t => String(t.id));
+    st._linhasConhecidas = idsAgora;
+    return linhas.map(t => ({ t, saiu: false }));
+  }
+
+  // Guarda a versão mais nova de cada tarefa que continua na lista, pra
+  // quando ela sair a linha ainda mostrar o dado certo (a data NOVA, que é
+  // justamente o motivo de ela ter saído).
+  idsAgora.forEach((t, id) => st._linhasConhecidas.set(id, t));
+
+  const saida = [];
+  const vivas = typeof tasksTodas !== "undefined" ? tasksTodas : [];
+  st._ordemIds.forEach(id => {
+    // Pra quem já saiu da lista, pega a versão viva do quadro se ainda
+    // existir — assim a linha esmaecida mostra o dado ATUAL da tarefa
+    // (inclusive a data nova, que foi o motivo de ela ter saído).
+    let t = idsAgora.get(id);
+    if (!t) {
+      const viva = vivas.find(x => String(x.id) === id);
+      if (viva) st._linhasConhecidas.set(id, viva);
+      t = st._linhasConhecidas.get(id);
+    }
+    if (t) saida.push({ t, saiu: !idsAgora.has(id) });
+  });
+  const jaListados = new Set(st._ordemIds);
+  linhas.forEach(t => {
+    const id = String(t.id);
+    if (jaListados.has(id)) return;
+    st._ordemIds.push(id);
+    saida.push({ t, saiu: false });
+  });
+  return saida;
+}
+
+/** Redesenha o corpo do pop-up sem perder onde a pessoa estava na rolagem
+ *  — a lista pode ser longa e refazer o HTML joga o scroll pro topo. */
+function pnlPintarListaPreservandoRolagem(corpo, html) {
+  const anterior = corpo.querySelector(".pnl-tarefas-lista");
+  const rolagem = anterior ? anterior.scrollTop : 0;
+  const rolagemCorpo = corpo.scrollTop;
+  corpo.innerHTML = html;
+  const nova = corpo.querySelector(".pnl-tarefas-lista");
+  if (nova && rolagem) nova.scrollTop = rolagem;
+  if (rolagemCorpo) corpo.scrollTop = rolagemCorpo;
 }
 
 function pnlWireLinhasDoModal(corpo, st) {
@@ -1233,20 +1379,7 @@ function pnlWireLinhasDoModal(corpo, st) {
       abrirCalendarioColmeia({
         ancoraEl: btn,
         valorInicial: t.dueISO || "",
-        onEscolher: async novaData => {
-          if (!novaData || novaData === t.dueISO) return;
-          btn.textContent = "Salvando...";
-          const resultado = await enviarEscritaNoBackend({ acao: "alterarEntrega", taskId: t.id, novaData }, "mudar a entrega desejada");
-          if (!resultado.ok) {
-            mostrarToast(resultado.error ? String(resultado.error).slice(0, 60) : "Não consegui salvar a nova data.", "erro");
-            pnlRenderTarefasModal();
-            return;
-          }
-          const [ano, mes, dia] = novaData.split("-").map(Number);
-          t.dueISO = novaData;
-          t.due = `${String(dia).padStart(2, "0")} ${MESES_ABREV[mes - 1]}`;
-          pnlAtualizarTudoAposEditar(st);
-        },
+        onEscolher: novaData => pnlTrocarDataOtimista(st, t, novaData),
       });
     });
   });
@@ -1288,7 +1421,7 @@ function pnlCorDaEtapa(t) {
 // (stroke-width 1.8) dos outros ícones já usados no painel.
 const PNL_ICONE_CALENDARIO = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 
-function pnlLinhaTarefaHTML(t, mostrarDesigner) {
+function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista) {
   const hoje = hojeISO();
   const atrasada = t.dueISO && t.dueISO < hoje && !t.entregue;
   const dataCurta = t.due || "sem data";
@@ -1302,10 +1435,11 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner) {
   const tempoCadastrado = pnlTempoMedioCadastrado(t.assignee, t.client);
 
   return `
-    <div class="pnl-tarefa-row">
+    <div class="pnl-tarefa-row ${saiuDaLista ? "pnl-tarefa-row-saiu" : ""}" data-pnl-row-id="${escaparHTML(String(t.id))}">
       <div class="pnl-tarefa-info">
         <button type="button" class="pnl-tarefa-titulo-btn" data-pnl-abrir-tarefa="${escaparHTML(String(t.id))}" title="Abrir a tarefa no Colmeia">${escaparHTML(t.title || "Sem título")}</button>
         <div class="pnl-tarefa-badges">
+          ${saiuDaLista ? `<span class="pnl-tag pnl-tag-saiu" title="Continua aqui só pra você não perder ela de vista — some quando reabrir o pop-up">já não entra nesta lista</span>` : ""}
           ${designerCol ? `<span class="pnl-tag" style="background:${designerCol.bg};color:${designerCol.fg};">${escaparHTML(t.assignee)}</span>` : ""}
           ${clienteCol ? `<span class="pnl-tag" style="background:${clienteCol.bg};color:${clienteCol.fg};">${escaparHTML(t.client)}</span>` : ""}
           ${publicacaoCurta ? `<span class="pnl-pub" title="Data de Publicação (Runrun.it)">${PNL_ICONE_CALENDARIO} Publica ${escaparHTML(publicacaoCurta)}</span>` : ""}

@@ -292,6 +292,28 @@
   font-family: var(--font-body); transition: box-shadow var(--dur-fast) var(--ease-apple);
 }
 .pnl-tarefa-row:hover { box-shadow: var(--shadow-hover); }
+
+/* "Mudou agora" — o pulso curto que substitui o antigo "Salvando...".
+   A mudança já está na tela quando isto roda; a animação só marca ONDE
+   ela aconteceu, pra o olho achar a linha certa numa lista longa. */
+@keyframes pnlLinhaMudou {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 55%, transparent); }
+  100% { box-shadow: 0 0 0 12px transparent; }
+}
+.pnl-tarefa-row-mudou { animation: pnlLinhaMudou 900ms var(--ease-apple); }
+
+/* Linha que já não pertence a esta lista (mudou de data, foi entregue,
+   alguém mexeu do outro lado) mas continua visível de propósito — ver
+   pnlListaEstavel, js/pagina-painel-designers.js. Fica discreta sem ficar
+   ilegível: continua clicável e editável. */
+.pnl-tarefa-row-saiu { opacity: 0.62; border-style: dashed; box-shadow: none; }
+.pnl-tarefa-row-saiu:hover { opacity: 1; box-shadow: var(--shadow-card); }
+.pnl-tag-saiu {
+  background: var(--border); color: var(--text-muted); font-weight: 600; letter-spacing: 0.01em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pnl-tarefa-row-mudou { animation: none; }
+}
 .pnl-tarefa-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
 .pnl-tarefa-titulo-btn {
   border: none; background: none; cursor: pointer; text-align: left; padding: 0; font-family: var(--font-display);

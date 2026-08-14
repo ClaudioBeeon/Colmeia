@@ -762,9 +762,25 @@ async function abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, btn) {
   menu.querySelectorAll("button").forEach(opt => {
     opt.addEventListener("click", async () => {
       fechar();
+      // A fotinho entra na fileira NA HORA, sem esperar o Runrun.it —
+      // mesmo desenho de adicionarPessoaOtimista (js/regras-briefing.js) e
+      // de adicionarPessoaViaQuickPicker (js/pagina-repasse.js). Antes daqui
+      // pra frente o pill ficava parado por segundos, sem sinal nenhum de
+      // que o clique tinha valido.
+      cardMaeTask.sequencia = construirSequenciaOtimistaComNovaPessoa(cardMaeTask, {
+        id: opt.dataset.userId,
+        nome: opt.dataset.userNome,
+        foto: opt.dataset.userFoto || null,
+      });
+      rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId, true);
+
       if (!cardMaeTask.workflowId) {
         const criado = await criarRegraNoBackend(cardMaeTask.id);
-        if (!criado.ok) { mostrarToast("Não consegui criar a sequência do card mãe agora.", "erro"); return; }
+        if (!criado.ok) {
+          mostrarToast("Não consegui criar a sequência do card mãe agora.", "erro");
+          await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId); // desfaz a fotinho otimista
+          return;
+        }
         cardMaeTask.workflowId = criado.workflowId;
       }
       const ok = await adicionarNaRegraNoBackend(cardMaeTask.workflowId, opt.dataset.userId);

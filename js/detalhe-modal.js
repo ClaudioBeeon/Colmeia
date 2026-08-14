@@ -794,13 +794,17 @@ function abrirMenuEtapa(task, statusBadge, aoMudar, voltarInfo) {
       fechar();
       const statusAntigo = task.status;
       const runrunStageAntigo = task.runrunStage;
-      task.status = null;
-      task.runrunStage = voltarBtn.dataset.voltarLabel;
+      // A varredura do quadro roda 900ms depois de qualquer clique e traz o
+      // estado que o Runrun.it AINDA tem (a escrita nem chegou lá) — sem
+      // marcar, a etapa voltava sozinha pra antiga por um instante antes de
+      // ir pra nova. Ver marcarEscritaOtimista, js/fila-offline.js.
+      marcarEscritaOtimista(task, { status: null, runrunStage: voltarBtn.dataset.voltarLabel });
       redesenhar();
       const ok = await moverEtapaArbitrariaNoBackend(task.id, voltarBtn.dataset.voltarStateId);
       if (!ok) {
         task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
         task.runrunStage = runrunStageAntigo;
+        desmarcarEscritaOtimista(task, ["status", "runrunStage"]);
         redesenhar();
         mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
       } else {
@@ -815,18 +819,21 @@ function abrirMenuEtapa(task, statusBadge, aoMudar, voltarInfo) {
       fechar();
       const statusAntigo = task.status;
       const runrunStageAntigo = task.runrunStage;
-      task.status = opt.dataset.status;
       // Atualiza também o nome da etapa: sem isso, um card que estava numa
       // etapa fora do quadro ("Cards Mães") continuava mostrando esse nome
       // antigo no crachá, porque é ele que aparece quando não bate com
       // nenhuma das 5 colunas.
       const colunaEscolhida = columnsDef.find(c => c.key === opt.dataset.status);
-      if (colunaEscolhida) task.runrunStage = colunaEscolhida.label;
+      marcarEscritaOtimista(task, {
+        status: opt.dataset.status,
+        runrunStage: colunaEscolhida ? colunaEscolhida.label : runrunStageAntigo,
+      });
       redesenhar();
       const ok = await moverEtapaNoBackend(task.id, opt.dataset.status);
       if (!ok) {
         task.status = statusAntigo; // Runrun.it recusou — volta pro estado real
         task.runrunStage = runrunStageAntigo;
+        desmarcarEscritaOtimista(task, ["status", "runrunStage"]);
         redesenhar();
         mostrarToast("Não consegui mover essa tarefa de etapa agora.", "erro");
       } else {
@@ -1343,13 +1350,19 @@ function renderDetail() {
         mostrarToast("Digita um número de horas válido (maior que zero).", "erro");
         return;
       }
-      const ok = await ajustarEstimativaNoBackend(task.id, horas * 60);
-      if (ok) {
-        task.estimateMinutes = Math.round(horas * 60);
+      // Otimista: a estimativa nova já vale na tela (a barra de progresso
+      // do card se recalcula em cima dela), e volta sozinha se o Runrun.it
+      // recusar.
+      const estimativaAntes = task.estimateMinutes;
+      marcarEscritaOtimista(task, { estimateMinutes: Math.round(horas * 60) });
+      render();
+      ajustarEstimativaNoBackend(task.id, horas * 60).then(ok => {
+        if (ok) return;
+        task.estimateMinutes = estimativaAntes;
+        desmarcarEscritaOtimista(task, ["estimateMinutes"]);
         render();
-      } else {
         mostrarToast("Não consegui ajustar a estimativa agora. Tenta de novo em alguns segundos.", "erro");
-      }
+      });
     });
   }
 
@@ -1388,23 +1401,29 @@ function renderDetail() {
       editarDescricaoBtn.hidden = false;
     });
 
-    document.getElementById("descEditSalvar").addEventListener("click", async () => {
+    document.getElementById("descEditSalvar").addEventListener("click", () => {
       const original = document.getElementById("descTextReal");
-      const salvarBtn = document.getElementById("descEditSalvar");
       const novoHtml = original.innerHTML;
-      salvarBtn.disabled = true;
-      salvarBtn.textContent = "Salvando...";
-      const ok = await salvarDescricaoNoBackend(task.id, novoHtml);
-      salvarBtn.disabled = false;
-      salvarBtn.textContent = "Salvar";
-      if (ok) {
-        original.contentEditable = "false";
-        original.classList.remove("editando");
-        document.getElementById("descEditActions").hidden = true;
-        editarDescricaoBtn.hidden = false;
-      } else {
+      // Otimista: fecha o editor na hora, sem o botão virar "Salvando...".
+      // Se o Runrun.it recusar, o editor VOLTA a abrir com o texto que a
+      // pessoa escreveu — o trabalho dela nunca se perde por causa disso.
+      original.contentEditable = "false";
+      original.classList.remove("editando");
+      document.getElementById("descEditActions").hidden = true;
+      editarDescricaoBtn.hidden = false;
+
+      salvarDescricaoNoBackend(task.id, novoHtml).then(ok => {
+        if (ok) return;
+        const aindaAberta = document.getElementById("descTextReal");
+        if (aindaAberta && tasks[detailIdx] && String(tasks[detailIdx].id) === String(task.id)) {
+          aindaAberta.innerHTML = novoHtml;
+          aindaAberta.contentEditable = "true";
+          aindaAberta.classList.add("editando");
+          document.getElementById("descEditActions").hidden = false;
+          editarDescricaoBtn.hidden = true;
+        }
         mostrarToast("Não consegui salvar a descrição agora. Tenta de novo em alguns segundos.", "erro");
-      }
+      });
     });
   }
 

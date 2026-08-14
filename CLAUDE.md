@@ -1893,6 +1893,76 @@ trazer dependência num projeto sem bundler.
   clique. ⚠️ **Campo que o card enche sob demanda TEM que entrar nessa lista de preservação** —
   senão nasce vazio a cada atualização, sem erro nenhum, e ninguém percebe.
 
+## Auditoria: nada mais espera o Runrun.it pra mudar na tela (2026-08-14)
+
+Varredura em TODO o app atrás de ação que só reagia depois da resposta do Runrun.it. Achado: o
+padrão otimista já valia em vários lugares (arrastar card, menu de etapa, play/pause, datas da
+Fila de repasse, setas do pill preto, transferir card mãe), e faltava nos outros — sempre com o
+mesmo sintoma: "Salvando...", pastilha cinza girando, ou simplesmente nada acontecendo por vários
+segundos. Como a fila do Apps Script é uma só pra todo mundo (ver "Por que o card demora a abrir"),
+esses "vários segundos" viravam cinco, dez.
+
+**A regra, agora sem exceção: o clique muda a tela ANTES de qualquer `await`.** O pedido vai por
+trás; se o Runrun.it recusar de verdade, desfaz e avisa. Nunca o contrário.
+
+### `marcarEscritaOtimista` — a peça que faltava (js/fila-offline.js)
+
+Mudar na hora não bastava: a varredura do quadro roda **900ms depois de qualquer clique** e traz o
+estado que o Runrun.it AINDA tem — o antigo, porque a escrita nem chegou lá. A mudança aparecia e
+sumia sozinha. Era isso o "aparece e volta" do painel dos designers.
+
+Cada conserto pontual disso virava mais uma linha na lista de campos preservados de
+`atualizarKanbanEmBackground` — lista que só cresce e cujo esquecimento não dá erro nenhum, só some
+da tela. Agora é o contrário: quem muda **declara**, e a varredura respeita sem saber que campo é.
+
+```js
+marcarEscritaOtimista(t, { dueISO: "2026-08-20", due: "20 ago" });  // muda e protege
+desmarcarEscritaOtimista(t, ["dueISO", "due"]);                     // só no rollback
+```
+
+Janela de 25s, não pra sempre — senão mudança feita por outra pessoa nunca mais chegaria na tela.
+E a marca **não** se apaga quando o Runrun.it confirma: logo depois de uma escrita a leitura dele
+ainda devolve o valor velho por alguns segundos (mesma razão da proteção do cronômetro).
+
+### O que virou otimista nesta rodada
+
+| Onde | Era | Ficou |
+|---|---|---|
+| Painel dos designers → trocar data | "Salvando...", lista reordenava e a tarefa sumia | muda na hora, linha **não sai do lugar** |
+| "Ver regra" → Transferir/Voltar | 3 idas ao Runrun.it **em fila** (~5s+) | muda na hora, as 2 idas em paralelo |
+| "Ver regra" → adicionar pessoa | linha cinza com spinner até confirmar | entra normal, com animação de entrada |
+| Card do quadro → trocar data | "Salvando..." | muda na hora |
+| Detalhe (lateral) → trocar data | "Salvando..." | muda na hora |
+| Card do quadro → avançar sequência | nada acontecia até responder | reusa `avancarSequenciaOtimista` |
+| Card do quadro → reatribuir | foto só trocava depois | troca na hora |
+| Pill do card mãe → adicionar pessoa | pill parado por segundos | fotinho entra na hora |
+| Comentário → reagir | emoji só depois da resposta **+ recarga da conversa** | aparece na hora, com toggle |
+| Comentário → editar | "Salvando..." | texto novo já vale |
+| Comentário → excluir | balão semitransparente esperando | sai na hora |
+| Ajustar estimativa / salvar descrição | "Salvando..." | aplica na hora |
+
+### Ordem congelada: por que a lista do painel não reordena mais
+
+A lista do pop-up é ordenada por data/tempo/etapa — ou seja, **pelos campos que a pessoa está
+editando ali dentro**. Reordenar a cada edição é matematicamente certo e na prática insuportável:
+o item que você acabou de mexer pula de lugar e o próximo já não está mais onde estava. Queixa do
+Cláudio: *"estou olhando uma, quando vejo ela foi pra cima sozinha e perdi ela"*.
+
+`pnlListaEstavel` (js/pagina-painel-designers.js) decide a ordem **uma vez**, quando a visão abre,
+e não mexe mais. Trocar de aba, de filtro ou de critério é pedido explícito de reordenar — aí sim
+recalcula (é a `chaveVisao`). Tarefa que deixou de pertencer à lista **não some**: fica na mesma
+linha, esmaecida e tracejada, com o aviso "já não entra nesta lista", e continua clicável. Some de
+verdade só quando o pop-up for reaberto. Sumir na hora é o mesmo problema de pular de lugar, pior.
+
+### Dois bugs achados de raspão
+
+- **`renderSequenciaNoHeaderSeAberta` não religava as setas.** Trocar o `innerHTML` cria botões
+  novos, que nascem sem clique nenhum ligado — mexer na sequência pelo modal deixava as setinhas do
+  pill preto atrás dele **mortas** até reabrir a tarefa. Sem erro, sem sintoma além de "não faz nada".
+- **`atualizarSequenciaEModal` repintava sempre.** No caminho feliz (o Runrun.it confirmou o que já
+  estava na tela) repintar não muda nada e ainda pisca e derruba o que estiver digitado na busca de
+  pessoas. Agora compara `assinaturaDaSequencia` antes e só repinta se mudou de verdade.
+
 ## Medir antes de adivinhar: `backend_chamada` no PostHog (2026-08-13)
 
 `medirChamadaDoBackend` (js/config.js) anota no PostHog **todo** pedido ao backend, nos dois funis

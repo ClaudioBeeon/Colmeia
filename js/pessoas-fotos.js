@@ -655,6 +655,13 @@ async function atualizarKanbanEmBackground() {
     const emAjustesAgora = [];
     todasMapeadas.forEach(nova => {
       const antiga = antigasPorId[nova.id];
+      // O que a pessoa acabou de mudar na tela e o Runrun.it ainda não teve
+      // tempo de processar (ver marcarEscritaOtimista, js/fila-offline.js).
+      // Fica AQUI, no laço de `todasMapeadas`, e não no laço de baixo (que
+      // só percorre `novasTarefas`): assim vale também pras tarefas de
+      // outras etapas — que é justamente o que o painel dos designers e a
+      // Central mostram.
+      if (typeof preservarEscritasOtimistas === "function") preservarEscritasOtimistas(antiga, nova);
       if (antiga && antiga.sequencia !== undefined) {
         nova.sequencia = antiga.sequencia;
         nova.workflowId = antiga.workflowId;
