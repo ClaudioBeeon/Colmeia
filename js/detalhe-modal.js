@@ -2022,8 +2022,50 @@ function closeDetail() {
   if (typeof roteadorAoFecharTarefa === "function") roteadorAoFecharTarefa();
 }
 
+/**
+ * Esc fecha só a camada de cima, não o painel inteiro de uma vez
+ * (2026-08-14, achado do impeccable critique: Esc era global e
+ * incondicional — apagava um comentário meio escrito, ou fechava o
+ * painel com o seletor de destino/emoji/menções ainda aberto). Cada
+ * `if` aqui é uma camada; a primeira que estiver mesmo aberta ganha o
+ * Esc e para a função ali — o painel só fecha quando nenhuma delas
+ * está no caminho.
+ */
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeDetail();
+  if (e.key !== "Escape") return;
+  const panel = document.getElementById("taskDetail");
+  if (!panel || !panel.classList.contains("open")) return;
+
+  const mentionList = document.getElementById("mentionList");
+  if (mentionList && !mentionList.hidden) { mentionList.hidden = true; return; }
+
+  const emojiPicker = document.getElementById("emojiPicker");
+  if (emojiPicker && !emojiPicker.hidden) { emojiPicker.hidden = true; return; }
+
+  const reactPicker = document.querySelector(".comment-react-picker:not([hidden])");
+  if (reactPicker) { reactPicker.hidden = true; return; }
+
+  const chatDestinoMenu = document.getElementById("chatDestinoMenu");
+  if (chatDestinoMenu && !chatDestinoMenu.hidden) { chatDestinoMenu.hidden = true; return; }
+
+  const descEditando = document.getElementById("descTextReal");
+  if (descEditando && descEditando.classList.contains("editando")) {
+    document.getElementById("descEditCancelar")?.click();
+    return;
+  }
+
+  // Comentário com texto ainda não enviado: o primeiro Esc só tira o
+  // foco (chance de perceber e não perder o que escreveu), o segundo
+  // fecha o painel de verdade.
+  const commentInput = document.getElementById("commentInput");
+  if (commentInput && commentInput.value.trim() && document.activeElement === commentInput) {
+    commentInput.blur();
+    return;
+  }
+
+  if (panel.classList.contains("chat-open")) { fecharChatPanel(); return; }
+
+  closeDetail();
 });
 
 /**

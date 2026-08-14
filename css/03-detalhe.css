@@ -611,7 +611,12 @@
   position: absolute; top: -4px; right: -4px; display: flex; gap: 4px;
   opacity: 0; transition: opacity 0.12s var(--ease-apple);
 }
-.comment-bubble:hover .comment-bubble-acoes { opacity: 1; }
+/* :focus-within também acende as ações — sem isso, editar/excluir só
+   existiam pro mouse (2026-08-14, achado do impeccable critique): quem
+   navega por teclado nunca conseguia alcançar esses botões porque eles
+   ficavam a opacity:0 até um :hover que o teclado não dispara. */
+.comment-bubble:hover .comment-bubble-acoes,
+.comment-bubble:focus-within .comment-bubble-acoes { opacity: 1; }
 .comment-edit-btn, .comment-delete-btn {
   width: 18px; height: 18px; border-radius: 50%;
   border: none; background: var(--card-bg); color: var(--text-muted);
@@ -662,8 +667,17 @@
    .comment-body não tem mais o "cartão" nele: quem carrega a aparência
    de balão agora é só o .comment-text (e as reações), embaixo do nome. */
 .comment-meta { display: flex; align-items: baseline; gap: 7px; padding: 0 6px 1px; }
-.comment-author { font-size: 12px; font-weight: 500; color: #777777; }
-.comment-time { font-size: 10.5px; font-weight: 400; color: #9A9AA0; }
+/* Cores escurecidas e hora maior (2026-08-14, achado do impeccable
+   critique): #777777/12px dava só 4.48:1 (reprova por pouco o mínimo
+   de 4.5:1 do WCAG) e #9A9AA0/10.5px dava 2.80:1 — pra quem só quer ler
+   quem falou e quando, essas eram as letras menos legíveis da tela. */
+.comment-author { font-size: 12px; font-weight: 500; color: #5C5C63; }
+.comment-time { font-size: 12px; font-weight: 400; color: #6B6B70; }
+/* As cores acima foram escurecidas pra passar no contraste em fundo
+   claro — em fundo escuro elas fariam o oposto (ficariam apagadas
+   demais), por isso o modo escuro usa os tokens claros de sempre. */
+[data-theme="dark"] .comment-author { color: var(--text-secondary); }
+[data-theme="dark"] .comment-time { color: var(--text-muted); }
 /* Mensagem própria não repete "Você"/hora acima do balão — só o avatar
    do lado já deixa claro de quem é. (O botão "mandar pro Runrun" do
    chat da Bee, quando existe, continua visível — não é texto.) */
@@ -685,12 +699,13 @@
    Runrun.it). Sem fundo, sem contorno — só o ícone. */
 .msg-acoes { display: flex; gap: 2px; padding: 2px 6px 0; }
 .msg-acao {
-  width: 28px; height: 28px; border: none; background: transparent; color: #9A9AA0;
+  width: 28px; height: 28px; border: none; background: transparent; color: #6B6B70;
   border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
   transition: background 180ms ease-out, color 180ms ease-out;
 }
 .msg-acao svg { width: 15px; height: 15px; }
 .msg-acao:hover { background: #F5F5F5; color: #111111; }
+[data-theme="dark"] .msg-acao { color: var(--text-muted); }
 [data-theme="dark"] .msg-acao:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
 .comment-text a { color: var(--accent); text-decoration: underline; word-break: break-word; }
 .comment-text a:hover { text-decoration: none; }
@@ -727,9 +742,10 @@
   color: #111111; box-shadow: 0 2px 10px rgba(0,0,0,.05);
   transition: box-shadow 180ms ease-out;
 }
-.comment-input input::placeholder { color: #9A9AA0; font-weight: 400; }
+.comment-input input::placeholder { color: #6B6B70; font-weight: 400; }
 .comment-input input:focus { outline: none; box-shadow: 0 2px 14px rgba(0,0,0,.09); }
 [data-theme="dark"] .comment-input input { background: rgba(255,255,255,0.07); color: var(--text-primary); box-shadow: none; }
+[data-theme="dark"] .comment-input input::placeholder { color: var(--text-muted); }
 
 .comment-tool-btn {
   flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;

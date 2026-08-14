@@ -981,16 +981,16 @@ function renderComentariosHTML(task) {
       ${c._somenteLeitura ? "" : `
         <button type="button" class="comment-react-btn" data-comment-id="${c.id}" title="Reagir" aria-label="Reagir">🙂</button>
         <div class="comment-react-picker" data-comment-id="${c.id}" hidden></div>
+        ${minha ? `
         <div class="comment-bubble-acoes">
-          ${minha ? `
             <button type="button" class="comment-edit-btn" data-comment-id="${c.id}" title="Editar comentário" aria-label="Editar comentário">
               <svg viewBox="0 0 24 24" fill="none"><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-          ` : ""}
           <button type="button" class="comment-delete-btn" data-comment-id="${c.id}" title="Excluir comentário" aria-label="Excluir comentário">
             <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
         </div>
+        ` : ""}
       `}
     </div>
   `;
