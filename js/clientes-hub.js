@@ -4,10 +4,33 @@ async function carregarLinksClientes() {
   if (!COLMEIA_API_URL) return;
   try {
     const data = await chamarBackend({ acao: "listarLinksClientes" });
-    if (data.ok) linksClientes = data.links || [];
+    if (data.ok) {
+      linksClientes = data.links || [];
+      atualizarHubDoClienteAberto();
+    }
   } catch (err) {
     console.error("Falha ao carregar links de clientes:", err);
   }
+}
+
+/**
+ * BUG DE VERDADE (2026-08-14, relatado pelo Cláudio: "tem tudo
+ * cadastrado, pasta, pasta publicações, e não aparecem"): essa busca é
+ * disparada no boot (login-boot.js) sem que nada espere por ela. Se a
+ * pessoa abre uma tarefa rápido (por exemplo, logo depois de um F5), o
+ * Hub do cliente desenha ANTES de `linksClientes` chegar, mostra "Nenhum
+ * link cadastrado" e nunca mais se atualiza sozinho -- não existia
+ * nenhum gancho pra redesenhar só o Hub quando os dados finalmente
+ * chegavam. Essa função é esse gancho: se uma tarefa estiver aberta
+ * quando os links terminarem de carregar, redesenha só a grade do Hub
+ * dela (não a tarefa inteira, pra não perder scroll/edição em andamento).
+ */
+function atualizarHubDoClienteAberto() {
+  if (typeof detailIdx === "undefined" || detailIdx < 0) return;
+  const task = tasks[detailIdx];
+  if (!task) return;
+  const grid = document.getElementById("hubDoClienteGrid");
+  if (grid) grid.innerHTML = renderHubDoClienteHTML(task.client);
 }
 
 async function salvarLinksClienteNoBackend(cliente, dados) {

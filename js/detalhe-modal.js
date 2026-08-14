@@ -963,13 +963,12 @@ function renderDetail() {
               ${ehTarefaDeAlteracao(task) ? `
                 <button type="button" class="detail-tab" id="tabOriginal" role="tab" aria-selected="false" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
               ` : ""}
+              ${task.id ? `
+                <button type="button" class="detail-tab anexos-tab" id="tabAnexos" role="tab" aria-selected="false" title="Arquivos da tarefa, do card mãe e das subtarefas, tudo junto">
+                  Anexos <span class="anexos-tab-count" id="anexosTabCount" hidden>0</span>
+                </button>
+              ` : ""}
             </div>
-            <div class="detail-tabs-spacer"></div>
-            ${task.id ? `
-              <button type="button" class="detail-tab anexos-tab" id="tabAnexos" role="tab" aria-selected="false" title="Arquivos da tarefa, do card mãe e das subtarefas, tudo junto">
-                Anexos <span class="anexos-tab-count" id="anexosTabCount" hidden>0</span>
-              </button>
-            ` : ""}
           </div>
           <div class="desc-stack">
             <div class="desc-content" id="descContent">
@@ -1092,7 +1091,7 @@ function renderDetail() {
           </div>
           <div class="side-block">
             <span class="side-label">Hub do cliente</span>
-            <div class="hub-grid">
+            <div class="hub-grid" id="hubDoClienteGrid">
               ${renderHubDoClienteHTML(task.client)}
             </div>
           </div>
@@ -2527,6 +2526,20 @@ setInterval(() => {
       if (idx === detailIdx) {
         const detailTimerEl = document.getElementById("detailTimer");
         if (detailTimerEl) detailTimerEl.textContent = formatTime(task.timerSeconds);
+        // Corrige o ícone de play/pause do pill, não só o número do
+        // cronômetro (2026-08-14, relatado pelo Cláudio: "dei F5, o
+        // cronômetro continuou rodando mas o ícone ficou de play"). A
+        // foto salva localmente pro F5 abrir rápido zera `running` de
+        // propósito (ver restaurarSnapshotDoQuadro, js/pessoas-fotos.js)
+        // -- o número já se corrige sozinho aqui porque lê `task.running`
+        // fresco a cada segundo, mas o ícone tinha sido desenhado uma
+        // única vez, na hora de abrir o painel, com o valor velho (falso)
+        // e nunca mais era tocado.
+        const playBtn = document.getElementById("detailPlay");
+        if (playBtn && playBtn.getAttribute("aria-label") !== "Pausar tarefa") {
+          playBtn.innerHTML = pauseIcon;
+          playBtn.setAttribute("aria-label", "Pausar tarefa");
+        }
       }
       if (task.tempoMedioMinutos) {
         task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
