@@ -653,7 +653,7 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
       // backend, então ficava parada por segundos parecendo travada; e um
       // segundo clique durante essa espera nem tinha trava nenhuma. Ver o
       // comentário grande em wireWorkflowArrows, js/detalhe-modal.js.
-      if (cardMaeTask._sequenciaAcaoEmAndamento) return;
+      if (cardMaeTask._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
       cardMaeTask._sequenciaAcaoEmAndamento = true;
       prevBtn.disabled = true;
 
@@ -682,7 +682,7 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
   const nextBtn = face.querySelector("#navNextArrow");
   if (nextBtn) {
     nextBtn.addEventListener("click", async () => {
-      if (cardMaeTask._sequenciaAcaoEmAndamento) return;
+      if (cardMaeTask._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
       cardMaeTask._sequenciaAcaoEmAndamento = true;
       nextBtn.disabled = true;
 
@@ -716,7 +716,7 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
   const deliverBtn = face.querySelector("#navDeliverBtn");
   if (deliverBtn && !cardMaeTask.entregue) {
     deliverBtn.addEventListener("click", async () => {
-      if (cardMaeTask._sequenciaAcaoEmAndamento) return;
+      if (cardMaeTask._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
       cardMaeTask._sequenciaAcaoEmAndamento = true;
       deliverBtn.disabled = true;
       // Pausar o cronômetro e entregar/avançar de verdade correm juntos
@@ -772,20 +772,32 @@ async function abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, btn) {
         nome: opt.dataset.userNome,
         foto: opt.dataset.userFoto || null,
       });
+      // ⚠️ MESMO CADEADO das setas de transferir/voltar logo abaixo neste
+      // arquivo (2026-08-14, ver o comentário grande em cima de
+      // adicionarPessoaOtimista, js/regras-briefing.js, pro porquê:
+      // "complete_workflow_step" entrega a tarefa em vez de transferir se
+      // rodar antes desta adição confirmar no Runrun.it). Sem isto, clicar
+      // em "Transferir" no pill logo depois de adicionar alguém aqui tinha
+      // o mesmo risco de entregar a tarefa por engano.
+      cardMaeTask._sequenciaAcaoEmAndamento = true;
       rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId, true);
 
-      if (!cardMaeTask.workflowId) {
-        const criado = await criarRegraNoBackend(cardMaeTask.id);
-        if (!criado.ok) {
-          mostrarToast("Não consegui criar a sequência do card mãe agora.", "erro");
-          await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId); // desfaz a fotinho otimista
-          return;
+      try {
+        if (!cardMaeTask.workflowId) {
+          const criado = await criarRegraNoBackend(cardMaeTask.id);
+          if (!criado.ok) {
+            mostrarToast("Não consegui criar a sequência do card mãe agora.", "erro");
+            await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId); // desfaz a fotinho otimista
+            return;
+          }
+          cardMaeTask.workflowId = criado.workflowId;
         }
-        cardMaeTask.workflowId = criado.workflowId;
+        const ok = await adicionarNaRegraNoBackend(cardMaeTask.workflowId, opt.dataset.userId);
+        if (!ok) mostrarToast("Não consegui adicionar essa pessoa na sequência agora.", "erro");
+        await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
+      } finally {
+        cardMaeTask._sequenciaAcaoEmAndamento = false;
       }
-      const ok = await adicionarNaRegraNoBackend(cardMaeTask.workflowId, opt.dataset.userId);
-      if (!ok) mostrarToast("Não consegui adicionar essa pessoa na sequência agora.", "erro");
-      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
     });
   });
 

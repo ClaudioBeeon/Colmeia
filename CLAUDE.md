@@ -1893,6 +1893,51 @@ trazer dependência num projeto sem bundler.
   clique. ⚠️ **Campo que o card enche sob demanda TEM que entrar nessa lista de preservação** —
   senão nasce vazio a cada atualização, sem erro nenhum, e ninguém percebe.
 
+## Adicionar alguém na sequência e transferir rápido demais ENTREGAVA a tarefa (2026-08-14)
+
+Relatado ao vivo pelo Cláudio, já com as animações da sequência no ar: adicionou o Erick como
+próximo na fila e clicou em transferir — a tarefa foi **entregue**, não foi pro Erick.
+
+### A causa: dois pedidos independentes correndo ao mesmo tempo
+
+`avancarWorkflowTarefa` (RunrunEscrita.gs) chama `/tasks/{id}/complete_workflow_step` — o
+**mesmo** endpoint faz duas coisas diferentes dependendo de quem está na sequência **do lado do
+Runrun.it**: passa pro próximo, OU entrega, se você já era o último. Quem decide isso é o
+Runrun.it, olhando a sequência dele — não a da tela do Colmeia.
+
+Adicionar uma pessoa na sequência (`adicionarNaRegraNoBackend`) é uma chamada assíncrona
+separada. Enquanto ela não confirma, o Runrun.it **ainda acha que você é o último**. A tela já
+mostrava o Erick como próximo (otimista, como devia), mas se "Transferir" fosse clicado nesse
+meio-tempo, o `complete_workflow_step` chegava no Runrun.it ANTES da adição — e ele entregava a
+tarefa, porque pra ele o Erick simplesmente não existia na sequência ainda.
+
+### Por que o cadeado que já existia não pegou isso
+
+O campo `task._sequenciaAcaoEmAndamento` já existia desde 2026-08-13, criado por um bug parecido
+(dois cliques em avançar empurravam a sequência dois passos de uma vez). As setas de
+avançar/voltar (no pill do cabeçalho, no modal "Ver regra" e no pill do card mãe) já checavam
+esse cadeado antes de rodar. **Só que adicionar e remover pessoa nunca ligavam esse cadeado** —
+então a proteção existia pra um tipo de corrida (dois avanços) e ficava cega pra outra (avançar
+durante uma adição). Três lugares tinham o mesmo buraco: `adicionarPessoaOtimista` e
+`removerPessoaOtimista` (js/regras-briefing.js) e o quick-picker do pill do card mãe
+(js/detalhe-cardmae.js).
+
+Conserto: os três agora ligam `_sequenciaAcaoEmAndamento` assim que a mudança otimista entra na
+tela e só soltam quando a chamada de verdade ao Runrun.it confirma. Como as setas de
+avançar/voltar **já** checavam esse mesmo campo, elas passaram a esperar sozinhas — nenhuma
+mudança precisou ser feita nelas.
+
+Efeito colateral bom de cuidar: com o cadeado durando o tempo todo da adição (não só um instante),
+clicar "Transferir" nesse meio-tempo agora mostra um aviso ("Espera confirmar a mudança anterior
+na sequência pra continuar") em vez de simplesmente não fazer nada — sem isso pareceria mais um
+clique que travou.
+
+⚠️ **Regra que fica:** qualquer ação nova que mexe na sequência de responsáveis (adicionar,
+remover, e o que vier depois) tem que ligar `_sequenciaAcaoEmAndamento` no objeto da tarefa
+enquanto a chamada de verdade ao Runrun.it está no ar. O padrão "mudar a tela na hora e confirmar
+por trás" só é seguro quando **nenhuma outra ação que dependa do mesmo estado remoto** pode
+disparar no meio do caminho.
+
 ## O que o painel de erros mostrou — três defeitos reais (2026-08-14)
 
 O Cláudio mandou o despejo do painel de diagnóstico (Ctrl+Shift+D → "Ver de todo mundo") de dois

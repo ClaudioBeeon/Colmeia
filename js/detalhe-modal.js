@@ -247,6 +247,19 @@ async function carregarSequencia(task) {
 }
 
 /**
+ * Clicou em avançar/voltar bem no meio de outra mudança na sequência
+ * (adicionar/remover pessoa, ou outro avançar/voltar ainda confirmando)?
+ * O cadeado `_sequenciaAcaoEmAndamento` já impede a ação de rodar — isto
+ * aqui só avisa por quê, pra não parecer que o clique simplesmente não
+ * funcionou (2026-08-14). Sem aviso nenhum, alguém que acabou de
+ * adicionar uma pessoa e clicasse "Transferir" na sequência via só a
+ * tela travada, sem entender que é de propósito e passageiro.
+ */
+function avisarAcaoDeSequenciaOcupada() {
+  mostrarToast("Espera confirmar a mudança anterior na sequência pra continuar.", "erro");
+}
+
+/**
  * Liga as setas de desfazer/avançar a sequência de verdade no
  * Runrun.it. Precisa ser chamado de novo toda vez que o HTML da
  * sequência é redesenhado (as setas são recriadas do zero).
@@ -275,7 +288,7 @@ function wireWorkflowArrows(task) {
       // tarefa, que era pra ficar com a próxima pessoa). O campo mora no
       // `task` (não no botão) porque é o `task` que sobrevive à
       // recriação do botão a cada redesenho.
-      if (task._sequenciaAcaoEmAndamento) return;
+      if (task._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
       task._sequenciaAcaoEmAndamento = true;
       prevBtn.disabled = true;
 
@@ -326,7 +339,7 @@ function wireWorkflowArrows(task) {
     nextBtn.addEventListener("click", async () => {
       // Trava contra clique duplo — mesmo motivo do botão de desfazer,
       // acima (ver o comentário grande lá).
-      if (task._sequenciaAcaoEmAndamento) return;
+      if (task._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
       task._sequenciaAcaoEmAndamento = true;
       nextBtn.disabled = true;
 

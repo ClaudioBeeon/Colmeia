@@ -135,7 +135,7 @@ function assinaturaDaSequencia(seq) {
  *      desfaz sozinho.
  */
 async function avancarSequenciaOtimista(task) {
-  if (task._sequenciaAcaoEmAndamento) return; // trava contra clique duplo — dois avanços de uma vez já causaram entrega indevida
+  if (task._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; } // trava contra clique duplo — dois avanços de uma vez já causaram entrega indevida
   task._sequenciaAcaoEmAndamento = true;
   try {
     const seq = task.sequencia || [];
@@ -187,7 +187,7 @@ async function avancarSequenciaOtimista(task) {
 }
 
 async function voltarSequenciaOtimista(task) {
-  if (task._sequenciaAcaoEmAndamento) return;
+  if (task._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
   task._sequenciaAcaoEmAndamento = true;
   try {
     const seq = task.sequencia || [];
@@ -265,7 +265,17 @@ function removerPessoaOtimista(task, elementId) {
     setTimeout(() => row.remove(), 200);
   }
   task.sequencia = task.sequencia.filter(s => String(s.id) !== String(elementId));
-  removerDaRegraNoBackend(task.workflowId, elementId).then(() => atualizarSequenciaEModal(task));
+  // Mesmo cadeado do avançar/voltar (ver o comentário grande em
+  // wireWorkflowArrows, js/detalhe-modal.js — "acabou entregando a
+  // tarefa"). Remover MUDA quem é "o último da fila" tanto quanto
+  // avançar muda: se o Runrun.it ainda está processando esta remoção e
+  // alguém clica "Transferir" nesse meio-tempo, o /complete_workflow_step
+  // é decidido pelo estado ANTIGO de lá — pode entregar a tarefa por
+  // engano em vez de passar pra próxima pessoa.
+  task._sequenciaAcaoEmAndamento = true;
+  removerDaRegraNoBackend(task.workflowId, elementId)
+    .then(() => atualizarSequenciaEModal(task))
+    .finally(() => { task._sequenciaAcaoEmAndamento = false; });
 }
 
 async function removerDaRegraNoBackend(workflowId, elementId) {
@@ -365,31 +375,65 @@ function construirSequenciaOtimistaComNovaPessoa(task, usuario) {
  * de verdade em segundo plano e substitui pela sequência real quando
  * a resposta chegar.
  */
+/**
+ * ⚠️ CADEADO OBRIGATÓRIO (2026-08-14, bug real relatado pelo Cláudio:
+ * adicionou o Erick como próximo, clicou em transferir, e a tarefa foi
+ * ENTREGUE em vez de ir pro Erick).
+ *
+ * `avancarWorkflowTarefa` (RunrunEscrita.gs) chama
+ * `/tasks/{id}/complete_workflow_step` — que é o MESMO endpoint pra
+ * "passar pro próximo" e "entregar, se eu já era o último". Quem decide
+ * qual das duas coisas acontece é o Runrun.it, olhando a sequência DELE,
+ * não a da tela. `adicionarNaRegraNoBackend` (a chamada de verdade que
+ * bota o Erick na sequência lá) é assíncrona; enquanto ela não confirma,
+ * o Runrun.it AINDA ACHA que você é o último da fila.
+ *
+ * Se "Transferir" for clicado nesse meio-tempo, `complete_workflow_step`
+ * chega no Runrun.it ANTES da adição ter sido processada — e ele entrega
+ * a tarefa, porque pra ele você ainda era o último. A tela já mostrava o
+ * Erick como próximo (otimista), então parecia que ia funcionar; só não
+ * ia, porque o lado de lá ainda não sabia do Erick.
+ *
+ * As setas de avançar/voltar (wireWorkflowArrows, js/detalhe-modal.js;
+ * avancarSequenciaOtimista/voltarSequenciaOtimista, abaixo neste
+ * arquivo) JÁ recusam rodar enquanto `task._sequenciaAcaoEmAndamento`
+ * está true — esse cadeado existe desde 2026-08-13, por um bug parecido
+ * (dois avanços em fila). Só que ele nunca era ligado durante ADICIONAR
+ * ou REMOVER pessoa — exatamente o buraco que causou este bug. Ligando
+ * aqui, as MESMAS setas que já checam o cadeado passam a esperar a
+ * adição confirmar antes de deixar transferir.
+ */
 async function adicionarPessoaOtimista(task, usuario) {
   task.sequencia = construirSequenciaOtimistaComNovaPessoa(task, usuario);
+  task._sequenciaAcaoEmAndamento = true;
   renderModalRegra(task);
   animarLinhaEntrando(document.getElementById("ruleList"));
   renderSequenciaNoHeaderSeAberta(task);
   renderRepasseCardSeAberta(task);
 
-  // Tarefa que ainda não tem NENHUMA sequência configurada no Runrun.it
-  // não tem workflowId — antes disso, o Colmeia tentava adicionar a
-  // pessoa direto e a chamada era abortada em silêncio (nunca ia pro ar
-  // request nenhum), então a "pessoa otimista" simplesmente sumia da
-  // tela sem explicação nenhuma. Agora, nesse caso, primeiro cria a
-  // sequência do zero no Runrun.it (ele mesmo já entra com quem estiver
-  // logado como 1ª pessoa) e só then adiciona de verdade.
-  if (!task.workflowId) {
-    const criado = await criarRegraNoBackend(task.id);
-    if (!criado.ok) {
-      console.error("Não consegui criar a sequência do zero:", criado.error);
-      await atualizarSequenciaEModal(task); // desfaz a linha otimista
-      return;
+  try {
+    // Tarefa que ainda não tem NENHUMA sequência configurada no Runrun.it
+    // não tem workflowId — antes disso, o Colmeia tentava adicionar a
+    // pessoa direto e a chamada era abortada em silêncio (nunca ia pro ar
+    // request nenhum), então a "pessoa otimista" simplesmente sumia da
+    // tela sem explicação nenhuma. Agora, nesse caso, primeiro cria a
+    // sequência do zero no Runrun.it (ele mesmo já entra com quem estiver
+    // logado como 1ª pessoa) e só then adiciona de verdade.
+    if (!task.workflowId) {
+      const criado = await criarRegraNoBackend(task.id);
+      if (!criado.ok) {
+        console.error("Não consegui criar a sequência do zero:", criado.error);
+        await atualizarSequenciaEModal(task); // desfaz a linha otimista
+        return;
+      }
+      task.workflowId = criado.workflowId;
     }
-    task.workflowId = criado.workflowId;
-  }
 
-  adicionarNaRegraNoBackend(task.workflowId, usuario.id).then(() => atualizarSequenciaEModal(task));
+    await adicionarNaRegraNoBackend(task.workflowId, usuario.id);
+    await atualizarSequenciaEModal(task);
+  } finally {
+    task._sequenciaAcaoEmAndamento = false;
+  }
 }
 
 /**
