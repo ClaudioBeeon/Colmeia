@@ -982,7 +982,9 @@ function renderComentariosHTML(task) {
         ` : ""}
       </div>
       ${c._somenteLeitura ? "" : `
-        <button type="button" class="comment-react-btn" data-comment-id="${c.id}" title="Reagir" aria-label="Reagir">🙂</button>
+        <button type="button" class="comment-react-btn" data-comment-id="${c.id}" title="Reagir" aria-label="Reagir">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 10.5h.01M15.5 10.5h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 14.5c1 1.3 2.4 2 4 2s3-.7 4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <div class="comment-react-picker" data-comment-id="${c.id}" hidden></div>
         ${minha ? `
         <div class="comment-bubble-acoes">
@@ -1585,7 +1587,7 @@ function anexoEhGrandeDemais(tamanho) {
  */
 function abrirAnexoNoRunrun(taskId, nome) {
   if (!taskId) {
-    mostrarToast(`"${nome}" é grande demais pra baixar pelo Colmeia — abre a tarefa no Runrun.it pra pegar de lá.`, "erro");
+    mostrarToast(`“${nome}” é grande demais pra baixar pelo Colmeia — abre a tarefa no Runrun.it pra pegar de lá.`, "erro");
     return false;
   }
   const url = "https://runrun.it/tasks/" + taskId;
@@ -2054,20 +2056,27 @@ function wireEdicaoEntregaDesejada(task) {
 
 function wireExcluirComentario() {
   document.querySelectorAll(".comment-delete-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("Excluir esse comentário?")) return;
-      // Otimista: o balão sai na hora. Antes ele ficava meio transparente
-      // esperando o Runrun.it — e depois ainda recarregava a conversa
-      // inteira pra sumir de verdade.
+    btn.addEventListener("click", () => {
+      // Sem confirm() cinza do navegador (2026-08-14, achado do hallmark
+      // audit: destoava de um app que desenha cada outro popup próprio) —
+      // some da tela na hora e dá 6s de "Desfazer" antes de mandar a
+      // exclusão de verdade pro Runrun.it.
       const commentId = btn.dataset.commentId;
       const guardado = tirarComentarioDasFontes(commentId);
-      if (guardado) redesenharThreadAtiva();
-      const ok = await excluirComentarioNoBackend(commentId);
-      if (!ok) {
-        devolverComentarioAFonte(guardado);
-        redesenharThreadAtiva();
-        mostrarToast("Não consegui excluir esse comentário agora.", "erro");
-      }
+      if (!guardado) return;
+      redesenharThreadAtiva();
+      mostrarToastComDesfazer(
+        "Comentário excluído.",
+        () => { devolverComentarioAFonte(guardado); redesenharThreadAtiva(); },
+        async () => {
+          const ok = await excluirComentarioNoBackend(commentId);
+          if (!ok) {
+            devolverComentarioAFonte(guardado);
+            redesenharThreadAtiva();
+            mostrarToast("Não consegui excluir esse comentário agora.", "erro");
+          }
+        }
+      );
     });
   });
 

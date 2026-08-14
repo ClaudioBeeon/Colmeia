@@ -91,7 +91,7 @@
   align-items: center;
   justify-content: center;
   background: rgba(12,11,18,0.7);
-  color: #fff;
+  color: var(--on-ink);
   font-weight: 600;
   font-size: 16px;
   text-align: center;
@@ -120,7 +120,7 @@
    (mostrarEntregueNoPill, js/detalhe-cardmae.js), pra já nascer verde
    junto com o resto da informação, não só depois de pronta. */
 .detail-header-pill.entregue-modo { background: #1E7A4C; }
-.detail-header-pill.entregue-modo .pill-horas-trabalhadas { background: rgba(255,255,255,0.16); color: #fff; }
+.detail-header-pill.entregue-modo .pill-horas-trabalhadas { background: rgba(255,255,255,0.16); color: var(--on-ink); }
 .detail-header-pill.entregue-modo .status-badge.entregue { background: rgba(255,255,255,0.9); }
 
 /* Conteúdo normal do pill (play, tempo, nome, sequência do card
@@ -199,16 +199,16 @@
 .pill-cardmae-icone {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--kanban-yellow); color: #16181D;
+  background: var(--kanban-yellow); color: var(--ink);
 }
-.pill-cardmae-icone.entregue { background: #2F9E44; color: #fff; }
+.pill-cardmae-icone.entregue { background: #2F9E44; color: var(--on-ink); }
 .pill-cardmae-icone svg { width: 12px; height: 12px; }
 /* A pergunta "Transferir o card mãe também?" é sugestão da Bee — o
    ícone dela ocupa o lugar inteiro (não um ícone genérico + selo
    pequeno do lado, como estava antes). */
 .pill-cardmae-icone.bee-modo { width: 30px; height: 30px; }
 .pill-cardmae-icone.bee-modo svg { width: 16px; height: 16px; }
-.pill-cardmae-texto { color: #fff; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill-cardmae-texto { color: var(--on-ink); font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill-cardmae-conteudo.centralizado { justify-content: center; }
 
 .pill-cardmae-acoes { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
@@ -219,11 +219,11 @@
 .pill-cardmae-acoes button {
   font-family: var(--font-body); font-size: 11.5px; font-weight: 700; border: none;
   border-radius: 999px; padding: 6px 13px; cursor: pointer; white-space: nowrap;
-  background: rgba(255,255,255,0.12); color: #fff;
+  background: rgba(255,255,255,0.12); color: var(--on-ink);
   transition: background 0.15s var(--ease-apple);
 }
 .pill-cardmae-acoes button:hover { background: rgba(255,255,255,0.2); }
-.pill-cardmae-acoes button.principal { background: var(--kanban-yellow); color: #16181D; }
+.pill-cardmae-acoes button.principal { background: var(--kanban-yellow); color: var(--ink); }
 .pill-cardmae-acoes button.principal:hover { background: #E0B400; }
 
 /* Etapa final (D): a própria regra do card mãe, editável ali dentro —
@@ -244,7 +244,7 @@
   display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0;
 }
 .pill-cardmae-nome {
-  color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap;
+  color: var(--on-ink); font-size: 12px; font-weight: 600; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
 /* "X" de voltar/fechar — de propósito NÃO é verde/check: só sai dessa
@@ -252,7 +252,7 @@
    entrega é a flechinha de entregar dentro da própria regra, reaproveitada
    de renderSequenciaHTML). */
 .pill-cardmae-fechar {
-  width: 26px; height: 26px; border-radius: 50%; background: #24252C; color: #fff;
+  width: 26px; height: 26px; border-radius: 50%; background: #24252C; color: var(--on-ink);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer;
   border: none; transition: background 0.15s var(--ease-apple);
 }
@@ -275,11 +275,11 @@
               transform .34s var(--ease-apple), padding .34s var(--ease-apple),
               margin .34s var(--ease-apple);
 }
-.etapa-chip.de { background: #24252C; color: #fff; margin-right: 4px; }
+.etapa-chip.de { background: #24252C; color: var(--on-ink); margin-right: 4px; }
 .etapa-chip.de:hover { color: var(--kanban-yellow); }
 .etapa-chip.para {
   display: inline-flex; align-items: center; gap: 0;
-  background: var(--kanban-yellow); color: #16181D;
+  background: var(--kanban-yellow); color: var(--ink);
 }
 .etapa-chip.para:hover { background: #E0B400; }
 /* O ✓ nasce com largura zero e só "abre" quando a transferência chega. */
@@ -292,12 +292,12 @@
   width: 24px; height: 24px; flex-shrink: 0; margin-right: 4px; max-width: 24px;
   display: flex; align-items: center; justify-content: center;
   border: none; border-radius: 50%; cursor: pointer;
-  background: rgba(255,255,255,0.12); color: #fff;
+  background: rgba(255,255,255,0.12); color: var(--on-ink);
   transition: background .15s var(--ease-apple), color .15s var(--ease-apple),
               transform .34s var(--ease-apple), opacity .2s var(--ease-apple),
               max-width .34s var(--ease-apple), margin .34s var(--ease-apple);
 }
-.etapa-transfer-seta:hover { background: var(--kanban-yellow); color: #16181D; }
+.etapa-transfer-seta:hover { background: var(--kanban-yellow); color: var(--ink); }
 .etapa-transfer-seta svg { width: 14px; height: 14px; }
 
 /* 1) a setinha dispara pra direita e some */
@@ -320,7 +320,7 @@
 }
 /* 3) a etapa de destino chega dando um pulinho e vira verde com o ✓ */
 .etapa-transfer.chegou .etapa-chip.para {
-  background: #2F9E44; color: #fff;
+  background: #2F9E44; color: var(--on-ink);
   animation: colmeia-etapa-chegou .5s var(--ease-apple-spring);
 }
 .etapa-transfer.chegou .etapa-chip-check { width: 11px; opacity: 1; margin-left: 5px; }
@@ -349,18 +349,18 @@
 
 .detail-header-pill-right { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 1; min-width: 0; }
 
-.detail-header-pill .status-badge { background: #24252C; color: #fff; }
+.detail-header-pill .status-badge { background: #24252C; color: var(--on-ink); }
 .detail-header-pill .status-badge:hover { color: var(--kanban-yellow); }
 
 .detail-header-pill .play-btn {
   width: 30px; height: 30px; border-radius: 50%;
-  background: var(--kanban-yellow); color: #16181D; flex-shrink: 0;
+  background: var(--kanban-yellow); color: var(--ink); flex-shrink: 0;
 }
 .detail-header-pill .play-btn svg { width: 13px; height: 13px; }
 
-.detail-header-pill .timer-text { color: #fff; }
+.detail-header-pill .timer-text { color: var(--on-ink); }
 .detail-header-pill .detail-sep { color: #33343B; }
-.detail-header-pill .detail-taskname { color: #fff; }
+.detail-header-pill .detail-taskname { color: var(--on-ink); }
 
 .detail-sep { color: var(--border); }
 
@@ -394,7 +394,7 @@
   color: #8A8D9A; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
 }
 .nav-arrow svg { width: 16px; height: 16px; }
-.nav-arrow:hover { background: #24252C; color: #fff; }
+.nav-arrow:hover { background: #24252C; color: var(--on-ink); }
 
 .status-wrap { position: relative; }
 
@@ -577,7 +577,7 @@
    pedido do Cláudio: "não usamos, pelo menos ali no pill") — a regra de
    .child-priority (usada na lista de subtarefas) continua. */
 .child-priority {
-  font-size: 10px; font-weight: 700; color: #fff; padding: 3px 8px;
+  font-size: 10px; font-weight: 700; color: var(--on-ink); padding: 3px 8px;
   border-radius: 999px; flex-shrink: 0; white-space: nowrap;
 }
 
@@ -593,12 +593,12 @@
 
 .format-box {
   border-radius: 12px; padding: 14px 20px;
-  font-size: 13.5px; font-weight: 700; color: #fff;
+  font-size: 13.5px; font-weight: 700; color: var(--on-ink);
 }
 
 .fb-purple { background: var(--purple); }
 .fb-pink { background: var(--danger); }
-.fb-blue { background: var(--kanban-yellow); color: #16181D; }
+.fb-blue { background: var(--kanban-yellow); color: var(--ink); }
 .fb-teal { background: var(--success); }
 .fb-orange { background: var(--warning); }
 
@@ -659,7 +659,7 @@
   border: none; border-radius: 999px; padding: 5px 12px;
   font-family: var(--font-body); font-size: 11.5px; font-weight: 700; cursor: pointer;
 }
-.comment-edit-salvar { background: var(--kanban-yellow); color: #16181D; }
+.comment-edit-salvar { background: var(--kanban-yellow); color: var(--ink); }
 .comment-edit-cancelar { background: var(--page-bg); color: var(--text-secondary); }
 
 /* O avatar fica sempre FORA do balão, alinhado com o topo dele — nunca
@@ -675,7 +675,7 @@
    Usa o MESMO ícone/cor dela no resto do app (ver `.bee-avatar`,
    css/05-componentes.css) em vez disso. */
 .comment-avatar-bee {
-  background: var(--kanban-yellow); color: #16181D;
+  background: var(--kanban-yellow); color: var(--ink);
   display: flex; align-items: center; justify-content: center;
 }
 .comment-avatar-bee svg { width: 13px; height: 13px; }
@@ -781,7 +781,7 @@
 
 .comment-send-btn {
   flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
-  border: none; background: #111111; color: #fff;
+  border: none; background: #111111; color: var(--on-ink);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
   transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
@@ -827,7 +827,7 @@
 .chat-fab {
   position: absolute; bottom: 20px; right: 20px; z-index: 15;
   width: 52px; height: 52px; border-radius: 50%; border: none;
-  background: var(--kanban-yellow); color: #16181D; cursor: pointer;
+  background: var(--kanban-yellow); color: var(--ink); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 6px 18px rgba(255,199,0,0.4);
   transition: transform .12s var(--ease-apple);
@@ -838,7 +838,7 @@
 .chat-fab-badge {
   position: absolute; top: -3px; right: -3px;
   min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
-  background: var(--danger); color: #fff; font-size: 11px; font-weight: 700;
+  background: var(--danger); color: var(--on-ink); font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   border: 2px solid var(--card-bg);
 }
@@ -873,7 +873,7 @@
 
 .chat-hdr-back {
   width: 38px; height: 38px; border-radius: 50%; border: none;
-  background: #16181D; color: #fff; flex-shrink: 0;
+  background: var(--ink); color: var(--on-ink); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: background var(--dur-base) var(--ease-apple), transform var(--dur-base) var(--ease-apple-spring);
 }
@@ -886,7 +886,7 @@
 .chat-hdr-bar {
   flex: 1; min-width: 0; height: 38px;
   display: flex; align-items: center; gap: 6px;
-  background: #16181D; border-radius: 999px; padding: 3px;
+  background: var(--ink); border-radius: 999px; padding: 3px;
 }
 [data-theme="dark"] .chat-hdr-bar { background: #0A0A0D; }
 
@@ -904,8 +904,8 @@
   display: flex; align-items: center; justify-content: center;
 }
 .chat-hdr-avatar svg { width: 11px; height: 11px; }
-.chat-hdr-avatar-comentarios { background: #2A2C33; color: #fff; }
-.chat-hdr-avatar-bee { background: var(--kanban-yellow); color: #16181D; }
+.chat-hdr-avatar-comentarios { background: #2A2C33; color: var(--on-ink); }
+.chat-hdr-avatar-bee { background: var(--kanban-yellow); color: var(--ink); }
 
 /* Os dois gomos da barra — "Comentários" (o rótulo não muda mais: quem
    mostra qual conversa está aberta é a fileira de pílulas cinzas
@@ -917,7 +917,7 @@
   display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%;
   height: 32px; border: none; cursor: pointer;
   padding: 0 7px; border-radius: 999px; font-family: var(--font-body);
-  background: var(--kanban-yellow); color: #16181D;
+  background: var(--kanban-yellow); color: var(--ink);
   transition: background var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple),
     transform var(--dur-base) var(--ease-apple-spring);
 }
@@ -926,7 +926,7 @@
 
 /* Enquanto a Bee está acesa, o gomo "Comentários" apaga — mesma ideia
    de controle segmentado, só uma opção acesa por vez. */
-.chat-aba-atual.aba-apagada { background: transparent; color: #fff; }
+.chat-aba-atual.aba-apagada { background: transparent; color: var(--on-ink); }
 .chat-aba-atual.aba-apagada:hover { background: rgba(255,255,255,0.08); }
 
 /* Botão da Bee — o segundo gomo, do mesmo tamanho do primeiro. Acende
@@ -943,14 +943,14 @@
   width: 100%; height: 32px;
   display: flex; align-items: center; justify-content: center; gap: 4px;
   border: none; border-radius: 999px; cursor: pointer; padding: 0 7px;
-  background: transparent; color: #fff; font-family: var(--font-body);
+  background: transparent; color: var(--on-ink); font-family: var(--font-body);
   transition: background var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple),
     transform var(--dur-base) var(--ease-apple-spring);
 }
 .chat-hdr-bee:hover { background: rgba(255,255,255,0.1); }
 .chat-hdr-bee:active { transform: scale(0.97); }
 .chat-hdr-bee-texto { font-size: 12.5px; font-weight: 600; }
-.chat-hdr-bee.active { background: var(--kanban-yellow, #FFE9A8); color: #16181D; }
+.chat-hdr-bee.active { background: var(--kanban-yellow, #FFE9A8); color: var(--ink); }
 .chat-hdr-bee.active:hover { background: #E0A800; }
 .chat-hdr-bee-vazio { visibility: hidden; }
 
@@ -1012,8 +1012,8 @@
   transition: background 180ms ease-out, color 180ms ease-out;
 }
 .chat-subpill:hover { color: var(--text-primary); }
-.chat-subpill.active { background: #16181D; color: #fff; }
-[data-theme="dark"] .chat-subpill.active { background: var(--kanban-yellow); color: #16181D; }
+.chat-subpill.active { background: var(--ink); color: var(--on-ink); }
+[data-theme="dark"] .chat-subpill.active { background: var(--kanban-yellow); color: var(--ink); }
 .chat-subpill[hidden] { display: none; }
 
 /* Interruptor "mostrar comentários da Bee" — só aparece junto de Todos
@@ -1093,7 +1093,7 @@
 
 .mother-card-btn {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
-  color: #16181D; background: var(--kanban-yellow); border: none;
+  color: var(--ink); background: var(--kanban-yellow); border: none;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .mother-card-btn svg { width: 14px; height: 14px; }
@@ -1117,13 +1117,13 @@
    campo Projeto do Runrun.it, ex: [MAIO26]) lado a lado — ver
    extrairMesAnoDoProjeto em js/config.js. */
 .side-badges-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.side-block .badge-projeto { background: #16181D; color: var(--kanban-yellow); align-self: auto; }
+.side-block .badge-projeto { background: var(--ink); color: var(--kanban-yellow); align-self: auto; }
 
 .hub-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .hub-empty { font-size: 12px; color: var(--text-muted); font-style: italic; }
-.side-block .hub-pill { background: #16181D; color: #fff; }
+.side-block .hub-pill { background: var(--ink); color: var(--on-ink); }
 
-.hub-pill { font-size: 11.5px; font-weight: 600; color: #fff; padding: 5px 11px; border-radius: 999px; text-decoration: none; }
+.hub-pill { font-size: 11.5px; font-weight: 600; color: var(--on-ink); padding: 5px 11px; border-radius: 999px; text-decoration: none; }
 .hub-purple { background: var(--purple); }
 .hub-pink { background: var(--danger); }
 .hub-blue { background: var(--accent); }
@@ -1136,7 +1136,7 @@
 
 .discord-cta {
   display: flex; align-items: center; gap: 9px;
-  background: #16181D; color: #fff;
+  background: var(--ink); color: var(--on-ink);
   font-size: 12.5px; font-weight: 600; text-decoration: none;
   padding: 9px 12px; border-radius: 10px;
 }
@@ -1258,7 +1258,7 @@
 .status-menu-atalho {
   display: flex; align-items: center; gap: 7px; width: 100%;
   border: none; cursor: pointer; text-align: left;
-  background: var(--kanban-yellow); color: #16181D;
+  background: var(--kanban-yellow); color: var(--ink);
   font-family: var(--font-body); font-size: 12.5px; font-weight: 700;
   padding: 9px 10px; border-radius: 8px;
 }
@@ -1280,7 +1280,7 @@
 }
 .devolucao-topo { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; flex-wrap: wrap; }
 .devolucao-selo {
-  background: var(--kanban-yellow); color: #16181D;
+  background: var(--kanban-yellow); color: var(--ink);
   font-size: 11px; font-weight: 800; letter-spacing: 0.02em;
   padding: 4px 10px; border-radius: 999px; text-transform: uppercase;
 }
@@ -1314,7 +1314,7 @@
 .devolucao-ponto {
   position: absolute; transform: translate(-50%, -50%);
   width: 26px; height: 26px; border-radius: 50%;
-  background: var(--kanban-yellow); color: #16181D; border: 2px solid #fff;
+  background: var(--kanban-yellow); color: var(--ink); border: 2px solid #fff;
   font-size: 12px; font-weight: 800; line-height: 22px; text-align: center;
   box-shadow: 0 4px 12px rgba(20, 20, 30, 0.35);
 }
@@ -1322,6 +1322,6 @@
 .devolucao-linha { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; line-height: 1.45; }
 .devolucao-num {
   width: 21px; height: 21px; flex-shrink: 0; border-radius: 50%;
-  background: var(--kanban-yellow); color: #16181D;
+  background: var(--kanban-yellow); color: var(--ink);
   font-size: 11px; font-weight: 800; line-height: 21px; text-align: center;
 }

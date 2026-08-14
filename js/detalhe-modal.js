@@ -2167,7 +2167,7 @@ function wireArrastarArquivoParaCard() {
 
 async function subirArquivoArrastadoParaCard(task, arquivo) {
   if (arquivo.size > LIMITE_UPLOAD_ARRASTADO_BYTES) {
-    mostrarToast(`"${arquivo.name}" passa de 30MB — sobe direto pela pasta do Drive.`, "erro");
+    mostrarToast(`“${arquivo.name}” passa de 30MB — sobe direto pela pasta do Drive.`, "erro");
     return;
   }
   const idAoSoltar = task.id;
@@ -2202,7 +2202,7 @@ async function subirArquivoArrastadoParaCard(task, arquivo) {
       tasks[detailIdx].pastaUrlSalva = data.pastaUrl;
       mostrarPillCopiarLinkDaPasta(data.pastaUrl);
     }
-    mostrarToast(`"${data.nomeFinal}" enviado pro Drive.`, "sucesso");
+    mostrarToast(`“${data.nomeFinal}” enviado pro Drive.`, "sucesso");
     enviarEscritaNoBackend(
       { acao: "adicionarComentario", taskId: idAoSoltar, texto: `📎 Novo arquivo na pasta do card: ${data.nomeFinal}` },
       "avisar sobre o arquivo novo"
@@ -2218,7 +2218,7 @@ async function subirArquivoArrastadoParaCard(task, arquivo) {
     }
   } catch (err) {
     console.error("Falha ao subir arquivo arrastado:", err);
-    mostrarToast(`Falha de conexão ao subir "${arquivo.name}".`, "erro");
+    mostrarToast(`Falha de conexão ao subir “${arquivo.name}”.`, "erro");
   }
 }
 

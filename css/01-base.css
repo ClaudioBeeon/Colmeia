@@ -39,6 +39,14 @@
   --kanban-yellow-text: #8A6D00;
   --success: #22B07D;
   --purple: #8B5CF6;
+
+  /* Par "tinta escura / branco" dos crachás e do pill escuro do topo da
+     tarefa aberta (2026-08-14, achado do hallmark audit) — NÃO muda de
+     claro pro escuro (--kanban-yellow também não muda, e o pill do
+     cabeçalho é sempre escuro nos dois temas, de propósito). Antes vários
+     arquivos escreviam esse mesmo #16181D/#fff direto, sem nome nenhum. */
+  --ink: #16181D;
+  --on-ink: #FFFFFF;
   --purple-soft: #F1EBFE;
 
   --radius-lg: 16px;

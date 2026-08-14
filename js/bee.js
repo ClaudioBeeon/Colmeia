@@ -1184,11 +1184,17 @@ function excluirConversaAtual() {
     beeMostrarTela("inicio");
     return;
   }
-  if (!confirm("Excluir essa conversa com a Bee?")) return;
+  // Sem confirm() cinza do navegador (2026-08-14, achado do hallmark
+  // audit) — sai da conversa na hora e só manda excluir de verdade se a
+  // pessoa não clicar "Desfazer" nos 6s do toast.
   const chave = beeConversaAtual.chave;
   beeConversaAtual = null;
   beeMostrarTela("inicio");
-  excluirConversaLivre(chave);
+  mostrarToastComDesfazer(
+    "Conversa com a Bee excluída.",
+    () => { /* Desfazer: a conversa nunca saiu da lista de verdade, só não está mais em tela. */ },
+    () => excluirConversaLivre(chave)
+  );
 }
 
 async function beeAbrirConversa(chave) {

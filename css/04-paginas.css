@@ -1378,15 +1378,22 @@ body.card-aberto .quick-access-panel { display: none; }
   background: var(--card-bg); border: 1px solid var(--border);
   border-radius: 999px; padding: 2px 8px; font-size: 12px;
 }
+/* Ícone desenhado (não mais o emoji 🙂), pra combinar com os botões de
+   editar/excluir ao lado -- os três desenhados no mesmo traço agora
+   (2026-08-14, achado do hallmark audit: emoji ao lado de SVG dava pra
+   notar a diferença de voz). */
 .comment-react-btn {
   position: absolute; top: -4px; right: 18px;
   width: 18px; height: 18px; border-radius: 50%;
-  border: none; background: var(--card-bg); font-size: 11px;
+  border: none; background: var(--card-bg); color: var(--text-muted);
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.12s var(--ease-apple); cursor: pointer;
+  opacity: 0; transition: opacity 0.12s var(--ease-apple), color 0.12s var(--ease-apple); cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
-.comment-bubble:hover .comment-react-btn { opacity: 1; }
+.comment-react-btn svg { width: 11px; height: 11px; }
+.comment-react-btn:hover { color: var(--text-primary); }
+.comment-bubble:hover .comment-react-btn,
+.comment-bubble:focus-within .comment-react-btn { opacity: 1; }
 .comment-react-picker {
   position: absolute; top: -34px; right: 18px;
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;

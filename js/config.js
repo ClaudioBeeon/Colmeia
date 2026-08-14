@@ -1081,6 +1081,45 @@ function mostrarToast(mensagem, tipo) {
 }
 
 /**
+ * Toast com botão "Desfazer" — pra excluir sem o confirm() cinza do
+ * navegador (2026-08-14, achado do hallmark audit: "confirmação cinza
+ * destoa de um app que desenha cada outro popup"). Some sozinho em 6s
+ * e SÓ AÍ `aoConfirmar` roda de verdade — clicar "Desfazer" antes disso
+ * cancela e chama `aoDesfazer` no lugar. Quem chama já fez a remoção
+ * otimista da tela antes de mostrar este toast; `aoDesfazer` deve
+ * devolver esse estado, `aoConfirmar` deve mandar a exclusão de verdade
+ * pro backend.
+ */
+function mostrarToastComDesfazer(mensagem, aoDesfazer, aoConfirmar) {
+  let container = document.getElementById("colmeiaToasts");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "colmeiaToasts";
+    container.className = "colmeia-toasts";
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement("div");
+  toast.className = "colmeia-toast colmeia-toast-desfazer";
+  toast.innerHTML = `<span>${escaparHTML(mensagem)}</span><button type="button" class="colmeia-toast-desfazer-btn">Desfazer</button>`;
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("show"));
+
+  const remover = () => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 250);
+  };
+  const timer = setTimeout(() => {
+    remover();
+    if (typeof aoConfirmar === "function") aoConfirmar();
+  }, 6000);
+  toast.querySelector(".colmeia-toast-desfazer-btn").addEventListener("click", () => {
+    clearTimeout(timer);
+    remover();
+    if (typeof aoDesfazer === "function") aoDesfazer();
+  });
+}
+
+/**
  * "Ilha" do topbar — pílula que aparece por cima de tudo (position:
  * fixed, sempre visível, nunca escondida atrás de modal nenhum) pra
  * avisar de um evento rápido: comentário novo, aviso novo, upload no
