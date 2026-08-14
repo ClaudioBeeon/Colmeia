@@ -484,15 +484,24 @@
   flex: 1 1 100%;
 }
 
-.detail-tabs { display: flex; gap: 8px; padding: 16px 20px 0; flex-shrink: 0; }
+/* Pílula segmentada, não mais abas de pasta (2026-08-14, redesenho
+   "Cartões de conteúdo" aprovado pelo Cláudio a partir de 3 protótipos).
+   Descrição/Descrição card mãe/Tarefa original ficam agrupadas numa
+   pílula só; Anexos é um botão-pílula separado, com o mesmo verniz. */
+.detail-tabs { display: flex; align-items: center; gap: 8px; padding: 16px 20px 0; flex-shrink: 0; }
+
+.detail-tabs-group { display: flex; gap: 2px; background: var(--page-bg); border-radius: 999px; padding: 4px; }
 
 .detail-tab {
-  font-family: var(--font-body); font-size: 13.5px; font-weight: 600;
-  border: none; background: var(--page-bg); color: var(--text-secondary);
-  padding: 10px 16px; border-radius: 10px 10px 0 0; cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  border: none; background: transparent; color: var(--text-secondary);
+  padding: 8px 15px; border-radius: 999px; cursor: pointer;
 }
 
-.detail-tab.active { background: var(--card-bg); color: var(--kanban-yellow-text); box-shadow: 0 -1px 0 var(--border) inset; }
+.detail-tab.active { background: var(--card-bg); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+.detail-tab.anexos-tab { background: var(--page-bg); }
+.detail-tab.anexos-tab.active { background: var(--card-bg); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
 .change-tab {
   padding: 10px 12px;

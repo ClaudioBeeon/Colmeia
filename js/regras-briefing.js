@@ -676,6 +676,17 @@ function ehCampoDuplicadoDePlataformaOuFormato(pergunta) {
   return ehPlataforma || ehFormato;
 }
 
+/**
+ * "3 linhas" / "1 linha" no cabeçalho do card (2026-08-14, redesenho
+ * "Cartões de conteúdo") — some de propósito quando a resposta é curta
+ * (1 linha), porque aí não ajuda em nada saber a contagem.
+ */
+function contarLinhasBriefing(resposta) {
+  const linhas = String(resposta || "").split("\n").filter(l => l.trim()).length;
+  if (linhas <= 1) return "";
+  return `${linhas} linhas`;
+}
+
 function categoriaCampoBriefing(pergunta) {
   const p = normalizarParaComparar(pergunta);
   if (p.includes("referencia") || p.includes("link")) return "cat-blue";
@@ -927,6 +938,7 @@ function montarBriefingDaTarefaHTML(data) {
                 <div class="ai-briefing-cat-head">
                   <span class="ai-briefing-cat-icon">${c.pergunta.trim().charAt(0).toUpperCase()}</span>
                   <span class="ai-briefing-cat-label">${escaparHTML(c.pergunta)}</span>
+                  ${contarLinhasBriefing(c.resposta) ? `<span class="ai-briefing-cat-meta">${contarLinhasBriefing(c.resposta)}</span>` : ""}
                 </div>
                 <div class="ai-briefing-cat-corpo">
                   <div class="ai-briefing-cat-valor">${renderValorCampo(c.resposta)}</div>

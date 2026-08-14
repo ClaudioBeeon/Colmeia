@@ -1010,28 +1010,38 @@ body.card-aberto .quick-access-panel { display: none; }
   background: #FBEAF0; color: #72243E; white-space: nowrap;
 }
 [data-theme="dark"] .ai-briefing-plataforma-tag { background: rgba(212,83,126,0.20); color: #F0A8C0; }
+/* "Cartões de conteúdo" (2026-08-14, redesenho aprovado pelo Cláudio a
+   partir de 3 protótipos): cabeçalho (ícone + rótulo + contagem de
+   linhas) empilhado ACIMA do corpo, não mais ao lado numa coluna fixa
+   de 150px -- essa largura fixa cortava rótulo comprido e desperdiçava
+   espaço em resposta curta. Gap maior entre cards (8px -> 14px), raio
+   maior (10px -> 12px), ícone virou chip quadrado arredondado em vez
+   de círculo -- mesma linguagem visual do resto do app. */
 .ai-briefing-preenchidos {
-  display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
+  display: flex; flex-direction: column; gap: 14px; margin-top: 4px;
 }
 .ai-briefing-cat {
-  border-radius: 10px; padding: 10px 14px;
-  display: flex; align-items: flex-start; gap: 10px;
+  border-radius: 12px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
 }
 .ai-briefing-cat-head {
-  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
-  width: 150px;
+  display: flex; align-items: center; gap: 8px;
 }
 .ai-briefing-cat-icon {
-  width: 20px; height: 20px; border-radius: 6px;
+  width: 24px; height: 24px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; flex-shrink: 0;
+  font-size: 11.5px; font-weight: 700; flex-shrink: 0;
 }
 .ai-briefing-cat-label {
-  font-size: 11.5px; font-weight: 600; line-height: 1.3;
+  font-size: 12px; font-weight: 700; line-height: 1.3;
 }
-.ai-briefing-cat-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ai-briefing-cat-meta {
+  font-size: 10.5px; font-weight: 600; opacity: 0.65; margin-left: auto; flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.ai-briefing-cat-corpo { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .ai-briefing-cat-valor {
-  font-size: 13px; line-height: 1.5; white-space: pre-wrap;
+  font-size: 13.5px; line-height: 1.6; white-space: pre-wrap;
 }
 .ai-briefing-cat-valor a { text-decoration: none; font-weight: 600; }
 

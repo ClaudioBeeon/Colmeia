@@ -955,13 +955,15 @@ function renderDetail() {
       <div class="detail-body" id="detailBody">
         <div class="detail-pane desc-pane">
           <div class="detail-tabs" role="tablist">
-            <button type="button" class="detail-tab active" id="tabDesc" role="tab" aria-selected="true">Descrição</button>
-            ${task.parentTaskId ? `
-              <button type="button" class="detail-tab" id="tabDescMae" role="tab" aria-selected="false">Descrição card mãe</button>
-            ` : ""}
-            ${ehTarefaDeAlteracao(task) ? `
-              <button type="button" class="detail-tab" id="tabOriginal" role="tab" aria-selected="false" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
-            ` : ""}
+            <div class="detail-tabs-group">
+              <button type="button" class="detail-tab active" id="tabDesc" role="tab" aria-selected="true">Descrição</button>
+              ${task.parentTaskId ? `
+                <button type="button" class="detail-tab" id="tabDescMae" role="tab" aria-selected="false">Descrição card mãe</button>
+              ` : ""}
+              ${ehTarefaDeAlteracao(task) ? `
+                <button type="button" class="detail-tab" id="tabOriginal" role="tab" aria-selected="false" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
+              ` : ""}
+            </div>
             <div class="detail-tabs-spacer"></div>
             ${task.id ? `
               <button type="button" class="detail-tab anexos-tab" id="tabAnexos" role="tab" aria-selected="false" title="Arquivos da tarefa, do card mãe e das subtarefas, tudo junto">
