@@ -557,6 +557,33 @@
   padding: 5px 11px; border-radius: 999px;
 }
 
+/* ----- Baixar de verdade (2026-08-14, pedido do Cláudio) -----
+   Botão da peça atual + "Baixar todos" com o menu (separado/.zip). Ficam
+   na mesma fileira do nome do arquivo, à direita dela. */
+.apv-download-todos-wrap { position: relative; }
+
+.apv-download-menu {
+  /* .apv-envio-menu já dá fundo/sombra/animação de entrada — só muda o
+     lado que abre: pra BAIXO, porque este botão mora no topo do cartão
+     (o envio-menu original abre pra cima porque mora no rodapé). */
+  top: calc(100% + 8px); bottom: auto; right: 0; min-width: 170px;
+}
+
+/* A seta "cai" dentro da bandeja, em loop, enquanto baixa -- só
+   transform + opacity (ver o resto do app: nunca layout). */
+@keyframes apvDownloadSetaCaindo {
+  0%   { transform: translateY(-2px); opacity: 0.4; }
+  50%  { transform: translateY(2px);  opacity: 1; }
+  100% { transform: translateY(-2px); opacity: 0.4; }
+}
+.apv-baixando .apv-download-seta {
+  animation: apvDownloadSetaCaindo 0.85s ease-in-out infinite;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .apv-baixando .apv-download-seta { animation: none; }
+}
+
 /* ----- Carrossel de peças (lote com mais de uma peça) -----
    Pedido do Cláudio (2026-08-05): quando o designer manda várias peças
    diferentes de uma vez pra revisão (ex: 13 posts), o atendimento confere

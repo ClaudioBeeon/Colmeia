@@ -657,6 +657,74 @@ function buscarImagemCheiaDrive(fileId) {
   }
 }
 
+// ============ BAIXAR DE VERDADE (não só visualizar) ============
+// Mesmo padrão do baixarDocumentoAnexo (RunrunLeitura.gs), só que buscando
+// direto no Drive em vez do Runrun.it — usado pelos botões "Baixar" da
+// tela de conferência do atendimento (2026-08-14, pedido do Cláudio).
+// Sempre base64 (não usa o atalho de URL pública do Storage que
+// buscarImagemCheiaDrive usa): pra FORÇAR download em vez de exibir, o
+// front precisa do arquivo em mãos como Blob, e um <a href> apontando
+// pra uma URL de storage abriria/exibiria dependendo dos headers dela,
+// não baixaria garantido.
+function baixarArquivoDrive(fileId) {
+  if (!fileId) return { ok: false, error: 'fileId não informado.' };
+  try {
+    var arquivo = DriveApp.getFileById(fileId);
+    var blob = arquivo.getBlob();
+    var bytes = blob.getBytes();
+    // Mesmo limite e mesmo motivo do baixarDocumentoAnexo: acima disso
+    // não cabe direito na resposta do Apps Script (~50MB, e o base64
+    // ainda engorda uns 33% em cima disso).
+    var LIMITE_BYTES = 25 * 1024 * 1024;
+    if (bytes.length > LIMITE_BYTES) {
+      return { ok: false, arquivoGrande: true, error: 'Esse arquivo tem ' + Math.round(bytes.length / 1024 / 1024) + ' MB, grande demais pra baixar por aqui. Abre direto no Drive.' };
+    }
+    return {
+      ok: true,
+      base64: Utilities.base64Encode(bytes),
+      mimeType: blob.getContentType() || 'application/octet-stream',
+      nome: arquivo.getName()
+    };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao baixar o arquivo: ' + err.message };
+  }
+}
+
+/**
+ * "Baixar todos em ZIP" — junta os arquivos pedidos num .zip só.
+ *
+ * Teto do LOTE (não por arquivo) bem mais apertado que o de um arquivo
+ * sozinho: a resposta inteira do Apps Script (zip + base64 por cima)
+ * precisa caber no limite de ~50MB de uma Web App. 20MB de bytes crus
+ * dá folga suficiente pro +33% do base64 não estourar isso. Acima disso,
+ * a pessoa usa "baixar cada um separado" em vez de zipar.
+ */
+function baixarPecasEmZip(fileIds) {
+  if (!fileIds || !fileIds.length) return { ok: false, error: 'Nenhum arquivo selecionado.' };
+  var LIMITE_TOTAL_BYTES = 20 * 1024 * 1024;
+  try {
+    var blobs = [];
+    var totalBytes = 0;
+    for (var i = 0; i < fileIds.length; i++) {
+      var arquivo = DriveApp.getFileById(fileIds[i]);
+      var blob = arquivo.getBlob();
+      totalBytes += blob.getBytes().length;
+      if (totalBytes > LIMITE_TOTAL_BYTES) {
+        return { ok: false, loteGrande: true, error: 'Esse lote passa de ' + Math.round(LIMITE_TOTAL_BYTES / 1024 / 1024) + ' MB juntando tudo -- grande demais pra zipar por aqui. Baixa cada peça separada.' };
+      }
+      blobs.push(blob.setName(arquivo.getName()));
+    }
+    var zipBlob = Utilities.zip(blobs, 'aprovacao.zip');
+    return {
+      ok: true,
+      base64: Utilities.base64Encode(zipBlob.getBytes()),
+      mimeType: 'application/zip'
+    };
+  } catch (err) {
+    return { ok: false, error: 'Erro ao gerar o ZIP: ' + err.message };
+  }
+}
+
 // ============ ATIVIDADES DO DRIVE (aba "Histórico" > Atividades recentes) ============
 var JANELA_ATIVIDADES_DRIVE_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
 var MAX_ATIVIDADES_DRIVE = 30;

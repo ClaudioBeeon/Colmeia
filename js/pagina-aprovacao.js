@@ -1450,6 +1450,147 @@ async function apvMostrarNoPalco(peca, versao) {
 }
 
 // ---------------------------------------------------------------------------
+// Baixar de verdade (2026-08-14, pedido do Cláudio): baixar a peça que
+// está no palco agora, ou todas as peças do lote de uma vez (cada uma
+// separada, ou juntas num .zip). Mesmo padrão do baixarAnexo
+// (js/chat-comentarios.js) — base64 -> Blob -> <a download>, forçando o
+// download de verdade em vez de abrir o Drive numa aba.
+// ---------------------------------------------------------------------------
+
+/**
+ * Troca o conteúdo do botão pelo ícone animado "baixando..." e volta ao
+ * normal no fim — usado tanto no botão de uma peça só quanto no de
+ * "Baixar todos".
+ */
+function apvComBotaoBaixando(btnEl, rotuloBaixando, fn) {
+  const original = btnEl.innerHTML;
+  const disabledAntes = btnEl.disabled;
+  btnEl.disabled = true;
+  btnEl.classList.add("apv-baixando");
+  btnEl.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="apv-download-icone" aria-hidden="true">
+      <path class="apv-download-seta" d="M12 3v11m0 0l-3.5-3.5M12 14l3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span>${rotuloBaixando}</span>
+  `;
+  return fn().finally(() => {
+    btnEl.disabled = disabledAntes;
+    btnEl.classList.remove("apv-baixando");
+    btnEl.innerHTML = original;
+  });
+}
+
+/** Monta o Blob a partir do base64 e dispara o download de verdade. */
+function apvDispararDownload(base64, mimeType, nome) {
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  const blob = new Blob([bytes], { type: mimeType || "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nome || "arquivo";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Botão "Baixar" perto da peça que está no palco agora. */
+function apvBaixarPecaAtual(btnEl) {
+  if (!apvPecaAberta || !apvPecaAberta.peca) return;
+  const arquivo = apvPecaAberta.peca.versoes[apvVersaoNaTela - 1];
+  if (!arquivo) return;
+  apvComBotaoBaixando(btnEl, "Baixando...", async () => {
+    try {
+      const data = await chamarBackend({ acao: "baixarArquivoDrive", fileId: arquivo.fileId });
+      if (!data.ok) {
+        if (data.arquivoGrande) {
+          window.open(`https://drive.google.com/file/d/${encodeURIComponent(arquivo.fileId)}/view`, "_blank", "noopener");
+          return;
+        }
+        throw new Error(data.error || "Falha ao baixar.");
+      }
+      apvDispararDownload(data.base64, data.mimeType || arquivo.mimeType, arquivo.nome || data.nome);
+    } catch (err) {
+      console.error("Falha ao baixar peça:", err);
+      mostrarToast("Não consegui baixar essa peça agora: " + (err.message || "erro desconhecido"), "erro");
+    }
+  });
+}
+
+/** Abre/fecha o menu "Baixar todos" (separado / zip), fecha ao clicar fora. */
+function apvAlternarMenuDownload(ev) {
+  if (ev) ev.stopPropagation();
+  const menu = document.getElementById("apvDownloadMenu");
+  if (!menu) return;
+  menu.hidden = !menu.hidden;
+  if (menu.hidden) return;
+  setTimeout(() => {
+    const fechar = ev2 => {
+      if (menu.isConnected && !menu.hidden && !menu.contains(ev2.target)) {
+        menu.hidden = true;
+        document.removeEventListener("click", fechar, true);
+      }
+    };
+    document.addEventListener("click", fechar, true);
+  }, 0);
+}
+
+/** A versão mais recente de cada peça do lote — o que "baixar todos" baixa. */
+function apvArquivosDoLoteInteiro() {
+  if (!apvPecaAberta || !Array.isArray(apvPecaAberta.pecas)) return [];
+  return apvPecaAberta.pecas
+    .map(p => p.versoes[p.versoes.length - 1])
+    .filter(Boolean);
+}
+
+/** "Baixar todos" > "Cada um separado": um download por peça, em fila. */
+function apvBaixarTodosSeparados(btnMenuPai) {
+  const arquivos = apvArquivosDoLoteInteiro();
+  document.getElementById("apvDownloadMenu").hidden = true;
+  if (!arquivos.length) return;
+  apvComBotaoBaixando(btnMenuPai, `Baixando 0/${arquivos.length}...`, async () => {
+    let feitos = 0;
+    for (const arquivo of arquivos) {
+      try {
+        const data = await chamarBackend({ acao: "baixarArquivoDrive", fileId: arquivo.fileId });
+        if (data.ok) apvDispararDownload(data.base64, data.mimeType || arquivo.mimeType, arquivo.nome || data.nome);
+      } catch (err) {
+        console.error("Falha ao baixar " + arquivo.nome + ":", err);
+      }
+      feitos++;
+      btnMenuPai.querySelector("span").textContent = `Baixando ${feitos}/${arquivos.length}...`;
+    }
+  });
+}
+
+/** "Baixar todos" > "Em um .zip": um arquivo só, com tudo dentro. */
+function apvBaixarTodosEmZip(btnMenuPai) {
+  const arquivos = apvArquivosDoLoteInteiro();
+  document.getElementById("apvDownloadMenu").hidden = true;
+  if (!arquivos.length) return;
+  apvComBotaoBaixando(btnMenuPai, "Zipando...", async () => {
+    try {
+      const data = await chamarBackend({ acao: "baixarPecasEmZip", fileIds: arquivos.map(a => a.fileId) });
+      if (!data.ok) {
+        if (data.loteGrande) {
+          mostrarToast(data.error + " Usa \"Baixar cada um separado\" em vez disso.", "erro");
+          return;
+        }
+        throw new Error(data.error || "Falha ao gerar o ZIP.");
+      }
+      const nomeCliente = (apvPecaAberta && apvPecaAberta.cliente) || "";
+      apvDispararDownload(data.base64, data.mimeType, `${nomeCliente || "aprovacao"}.zip`.trim());
+    } catch (err) {
+      console.error("Falha ao baixar peças em ZIP:", err);
+      mostrarToast("Não consegui gerar o ZIP agora: " + (err.message || "erro desconhecido"), "erro");
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
 // O carrossel de peças — só aparece quando o LOTE tem mais de uma
 // (pedido do Cláudio, 2026-08-05: várias peças mandadas juntas viram uma
 // conferência só, com uma decisão só, e o atendimento usa este carrossel
@@ -1491,6 +1632,11 @@ function apvRenderCarrosselPecas() {
   if (!linha || !legenda || !apvPecaAberta) return;
 
   const pecas = apvPecaAberta.pecas || [];
+  // "Baixar todos" só faz sentido com mais de uma peça no lote -- mesma
+  // regra do carrossel, e mesmo lugar que já decide isso.
+  const wrapTodos = document.getElementById("apvBaixarTodosWrap");
+  if (wrapTodos) wrapTodos.hidden = pecas.length <= 1;
+
   if (pecas.length <= 1) {
     linha.hidden = true;
     legenda.hidden = true;
@@ -2780,6 +2926,16 @@ function apvLigarEventos() {
     if (btn && btn.dataset.fileId) abrirImagemAmpliadaDoDrive(btn.dataset.fileId, btn.dataset.nome);
   });
   liga("apvVerVersaoNova", "click", () => apvIrParaVersao(apvPecaAberta ? apvPecaAberta.peca.versoes.length : 1));
+
+  // Baixar de verdade (2026-08-14, pedido do Cláudio): a peça que está no
+  // palco agora, ou o lote inteiro (separado ou em .zip) via o menu.
+  liga("apvBaixarPecaBtn", "click", (e) => {
+    e.stopPropagation(); // não borbulha pro clique do palco, que marca ponto
+    apvBaixarPecaAtual(document.getElementById("apvBaixarPecaBtn"));
+  });
+  liga("apvBaixarTodosBtn", "click", apvAlternarMenuDownload);
+  liga("apvBaixarSeparadosBtn", "click", () => apvBaixarTodosSeparados(document.getElementById("apvBaixarTodosBtn")));
+  liga("apvBaixarZipBtn", "click", () => apvBaixarTodosEmZip(document.getElementById("apvBaixarTodosBtn")));
 
   liga("apvTabConferencia", "click", () => apvTrocarAba("conferencia"));
   liga("apvTabCliente", "click", () => apvTrocarAba("cliente"));

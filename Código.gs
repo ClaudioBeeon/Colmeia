@@ -528,6 +528,10 @@ function handleRequest(e, method) {
         output = buscarThumbnailDrive(body.fileId);
       } else if (body.acao === 'buscarImagemCheiaDrive') {
         output = buscarImagemCheiaDrive(body.fileId);
+      } else if (body.acao === 'baixarArquivoDrive') {
+        output = baixarArquivoDrive(body.fileId);
+      } else if (body.acao === 'baixarPecasEmZip') {
+        output = baixarPecasEmZip(body.fileIds);
       } else if (body.acao === 'urlsPublicasDasPecas') {
         // `atualizados` (fileId -> data no Drive) é opcional: quem tem o
         // dado manda, e aí a cópia devolvida é garantidamente a da versão
