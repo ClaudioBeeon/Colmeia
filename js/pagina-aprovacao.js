@@ -1481,12 +1481,8 @@ function apvComBotaoBaixando(btnEl, rotuloBaixando, fn) {
   });
 }
 
-/** Monta o Blob a partir do base64 e dispara o download de verdade. */
-function apvDispararDownload(base64, mimeType, nome) {
-  const binario = atob(base64);
-  const bytes = new Uint8Array(binario.length);
-  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
-  const blob = new Blob([bytes], { type: mimeType || "application/octet-stream" });
+/** Dispara o download de verdade a partir de um Blob já pronto. */
+function apvDispararDownloadDoBlob(blob, nome) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -1495,6 +1491,41 @@ function apvDispararDownload(base64, mimeType, nome) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+/** Monta o Blob a partir do base64 e dispara o download de verdade. */
+function apvDispararDownload(base64, mimeType, nome) {
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  apvDispararDownloadDoBlob(new Blob([bytes], { type: mimeType || "application/octet-stream" }), nome);
+}
+
+/**
+ * Baixa a partir do que `baixarArquivoDrive` devolveu — `url` (cópia já
+ * publicada no Storage, ver Storage.gs) OU `base64` (caminho de sempre,
+ * pelo Apps Script). Com `url`, o navegador busca direto no Supabase —
+ * sem passar pelo teto de 25MB do Apps Script, porque o arquivo nunca
+ * vira base64 dentro de uma resposta do Colmeia (2026-08-14, pedido do
+ * Cláudio: "algumas coisas já estão no Supabase, dá pra usar pra
+ * arquivo grande?"). Se o Supabase recusar a busca (CORS, link expirado
+ * etc.), cai pra abrir a URL numa aba — pior que baixar direto, mas
+ * ainda dá pra salvar a peça na mão.
+ */
+async function apvBaixarDeResposta(data, nomeFallback) {
+  if (data.url) {
+    try {
+      const resp = await fetch(data.url);
+      if (!resp.ok) throw new Error("Storage recusou (" + resp.status + ").");
+      const blob = await resp.blob();
+      apvDispararDownloadDoBlob(blob, nomeFallback);
+    } catch (err) {
+      console.error("Falha ao baixar do Storage, abrindo em aba:", err);
+      window.open(data.url, "_blank", "noopener");
+    }
+    return;
+  }
+  apvDispararDownload(data.base64, data.mimeType, nomeFallback);
 }
 
 /** Botão "Baixar" perto da peça que está no palco agora. */
@@ -1512,7 +1543,7 @@ function apvBaixarPecaAtual(btnEl) {
         }
         throw new Error(data.error || "Falha ao baixar.");
       }
-      apvDispararDownload(data.base64, data.mimeType || arquivo.mimeType, arquivo.nome || data.nome);
+      await apvBaixarDeResposta(data, arquivo.nome || data.nome);
     } catch (err) {
       console.error("Falha ao baixar peça:", err);
       mostrarToast("Não consegui baixar essa peça agora: " + (err.message || "erro desconhecido"), "erro");
@@ -1556,7 +1587,7 @@ function apvBaixarTodosSeparados(btnMenuPai) {
     for (const arquivo of arquivos) {
       try {
         const data = await chamarBackend({ acao: "baixarArquivoDrive", fileId: arquivo.fileId });
-        if (data.ok) apvDispararDownload(data.base64, data.mimeType || arquivo.mimeType, arquivo.nome || data.nome);
+        if (data.ok) await apvBaixarDeResposta(data, arquivo.nome || data.nome);
       } catch (err) {
         console.error("Falha ao baixar " + arquivo.nome + ":", err);
       }

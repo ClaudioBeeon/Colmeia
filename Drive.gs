@@ -668,13 +668,28 @@ function buscarImagemCheiaDrive(fileId) {
 // não baixaria garantido.
 function baixarArquivoDrive(fileId) {
   if (!fileId) return { ok: false, error: 'fileId não informado.' };
+
+  // Se já tem (ou dá pra fazer agora) uma cópia publicada no Storage —
+  // só existe pra IMAGEM, ver Storage.gs — devolve o ENDEREÇO em vez do
+  // arquivo em base64 (2026-08-14, pedido do Cláudio: "algumas coisas já
+  // estão no Supabase, não dá pra usar pra arquivo grande?"). O
+  // navegador baixa direto do Supabase — sem passar pelos 25MB de teto
+  // do Apps Script, porque o arquivo nunca vira texto dentro desta
+  // resposta. Falhar aqui não é erro: cai no base64 de sempre, como
+  // buscarImagemCheiaDrive já faz.
+  var url = urlPublicaDaPeca(fileId);
+  if (url) return { ok: true, url: url };
+
   try {
     var arquivo = DriveApp.getFileById(fileId);
     var blob = arquivo.getBlob();
     var bytes = blob.getBytes();
     // Mesmo limite e mesmo motivo do baixarDocumentoAnexo: acima disso
     // não cabe direito na resposta do Apps Script (~50MB, e o base64
-    // ainda engorda uns 33% em cima disso).
+    // ainda engorda uns 33% em cima disso). Vídeo nunca tem cópia no
+    // Storage (Storage.gs só publica imagem), então continua limitado a
+    // isso -- baixar vídeo grande direto do Colmeia esbarra nesse teto
+    // de qualquer jeito, é físico da resposta HTTP do Apps Script.
     var LIMITE_BYTES = 25 * 1024 * 1024;
     if (bytes.length > LIMITE_BYTES) {
       return { ok: false, arquivoGrande: true, error: 'Esse arquivo tem ' + Math.round(bytes.length / 1024 / 1024) + ' MB, grande demais pra baixar por aqui. Abre direto no Drive.' };
