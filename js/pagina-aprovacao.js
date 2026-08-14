@@ -452,7 +452,13 @@ async function atualizarBadgeAprovacao() {
  * pedido nem chega a responder.
  */
 function apvPareceProblemaDeConexao(data) {
-  return caiuARede(data) || !!(data && data.error && String(data.error).indexOf("?tipo=tarefas") !== -1);
+  // Desde 2026-08-14 o `chamarBackend` já repete sozinho uma vez quando
+  // reconhece essa assinatura (ver ehRespostaDeMetodoTrocado, js/config.js)
+  // — então chegar aqui significa que aconteceu DUAS vezes seguidas, o que
+  // reforça ainda mais que é a conexão daquela pessoa. A checagem fica,
+  // usando a mesma função pra não existirem duas definições do que é essa
+  // assinatura.
+  return caiuARede(data) || ehRespostaDeMetodoTrocado(data);
 }
 
 /**

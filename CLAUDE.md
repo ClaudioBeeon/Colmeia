@@ -1893,6 +1893,72 @@ trazer dependência num projeto sem bundler.
   clique. ⚠️ **Campo que o card enche sob demanda TEM que entrar nessa lista de preservação** —
   senão nasce vazio a cada atualização, sem erro nenhum, e ninguém percebe.
 
+## O que o painel de erros mostrou — três defeitos reais (2026-08-14)
+
+O Cláudio mandou o despejo do painel de diagnóstico (Ctrl+Shift+D → "Ver de todo mundo") de dois
+dias. A maior parte era a fila do Apps Script (timeouts e `NetworkError` em rajada, já conhecidos),
+mas no meio tinha três defeitos de verdade — todos eles invisíveis pra quem usa, porque nenhum
+deles mostra mensagem de erro na tela.
+
+### 1. O clique do quadro alcançava o botão de play do POP-UP
+
+```
+TypeError: can't access property "running", task is undefined   (5x no mesmo segundo)
+```
+
+`attachCardDragHandlers` (js/kanban-board.js) procurava `.play-btn` com
+`document.querySelectorAll` — o documento INTEIRO. Só que o pop-up de detalhe também tem um botão
+`class="play-btn"` (o `#detailPlay`), e esse **não tem `data-idx`**. O clique caía em
+`tasks[undefined]` → `undefined` → quebrava ao ler `.running`.
+
+E pior: `attachCardDragHandlers` roda a cada `render()`, que roda a cada atualização do quadro.
+Com o pop-up aberto, **cada rodada pendurava mais um clique quebrado no mesmo botão** — daí o erro
+aparecer repetido 5 vezes no mesmo segundo.
+
+⚠️ **Regra:** tudo dentro de `attachCardDragHandlers` procura a partir de `boardEl`, nunca de
+`document`. Classe de CSS não é dono de nada — o mesmo nome vive em telas diferentes.
+
+### 2. O Colmeia pausava o cronômetro DOS OUTROS
+
+```
+Runrun.it recusou o pause (status 403)     (aos pares, repetido, o erro mais comum do log)
+```
+
+`pararOutrasTarefasRodando` (js/kanban-polling.js) pausava **qualquer** tarefa do array `tasks`
+que estivesse rodando. Só que o quadro mostra o time inteiro: dar play numa tarefa minha mandava
+pausar a da Ana e a do Erick, que naquele instante estavam trabalhando. Dois estragos:
+
+- no Runrun.it, 403 — o token de quem clicou não manda na tarefa de outro (por sorte);
+- **na tela de quem clicou, o cronômetro do colega parava mesmo assim**, porque
+  `t.running = false` acontece antes da recusa chegar. Só voltava na atualização seguinte.
+
+A regra de "uma tarefa rodando por vez" é **por pessoa**, não pelo quadro. O botão da pílula de
+"tocando agora" já filtrava por `ehMinhaTarefa`; aqui faltava.
+
+### 3. POST que vira GET no caminho — agora repete sozinho
+
+```
+Backend recusou "listarPessoas": Use ?tipo=tarefas pra buscar o quadro.
+```
+
+Já tinha sido diagnosticado em 2026-08-13 (com a Laura): alguma coisa entre o navegador e o Apps
+Script — extensão, VPN, proxy da empresa — troca o método do pedido, e ele cai no ramo do `doGet`,
+que responde sempre esse mesmo texto. O conserto de lá valia **numa tela só** (a de aprovação).
+
+O detalhe que faltou aproveitar: **essa resposta prova que a ação não rodou.** Ela nem chegou a ser
+lida como ação — nada foi criado, movido nem gravado. Então repetir é seguro **por definição**,
+inclusive pra escrita. Agora `chamarBackend` reconhece a assinatura e repete **uma vez**, pra
+qualquer ação, em qualquer tela. Se acontecer duas vezes seguidas não é azar, é a conexão daquela
+pessoa — aí devolve o erro pra quem chamou tratar, como antes.
+
+### O resto do log: a fila do Apps Script
+
+Timeouts (`The operation was aborted`) em `listarConferenciasPendentes`, `listarComentarios`,
+`buscarUploadsRecentesDoCard`, e `NetworkError` em rajadas de 5-10 chamadas no mesmo segundo. Não
+são bugs de lógica: é o Apps Script engasgando com todo mundo na mesma fila (ver "Por que o card
+demora a abrir"). O caminho pra isso continua sendo tirar chamada de cima dele — cache, leitura em
+lote e prefetch — não tem conserto pontual.
+
 ## A "Alteração V2" que não nasceu (2026-08-14)
 
 O Lucas pediu uma alteração numa peça que já tinha uma "Alteração V1". A V2 não foi criada, e

@@ -619,6 +619,17 @@ function medirChamadaDoBackend(acao, comecouEm, resultado) {
   } catch (err) { /* medir nunca pode quebrar o app */ }
 }
 
+/**
+ * Essa resposta é a do doGet do Código.gs, que é o que o backend devolve
+ * quando o pedido chega SEM ser um POST com ação — ou seja, a assinatura
+ * de "o método do pedido foi trocado no caminho". Ver o uso em
+ * chamarBackend logo abaixo pro porquê disso ser tratado à parte.
+ */
+function ehRespostaDeMetodoTrocado(data) {
+  return !!(data && data.ok === false && data.error
+    && String(data.error).indexOf("?tipo=tarefas") !== -1);
+}
+
 async function chamarBackend(corpo, opcoes) {
   opcoes = opcoes || {};
   if (!COLMEIA_API_URL) return { ok: false, semRede: true, error: "Backend não configurado." };
@@ -663,6 +674,27 @@ async function chamarBackend(corpo, opcoes) {
       const rNaoJson = { ok: false, error: `O servidor respondeu de um jeito inesperado (${res.status}). Tenta de novo.` };
       medirChamadaDoBackend(corpo.acao, _comecouEm, rNaoJson);
       return rNaoJson;
+    }
+    // O POST VIROU GET NO CAMINHO — e dá pra provar que a ação NÃO rodou.
+    //
+    // Alguma coisa entre o navegador e o Apps Script (extensão, VPN,
+    // proxy da empresa, um redirecionamento do Google que o navegador
+    // reenvia como GET) troca o método do pedido. Aí ele cai no ramo do
+    // doGet, que não conhece ação nenhuma e responde sempre o mesmo texto:
+    // "Use ?tipo=tarefas pra buscar o quadro." (ver handleRequest,
+    // Código.gs).
+    //
+    // Essa resposta é a MELHOR notícia possível dentro de um erro: ela
+    // significa que o pedido nem chegou a ser lido como ação — nada foi
+    // criado, movido nem gravado. Por isso repetir é seguro por
+    // definição, inclusive pra escrita. UMA vez só: se acontecer de novo,
+    // não é sorte, é a conexão daquela pessoa, e aí quem chamou trata
+    // como erro normal (2026-08-14 — apareceu no diagnóstico em
+    // listarPessoas e buscarUploadsRecentesDoCard; já tinha sido visto
+    // com a Laura em 2026-08-13, mas o conserto de lá valia numa tela só).
+    if (!opcoes._jaRepetiPorMetodoTrocado && ehRespostaDeMetodoTrocado(data)) {
+      console.warn(`O pedido "${corpo.acao}" chegou como GET no backend (a ação não rodou). Repetindo uma vez.`);
+      return chamarBackend(corpo, Object.assign({}, opcoes, { _jaRepetiPorMetodoTrocado: true }));
     }
     if (data && data.ok === false && data.error) {
       console.error(`Backend recusou "${corpo.acao}":`, data.error);

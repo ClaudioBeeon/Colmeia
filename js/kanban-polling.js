@@ -149,11 +149,26 @@ function pararOutrasTarefasRodando(exceto) {
   const idExceto = exceto && exceto.id ? String(exceto.id) : null;
   tasks.forEach(t => {
     const ehAMesma = idExceto ? String(t.id) === idExceto : t === exceto;
-    if (t.running && !ehAMesma) {
-      t.running = false;
-      t._runningToggleEm = Date.now();
-      pausarTarefaNoBackend(t.id);
-    }
+    if (!t.running || ehAMesma) return;
+    // SÓ AS MINHAS (2026-08-14). O quadro mostra as tarefas do time
+    // inteiro, e isto aqui pausava QUALQUER uma que estivesse rodando —
+    // inclusive a de outra pessoa, que naquele instante estava com o
+    // cronômetro dela ligado, trabalhando. Dois estragos de uma vez:
+    //
+    //  - no Runrun.it a chamada era recusada com 403 (o token de quem
+    //    clicou não manda na tarefa de outro) — foi o erro que mais
+    //    apareceu no painel de diagnóstico, em pares e repetido;
+    //  - na TELA de quem clicou, o cronômetro do colega parava do mesmo
+    //    jeito (`t.running = false` acontecia antes da recusa chegar), e
+    //    só voltava na atualização seguinte.
+    //
+    // A regra de "uma tarefa rodando por vez" é por PESSOA, não pelo
+    // quadro. O botão da pílula de "tocando agora" já filtrava por
+    // ehMinhaTarefa; aqui faltava.
+    if (typeof ehMinhaTarefa === "function" && !ehMinhaTarefa(t)) return;
+    t.running = false;
+    t._runningToggleEm = Date.now();
+    pausarTarefaNoBackend(t.id);
   });
 }
 

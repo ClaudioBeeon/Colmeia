@@ -332,8 +332,31 @@ function setupDragAndDrop() {
   });
 }
 
+/**
+ * ⚠️ TUDO AQUI DENTRO TEM QUE SER PROCURADO A PARTIR DE `boardEl`, NUNCA
+ * DE `document` (2026-08-14).
+ *
+ * O pop-up de detalhe da tarefa também tem um botão com `class="play-btn"`
+ * (o `#detailPlay`, ver renderDetail em js/detalhe-modal.js). Como isto
+ * aqui varria o documento INTEIRO, ele era pego junto — só que o
+ * `#detailPlay` não tem `data-idx`, então o clique caía em
+ * `tasks[undefined]`, que é `undefined`, e quebrava na hora de ler
+ * `.running`:
+ *
+ *   TypeError: can't access property "running", task is undefined
+ *
+ * Pior: `attachCardDragHandlers` roda a CADA `render()`, e render roda a
+ * cada atualização do quadro. Com o pop-up aberto, cada rodada pendurava
+ * MAIS um clique quebrado no mesmo botão — por isso o erro aparecia
+ * repetido várias vezes no mesmo segundo no painel de diagnóstico.
+ *
+ * Escopando no `boardEl`, o botão do pop-up deixa de ser alcançado por
+ * este arquivo e volta a ter só o clique que é dele (ligado em
+ * wireDetailEvents, js/detalhe-modal.js).
+ */
 function attachCardDragHandlers() {
-  document.querySelectorAll(".task-card").forEach(card => {
+  if (!boardEl) return;
+  boardEl.querySelectorAll(".task-card").forEach(card => {
     card.addEventListener("dragstart", e => {
       e.dataTransfer.setData("text/plain", card.dataset.idx);
       card.classList.add("dragging");
@@ -356,7 +379,7 @@ function attachCardDragHandlers() {
   });
 
   // ===== Menu de prioridade =====
-  document.querySelectorAll(".priority-wrap").forEach(wrap => {
+  boardEl.querySelectorAll(".priority-wrap").forEach(wrap => {
     const btn = wrap.querySelector(".priority-btn");
     const menu = wrap.querySelector(".priority-menu");
     btn.addEventListener("click", e => {
@@ -396,7 +419,7 @@ function attachCardDragHandlers() {
   });
 
   // ===== Data de entrega desejada: clicar abre o calendário próprio do Colmeia =====
-  document.querySelectorAll(".card-due-wrap").forEach(wrap => {
+  boardEl.querySelectorAll(".card-due-wrap").forEach(wrap => {
     const btn = wrap.querySelector(".card-due-simple");
     btn.addEventListener("click", e => {
       e.stopPropagation();
@@ -434,7 +457,7 @@ function attachCardDragHandlers() {
   });
 
   // ===== Foto do responsável: avançar sequência ou reatribuir manual =====
-  document.querySelectorAll(".assignee-wrap").forEach(wrap => {
+  boardEl.querySelectorAll(".assignee-wrap").forEach(wrap => {
     const menu = wrap.querySelector(".assignee-menu");
     wrap.addEventListener("click", async e => {
       e.stopPropagation();
@@ -511,11 +534,17 @@ function attachCardDragHandlers() {
   });
 
   // ===== Play / progresso =====
-  document.querySelectorAll(".play-btn").forEach(btn => {
+  boardEl.querySelectorAll(".play-btn").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
       const idx = btn.dataset.idx;
       const task = tasks[idx];
+      // O índice vem gravado no HTML na hora do desenho, e a varredura do
+      // quadro troca o array `tasks` inteiro por trás. Clicar bem no meio
+      // dessa troca dá `undefined` aqui — e a tela toda quebrava ao ler
+      // `.running`. Não fazer nada é o certo: o quadro se redesenha logo
+      // em seguida e o botão volta a apontar pro lugar certo.
+      if (!task) return;
       const vaiComecar = !task.running;
       if (vaiComecar) pararOutrasTarefasRodando(task);
       task.running = vaiComecar;
