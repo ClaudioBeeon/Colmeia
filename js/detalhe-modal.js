@@ -1108,7 +1108,7 @@ function renderDetail() {
               // não dois botões fantasma a 40% de opacidade ocupando espaço
               // (2026-08-14, achado do impeccable critique).
               if (!linkPessoa && !linkCliente) {
-                return `<p class="discord-sem-config">Discord não configurado pra essa pessoa/cliente.</p>`;
+                return ""; // Sem link nenhum cadastrado: nada aparece (2026-08-14, pedido do Cláudio)
               }
               return `
                 <div class="discord-ctas">

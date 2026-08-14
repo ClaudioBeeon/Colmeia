@@ -499,24 +499,28 @@ body.card-aberto .quick-access-panel { display: none; }
    preenchia no hover; agora é a mesma cor cheia do estado "entregue"
    (.delivered, logo abaixo), só que sem a animação de pop -- constante,
    já dá pra ver de longe que é a ação de concluir. */
+/* Altura por padding, não fixa em 26px (2026-08-14, achado do Cláudio:
+   ficava rasa/desproporcional perto do pill preto de fundo) -- mesma
+   lógica de altura do .status-badge ao lado, pra fechar visualmente
+   com o resto do cabeçalho. */
 .nav-arrow.nav-deliver {
-  width: auto; border-radius: 999px; gap: 0;
-  padding: 0 14px; margin-left: 4px; position: relative;
+  width: auto; height: auto; border-radius: 999px; gap: 0;
+  padding: 8px 14px; margin-left: 4px; position: relative;
   background: #2F9E44;
-  color: #fff;
+  color: var(--on-ink);
 }
 .nav-arrow.nav-deliver::before {
   content: ""; position: absolute; left: -5px; top: 50%; transform: translateY(-50%);
   width: 1px; height: 16px; background: rgba(255,255,255,0.15);
 }
-.nav-deliver-label { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.nav-deliver-label { font-size: 12.5px; font-weight: 700; white-space: nowrap; line-height: 1; }
 .nav-arrow.nav-deliver:hover {
   background: #248037;
 }
 
 .nav-arrow.nav-deliver.delivered {
   background: #2F9E44;
-  color: #fff;
+  color: var(--on-ink);
   animation: navDeliverPop 0.45s var(--ease-apple);
 }
 .nav-arrow.nav-deliver.delivered:hover { background: #248037; }

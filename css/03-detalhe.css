@@ -21,6 +21,13 @@
   font-family: var(--font-body);
   color: var(--text-primary);
 }
+/* Sem isso o navegador desenha o anel de foco azul padrão em volta do
+   painel inteiro quando ele recebe foco por script ao abrir (2026-08-14,
+   achado do Cláudio: "linha azul em volta do pop-up, depois some") --
+   o painel é só um pouso de foco pra teclado/leitor de tela (ver
+   openDetail, js/detalhe-modal.js), não um controle que precisa de anel
+   visível; cada botão/campo lá dentro mantém o próprio foco normalmente. */
+.task-detail:focus, .task-detail:focus-visible { outline: none; }
 
 .task-detail.visible { display: flex; }
 
@@ -1084,8 +1091,6 @@
 .side-block-denso { gap: 12px; }
 .side-linha-densa { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .side-linha-densa .side-label { flex-shrink: 0; }
-
-.discord-sem-config { font-size: 12.5px; color: var(--text-muted); margin: 10px 0 0; }
 
 .side-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 

@@ -67,8 +67,21 @@ function getProgressoCliente(designer, cliente) {
   return reg ? { entregues: reg.entregues, total: reg.total } : { entregues: 0, total: 0 };
 }
 
+/**
+ * Acha os links cadastrados desse cliente — pelo nome canônico OU por
+ * qualquer apelido (aliases) vinculado a ele (2026-08-14, achado do
+ * Cláudio: "tem tudo cadastrado, pasta, pasta publicações, e não
+ * aparecem" — a tarefa vem do Runrun.it com um nome, mas o cliente foi
+ * cadastrado no Hub com outro, e os dois foram ligados como apelido; só
+ * que essa checagem de apelido só existia pra PESSOA, resolverPessoa em
+ * js/pessoas-fotos.js — nunca tinha sido copiada pra cliente aqui).
+ */
 function getLinksDoCliente(nomeCliente) {
-  return linksClientes.find(l => normalizarParaComparar(l.cliente) === normalizarParaComparar(nomeCliente)) || null;
+  const alvo = normalizarParaComparar(nomeCliente);
+  if (!alvo) return null;
+  return linksClientes.find(l =>
+    normalizarParaComparar(l.cliente) === alvo
+    || (l.aliases || []).some(a => normalizarParaComparar(a) === alvo)) || null;
 }
 
 const HUB_FIXOS = [
