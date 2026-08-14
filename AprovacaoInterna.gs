@@ -2250,6 +2250,17 @@ function devolverParaDesigner(dados) {
     // cliente de verdade ali; sobrescrever isso apagaria um dado real.
     var rEtapaMae = moverEtapaTarefa(cardMaeId, 'ajustes', dados.autor);
 
+    // Aqui não existe subtarefa pra falhar, mas existe algo tão ruim
+    // quanto: o comentário não sair ou o card não passar pro designer. Se
+    // as duas coisas falharem, o pedido não chegou em ninguém — e isso
+    // também precisa deixar rastro.
+    if (!rComentario.ok || !rPasse.ok) {
+      registrarFalhaDaDevolucao('projeto fechado: ' + (!rComentario.ok ? 'comentário não saiu' : 'não passei o card pro designer'), {
+        taskId: taskId, cardMaeId: cardMaeId, designer: designer,
+        detalhe: (rComentario.error || '') + ' ' + (rPasse.error || ''), autorNome: dados.autorNome
+      });
+    }
+
     marcarConferenciaDevolvida(taskId, dados.loteId, dados.autorNome, motivo, nomesPecas);
     return {
       ok: true,
@@ -2265,7 +2276,8 @@ function devolverParaDesigner(dados) {
     };
   }
 
-  var numero = proximoNumeroDeAlteracao(cardMaeId);
+  var contagem = proximoNumeroDeAlteracao(cardMaeId);
+  var numero = contagem.numero;
   var tituloPecas = nomesPecas.length > 1
     ? nomesPecas.length + ' peças (' + nomesPecas.join(', ') + ')'
     : (nomesPecas[0] || tarefa.title || '');
@@ -2284,6 +2296,17 @@ function devolverParaDesigner(dados) {
   });
 
   if (!criada.ok) {
+    // REGISTRA NO SERVIDOR (2026-08-14). Antes, uma devolução que falhava
+    // aqui não deixava rastro nenhum do lado de cá: a única pista era um
+    // avisinho passageiro no navegador de quem pediu — que aparece 10
+    // segundos DEPOIS do clique, quando a pessoa já foi conferir outra
+    // peça. Sem rastro, "a alteração não foi criada" vira palavra contra
+    // palavra e não dá pra investigar depois. Ver registrarErroDoApp,
+    // Monitoramento.gs (é a mesma tabela do painel de erros).
+    registrarFalhaDaDevolucao('não consegui criar a subtarefa de alteração', {
+      taskId: taskId, cardMaeId: cardMaeId, designer: designer,
+      numero: numero, detalhe: criada.error || '', autorNome: dados.autorNome
+    });
     return { ok: false, error: criada.error || 'Não consegui criar a subtarefa de alteração.', bodyBruto: criada.bodyBruto };
   }
 
@@ -2300,6 +2323,16 @@ function devolverParaDesigner(dados) {
   // designer abrir a alteração (ver buscarDevolucaoDaTarefa).
   vincularDevolucaoAAlteracao(codigo, criada.taskId);
 
+  // Numeração em que não dá pra confiar vira registro também: a tarefa foi
+  // criada (não vale derrubar a devolução por causa do nome), mas pode ter
+  // nascido com um número repetido — e isso alguém precisa saber.
+  if (!contagem.confiavel) {
+    registrarFalhaDaDevolucao('numeração da alteração pode estar repetida', {
+      taskId: taskId, cardMaeId: cardMaeId, designer: designer,
+      numero: numero, detalhe: contagem.motivo || '', autorNome: dados.autorNome
+    });
+  }
+
   marcarConferenciaDevolvida(taskId, dados.loteId, dados.autorNome, motivo, nomesPecas);
   return {
     ok: true,
@@ -2307,6 +2340,7 @@ function devolverParaDesigner(dados) {
     taskIdAlteracao: criada.taskId,
     link: criada.link,
     titulo: 'Alteração V' + numero,
+    numeracaoConfiavel: contagem.confiavel,
     alocou: criada.alocou,
     virouSubtarefa: criada.virouSubtarefa,
     foiProAjustes: !!rEtapa.ok,
@@ -2315,6 +2349,43 @@ function devolverParaDesigner(dados) {
     designer: designer,
     codigoAjuste: codigo
   };
+}
+
+/**
+ * Deixa rastro de uma devolução que não deu certo, na MESMA tabela do
+ * painel de erros do Colmeia (`erros`, ver Monitoramento.gs).
+ *
+ * Por que isto precisou existir (2026-08-14): o painel de erros só via o
+ * que o NAVEGADOR reportava — ele nasceu pendurado no `console.error`.
+ * Só que o pedido de alteração é mandado 10 segundos depois do clique, em
+ * segundo plano, quando quem pediu já está conferindo outra peça (ou já
+ * fechou a aba). Se falhasse ali, o aviso passageiro na tela não era visto
+ * por ninguém e o painel de erros ficava limpo — o defeito existia e era
+ * invisível pelas duas pontas. Agora quem viu a falha de perto (o
+ * servidor, que estava lá) é quem anota.
+ *
+ * Nunca estoura: um problema ao ANOTAR o problema não pode derrubar a
+ * devolução que ainda pode dar certo no resto.
+ */
+function registrarFalhaDaDevolucao(oQueFalhou, contexto) {
+  try {
+    contexto = contexto || {};
+    var partes = [
+      'devolverParaDesigner: ' + oQueFalhou,
+      'tarefa=' + (contexto.taskId || '?'),
+      'cardMae=' + (contexto.cardMaeId || '?'),
+      'designer=' + (contexto.designer || '?'),
+      'numero=V' + (contexto.numero || '?')
+    ];
+    if (contexto.detalhe) partes.push('detalhe=' + String(contexto.detalhe).slice(0, 300));
+    registrarErroDoApp({
+      tipo: 'erro',
+      mensagem: partes.join(' | '),
+      designer: contexto.autorNome || '(atendimento)',
+      tela: 'conferencia-interna',
+      navegador: '(servidor — Apps Script)'
+    });
+  } catch (e) { /* anotar nunca pode quebrar a devolução */ }
 }
 
 /**
@@ -2361,19 +2432,48 @@ function hojeNoFusoDaAgencia() {
  * devolução da mesma peça: ficariam duas "Alteração V1" no mesmo card
  * mãe, e ninguém saberia qual é qual. Aqui a gente conta as que já
  * existem e segue a numeração.
+ *
+ * ⚠️ ISTO AQUI JÁ DERRUBOU UMA DEVOLUÇÃO (2026-08-14, relatado pelo
+ * Cláudio: o Lucas pediu uma alteração, a V1 tinha sido criada normal e a
+ * V2 simplesmente não nasceu).
+ *
+ * O jeito antigo lia as subtarefas UMA A UMA, em fila: 1 + N idas ao
+ * Runrun.it antes de a devolução sequer começar a criar a tarefa. E o N é
+ * o número de subtarefas do card mãe — que CRESCE a cada alteração e a
+ * cada peça do mês. Ou seja: a função ficava mais lenta exatamente na
+ * medida em que era mais usada, e a segunda tentativa era sempre mais
+ * lenta que a primeira. Somando com o resto da devolução (~12 idas) e com
+ * a fila única do Apps Script, um card mãe cheio passava do prazo e a
+ * devolução inteira morria sem criar nada.
+ *
+ * Agora as leituras das filhas vão TODAS JUNTAS (runrunFetchAll, o mesmo
+ * recurso que já tinha consertado a abertura do card mãe) — de N idas em
+ * fila pra uma rodada só, independente de quantas subtarefas existam.
+ *
+ * Devolve `{ numero, confiavel }`. `confiavel: false` significa "não
+ * consegui LER o card mãe" — e aí o número é um chute que criaria uma
+ * segunda "Alteração V1" em cima da primeira. Quem chama precisa decidir
+ * o que fazer com isso, em vez de descobrir depois olhando o Runrun.it.
  */
 function proximoNumeroDeAlteracao(cardMaeId) {
   var pai = runrunFetch('/tasks/' + cardMaeId);
-  if (!pai || pai.erroFetch || !Array.isArray(pai.subtask_ids)) return 1;
+  if (!pai || pai.erroFetch) return { numero: 1, confiavel: false, motivo: 'não consegui ler o card mãe' };
+  if (!Array.isArray(pai.subtask_ids) || !pai.subtask_ids.length) return { numero: 1, confiavel: true };
+
+  var caminhos = pai.subtask_ids.map(function (id) { return '/tasks/' + id; });
+  var filhas = runrunFetchAll(caminhos);
 
   var maior = 0;
-  for (var i = 0; i < pai.subtask_ids.length; i++) {
-    var filha = runrunFetch('/tasks/' + pai.subtask_ids[i]);
-    if (!filha || filha.erroFetch) continue;
+  var falhas = 0;
+  for (var i = 0; i < filhas.length; i++) {
+    var filha = filhas[i];
+    if (!filha || filha.erroFetch) { falhas++; continue; }
     var m = String(filha.title || '').match(/altera[çc][ãa]o\s*v(\d+)/i);
     if (m) maior = Math.max(maior, parseInt(m[1], 10));
   }
-  return maior + 1;
+  // Uma filha que não deu pra ler PODE ser justamente a "Alteração V2" —
+  // seguir como se ela não existisse repetiria o número.
+  return { numero: maior + 1, confiavel: falhas === 0, motivo: falhas ? falhas + ' subtarefa(s) que não consegui ler' : '' };
 }
 
 /**

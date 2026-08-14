@@ -1893,6 +1893,61 @@ trazer dependência num projeto sem bundler.
   clique. ⚠️ **Campo que o card enche sob demanda TEM que entrar nessa lista de preservação** —
   senão nasce vazio a cada atualização, sem erro nenhum, e ninguém percebe.
 
+## A "Alteração V2" que não nasceu (2026-08-14)
+
+O Lucas pediu uma alteração numa peça que já tinha uma "Alteração V1". A V2 não foi criada, e
+**não sobrou rastro em lugar nenhum** — nem no Runrun.it, nem no painel de erros. Investigando,
+o defeito era menos "uma função errada" e mais três buracos que se somam.
+
+### 1. `proximoNumeroDeAlteracao` ficava mais lenta a cada alteração
+
+Ela lia as subtarefas do card mãe **uma a uma, em fila**: `1 + N` idas ao Runrun.it, com N = número
+de subtarefas do card mãe. Só que N **cresce a cada peça e a cada alteração do mês** — ou seja, a
+função ficava mais lenta exatamente na medida em que era mais usada, e **a tentativa da V2 é sempre
+mais lenta que a da V1 foi**. Somando com o resto da devolução (~12 idas: ler tarefa, ler projeto,
+gravar devolução, criar tarefa, conferir alocação, conferir vínculo de subtarefa, descrição, mover
+etapa, vincular, marcar conferência) e com a fila única do Apps Script, um card mãe cheio passa do
+prazo e a devolução inteira morre sem criar nada.
+
+Agora as filhas são lidas **todas juntas** (`runrunFetchAll`, o mesmo recurso que já tinha
+consertado a abertura do card mãe): de N idas em fila pra **uma rodada só**, não importa o tamanho
+do card mãe. A função também passou a devolver `{ numero, confiavel }` — antes, não conseguir ler
+o card mãe fazia ela devolver `1` caladinha, o que criaria uma **segunda "Alteração V1"** em cima
+da primeira sem ninguém perceber.
+
+### 2. O pedido morria em silêncio se a aba fechasse nos 10 segundos de "desfazer"
+
+O pedido de alteração só sai **10 segundos depois do clique** (o "desfazer" tipo Gmail). Nesse
+meio-tempo ele vivia **só num `setTimeout`**: fechar a aba, dar F5, trocar de aba no celular ou o
+navegador descartar a aba matava o pedido sem absolutamente nenhum sinal. A peça já tinha ficado
+amarela e a conferência já tinha fechado — pela tela, tudo certo; do lado do Runrun.it, nunca
+chegou nada. **Nem erro havia**, porque a chamada nunca chegou a sair.
+
+Agora `visibilitychange` (escondeu a aba) e `pagehide` **mandam na hora**. O prazo pra desfazer é
+uma gentileza, não uma condição: quem clicou já decidiu. `pendente.enviado` impede que o relógio
+de 10s, ao disparar depois, mande o mesmo pedido de novo.
+
+### 3. O painel de erros não enxergava nada disso
+
+Resposta direta à pergunta do Cláudio ("nossa ferramenta de investigar erros conseguiria ver?"):
+**não, e por dois motivos independentes.**
+
+- O painel nasceu pendurado no `console.error` do NAVEGADOR (`mandarErroProBanco`, js/config.js).
+  Se o pedido nunca saiu (buraco 2), não houve erro nenhum pra reportar.
+- Mesmo quando o backend recusava de verdade, o único sinal era um avisinho passageiro — que
+  aparece **10 segundos depois do clique**, quando quem pediu já está conferindo outra peça.
+  Ninguém via, e o painel ficava limpo.
+
+Dois consertos: **o servidor passou a anotar sozinho** (`registrarFalhaDaDevolucao`,
+AprovacaoInterna.gs → mesma tabela `erros` do painel) — quem viu a falha de perto é quem registra,
+sem depender de ter alguém olhando a tela; e **a falha passou a ficar no sino**, não só no aviso
+passageiro. O caminho de projeto fechado também anota (comentário que não saiu / card que não
+passou pro designer).
+
+⚠️ **Regra que fica:** ação que acontece em segundo plano, depois que a tela já disse que deu
+certo, TEM que deixar rastro do lado do servidor. Aviso passageiro não é registro — é decoração
+pra quem está olhando naquele segundo.
+
 ## Auditoria: nada mais espera o Runrun.it pra mudar na tela (2026-08-14)
 
 Varredura em TODO o app atrás de ação que só reagia depois da resposta do Runrun.it. Achado: o

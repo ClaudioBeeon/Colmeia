@@ -2457,8 +2457,34 @@ function apvDevolverPara(nomeDesigner) {
     }],
   });
 
+  pendente.enviarAgora = () => apvExecutarDevolucao(chave, pendente, payload);
   setTimeout(() => apvExecutarDevolucao(chave, pendente, payload), APV_DESFAZER_MS);
 }
+
+/**
+ * Fechou/escondeu a aba dentro dos 10 segundos de "desfazer"? MANDA AGORA.
+ *
+ * O prazo pra desfazer é uma gentileza, não uma condição: quem clicou já
+ * decidiu. Antes, o pedido vivia só num `setTimeout` — fechar a aba, dar
+ * F5 ou o navegador descartar a aba nesses 10 segundos matava o pedido em
+ * silêncio absoluto: a peça já tinha ficado amarela, a conferência já
+ * tinha fechado, e do lado do Runrun.it nunca chegou nada. Nenhum erro em
+ * lugar nenhum, porque erro nenhum houve — a chamada simplesmente nunca
+ * saiu (2026-08-14, investigando a alteração do Lucas que não virou V2).
+ *
+ * `visibilitychange` (e não só `beforeunload`) porque no celular e no
+ * Safari o `beforeunload` muitas vezes nem dispara — trocar de aba já é
+ * sinal suficiente pra parar de contar com esta aba viva.
+ */
+function apvMandarDevolucoesPendentesAgora() {
+  apvDevolucoesPendentes.forEach(pendente => {
+    if (!pendente.cancelado && !pendente.enviado && typeof pendente.enviarAgora === "function") pendente.enviarAgora();
+  });
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") apvMandarDevolucoesPendentesAgora();
+});
+window.addEventListener("pagehide", () => apvMandarDevolucoesPendentesAgora());
 
 /**
  * Passado o prazo de desfazer, manda de verdade pro Runrun.it — ou não,
@@ -2469,12 +2495,28 @@ function apvDevolverPara(nomeDesigner) {
  */
 async function apvExecutarDevolucao(chave, pendente, payload) {
   apvDevolucoesPendentes.delete(chave);
-  if (pendente.cancelado) return;
+  if (pendente.cancelado || pendente.enviado) return;
+  pendente.enviado = true; // o gatilho de "fechando a aba" pode ter chegado aqui primeiro
 
   const data = await chamarBackend(payload);
 
   if (!data || !data.ok) {
-    mostrarToast((data && data.error) || "Não consegui pedir a alteração agora.", "erro");
+    const porque = (data && data.error) || "não consegui falar com o Runrun.it";
+    mostrarToast("A alteração NÃO foi criada: " + porque, "erro");
+    // O avisinho some em segundos — e este erro acontece 10s depois do
+    // clique, quando quem pediu já está em outra peça. Sem deixar no
+    // sino, a alteração simplesmente não existia e ninguém ficava sabendo
+    // (2026-08-14: foi assim que a "Alteração V2" do Lucas se perdeu).
+    if (typeof registrarNotificacaoGenerica === "function") {
+      registrarNotificacaoGenerica({
+        tipo: "erro",
+        chave: "devolucaoFalhou::" + payload.taskId + "::" + Date.now(),
+        titulo: "A alteração não foi criada",
+        subtitulo: (payload.pecas && payload.pecas[0] ? payload.pecas[0].nomePeca + " — " : "") + porque,
+        icone: reopenIcon,
+        taskId: payload.taskId,
+      });
+    }
     return;
   }
 
@@ -2490,7 +2532,13 @@ async function apvExecutarDevolucao(chave, pendente, payload) {
     const partes = [`${data.titulo} criada pro ${data.designer || "designer"}`];
     partes.push(data.foiProAjustes ? "em Ajustes, com entrega hoje às 18h" : "— mas não consegui mover pra Ajustes, confere lá");
     if (!data.alocou) partes.push("(sem conseguir alocar — precisa escolher o responsável na mão)");
-    mostrarToast(partes.join(" ") + ".", data.foiProAjustes && data.alocou ? "sucesso" : "erro");
+    // O número sai da contagem das alterações que já existem no card mãe.
+    // Se alguma subtarefa não pôde ser lida, esse número pode repetir um
+    // que já existe — melhor dizer isso do que deixar duas "Alteração V1"
+    // no mesmo card sem ninguém perceber.
+    if (data.numeracaoConfiavel === false) partes.push("(não consegui conferir a numeração — vê se não repetiu)");
+    const deuTudoCerto = data.foiProAjustes && data.alocou && data.numeracaoConfiavel !== false;
+    mostrarToast(partes.join(" ") + ".", deuTudoCerto ? "sucesso" : "erro");
   }
 
   apvFila = apvFila.filter(i => !(String(i.taskId) === String(payload.taskId) && i.loteId === payload.loteId));
