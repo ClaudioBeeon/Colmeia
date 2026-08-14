@@ -188,7 +188,7 @@ function renderSequenciaHTML(task) {
       return `
         <div class="workflow-seq-dots">${responsavelAtualHTML}</div>
         <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Concluir e entregar essa tarefa">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nav-deliver-label">Entregar</span>
+          <span class="nav-deliver-label">Entregar</span>
         </button>
       `;
     }
@@ -224,7 +224,7 @@ function renderSequenciaHTML(task) {
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
       <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Entregar tarefa (não tem mais ninguém na frente)">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nav-deliver-label">Entregar</span>
+        <span class="nav-deliver-label">Entregar</span>
       </button>
     ` : `
       <button type="button" class="nav-arrow" id="navNextArrow" title="Avançar (próximo responsável)">

@@ -493,11 +493,17 @@ body.card-aberto .quick-access-panel { display: none; }
    colisão de forma — ver o comentário sobre duplo-clique mais abaixo,
    em detalhe-modal.js). O divisor à esquerda separa visualmente do
    grupo de setas/avatares da sequência. */
+/* Preenchida em verde já em repouso, sem ícone -- só o texto "Entregar"
+   (2026-08-14, pedido do Cláudio: "pode ficar dentro de um pill verde,
+   sem o ícone de chegar só entregar"). Antes era contorno verde que só
+   preenchia no hover; agora é a mesma cor cheia do estado "entregue"
+   (.delivered, logo abaixo), só que sem a animação de pop -- constante,
+   já dá pra ver de longe que é a ação de concluir. */
 .nav-arrow.nav-deliver {
-  width: auto; border-radius: 999px; gap: 6px;
-  padding: 0 14px 0 12px; margin-left: 4px; position: relative;
-  color: #2F9E44;
-  border-color: #2F9E44;
+  width: auto; border-radius: 999px; gap: 0;
+  padding: 0 14px; margin-left: 4px; position: relative;
+  background: #2F9E44;
+  color: #fff;
 }
 .nav-arrow.nav-deliver::before {
   content: ""; position: absolute; left: -5px; top: 50%; transform: translateY(-50%);
@@ -505,8 +511,7 @@ body.card-aberto .quick-access-panel { display: none; }
 }
 .nav-deliver-label { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .nav-arrow.nav-deliver:hover {
-  background: #2F9E44;
-  color: #fff;
+  background: #248037;
 }
 
 .nav-arrow.nav-deliver.delivered {
