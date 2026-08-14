@@ -365,7 +365,10 @@ function atualizarSubpillsAtivas() {
   const porAba = { aqui: "chatSubAqui", mae: "chatSubMae", todos: "chatSubTodos", linha: "chatSubLinha" };
   ["chatSubAqui", "chatSubMae", "chatSubTodos", "chatSubLinha"].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.classList.toggle("active", porAba[chatThreadAtivo] === id);
+    if (!el) return;
+    const ativa = porAba[chatThreadAtivo] === id;
+    el.classList.toggle("active", ativa);
+    el.setAttribute("aria-selected", String(ativa));
   });
   // O interruptor da Bee só faz sentido nos dois merges — nas outras
   // pílulas não tem o que ligar/desligar.

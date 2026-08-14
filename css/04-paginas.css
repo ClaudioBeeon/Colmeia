@@ -51,10 +51,15 @@
   padding: 12px 0;
 }
 
+/* max-width em ch (2026-08-14, achado do impeccable critique): sem
+   limite a linha corria a ~190 caracteres numa tela grande, e o olho
+   perdia o lugar voltando pra margem. 68ch é a medida de leitura
+   confortável de sempre (jornal/livro fica entre 50-75). */
 .desc-text-real {
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
   margin-bottom: 14px;
+  max-width: 68ch;
 }
 .desc-text-real p {
   margin: 0 0 8px;
@@ -482,10 +487,23 @@ body.card-aberto .quick-access-panel { display: none; }
 
 .tipo-tag-icon { font-size: 16px; }
 
+/* Pílula com rótulo, não mais um círculo de 26px idêntico à seta de
+   avançar do lado (2026-08-14, achado do impeccable critique: o próprio
+   código já registrava um acidente real de entrega por causa dessa
+   colisão de forma — ver o comentário sobre duplo-clique mais abaixo,
+   em detalhe-modal.js). O divisor à esquerda separa visualmente do
+   grupo de setas/avatares da sequência. */
 .nav-arrow.nav-deliver {
+  width: auto; border-radius: 999px; gap: 6px;
+  padding: 0 14px 0 12px; margin-left: 4px; position: relative;
   color: #2F9E44;
   border-color: #2F9E44;
 }
+.nav-arrow.nav-deliver::before {
+  content: ""; position: absolute; left: -5px; top: 50%; transform: translateY(-50%);
+  width: 1px; height: 16px; background: rgba(255,255,255,0.15);
+}
+.nav-deliver-label { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .nav-arrow.nav-deliver:hover {
   background: #2F9E44;
   color: #fff;
@@ -970,7 +988,7 @@ body.card-aberto .quick-access-panel { display: none; }
   padding: 0; margin: 4px 0 16px;
 }
 .ai-briefing-resumo {
-  font-size: 14px; line-height: 1.6; margin: 12px 0;
+  font-size: 14px; line-height: 1.6; margin: 12px 0; max-width: 68ch;
 }
 .ai-briefing-tags {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px;

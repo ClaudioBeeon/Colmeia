@@ -49,6 +49,11 @@ function sugestaoDeProgramaHTML(task) {
   `;
 }
 
+// Guarda quem tinha o foco antes de abrir o painel (o card do quadro,
+// normalmente), pra devolver o foco pra lá quando o painel fecha — ver
+// openDetail/closeDetail.
+let _elementoFocoAntesDoPainel = null;
+
 function openDetail(idx, entradaAnimacao) {
   detailIdx = Number(idx);
   childrenOpen = false;
@@ -81,6 +86,13 @@ function openDetail(idx, entradaAnimacao) {
   if (cardEl) cardEl.classList.add("selected");
   panel.classList.add("visible");
   requestAnimationFrame(() => panel.classList.add("open"));
+  // Foco entra no painel ao abrir, e volta pro card que abriu ele quando
+  // fecha (2026-08-14, achado do impeccable critique: por teclado/leitor
+  // de tela, abrir a tarefa não movia o foco pra lugar nenhum — ele
+  // ficava preso no quadro atrás do painel). `panel.tabIndex = -1`
+  // (kanban-board.js) deixa focar por JS sem entrar na ordem do Tab.
+  _elementoFocoAntesDoPainel = document.activeElement;
+  panel.focus({ preventScroll: true });
   // Esconde a bolinha da Bee solta enquanto o card está aberto: ela fica
   // no mesmo canto do botão de comentários da tarefa, e as duas juntas
   // viravam um monte de bolinha empilhada. Dentro do card, a Bee que
@@ -165,7 +177,7 @@ function renderSequenciaHTML(task) {
       return `
         <div class="workflow-seq-dots">${responsavelAtualHTML}</div>
         <button type="button" class="nav-arrow nav-deliver delivered" id="navDeliverBtn" title="Reabrir tarefa">
-          ${reopenIcon}
+          ${reopenIcon}<span class="nav-deliver-label">Reabrir</span>
         </button>
       `;
     }
@@ -176,7 +188,7 @@ function renderSequenciaHTML(task) {
       return `
         <div class="workflow-seq-dots">${responsavelAtualHTML}</div>
         <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Concluir e entregar essa tarefa">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nav-deliver-label">Entregar</span>
         </button>
       `;
     }
@@ -205,14 +217,14 @@ function renderSequenciaHTML(task) {
     </div>
     ${task.entregue ? `
       <button type="button" class="nav-arrow nav-deliver delivered" id="navDeliverBtn" title="Reabrir tarefa">
-        ${reopenIcon}
+        ${reopenIcon}<span class="nav-deliver-label">Reabrir</span>
       </button>
     ` : semNinguemNaFrente ? `
       <button type="button" class="nav-arrow" id="navAddPersonBtn" title="Adicionar próxima pessoa na sequência">
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
       <button type="button" class="nav-arrow nav-deliver" id="navDeliverBtn" title="Entregar tarefa (não tem mais ninguém na frente)">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nav-deliver-label">Entregar</span>
       </button>
     ` : `
       <button type="button" class="nav-arrow" id="navNextArrow" title="Avançar (próximo responsável)">
@@ -895,18 +907,24 @@ function renderDetail() {
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           ` : ""}
-          <span class="detail-taskname">${escaparHTML(task.title)}</span>
+          <span class="detail-taskname" id="detailTaskName" title="${escaparHTML(task.title)}">${escaparHTML(task.title)}</span>
           ${task.entregue ? `<span class="pill-horas-trabalhadas" title="Tempo total trabalhado nessa tarefa">${formatTime(task.timerSeconds)}</span>` : ""}
           <button type="button" class="detail-taskname-copy" id="detailTaskNameCopy" title="Copiar nome da tarefa" aria-label="Copiar nome da tarefa">
             <svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
-          <span class="header-priority pv-${task.priority}">${priorityLabels[task.priority] || ""}</span>
+          <!-- A pílula de prioridade (baixa/média/alta) saiu daqui
+               (2026-08-14, pedido do Cláudio: "não usamos, pelo menos
+               ali no pill" — o crítico já tinha notado que "baixa"
+               virava ruído, sempre visível, na faixa mais cheia da
+               tela). A etapa (status-badge, "Fazendo" etc.) veio pro
+               lugar dela, perto do título — antes ficava lá no canto
+               direito, longe de onde o olho já está. -->
+          <div class="status-wrap">
+            <button type="button" class="status-badge ${task.entregue ? "entregue" : ""}" id="statusBadge">${escaparHTML(rotuloDaEtapa(task))}</button>
+          </div>
           <div class="detail-header-pill-right">
             <div class="nav-dots-group" id="workflowSeqGroup">
               ${renderSequenciaHTML(task)}
-            </div>
-            <div class="status-wrap">
-              <button type="button" class="status-badge ${task.entregue ? "entregue" : ""}" id="statusBadge">${escaparHTML(rotuloDaEtapa(task))}</button>
             </div>
           </div>
           </div>
@@ -936,17 +954,17 @@ function renderDetail() {
 
       <div class="detail-body" id="detailBody">
         <div class="detail-pane desc-pane">
-          <div class="detail-tabs">
-            <button type="button" class="detail-tab active" id="tabDesc">Descrição</button>
+          <div class="detail-tabs" role="tablist">
+            <button type="button" class="detail-tab active" id="tabDesc" role="tab" aria-selected="true">Descrição</button>
             ${task.parentTaskId ? `
-              <button type="button" class="detail-tab" id="tabDescMae">Descrição card mãe</button>
+              <button type="button" class="detail-tab" id="tabDescMae" role="tab" aria-selected="false">Descrição card mãe</button>
             ` : ""}
             ${ehTarefaDeAlteracao(task) ? `
-              <button type="button" class="detail-tab" id="tabOriginal" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
+              <button type="button" class="detail-tab" id="tabOriginal" role="tab" aria-selected="false" title="Ver a peça que essa alteração está pedindo pra mudar">Tarefa original</button>
             ` : ""}
             <div class="detail-tabs-spacer"></div>
             ${task.id ? `
-              <button type="button" class="detail-tab anexos-tab" id="tabAnexos" title="Arquivos da tarefa, do card mãe e das subtarefas, tudo junto">
+              <button type="button" class="detail-tab anexos-tab" id="tabAnexos" role="tab" aria-selected="false" title="Arquivos da tarefa, do card mãe e das subtarefas, tudo junto">
                 Anexos <span class="anexos-tab-count" id="anexosTabCount" hidden>0</span>
               </button>
             ` : ""}
@@ -1014,6 +1032,14 @@ function renderDetail() {
         </div>
 
         <div class="detail-side">
+          ${task.id ? `
+            <button type="button" class="apv-pedir-btn side-action-primary" id="apvPedirBtn">
+              <span class="apv-pedir-btn-icone">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              <span class="apv-pedir-btn-txt" id="apvPedirBtnLabel">Enviar para revisão</span>
+            </button>
+          ` : ""}
           <div class="side-block">
             <span class="side-label">Entrega desejada</span>
             <div class="side-date-row" id="dueDateRow">
@@ -1043,18 +1069,23 @@ function renderDetail() {
             </div>
           ` : ""}
           ${sugestaoDeProgramaHTML(task)}
-          <div class="side-block">
-            <span class="side-label">Tipo de tarefa</span>
-            <span class="badge ${type.class}">${type.label}</span>
-          </div>
-          <div class="side-block">
-            <span class="side-label">Cliente</span>
-            <div class="side-badges-row">
-              <span class="badge badge-cliente">${escaparHTML(task.client)}</span>
-              ${(() => {
-                const mesProjeto = extrairMesAnoDoProjeto(task.projeto);
-                return mesProjeto ? `<span class="badge badge-projeto" title="Mês do projeto (campo Projeto do Runrun.it)">${mesProjeto.label}</span>` : "";
-              })()}
+          <!-- Tipo + Cliente fundidos num bloco denso só (2026-08-14,
+               achado do impeccable critique: 8 cards com o mesmo peso
+               visual escondiam a ação principal no meio deles). -->
+          <div class="side-block side-block-denso">
+            <div class="side-linha-densa">
+              <span class="side-label">Tipo de tarefa</span>
+              <span class="badge ${type.class}">${type.label}</span>
+            </div>
+            <div class="side-linha-densa">
+              <span class="side-label">Cliente</span>
+              <div class="side-badges-row">
+                <span class="badge badge-cliente">${escaparHTML(task.client)}</span>
+                ${(() => {
+                  const mesProjeto = extrairMesAnoDoProjeto(task.projeto);
+                  return mesProjeto ? `<span class="badge badge-projeto" title="Mês do projeto (campo Projeto do Runrun.it)">${mesProjeto.label}</span>` : "";
+                })()}
+              </div>
             </div>
           </div>
           <div class="side-block">
@@ -1063,17 +1094,6 @@ function renderDetail() {
               ${renderHubDoClienteHTML(task.client)}
             </div>
           </div>
-          ${task.id ? `
-            <div class="side-block">
-              <span class="side-label">Quando terminar</span>
-              <button type="button" class="apv-pedir-btn" id="apvPedirBtn">
-                <span class="apv-pedir-btn-icone">
-                  <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </span>
-                <span class="apv-pedir-btn-txt" id="apvPedirBtnLabel">Enviar para revisão</span>
-              </button>
-            </div>
-          ` : ""}
           <div class="side-block">
             <span class="side-label">Atendimento responsável</span>
             <div class="side-person">
@@ -1084,6 +1104,12 @@ function renderDetail() {
               const nomeAtendimento = getAtendimentoDoCliente(task.client) || task.assignee;
               const linkPessoa = getDiscordDaPessoa(nomeAtendimento);
               const linkCliente = getDiscordDoCliente(task.client);
+              // Sem nenhum dos dois cadastrado: uma linha de texto avisando,
+              // não dois botões fantasma a 40% de opacidade ocupando espaço
+              // (2026-08-14, achado do impeccable critique).
+              if (!linkPessoa && !linkCliente) {
+                return `<p class="discord-sem-config">Discord não configurado pra essa pessoa/cliente.</p>`;
+              }
               return `
                 <div class="discord-ctas">
                   ${linkPessoa ? `
@@ -1091,23 +1117,13 @@ function renderDetail() {
                       <span class="discord-cta-icon">${discordIcon}</span>
                       <span>Chamar no Discord</span>
                     </a>
-                  ` : `
-                    <span class="discord-cta disabled" title="Cadastre o Discord dessa pessoa em Configurações">
-                      <span class="discord-cta-icon">${discordIcon}</span>
-                      <span>Chamar no Discord</span>
-                    </span>
-                  `}
+                  ` : ""}
                   ${linkCliente ? `
                     <a href="${linkCliente}" target="_blank" rel="noopener" class="discord-cta ghost">
                       <span class="discord-cta-icon">${discordIcon}</span>
                       <span>Canal do cliente</span>
                     </a>
-                  ` : `
-                    <span class="discord-cta ghost disabled" title="Cadastre o link 'Discord' nos links extras desse cliente">
-                      <span class="discord-cta-icon">${discordIcon}</span>
-                      <span>Canal do cliente</span>
-                    </span>
-                  `}
+                  ` : ""}
                 </div>
               `;
             })()}
@@ -1151,11 +1167,11 @@ function renderDetail() {
         </div>
       </div>
       ${task.id ? `
-        <div class="chat-subpills" id="chatSubpills">
-          <button type="button" class="chat-subpill active" id="chatSubAqui">Comentários</button>
-          <button type="button" class="chat-subpill" id="chatSubMae" ${task.parentTaskId ? "" : "hidden"}>Card mãe</button>
-          <button type="button" class="chat-subpill" id="chatSubTodos" title="Comentários desta tarefa, do card mãe, da tarefa original e da Bee, tudo junto por hora">Todos os comentários</button>
-          <button type="button" class="chat-subpill" id="chatSubLinha" title="Todos os comentários + eventos do sistema (criada, começou a trabalhar, arquivo, entregue)">Linha do tempo</button>
+        <div class="chat-subpills" id="chatSubpills" role="tablist">
+          <button type="button" class="chat-subpill active" id="chatSubAqui" role="tab" aria-selected="true">Comentários</button>
+          <button type="button" class="chat-subpill" id="chatSubMae" role="tab" aria-selected="false" ${task.parentTaskId ? "" : "hidden"}>Card mãe</button>
+          <button type="button" class="chat-subpill" id="chatSubTodos" role="tab" aria-selected="false" title="Comentários desta tarefa, do card mãe, da tarefa original e da Bee, tudo junto por hora">Todos os comentários</button>
+          <button type="button" class="chat-subpill" id="chatSubLinha" role="tab" aria-selected="false" title="Todos os comentários + eventos do sistema (criada, começou a trabalhar, arquivo, entregue)">Linha do tempo</button>
         </div>
         <div class="chat-bee-toggle-row" id="chatBeeToggleRow" hidden>
           <label class="chat-bee-toggle">
@@ -1165,7 +1181,7 @@ function renderDetail() {
           </label>
         </div>
       ` : ""}
-      <div class="comments-thread" id="commentsThread">
+      <div class="comments-thread" id="commentsThread" aria-live="polite">
         ${renderComentariosHTML(task)}
       </div>
       <!-- Fica FORA da thread de propósito: #commentsThread é reconstruído
@@ -1910,10 +1926,11 @@ function applyCommentsState() {
   if (childrenPanel) childrenPanel.classList.toggle("open", childrenOpen);
   // Abas mutuamente exclusivas: Descrição (a padrão), Descrição card mãe,
   // Tarefa original (só em subtarefa de alteração), Anexos.
-  if (tabDesc) tabDesc.classList.toggle("active", !descMaeAberta && !originalAberta && !anexosAberta);
-  if (tabDescMae) tabDescMae.classList.toggle("active", descMaeAberta);
-  if (tabOriginal) tabOriginal.classList.toggle("active", originalAberta);
-  if (tabAnexos) tabAnexos.classList.toggle("active", anexosAberta);
+  const descAberta = !descMaeAberta && !originalAberta && !anexosAberta;
+  if (tabDesc) { tabDesc.classList.toggle("active", descAberta); tabDesc.setAttribute("aria-selected", String(descAberta)); }
+  if (tabDescMae) { tabDescMae.classList.toggle("active", descMaeAberta); tabDescMae.setAttribute("aria-selected", String(descMaeAberta)); }
+  if (tabOriginal) { tabOriginal.classList.toggle("active", originalAberta); tabOriginal.setAttribute("aria-selected", String(originalAberta)); }
+  if (tabAnexos) { tabAnexos.classList.toggle("active", anexosAberta); tabAnexos.setAttribute("aria-selected", String(anexosAberta)); }
   if (descContent) descContent.hidden = descMaeAberta || originalAberta || anexosAberta;
   if (descMaeContent) descMaeContent.hidden = !descMaeAberta;
   if (originalContent) originalContent.hidden = !originalAberta;
@@ -2020,6 +2037,15 @@ function closeDetail() {
   // Devolve o endereço do navegador pra página que estava por baixo
   // (ver js/roteador-url.js).
   if (typeof roteadorAoFecharTarefa === "function") roteadorAoFecharTarefa();
+
+  // Devolve o foco pra quem tinha ele antes de abrir (o card do quadro,
+  // normalmente) — ver openDetail. `isConnected` porque o card pode ter
+  // sumido da tela enquanto a tarefa estava aberta (movida de coluna,
+  // atualização em segundo plano).
+  if (_elementoFocoAntesDoPainel && _elementoFocoAntesDoPainel.isConnected) {
+    _elementoFocoAntesDoPainel.focus({ preventScroll: true });
+  }
+  _elementoFocoAntesDoPainel = null;
 }
 
 /**

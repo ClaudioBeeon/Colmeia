@@ -40,6 +40,26 @@
 }
 .task-detail.open { opacity: 1; transform: translateX(0) scale(1); }
 
+/* Este arquivo era o único dos 8 sem bloco de prefers-reduced-motion
+   (2026-08-14, achado do impeccable critique) — os outros 4 que animam
+   já tinham. Cada regra aqui desliga só o movimento (transform/scale),
+   deixando opacidade fazer a transição sozinha, pra quem pediu menos
+   animação continuar vendo o painel aparecer/sumir sem ficar "pulando". */
+@media (prefers-reduced-motion: reduce) {
+  .task-detail { transition: opacity var(--dur-fast) linear; transform: none; }
+  .task-detail.open { transform: none; }
+  .detail-inner { transition: opacity var(--dur-fast) linear; }
+  .detail-inner.panel-exit-up,
+  .detail-inner.panel-enter-below,
+  .detail-inner.panel-exit-down,
+  .detail-inner.panel-enter-above { transform: none; }
+  .pill-cardmae-pop,
+  .comment-bubble,
+  .chat-hdr-menu { animation: none !important; }
+  .etapa-transfer.disparando .etapa-transfer-seta,
+  .etapa-transfer.chegou .etapa-chip.para { animation: none !important; }
+}
+
 .detail-inner {
   display: flex; flex-direction: column; width: 100%; min-height: 0;
   transition: transform 0.26s var(--ease-apple), opacity 0.26s var(--ease-apple);
@@ -553,13 +573,13 @@
 
 .child-title { flex: 1; font-size: 12.5px; font-weight: 500; color: var(--text-primary); }
 
-.child-priority,
-.header-priority {
+/* .header-priority saiu do pill do topo da tarefa aberta (2026-08-14,
+   pedido do Cláudio: "não usamos, pelo menos ali no pill") — a regra de
+   .child-priority (usada na lista de subtarefas) continua. */
+.child-priority {
   font-size: 10px; font-weight: 700; color: #fff; padding: 3px 8px;
   border-radius: 999px; flex-shrink: 0; white-space: nowrap;
 }
-
-.header-priority { font-size: 11px; padding: 4px 10px; }
 
 .pv-alta { background: var(--danger); }
 .pv-media { background: var(--warning); }
@@ -1045,6 +1065,28 @@
   box-shadow: 0 2px 10px rgba(10,10,20,0.06);
 }
 
+/* "Enviar para revisão" saiu da pilha de 8 cards idênticos e virou o
+   primeiro elemento da coluna, com destaque de cor (2026-08-14, achado
+   do impeccable critique: a ação que faz o trabalho andar tinha o
+   mesmo peso visual de um selo somente-leitura de "Tipo de tarefa" e
+   ficava no meio da pilha). O `.apv-pedir-btn` de baixo continua dando
+   o layout/ícone/estado "enviado"; isso só empresta destaque. */
+.side-action-primary {
+  border-color: var(--kanban-yellow);
+  background: color-mix(in srgb, var(--kanban-yellow) 14%, var(--card-bg));
+  box-shadow: 0 2px 10px rgba(10,10,20,0.06);
+}
+.side-action-primary:hover { box-shadow: var(--shadow-hover); }
+
+/* Tipo + Cliente num bloco só, com duas linhas rotulada+valor, em vez
+   de dois cards com a mesma borda/sombra do resto da pilha (mesmo
+   achado acima). */
+.side-block-denso { gap: 12px; }
+.side-linha-densa { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.side-linha-densa .side-label { flex-shrink: 0; }
+
+.discord-sem-config { font-size: 12.5px; color: var(--text-muted); margin: 10px 0 0; }
+
 .side-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 .side-label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -1191,7 +1233,15 @@
   .page { padding: 14px; gap: 10px; }
   .search-box { display: none; }
   .task-detail { left: 14px; right: 14px; top: 14px; bottom: 14px; }
-  .detail-side { display: none; }
+  /* A coluna direita não some mais aqui (2026-08-14, achado do
+     impeccable critique: "não é layout degradado, é apagão de
+     funcionalidade" — sumia "Enviar para revisão", o prazo, a pasta do
+     Drive e o contato do atendimento). Empilha embaixo da descrição
+     em vez de ficar lado a lado, com scroll próprio pra não estourar
+     a altura do painel. */
+  .detail-body { flex-direction: column; overflow-y: auto; }
+  .desc-pane { border-right: none; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+  .detail-side { min-width: 0; max-width: none; max-height: 50vh; }
 }
 
 

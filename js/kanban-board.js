@@ -181,6 +181,14 @@ function buildBoard() {
     const panel = document.createElement("div");
     panel.className = "task-detail";
     panel.id = "taskDetail";
+    // Sem isso o leitor de tela não anunciava nada ao abrir a tarefa, e o
+    // foco ficava preso no card do quadro atrás do painel (2026-08-14,
+    // achado do impeccable critique). `aria-labelledby` aponta pro título
+    // da tarefa (#detailTaskName), escrito em cada renderDetail().
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-labelledby", "detailTaskName");
+    panel.tabIndex = -1;
     document.body.appendChild(panel);
   }
 
