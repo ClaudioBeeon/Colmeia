@@ -806,15 +806,21 @@ function mandarPastaDoErickParaConferencia(tarefa, folderId) {
     return;
   }
 
-  // ⚠️ SÓ pega arquivo cujo nome tem a ver com o TÍTULO desta tarefa
-  // específica (2026-08-12, bug real encontrado em produção): a pasta
-  // que ele linka pode ser a da SEQUÊNCIA inteira (ex: "Sequência
-  // Stories Fitness Brasil"), com as peças de VÁRIAS subtarefas irmãs
-  // juntas -- não uma pasta exclusiva desta peça. Sem esse filtro, a
-  // subtarefa "Story 6" ganhava comentário automático com os links de
-  // "Story 1" a "Story 8" também, porque a pasta compartilhada tinha
-  // todas juntas e o código pegava tudo que encontrava lá dentro.
-  var alvoNormalizado = normalizarNomeParaComparar(tarefa.title || '');
+  // Pega TODOS os arquivos aceitos que estão nessa pasta -- sem checar se
+  // o nome bate com o título da tarefa (2026-08-14, pedido do Cláudio: uma
+  // peça com verso e frente, por exemplo, tem dois arquivos que não têm o
+  // título da tarefa no nome nenhum dos dois, e a checagem antiga rejeitava
+  // os dois -- "nada foi enviado por segurança" pra TODAS as pastas dele).
+  // A ideia agora é mais simples e é a que o Cláudio pediu: o Erick colou
+  // O LINK DAQUELA PASTA ESPECÍFICA naquele comentário daquela tarefa --
+  // isso já É o sinal de que o conteúdo dela é pra essa tarefa. Ver o
+  // comentário de 2026-08-12 (histórico do git) sobre o bug antigo que
+  // motivou a checagem por nome: pasta de SEQUÊNCIA compartilhada entre
+  // várias subtarefas irmãs (ex: "Sequência Stories Fitness Brasil") fazia
+  // uma subtarefa levar os links de todas as irmãs junto. Se isso voltar a
+  // acontecer, o Erick precisa parar de colar a pasta da sequência inteira
+  // e colar a pasta (ou o arquivo) específico de cada peça -- é o próprio
+  // link que ele cola que decide o que a automação manda.
   var grupos = {};
   var arquivos = pasta.getFiles();
   while (arquivos.hasNext()) {
@@ -823,10 +829,6 @@ function mandarPastaDoErickParaConferencia(tarefa, folderId) {
     if (!ehTipoDePecaAceito(tipo)) continue;
     var nome = arq.getName();
     var base = nomeBaseDaPeca(nome);
-    var baseNormalizada = normalizarNomeParaComparar(base);
-    var bate = alvoNormalizado && baseNormalizada &&
-      (alvoNormalizado.indexOf(baseNormalizada) !== -1 || baseNormalizada.indexOf(alvoNormalizado) !== -1);
-    if (!bate) continue;
     var versao = versaoDoArquivo(nome) || 0;
     if (!grupos[base] || versao > grupos[base].versao) {
       grupos[base] = { fileId: arq.getId(), versao: versao };
@@ -835,7 +837,7 @@ function mandarPastaDoErickParaConferencia(tarefa, folderId) {
 
   var nomes = Object.keys(grupos);
   if (!nomes.length) {
-    Logger.log('[Erick] tarefa ' + tarefa.id + ' ("' + tarefa.title + '"): pasta ' + folderId + ' nao tem nenhum arquivo com nome parecido com o titulo da tarefa -- pode ser uma pasta compartilhada entre varias pecas, nada foi enviado por seguranca.');
+    Logger.log('[Erick] tarefa ' + tarefa.id + ' ("' + tarefa.title + '"): pasta ' + folderId + ' nao tem nenhum arquivo de imagem/video aceito -- nada foi enviado.');
     return;
   }
 
