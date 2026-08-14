@@ -1430,20 +1430,36 @@ function listarConferenciasPendentes() {
   }
 
   var itens = ordem.map(function (chave) { return grupos[chave]; });
+
+  // Entrega desejada da tarefa (mesmo campo que a tela de conferência já
+  // mostra, `dadosDaConferencia` -> `tarefa.desired_date`) — pedido do
+  // Cláudio (M1, 2026-08-05): a fila ordenava só por quem chegou primeiro,
+  // sem olhar o prazo do cliente. Uma leitura por taskId DISTINTO, não por
+  // peça — várias peças da mesma tarefa não pagam a busca de novo.
+  //
+  // ⚠️ TUDO NUM LOTE SÓ (2026-08-14, achado pelo Cláudio: "a BeeLine
+  // demora muuuuito"): antes isso era um `runrunFetch` SEQUENCIAL por
+  // taskId distinto dentro do loop de cima — uma fila com 20 tarefas
+  // fazia 20 idas ao Runrun.it, uma depois da outra, TODA vez que a
+  // Central abria ou "atualizar" era clicado. `runrunFetchAll` (mesmo
+  // padrão já usado em `calendarioDePostagens`, mais abaixo neste
+  // arquivo) manda todas de uma vez em paralelo.
+  var idsFaltando = itens
+    .map(function (it) { return it.taskId; })
+    .filter(function (id) { return !(id in cacheTarefas); });
+  // Só os distintos — a mesma tarefa não precisa ser pedida duas vezes.
+  idsFaltando = idsFaltando.filter(function (id, i) { return idsFaltando.indexOf(id) === i; });
+  if (idsFaltando.length) {
+    var tarefasCruas = runrunFetchAll(idsFaltando.map(function (id) { return '/tasks/' + id; }));
+    idsFaltando.forEach(function (id, i) {
+      var t = tarefasCruas[i];
+      cacheTarefas[id] = (t && !t.erroFetch) ? (t.desired_date || null) : null;
+    });
+  }
+
   itens.forEach(function (it) {
     it.temVersaoNova = it.pecas.some(function (p) { return p.temVersaoNova; });
     it.arquivoSumiu = it.pecas.every(function (p) { return p.arquivoSumiu; });
-
-    // Entrega desejada da tarefa (mesmo campo que a tela de conferência já
-    // mostra, `dadosDaConferencia` -> `tarefa.desired_date`) — pedido do
-    // Cláudio (M1, 2026-08-05): a fila ordenava só por quem chegou primeiro,
-    // sem olhar o prazo do cliente. Uma leitura por taskId (cacheada aqui
-    // dentro), não por lote — várias peças da mesma tarefa não pagam a busca
-    // de novo.
-    if (!(it.taskId in cacheTarefas)) {
-      var t = runrunFetch('/tasks/' + it.taskId);
-      cacheTarefas[it.taskId] = (t && !t.erroFetch) ? (t.desired_date || null) : null;
-    }
     it.prazo = cacheTarefas[it.taskId];
   });
 
