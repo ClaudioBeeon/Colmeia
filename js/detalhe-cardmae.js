@@ -714,7 +714,18 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
     addPersonBtn.addEventListener("click", () => abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, addPersonBtn));
   }
   const deliverBtn = face.querySelector("#navDeliverBtn");
-  if (deliverBtn && !cardMaeTask.entregue) {
+  // REGRA: card mãe só é entregue pelo atendimento (ou coordenador),
+  // NUNCA pelo designer (2026-08-14, pedido do Cláudio: um designer
+  // entregou a PRÓPRIA subtarefa, o carrossel de "transferir o card mãe"
+  // apareceu do jeito normal, e o botão "Entregar" ali dentro confundiu
+  // -- ele não devia nem poder entregar o card mãe, só o atendimento
+  // decide isso). Esconde o botão inteiro em vez de só travar o clique:
+  // um botão visível e morto confunde mais do que a ausência dele. O
+  // resto do carrossel (avançar/voltar a sequência, adicionar pessoa)
+  // continua igual -- só "concluir o card mãe de vez" é vedado aqui.
+  if (deliverBtn && typeof PAPEL_LOGADO !== "undefined" && PAPEL_LOGADO === "designer") {
+    deliverBtn.hidden = true;
+  } else if (deliverBtn && !cardMaeTask.entregue) {
     deliverBtn.addEventListener("click", async () => {
       if (cardMaeTask._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
       cardMaeTask._sequenciaAcaoEmAndamento = true;
