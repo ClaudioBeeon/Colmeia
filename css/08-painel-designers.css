@@ -282,6 +282,15 @@
   display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0;
   overflow-y: auto; padding: 4px 4px 4px 2px;
 }
+/* Modo compacto (achado da crítica de 2026-08-17: "Respiro Total" deixava
+   2-4 tarefas visíveis por tela num time de 8-10 pessoas) — mesmas linhas,
+   menos ar, pra comparar mais gente de uma vez. Padrão fica salvo por
+   designer (pnlLerPref/pnlSalvarPref), não é o default global. */
+.pnl-tarefas-lista.compacta { gap: 6px; }
+.pnl-tarefas-lista.compacta .pnl-tarefa-row { padding: 10px 16px; gap: 14px; }
+.pnl-tarefas-lista.compacta .pnl-tarefa-titulo-btn { font-size: 13.5px; }
+.pnl-tarefas-lista.compacta .pnl-tarefa-badges { gap: 6px; }
+.pnl-tarefas-lista.compacta .pnl-tarefa-info { gap: 5px; }
 
 /* Protótipo "Respiro Total" aprovado pelo Cláudio, com um ajuste dele: a
    linha é BRANCA (--card-bg) igual ao resto do modal, não um bloco cinza

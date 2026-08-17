@@ -117,6 +117,20 @@ function pnlFormatTempo(min) {
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
+/** Preferência de exibição por designer (ordenação escolhida, modo
+ *  compacto) — mesma convenção `colmeia_<coisa>_v1_<nome>` já usada no
+ *  resto do app pra esse tipo de preferência (não é decisão de trabalho,
+ *  então localStorage basta). */
+function pnlChavePref(sufixo) {
+  return `colmeia_esforco_${sufixo}_v1_${DESIGNER_LOGADO || "anon"}`;
+}
+function pnlLerPref(sufixo, padrao) {
+  try { return localStorage.getItem(pnlChavePref(sufixo)) || padrao; } catch (e) { return padrao; }
+}
+function pnlSalvarPref(sufixo, valor) {
+  try { localStorage.setItem(pnlChavePref(sufixo), valor); } catch (e) { /* sem localStorage, só não lembra */ }
+}
+
 /** Quanto é um dia cheio, em minutos. Estava escrito na mão só dentro de
  *  pnlRenderEsforcoLista (a lista da PÁGINA) e não chegava no pop-up — que
  *  é justamente onde a pessoa vai DECIDIR o que fazer com a carga (achado
@@ -1145,7 +1159,10 @@ function pnlAbrirEsforcoModal(filtroInicial) {
     modoEsforco: true,
     esforco: pnlEsforcoPorResponsavel(),
     filtroPessoa: filtroInicial || null,
-    ordenacao: "data",
+    // Lembradas por designer (achado da crítica de 2026-08-17: reabrir
+    // sempre voltava pra "Data", obrigando reclicar em "Tempo" todo dia).
+    ordenacao: pnlLerPref("ordenacao", "data"),
+    compacto: pnlLerPref("compacto", "0") === "1",
     selecionadas: new Set(),
   };
   document.getElementById("pnlTarefasOverlay").hidden = false;
@@ -1255,8 +1272,10 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
       <button type="button" class="pnl-sort-btn ${st.ordenacao === "data" ? "active" : ""}" data-pnl-ordenar="data" aria-pressed="${st.ordenacao === "data"}">Data</button>
       <button type="button" class="pnl-sort-btn ${st.ordenacao === "tempo" ? "active" : ""}" data-pnl-ordenar="tempo" aria-pressed="${st.ordenacao === "tempo"}">Tempo</button>
       <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba" aria-pressed="${st.ordenacao === "aba"}">Aba</button>
+      <span style="flex:1"></span>
+      <button type="button" class="pnl-sort-btn ${st.compacto ? "active" : ""}" data-pnl-compacto aria-pressed="${!!st.compacto}">${st.compacto ? "Compacto" : "Modo compacto"}</button>
     </div>
-    <div class="pnl-tarefas-lista">
+    <div class="pnl-tarefas-lista ${st.compacto ? "compacta" : ""}">
       ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu, st)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
     </div>
   `);
@@ -1269,7 +1288,16 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
     });
   });
   corpo.querySelectorAll("[data-pnl-ordenar]").forEach(btn => {
-    btn.addEventListener("click", () => { st.ordenacao = btn.dataset.pnlOrdenar; pnlRenderTarefasModal(); });
+    btn.addEventListener("click", () => {
+      st.ordenacao = btn.dataset.pnlOrdenar;
+      pnlSalvarPref("ordenacao", st.ordenacao);
+      pnlRenderTarefasModal();
+    });
+  });
+  corpo.querySelector("[data-pnl-compacto]")?.addEventListener("click", () => {
+    st.compacto = !st.compacto;
+    pnlSalvarPref("compacto", st.compacto ? "1" : "0");
+    pnlRenderTarefasModal();
   });
 
   pnlWireLinhasDoModal(corpo, st);
