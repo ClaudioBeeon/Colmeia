@@ -117,6 +117,17 @@ function pnlFormatTempo(min) {
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
+/** Quanto é um dia cheio, em minutos. Estava escrito na mão só dentro de
+ *  pnlRenderEsforcoLista (a lista da PÁGINA) e não chegava no pop-up — que
+ *  é justamente onde a pessoa vai DECIDIR o que fazer com a carga (achado
+ *  da crítica de 2026-08-17). Um lugar só, os dois desenhos usam. */
+const PNL_ESFORCO_LIMITE_MIN = 240;
+function pnlNivelDeCarga(min) {
+  if (min > PNL_ESFORCO_LIMITE_MIN) return "estourado";
+  if (min > PNL_ESFORCO_LIMITE_MIN * 0.75) return "cheio";
+  return "tranquilo";
+}
+
 // ===== Abrir/fechar a página =====
 
 function abrirPainelDesigners() {
@@ -313,17 +324,24 @@ function pnlTarefasDoMes() {
  * Acha o designer do PAINEL a partir de quem está com a tarefa no
  * Runrun.it (mesmo cuidado de pnlTarefasDoDesignerPainel — são pessoas
  * de cadastros diferentes) e, dentro do cadastro dele, o cliente da
- * tarefa. Sem cadastro pra essa dupla designer+cliente, o tempo é 0 — não
- * cai pra nenhuma média emprestada, porque emprestar de outro designer é
- * exatamente o que estava errado antes.
+ * tarefa.
+ *
+ * Devolve `null` quando NÃO EXISTE cadastro pra essa dupla — nunca `0`.
+ * `0` e "sem cadastro" são coisas diferentes de propósito: `0` é "cadastrei
+ * e não dá trabalho", `null` é "nunca cadastrei" — antes os dois viravam a
+ * mesma coisa na tela ("0min"), e o esforço do dia somava menos do que a
+ * realidade sem avisar ninguém (achado da crítica de 2026-08-17). Quem
+ * chama esta função TEM que tratar o `null` — não cai pra nenhuma média
+ * emprestada, porque emprestar de outro designer é exatamente o que
+ * estava errado antes.
  */
 function pnlTempoMedioCadastrado(nomeResponsavelRunrun, nomeCliente) {
-  if (!nomeResponsavelRunrun || !nomeCliente) return 0;
+  if (!nomeResponsavelRunrun || !nomeCliente) return null;
   const designerPainel = pnlDesigners.find(d => nomesCorrespondem(nomeResponsavelRunrun, d));
-  if (!designerPainel) return 0;
+  if (!designerPainel) return null;
   const alvo = typeof normalizarParaComparar === "function" ? normalizarParaComparar(nomeCliente) : nomeCliente.toLowerCase();
   const c = (pnlState[designerPainel] || []).find(c => (typeof normalizarParaComparar === "function" ? normalizarParaComparar(c.cliente) : c.cliente.toLowerCase()) === alvo);
-  return c ? (c.tempo || 0) : 0;
+  return c ? (c.tempo || 0) : null;
 }
 
 /**
@@ -332,15 +350,25 @@ function pnlTempoMedioCadastrado(nomeResponsavelRunrun, nomeCliente) {
  * não uma média vinda do Runrun.it. Agrupado por quem está com a tarefa
  * no Runrun.it — NÃO pelo designer do painel: são pessoas diferentes (ver
  * o aviso no grupo abaixo).
+ *
+ * Todo designer do painel entra, mesmo sem nenhuma tarefa vencendo hoje
+ * (grupo com `min: 0`) — é o destino de qualquer reequilíbrio, e ficar de
+ * fora fazia a pessoa livre parecer que não existe (achado da crítica de
+ * 2026-08-17). E `semCadastro` conta quantas tarefas do grupo não têm
+ * tempo cadastrado — sem isso "4 tarefas · 0min" parecia "não dá trabalho"
+ * quando na verdade era "nunca cadastrei tempo pra ninguém aqui".
  */
 function pnlEsforcoPorResponsavel() {
   const hoje = hojeISO();
-  const porResponsavel = {}; // nome -> {min, tarefas:[]}
+  const porResponsavel = {}; // nome -> {min, semCadastro, tarefas:[]}
+  pnlDesigners.forEach(d => { porResponsavel[d] = { min: 0, semCadastro: 0, tarefas: [] }; });
   pnlTarefasAbertas().forEach(t => {
     if (!t.dueISO || t.dueISO > hoje) return;
     const nome = t.assignee || "Sem responsável";
-    if (!porResponsavel[nome]) porResponsavel[nome] = { min: 0, tarefas: [] };
-    porResponsavel[nome].min += pnlTempoMedioCadastrado(nome, t.client);
+    if (!porResponsavel[nome]) porResponsavel[nome] = { min: 0, semCadastro: 0, tarefas: [] };
+    const min = pnlTempoMedioCadastrado(nome, t.client);
+    if (min === null) porResponsavel[nome].semCadastro++;
+    else porResponsavel[nome].min += min;
     porResponsavel[nome].tarefas.push(t);
   });
   Object.values(porResponsavel).forEach(g => g.tarefas.sort((a, b) => (a.dueISO || "").localeCompare(b.dueISO || "")));
@@ -413,7 +441,12 @@ function pnlRenderEsforcoLista() {
   if (!el) return;
 
   const esforco = pnlEsforcoPorResponsavel();
-  const nomesEsforco = Object.keys(esforco).sort((a, b) => esforco[b].min - esforco[a].min);
+  // Diferente da tira DENTRO do modal (Tarefa 7), esta lista da página é um
+  // resumo rápido — só quem tem carga hoje. pnlEsforcoPorResponsavel agora
+  // inclui todo designer, inclusive livre; filtrar aqui pra não poluir.
+  const nomesEsforco = Object.keys(esforco)
+    .filter(n => esforco[n].tarefas.length > 0)
+    .sort((a, b) => esforco[b].min - esforco[a].min);
 
   if (!nomesEsforco.length) {
     el.innerHTML = `<div class="pnl-esforco-vazio">Nada atrasado nem pra hoje.</div>`;
@@ -424,7 +457,7 @@ function pnlRenderEsforcoLista() {
     <div class="pnl-esforco-linha" data-pnl-esforco-pessoa="${escaparHTML(n)}">
       ${typeof avatarHTML === "function" ? avatarHTML(n, "avatar-sm") : ""}
       <div class="pnl-esforco-linha-nome">${escaparHTML(n)}</div>
-      <div class="pnl-esforco-linha-valor ${esforco[n].min > 240 ? "alerta" : ""}">${escaparHTML(pnlFormatTempo(esforco[n].min))}</div>
+      <div class="pnl-esforco-linha-valor ${pnlNivelDeCarga(esforco[n].min) === "estourado" ? "alerta" : ""}">${escaparHTML(pnlFormatTempo(esforco[n].min))}</div>
     </div>
   `).join("");
 
@@ -1136,14 +1169,21 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
   const tiraHtml = `
     <div class="pnl-esforco-tira">
       ${nomes.map(nome => {
-        const qtd = st.esforco[nome].tarefas.length;
+        const g = st.esforco[nome];
+        const qtd = g.tarefas.length;
+        const livre = qtd === 0;
+        const nivel = livre ? "livre" : pnlNivelDeCarga(g.min);
+        const pct = Math.min(100, Math.round(g.min / PNL_ESFORCO_LIMITE_MIN * 100));
         return `
-          <div class="pnl-esforco-tira-item ${st.filtroPessoa === nome ? "selecionado" : ""}" data-pnl-esforco-filtro="${escaparHTML(nome)}">
+          <button type="button" class="pnl-esforco-tira-item ${st.filtroPessoa === nome ? "selecionado" : ""} ${livre ? "livre" : ""}"
+                  data-pnl-esforco-filtro="${escaparHTML(nome)}" aria-pressed="${st.filtroPessoa === nome}">
             ${typeof avatarHTML === "function" ? avatarHTML(nome, "pnl-esforco-tira-avatar") : ""}
             <div class="pnl-esforco-tira-nome">${escaparHTML(nome)}</div>
-            <div class="pnl-esforco-tira-tempo">${escaparHTML(pnlFormatTempo(st.esforco[nome].min))}</div>
+            <div class="pnl-esforco-tira-tempo nivel-${nivel}">${livre ? "livre" : escaparHTML(pnlFormatTempo(g.min))}</div>
+            <div class="pnl-carga-barra"><span class="nivel-${nivel}" style="width:${pct}%"></span></div>
             <div class="pnl-esforco-tira-qtd">${qtd} tarefa${qtd === 1 ? "" : "s"}</div>
-          </div>
+            ${g.semCadastro ? `<div class="pnl-esforco-tira-aviso">${g.semCadastro} sem tempo cadastrado</div>` : ""}
+          </button>
         `;
       }).join("")}
     </div>
@@ -1156,7 +1196,16 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
   });
 
   if (st.ordenacao === "tempo") {
-    linhas.sort((a, b) => pnlTempoMedioCadastrado(b.assignee, b.client) - pnlTempoMedioCadastrado(a.assignee, a.client));
+    // null (sem cadastro) vai pro FIM, não pro topo — não é "tarefa de zero
+    // minuto", é dado faltando.
+    linhas.sort((a, b) => {
+      const ta = pnlTempoMedioCadastrado(a.assignee, a.client);
+      const tb = pnlTempoMedioCadastrado(b.assignee, b.client);
+      if (ta === null && tb === null) return 0;
+      if (ta === null) return 1;
+      if (tb === null) return -1;
+      return tb - ta;
+    });
   } else if (st.ordenacao === "aba") {
     const ordemEtapa = {};
     (typeof columnsDef !== "undefined" ? columnsDef : []).forEach((c, i) => { ordemEtapa[c.key] = i; });
@@ -1434,8 +1483,14 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista) {
   const rotuloEtapa = typeof rotuloDaEtapa === "function" ? rotuloDaEtapa(t) : (t.runrunStage || "Sem etapa");
   const publicacaoCurta = pnlFormatDataCurta(t.dataPublicacao);
   // Tempo cadastrado pelo Cláudio na aba do designer (ver pnlTempoMedioCadastrado)
-  // — não a média genérica do Runrun.it.
+  // — não a média genérica do Runrun.it. `null` = nunca cadastrou pra essa
+  // dupla designer+cliente; a pílula mostra "—", não "0min" (achado da
+  // crítica de 2026-08-17 — "0min" escondia tarefa sem cadastro).
   const tempoCadastrado = pnlTempoMedioCadastrado(t.assignee, t.client);
+  const semTempo = tempoCadastrado === null;
+  const tituloTempo = semTempo
+    ? `Sem tempo cadastrado pra ${t.assignee || "esse designer"} + ${t.client || "esse cliente"} — esta tarefa não conta no esforço do dia`
+    : `Tempo médio cadastrado na aba de ${t.assignee || ""}`;
 
   return `
     <div class="pnl-tarefa-row ${saiuDaLista ? "pnl-tarefa-row-saiu" : ""}" data-pnl-row-id="${escaparHTML(String(t.id))}">
@@ -1450,7 +1505,7 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista) {
       </div>
       <div class="pnl-tarefa-right">
         <button type="button" class="pnl-pill pnl-pill-data ${atrasada ? "atrasada" : ""}" data-pnl-editar-data="${escaparHTML(String(t.id))}" title="Clique pra trocar a Entrega Desejada">${escaparHTML(dataCurta)}</button>
-        <span class="pnl-pill pnl-pill-tempo" title="Tempo médio cadastrado na aba de ${escaparHTML(t.assignee || "")}">${escaparHTML(pnlFormatTempo(tempoCadastrado))}</span>
+        <span class="pnl-pill pnl-pill-tempo ${semTempo ? "sem-tempo" : ""}" title="${escaparHTML(tituloTempo)}">${semTempo ? "—" : escaparHTML(pnlFormatTempo(tempoCadastrado))}</span>
         <button type="button" class="pnl-pill pnl-pill-etapa" style="background:${etapaCor.bg};color:${etapaCor.fg};" data-pnl-editar-etapa="${escaparHTML(String(t.id))}" title="Clique pra mudar a etapa">${escaparHTML(rotuloEtapa)}</button>
         ${t.link ? `<a class="pnl-tarefa-link" href="${escaparHTML(t.link)}" target="_blank" rel="noopener" title="Abrir no Runrun.it">↗</a>` : ""}
       </div>

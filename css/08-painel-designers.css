@@ -356,6 +356,8 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 .pnl-pill-data { background: var(--pnl-sucesso-suave); color: var(--success-on-soft); width: 62px; }
 .pnl-pill-data.atrasada { background: var(--danger-soft); color: var(--danger-on-soft); }
 .pnl-pill-tempo { background: var(--pnl-sucesso-suave); color: var(--success-on-soft); width: 72px; }
+/* Sem cadastro ≠ zero: fica neutra, não verde, pra não parecer um número. */
+.pnl-pill-tempo.sem-tempo { background: var(--border); color: var(--text-secondary); }
 .pnl-pill-etapa { width: 118px; }
 .pnl-tarefa-link {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border);
@@ -367,16 +369,38 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 /* ---- Esforço de hoje: a tira de pessoas + ordenar, dentro do modal largo ---- */
 .pnl-esforco-tira { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; flex-shrink: 0; }
 .pnl-esforco-tira-item {
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  /* Era <div> com clique — virou <button> (achado da crítica de
+     2026-08-17: o filtro de pessoa era o único controle central sem
+     teclado). Resets pra não mudar a aparência de antes. */
+  display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%;
+  font-family: inherit; text-align: center;
   padding: 16px 10px; border-radius: var(--radius-lg); background: var(--card-bg); border: 1px solid var(--border);
   box-shadow: var(--shadow-card); cursor: pointer;
   transition: border-color var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
 }
 .pnl-esforco-tira-item:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
 .pnl-esforco-tira-item.selecionado { border-color: var(--success); box-shadow: 0 0 0 2px var(--success) inset, var(--shadow-hover); }
+/* Designer sem nenhuma tarefa hoje — o destino óbvio de qualquer
+   reequilíbrio, e antes simplesmente não aparecia na tira. */
+.pnl-esforco-tira-item.livre { opacity: .72; border-style: dashed; box-shadow: none; }
+.pnl-esforco-tira-item.livre:hover { opacity: 1; }
 .pnl-esforco-tira-avatar { width: 46px; height: 46px; border-radius: 50%; }
 .pnl-esforco-tira-nome { font-size: 12.5px; font-weight: 650; color: var(--text-primary); text-align: center; }
-.pnl-esforco-tira-tempo { font-size: 14px; font-weight: 700; color: var(--success-on-soft); }
+.pnl-esforco-tira-tempo { font-size: 14px; font-weight: 700; }
+/* Mesmo limite de 4h que já existia na lista da PÁGINA, agora também
+   dentro do pop-up — antes o número ficava verde pra todo mundo aqui
+   dentro, inclusive num dia de 8h (achado da crítica de 2026-08-17). */
+.pnl-esforco-tira-tempo.nivel-tranquilo { color: var(--success-on-soft); }
+.pnl-esforco-tira-tempo.nivel-cheio     { color: var(--warning-on-soft); }
+.pnl-esforco-tira-tempo.nivel-estourado { color: var(--danger-on-soft); }
+.pnl-esforco-tira-tempo.nivel-livre     { color: var(--text-muted); }
+.pnl-carga-barra { width: 100%; height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; margin-top: 1px; }
+.pnl-carga-barra span { display: block; height: 100%; border-radius: 999px; background: currentColor; }
+.pnl-carga-barra span.nivel-tranquilo { color: var(--success-on-soft); }
+.pnl-carga-barra span.nivel-cheio     { color: var(--warning-on-soft); }
+.pnl-carga-barra span.nivel-estourado { color: var(--danger-on-soft); }
+.pnl-carga-barra span.nivel-livre     { color: var(--border); }
+.pnl-esforco-tira-aviso { font-size: 10.5px; font-weight: 700; color: var(--warning-on-soft); text-align: center; }
 /* 10,5px estava abaixo do piso de 11px do projeto pra texto funcional, e
    --text-muted media 2,69:1 nesse tamanho — os dois corrigidos junto. */
 .pnl-esforco-tira-qtd { font-size: 11.5px; color: var(--text-secondary); }
