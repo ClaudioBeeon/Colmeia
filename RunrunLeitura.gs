@@ -1851,3 +1851,56 @@ function buscarEntreguesDoDesigner(designer, limite) {
 
   return { ok: true, entregues: entregues };
 }
+
+/**
+ * Igual a buscarEntreguesDoDesigner, mas filtrado a UM DIA específico
+ * (fuso São Paulo) e com o tempo trabalhado + tempo médio do cliente já
+ * calculados — é o que o relatório diário usa pra montar "gastou X,
+ * esperado Y". Busca até 50 entregues recentes e filtra pelo dia: o
+ * Runrun.it não tem filtro de data na API (ver CLAUDE.md), então o corte
+ * é sempre feito aqui depois de buscar.
+ */
+function buscarEntreguesDoDiaComTempo(designer, dataISO) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  if (!dataISO) return { ok: false, error: 'dataISO não informado.' };
+
+  var runrunId = idDoUsuarioRunrunPorNome(designer);
+  if (!runrunId) return { ok: false, error: 'Não achei o id de ' + designer + ' no Runrun.it.' };
+
+  var lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
+    '&is_closed=true&sort=close_date&sortDir=desc&limit=50');
+  if (!Array.isArray(lote)) {
+    lote = runrunFetch('/tasks?responsible_id=' + encodeURIComponent(runrunId) +
+      '&is_closed=true&sort=updated_at&sortDir=desc&limit=50');
+  }
+  if (!Array.isArray(lote)) {
+    return { ok: false, error: 'Resposta inesperada do Runrun.it ao buscar entregues do dia.' };
+  }
+
+  var mapaVinculos = buscarVinculosDoPainel();
+  var mapaTempoMedio = buscarTempoMedioDoPainel();
+
+  var entregues = lote
+    .filter(function (t) { return !tarefaEhCardMae(t); })
+    .map(function (t) {
+      var quandoRaw = t.close_date || t.updated_at || null;
+      var quando = quandoRaw ? new Date(quandoRaw).getTime() : null;
+      var diaDoFechamento = quando ? Utilities.formatDate(new Date(quando), 'America/Sao_Paulo', 'yyyy-MM-dd') : null;
+      var nomeClienteBruto = t.client_name || 'Sem cliente';
+      var nomeClienteResolvido = resolverNomeCanonico(nomeClienteBruto, mapaVinculos);
+      return {
+        id: t.id,
+        titulo: t.title || '',
+        cliente: nomeClienteResolvido,
+        projeto: extrairNomeProjeto(t),
+        tipo: extrairTipoTarefa(t),
+        quando: quando,
+        dia: diaDoFechamento,
+        workedSeconds: tempoTrabalhadoAoVivo(t),
+        tempoMedioMinutos: mapaTempoMedio[normalizarNomeParaComparar(nomeClienteResolvido)] || 0
+      };
+    })
+    .filter(function (e) { return e.dia === dataISO; });
+
+  return { ok: true, entregues: entregues };
+}
