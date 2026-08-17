@@ -490,6 +490,8 @@ function handleRequest(e, method) {
         output = listarUsoDasTelas(body.dias);
       } else if (body.acao === 'buscarFeedEventos') {
         output = buscarFeedEventos(body.designer);
+      } else if (body.acao === 'relatorioDiarioDesigner') {
+        output = relatorioDiarioDesigner(body.designer, body.dataISO);
       } else if (body.acao === 'listarRepasseIgnorados') {
         output = listarRepasseIgnorados(body.designer);
       } else if (body.acao === 'ignorarNoRepasse') {
