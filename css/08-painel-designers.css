@@ -327,6 +327,13 @@
 .pnl-tarefa-titulo-btn:hover { text-decoration: underline; }
 .pnl-tarefa-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
 .pnl-tarefa-badges .pnl-tag { padding: 4px 11px; font-size: 11px; }
+/* Etiqueta do designer virou <button> (achado da crítica de 2026-08-17:
+   reequilibrar precisa das duas alavancas, data E pessoa). Resets pra não
+   parecer botão de formulário, mais um "▾" fixo que avisa que é clicável
+   sem depender só do title (que some pra quem usa teclado/toque). */
+.pnl-tag-designer { border: none; cursor: pointer; font-family: inherit; }
+.pnl-tag-designer::after { content: "▾"; font-size: 8px; opacity: .7; margin-left: 1px; }
+.pnl-tag-designer:hover { filter: brightness(0.94); }
 /* --text-muted media 2,69:1 nesse tamanho (achado da crítica de
    2026-08-17) — --text-secondary dá 4,84:1 e continua discreto. */
 .pnl-pub {
@@ -408,6 +415,21 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 /* 10,5px estava abaixo do piso de 11px do projeto pra texto funcional, e
    --text-muted media 2,69:1 nesse tamanho — os dois corrigidos junto. */
 .pnl-esforco-tira-qtd { font-size: 11.5px; color: var(--text-secondary); }
+
+/* ---- Menu de trocar pessoa (etiqueta do designer na linha) ---- */
+.pnl-menu-pessoa {
+  position: fixed; z-index: 200; background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-hover); padding: 6px; min-width: 190px;
+  max-height: 280px; overflow-y: auto;
+}
+[data-theme="dark"] .pnl-menu-pessoa { background: #17141F; }
+.pnl-menu-pessoa button {
+  display: flex; width: 100%; align-items: center; gap: 8px; padding: 8px 10px;
+  border: none; background: none; border-radius: 9px; font-size: 12.5px; font-family: inherit;
+  text-align: left; color: var(--text-primary); cursor: pointer;
+}
+.pnl-menu-pessoa button:hover { background: var(--page-bg); }
+.pnl-menu-pessoa-carregando { font-size: 12px; color: var(--text-secondary); padding: 8px; }
 
 .pnl-ordenar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
 /* --text-muted media 2,69:1 nesse tamanho. */

@@ -1342,6 +1342,67 @@ function pnlTrocarDataOtimista(st, t, novaData) {
     });
 }
 
+/**
+ * Passar a tarefa pra outra pessoa direto no pop-up — a alavanca que
+ * faltava (achado da crítica de 2026-08-17): reequilibrar tem duas
+ * alavancas, outro DIA e outra PESSOA, e o pop-up só dava a primeira.
+ * `reatribuirTarefaNoBackend` já existe e já é usada pelo quadro
+ * (js/kanban-polling.js) — reusada aqui, não reimplementada. Mesma receita
+ * otimista de pnlTrocarDataOtimista, acima.
+ */
+function pnlTrocarPessoaOtimista(st, t, userId, nomeNovo) {
+  if (!nomeNovo || nomeNovo === t.assignee) return;
+  const antigoNome = t.assignee, antigoAvatar = t.assigneeAvatarUrl;
+
+  marcarEscritaOtimista(t, { assignee: nomeNovo });
+  pnlAtualizarTudoAposEditar(st, false);
+  pnlPiscarLinhaDaTarefa(t.id);
+
+  reatribuirTarefaNoBackend(t.id, userId, nomeNovo).then(ok => {
+    if (ok) {
+      if (pnlTarefasEstadoAtual === st && typeof agendarAtualizacaoKanban === "function") agendarAtualizacaoKanban();
+      return;
+    }
+    t.assignee = antigoNome;
+    t.assigneeAvatarUrl = antigoAvatar;
+    desmarcarEscritaOtimista(t, ["assignee"]);
+    if (pnlTarefasEstadoAtual === st) pnlAtualizarTudoAposEditar(st, false);
+    mostrarToast("Não consegui passar essa tarefa pra outra pessoa agora.", "erro");
+  });
+}
+
+/** Menu com a lista de gente do Runrun.it (mesma fonte do seletor do
+ *  quadro, buscarUsuariosRunrun) ancorado no botão clicado. Reusa
+ *  posicionarPopupFixo (js/config.js), o mesmo que o calendário usa. */
+async function pnlAbrirSeletorDePessoa(t, ancoraEl, aoEscolher) {
+  document.querySelectorAll(".pnl-menu-pessoa").forEach(m => m.remove());
+  const menu = document.createElement("div");
+  menu.className = "pnl-menu-pessoa";
+  menu.innerHTML = `<div class="pnl-menu-pessoa-carregando">Carregando pessoas...</div>`;
+  document.body.appendChild(menu);
+  posicionarPopupFixo(menu, ancoraEl);
+
+  const fechar = () => { menu.remove(); document.removeEventListener("click", foraDoMenu); };
+  const foraDoMenu = ev => { if (!menu.contains(ev.target) && ev.target !== ancoraEl) fechar(); };
+  setTimeout(() => document.addEventListener("click", foraDoMenu), 0);
+
+  const usuarios = await buscarUsuariosRunrun();
+  if (!menu.isConnected) return; // fechou enquanto carregava
+  if (!usuarios.length) { menu.innerHTML = `<div class="pnl-menu-pessoa-carregando">Não consegui buscar a lista.</div>`; return; }
+  menu.innerHTML = usuarios.map(u => `
+    <button type="button" data-user-id="${u.id}" data-user-nome="${escaparHTML(u.nome)}">
+      ${typeof avatarHTML === "function" ? avatarHTML(u.nome, "avatar-sm", u.foto, { runrunId: u.id, email: u.email }) : ""}
+      <span>${escaparHTML(u.nome)}</span>
+    </button>
+  `).join("");
+  menu.querySelectorAll("button[data-user-id]").forEach(opt => {
+    opt.addEventListener("click", () => {
+      fechar();
+      aoEscolher(opt.dataset.userId, opt.dataset.userNome);
+    });
+  });
+}
+
 /** Pisca a linha da tarefa que acabou de mudar — é o que dá a sensação de
  *  "pronto, mudou" sem nenhum "Salvando..." no meio. */
 function pnlPiscarLinhaDaTarefa(taskId) {
@@ -1456,6 +1517,16 @@ function pnlWireLinhasDoModal(corpo, st) {
       abrirMenuEtapa(t, btn, () => pnlAtualizarTudoAposEditar(st));
     });
   });
+
+  // Designer — a outra alavanca de reequilíbrio (ver pnlTrocarPessoaOtimista).
+  corpo.querySelectorAll("[data-pnl-trocar-pessoa]").forEach(btn => {
+    btn.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const t = pnlAcharTarefaPorId(st, btn.dataset.pnlTrocarPessoa);
+      if (!t) return;
+      pnlAbrirSeletorDePessoa(t, btn, (userId, nome) => pnlTrocarPessoaOtimista(st, t, userId, nome));
+    });
+  });
 }
 
 // Cores das etapas do quadro — mesmas 5 colunas de columnsDef (js/config.js),
@@ -1516,7 +1587,7 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista) {
         <button type="button" class="pnl-tarefa-titulo-btn" data-pnl-abrir-tarefa="${escaparHTML(String(t.id))}" title="Abrir a tarefa no Colmeia">${escaparHTML(t.title || "Sem título")}</button>
         <div class="pnl-tarefa-badges">
           ${saiuDaLista ? `<span class="pnl-tag pnl-tag-saiu" title="Continua aqui só pra você não perder ela de vista — some quando reabrir o pop-up">já não entra nesta lista</span>` : ""}
-          ${designerCol ? `<span class="pnl-tag" style="background:${designerCol.bg};color:${designerCol.fg};">${escaparHTML(t.assignee)}</span>` : ""}
+          ${designerCol ? `<button type="button" class="pnl-tag pnl-tag-designer" style="background:${designerCol.bg};color:${designerCol.fg};" data-pnl-trocar-pessoa="${escaparHTML(String(t.id))}" title="Clique pra passar pra outra pessoa">${escaparHTML(t.assignee)}</button>` : ""}
           ${clienteCol ? `<span class="pnl-tag" style="background:${clienteCol.bg};color:${clienteCol.fg};">${escaparHTML(t.client)}</span>` : ""}
           ${publicacaoCurta ? `<span class="pnl-pub" title="Data de Publicação (Runrun.it)">${PNL_ICONE_CALENDARIO} Publica ${escaparHTML(publicacaoCurta)}</span>` : ""}
         </div>
