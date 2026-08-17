@@ -453,12 +453,14 @@ function pnlRenderEsforcoLista() {
     return;
   }
 
+  // <button>, não <div> com clique — era o outro controle central sem
+  // teclado (achado da crítica de 2026-08-17, junto com a tira do modal).
   el.innerHTML = nomesEsforco.map(n => `
-    <div class="pnl-esforco-linha" data-pnl-esforco-pessoa="${escaparHTML(n)}">
+    <button type="button" class="pnl-esforco-linha" data-pnl-esforco-pessoa="${escaparHTML(n)}">
       ${typeof avatarHTML === "function" ? avatarHTML(n, "avatar-sm") : ""}
       <div class="pnl-esforco-linha-nome">${escaparHTML(n)}</div>
       <div class="pnl-esforco-linha-valor ${pnlNivelDeCarga(esforco[n].min) === "estourado" ? "alerta" : ""}">${escaparHTML(pnlFormatTempo(esforco[n].min))}</div>
-    </div>
+    </button>
   `).join("");
 
   el.querySelectorAll("[data-pnl-esforco-pessoa]").forEach(linha => {
@@ -1094,6 +1096,33 @@ function pnlSubmitReatribuir() {
 
 let pnlTarefasEstadoAtual = null; // { titulo, abas, abaAtiva, lista, mostrarDesigner } OU { titulo, modoEsforco:true, esforco, filtroPessoa, ordenacao }
 
+// ===== Foco preso dentro do modal (achado da crítica de 2026-08-17: sem
+// isso, o Tab escapava pra página atrás enquanto o pop-up estava aberto).
+// Mesma receita já usada e testada em aprovar.html (prenderFoco/soltarFoco).
+let pnlFocoAntesDoModal = null;
+let pnlModalAoTab = null;
+function pnlPrenderFocoNoModal() {
+  pnlFocoAntesDoModal = document.activeElement;
+  const modal = document.querySelector(".pnl-tarefas-modal");
+  document.getElementById("pnlTarefasFechar")?.focus();
+  pnlModalAoTab = ev => {
+    if (ev.key !== "Tab" || !modal) return;
+    const focaveis = Array.prototype.slice.call(
+      modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter(el => !el.disabled && el.offsetParent !== null);
+    if (!focaveis.length) return;
+    const primeiro = focaveis[0], ultimo = focaveis[focaveis.length - 1];
+    if (ev.shiftKey && document.activeElement === primeiro) { ev.preventDefault(); ultimo.focus(); }
+    else if (!ev.shiftKey && document.activeElement === ultimo) { ev.preventDefault(); primeiro.focus(); }
+  };
+  document.addEventListener("keydown", pnlModalAoTab);
+}
+function pnlSoltarFocoDoModal() {
+  if (pnlModalAoTab) { document.removeEventListener("keydown", pnlModalAoTab); pnlModalAoTab = null; }
+  if (pnlFocoAntesDoModal && typeof pnlFocoAntesDoModal.focus === "function") pnlFocoAntesDoModal.focus();
+  pnlFocoAntesDoModal = null;
+}
+
 function pnlAbrirTarefasModal(titulo, opcoes) {
   pnlTarefasEstadoAtual = {
     titulo,
@@ -1105,6 +1134,7 @@ function pnlAbrirTarefasModal(titulo, opcoes) {
   document.getElementById("pnlTarefasOverlay").hidden = false;
   document.querySelector(".pnl-tarefas-modal")?.classList.remove("pnl-modal-esforco");
   pnlRenderTarefasModal();
+  pnlPrenderFocoNoModal();
 }
 
 /** Abre igual ao card "Esforço de hoje" do painel original: tira de pessoas
@@ -1120,14 +1150,16 @@ function pnlAbrirEsforcoModal(filtroInicial) {
   document.getElementById("pnlTarefasOverlay").hidden = false;
   document.querySelector(".pnl-tarefas-modal")?.classList.add("pnl-modal-esforco");
   pnlRenderTarefasModal();
+  pnlPrenderFocoNoModal();
 }
 
 function pnlFecharTarefasModal() {
   document.getElementById("pnlTarefasOverlay").hidden = true;
   pnlTarefasEstadoAtual = null;
-  // Se a pessoa fechou o pop-up com o calendário ou o menu de etapa ainda
-  // abertos por cima, eles ficariam órfãos na tela.
-  document.querySelectorAll(".colmeia-calendario, .status-menu").forEach(el => el.remove());
+  // Se a pessoa fechou o pop-up com o calendário, o menu de etapa ou o
+  // seletor de pessoa ainda abertos por cima, eles ficariam órfãos na tela.
+  document.querySelectorAll(".colmeia-calendario, .status-menu, .pnl-menu-pessoa, .pnl-menu-data").forEach(el => el.remove());
+  pnlSoltarFocoDoModal();
 }
 
 function pnlRenderTarefasModal() {
@@ -1219,9 +1251,9 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
     ${tiraHtml}
     <div class="pnl-ordenar-row">
       <span class="pnl-ordenar-label">Ordenar por:</span>
-      <button type="button" class="pnl-sort-btn ${st.ordenacao === "data" ? "active" : ""}" data-pnl-ordenar="data">Data</button>
-      <button type="button" class="pnl-sort-btn ${st.ordenacao === "tempo" ? "active" : ""}" data-pnl-ordenar="tempo">Tempo</button>
-      <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba">Aba</button>
+      <button type="button" class="pnl-sort-btn ${st.ordenacao === "data" ? "active" : ""}" data-pnl-ordenar="data" aria-pressed="${st.ordenacao === "data"}">Data</button>
+      <button type="button" class="pnl-sort-btn ${st.ordenacao === "tempo" ? "active" : ""}" data-pnl-ordenar="tempo" aria-pressed="${st.ordenacao === "tempo"}">Tempo</button>
+      <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba" aria-pressed="${st.ordenacao === "aba"}">Aba</button>
     </div>
     <div class="pnl-tarefas-lista">
       ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
@@ -1669,6 +1701,17 @@ function pnlLigarControlesUmaVez() {
 
   document.addEventListener("keydown", ev => {
     if (ev.key !== "Escape") return;
+    // Com um submenu aberto por cima do pop-up (calendário, menu de etapa,
+    // seletor de pessoa), o Esc fecha SÓ ele — fechar o modal inteiro por
+    // baixo era um bug de verdade, não só de aparência (achado da crítica
+    // de 2026-08-17): quem estava escolhendo uma data perdia a tarefa que
+    // estava editando. Este handler é registrado uma vez, no carregamento
+    // da página — sempre ANTES de qualquer submenu existir — então checar
+    // o DOM aqui é o único jeito confiável de saber quem deve responder
+    // primeiro (a ordem de registro dos listeners não ajuda: os submenus
+    // só nascem depois que este já está no ar).
+    const submenu = document.querySelector(".colmeia-calendario, .status-menu, .pnl-menu-pessoa, .pnl-menu-data");
+    if (submenu) { submenu.remove(); return; }
     if (pnlTarefasEstadoAtual) { pnlFecharTarefasModal(); return; }
     if (!document.getElementById("pnlModalOverlay")?.hidden) pnlFecharModal();
   });

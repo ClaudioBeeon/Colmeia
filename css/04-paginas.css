@@ -977,6 +977,12 @@ body.card-aberto .quick-access-panel { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .rule-row-virou-atual, .rule-row-status-pop, .rule-row-entrando { animation: none; }
+  /* A entrada de QUALQUER modal `.rule-modal`/`.rule-modal-overlay` do app
+     (não só um) nunca tinha guarda de movimento reduzido — achado da
+     crítica de 2026-08-17 no pop-up "Esforço de hoje", mas o bug era
+     daqui, do shell compartilhado, não daquela tela específica. */
+  .rule-modal-overlay:not([hidden]),
+  .rule-modal-overlay:not([hidden]) .rule-modal { animation: none; }
 }
 
 .avatar-flying {

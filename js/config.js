@@ -928,7 +928,19 @@ function abrirCalendarioColmeia({ ancoraEl, valorInicial, onEscolher, onFechar }
     }
   }
   function teclaEsc(ev) {
-    if (ev.key === "Escape") { fechar(); if (onFechar) onFechar(); }
+    if (ev.key !== "Escape") return;
+    // stopImmediatePropagation (não só stopPropagation): outro listener de
+    // Escape no MESMO `document` — como o do pop-up que abriu este
+    // calendário — pode ter sido registrado ANTES deste (o modal existe
+    // desde o carregamento da página; o calendário só nasce quando abre),
+    // e listeners no mesmo alvo rodam na ordem em que foram registrados.
+    // Ainda assim, quem garante a ordem certa é o handler de quem abriu o
+    // calendário conferir se ele está aberto ANTES de fechar a si mesmo
+    // (ver pagina-painel-designers.js) — isto aqui é reforço, não a
+    // correção completa sozinha.
+    ev.stopImmediatePropagation();
+    fechar();
+    if (onFechar) onFechar();
   }
 
   renderCalendario();

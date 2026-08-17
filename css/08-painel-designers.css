@@ -71,6 +71,7 @@
 .pnl-esforco-lista { display: flex; flex-direction: column; gap: 2px; }
 .pnl-esforco-linha {
   display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-radius: 8px;
+  width: 100%; border: none; background: none; font-family: inherit; text-align: left;
   cursor: pointer; transition: background var(--dur-fast) var(--ease-apple);
 }
 .pnl-esforco-linha:hover { background: var(--page-bg); }
@@ -317,6 +318,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .pnl-tarefa-row-mudou { animation: none; }
+  .pnl-esforco-tira-item, .pnl-tarefa-row, .pnl-tarefa-link, .pnl-esforco-linha { transition: none; }
 }
 .pnl-tarefa-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
 .pnl-tarefa-titulo-btn {
