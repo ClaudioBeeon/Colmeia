@@ -2114,6 +2114,12 @@ async function buscarRelatorioDiario(designer, dataISO) {
 }
 
 // ===== Pop-up "Relatório diário" (Painel de Designers) =====
+// Mesmo tamanho/posição do pop-up de tarefa (.task-detail, css/03-detalhe.css:
+// top/right/bottom 22px, left 106px pra sobrar a barra lateral) — pedido do
+// Cláudio pra ficar "quase a tela toda", igual ele já conhece. A barra de
+// "Entregues x fila do dia" reaproveita as MESMAS classes de
+// css/04-paginas.css que a página "Minhas horas" já usa pra "Trabalhadas/
+// Restante/Meta" (.hr-barra-wrap/.hr-seg) — visual já aprovado, sem CSS novo.
 let relatorioDesignerAtual = null; // nome do designer com o pop-up aberto, ou null
 let relatorioDiaAtual = null;      // Date do dia sendo mostrado
 
@@ -2143,17 +2149,17 @@ async function relatorioDiarioRenderizar() {
   const corpo = document.getElementById("reldCorpo");
   if (!corpo || !relatorioDesignerAtual || !relatorioDiaAtual) return;
 
+  const designer = relatorioDesignerAtual;
   corpo.innerHTML = `<div class="reld-carregando">Carregando relatório...</div>`;
-  document.getElementById("reldTituloDesigner").textContent = relatorioDesignerAtual;
   document.getElementById("reldDataLabel").textContent =
     relatorioDiaAtual.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 
   const dataISO = relatorioDataISO(relatorioDiaAtual);
-  const dados = await buscarRelatorioDiario(relatorioDesignerAtual, dataISO);
+  const dados = await buscarRelatorioDiario(designer, dataISO);
 
   // O designer/dia pode ter mudado enquanto a busca estava no ar (clicou
   // rápido nas setas, ou fechou o pop-up) — descarta resposta velha.
-  if (!relatorioDesignerAtual || relatorioDataISO(relatorioDiaAtual) !== dataISO) return;
+  if (!relatorioDesignerAtual || relatorioDesignerAtual !== designer || relatorioDataISO(relatorioDiaAtual) !== dataISO) return;
 
   if (!dados) {
     corpo.innerHTML = `
@@ -2164,10 +2170,10 @@ async function relatorioDiarioRenderizar() {
     return;
   }
 
-  corpo.innerHTML = relatorioDiarioCorpoHTML(dados);
+  corpo.innerHTML = relatorioDiarioCorpoHTML(dados, designer);
 }
 
-function relatorioDiarioCorpoHTML(dados) {
+function relatorioDiarioCorpoHTML(dados, designer) {
   const tocadas = dados.tocadas || [];
   const entregues = dados.entregues || [];
   const transferidas = dados.transferidas || [];
@@ -2175,59 +2181,190 @@ function relatorioDiarioCorpoHTML(dados) {
   const chegaram = dados.chegaramDepoisDas10h || [];
 
   return `
-    <div class="reld-numeros">
-      <div class="reld-num-card">
-        <div class="reld-num">${tocadas.length}</div>
-        <div class="reld-num-label">Tarefas tocadas</div>
-      </div>
-      <div class="reld-num-card">
-        <div class="reld-num">${entregues.length}</div>
-        <div class="reld-num-label">Entregues</div>
-      </div>
-      <div class="reld-num-card">
-        <div class="reld-num">${transferidas.length}</div>
-        <div class="reld-num-label">Transferidas</div>
-      </div>
-      <div class="reld-num-card">
-        <div class="reld-num">${fila.total}</div>
-        <div class="reld-num-label">Na fila${fila.atrasadas ? ` <span class="reld-num-sub">${fila.atrasadas} atrasada${fila.atrasadas > 1 ? "s" : ""}</span>` : ""}</div>
-      </div>
-      <div class="reld-num-card">
-        <div class="reld-num">${chegaram.length}</div>
-        <div class="reld-num-label">Chegaram depois das 10h</div>
-      </div>
+    <h1 class="reld-h1" id="reldCorpoTitulo">O dia de <b>${escaparHTML(designer)}</b></h1>
+    ${relatorioDiarioBarraEntreguesHTML(entregues.length, fila.total)}
+    <div class="reld-grid">
+      ${relatorioDiarioPerfilHTML(designer, fila.total)}
+      ${relatorioDiarioProducaoHTML(tocadas.length, entregues.length, transferidas.length)}
+      ${relatorioDiarioAnelHTML(entregues.length, fila.total)}
+      ${relatorioDiarioTimelineHTML(tocadas, entregues, transferidas, chegaram)}
+      ${relatorioDiarioFilaHTML(fila)}
+      ${relatorioDiarioEntreguesDetalheHTML(entregues)}
     </div>
+  `;
+}
 
-    <div class="reld-secao">
-      <div class="reld-secao-titulo">Entregues no dia</div>
-      ${entregues.length === 0 ? `<div class="reld-vazio">Nada entregue neste dia.</div>` : `
-        <div class="reld-lista">
-          ${entregues.map(relatorioDiarioLinhaEntregueHTML).join("")}
+// A barra "Entregues x fila do dia" — mesmo componente visual de
+// "Trabalhadas/Restante/Meta" (js/pagina-horas.js, renderBarraDeHoje).
+// `Math.max(pct, 12)` é o mesmo cuidado de lá: sem isso um segmento muito
+// pequeno (ex: 0 entregues) fica estreito demais pro texto caber dentro.
+function relatorioDiarioBarraEntreguesHTML(qtdEntregues, qtdFila) {
+  const feito = Math.min(qtdEntregues, qtdFila || qtdEntregues);
+  const restante = Math.max(0, qtdFila - qtdEntregues);
+  const pctFeito = qtdFila > 0 ? Math.round((feito / qtdFila) * 100) : (qtdEntregues > 0 ? 100 : 0);
+  const pctRestante = 100 - pctFeito;
+  return `
+    <div class="hr-barra-wrap reld-barra-wrap">
+      <div class="hr-barra-col principal">
+        <div class="hr-barra-labels">
+          <span style="flex:${Math.max(pctFeito, 12)}">Entregues</span>
+          <span style="flex:${Math.max(pctRestante, 12)}">Restante</span>
         </div>
-      `}
-    </div>
-
-    <div class="reld-secao">
-      <div class="reld-secao-titulo">Transferidas hoje</div>
-      ${transferidas.length === 0 ? `<div class="reld-vazio">Nada transferido neste dia.</div>` : `
-        <div class="reld-lista">
-          ${transferidas.map(relatorioDiarioLinhaTransferidaHTML).join("")}
+        <div class="hr-barra">
+          <div class="hr-seg escuro" style="flex:${Math.max(pctFeito, 12)}">${pctFeito}%</div>
+          <div class="hr-seg hachura" style="flex:${Math.max(pctRestante, 12)}">${restante} peça${restante === 1 ? "" : "s"}</div>
         </div>
-      `}
+      </div>
+      <div class="hr-barra-col">
+        <div class="hr-barra-labels"><span>Na fila</span></div>
+        <div class="hr-barra"><div class="hr-seg branca">${qtdFila}</div></div>
+      </div>
     </div>
+  `;
+}
 
-    <div class="reld-secao">
-      <div class="reld-secao-titulo">Chegou depois das 10h</div>
-      ${chegaram.length === 0 ? `<div class="reld-vazio">Nada chegou fora da fila original.</div>` : `
-        <div class="reld-lista">
-          ${chegaram.map(relatorioDiarioLinhaEventoHTML).join("")}
+function relatorioDiarioPerfilHTML(designer, qtdFila) {
+  const foto = (typeof pnlPhotos !== "undefined" && pnlPhotos[designer]) || null;
+  const iniciais = typeof initials === "function" ? initials(designer) : designer.slice(0, 2).toUpperCase();
+  return `
+    <div class="reld-card reld-perfil">
+      <div class="reld-perfil-fundo"></div>
+      <div class="reld-perfil-corpo">
+        <div class="reld-perfil-avatar">${foto ? `<img src="${escaparHTML(foto)}" alt="">` : escaparHTML(iniciais)}</div>
+        <div class="reld-perfil-nome">${escaparHTML(designer)}</div>
+      </div>
+      <div class="reld-perfil-chip">${qtdFila} na fila</div>
+    </div>
+  `;
+}
+
+function relatorioDiarioProducaoHTML(qtdTocadas, qtdEntregues, qtdTransferidas) {
+  const max = Math.max(qtdTocadas, qtdEntregues, qtdTransferidas, 1);
+  const linha = (label, valor, cor) => `
+    <div class="reld-producao-linha">
+      <div class="reld-producao-label">${label}</div>
+      <div class="reld-producao-barra-wrap"><div class="reld-producao-barra" style="width:${Math.max(4, Math.round((valor / max) * 100))}%; background:${cor};"></div></div>
+      <div class="reld-producao-valor">${valor}</div>
+    </div>
+  `;
+  return `
+    <div class="reld-card">
+      <div class="reld-card-titulo">Produção do dia</div>
+      <div class="reld-producao-linhas">
+        ${linha("Tocadas", qtdTocadas, "var(--kanban-yellow)")}
+        ${linha("Entregues", qtdEntregues, "var(--success)")}
+        ${linha("Transferidas", qtdTransferidas, "var(--accent)")}
+      </div>
+    </div>
+  `;
+}
+
+function relatorioDiarioAnelHTML(qtdEntregues, qtdFila) {
+  const pct = qtdFila > 0 ? Math.min(100, Math.round((qtdEntregues / qtdFila) * 100)) : 0;
+  const circunferencia = 2 * Math.PI * 50;
+  const offset = circunferencia - (circunferencia * pct) / 100;
+  return `
+    <div class="reld-card">
+      <div class="reld-card-titulo">Resolvidas hoje</div>
+      <div class="reld-anel-wrap">
+        <div class="reld-anel">
+          <svg width="118" height="118" viewBox="0 0 118 118">
+            <circle cx="59" cy="59" r="50" fill="none" stroke="var(--card-bg-2)" stroke-width="12"/>
+            <circle cx="59" cy="59" r="50" fill="none" stroke="var(--kanban-yellow)" stroke-width="12"
+              stroke-linecap="round" stroke-dasharray="${circunferencia.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}" />
+          </svg>
+          <div class="reld-anel-texto">
+            <div class="reld-anel-num">${pct}%</div>
+            <div class="reld-anel-frac">${qtdEntregues} de ${qtdFila}</div>
+          </div>
+        </div>
+        <div class="reld-anel-legenda">da fila de hoje</div>
+      </div>
+    </div>
+  `;
+}
+
+// Junta as 4 fontes (tocadas/entregues/transferidas/chegaram) numa única
+// ordem cronológica — no lugar de 3 listas soltas, que ficavam confusas
+// (pedido do Cláudio, 2026-08-17). Nenhuma busca nova: usa só o que
+// `dados` já trouxe.
+function relatorioDiarioTimelineHTML(tocadas, entregues, transferidas, chegaram) {
+  const eventos = [];
+  tocadas.forEach(t => eventos.push({ quando: t.primeiroPlay, tipo: "play", titulo: t.titulo }));
+  entregues.forEach(e => eventos.push({ quando: e.quando, tipo: "entrega", titulo: e.titulo, cliente: e.cliente }));
+  transferidas.forEach(t => eventos.push({
+    quando: t.quando, tipo: "transf", titulo: t.titulo, cliente: t.cliente,
+    selo: t.contouComoEntrega ? "conta como entrega" : null
+  }));
+  chegaram.forEach(ev => eventos.push({
+    quando: ev.quando, tipo: "chegou", titulo: ev.titulo,
+    selo: ev.tipo === "prioridade" ? "prioridade" : "repasse"
+  }));
+  eventos.sort((a, b) => (a.quando || 0) - (b.quando || 0));
+
+  const icones = { play: "▶", entrega: "✓", transf: "↪", chegou: "⚡" };
+  const verbos = { play: "Tocou", entrega: "Entregou", transf: "Transferiu", chegou: "Chegou" };
+
+  return `
+    <div class="reld-card reld-timeline">
+      <div class="reld-card-titulo">Linha do dia <small>${eventos.length} evento${eventos.length === 1 ? "" : "s"}</small></div>
+      ${eventos.length === 0 ? `<div class="reld-timeline-vazio">Nada aconteceu neste dia ainda.</div>` : `
+        <div class="reld-timeline-lista">
+          ${eventos.map(ev => `
+            <div class="reld-tl-item">
+              <span class="reld-tl-hora">${ev.quando ? new Date(ev.quando).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+              <span class="reld-tl-icone ${ev.tipo}">${icones[ev.tipo]}</span>
+              <div class="reld-tl-corpo">
+                <div class="reld-tl-titulo">${verbos[ev.tipo]} ${escaparHTML(ev.titulo || "")}${ev.selo ? ` <span class="reld-tl-selo ${ev.tipo === "transf" && ev.selo === "conta como entrega" ? "reld-tl-selo-ok" : ""}">${escaparHTML(ev.selo)}</span>` : ""}</div>
+                ${ev.cliente ? `<div class="reld-tl-cliente">${escaparHTML(ev.cliente)}</div>` : ""}
+              </div>
+            </div>
+          `).join("")}
         </div>
       `}
     </div>
   `;
 }
 
-function relatorioDiarioLinhaEntregueHTML(e) {
+function relatorioDiarioFilaHTML(fila) {
+  return `
+    <div class="reld-card">
+      <div class="reld-card-titulo">Fila do dia</div>
+      <div class="reld-fila-linhas">
+        <div class="reld-fila-linha">
+          <span class="reld-fila-dot" style="background: var(--danger);"></span>
+          <span class="reld-fila-nome">Atrasadas</span>
+          <span class="reld-fila-num" style="color: var(--danger);">${fila.atrasadas}</span>
+        </div>
+        <div class="reld-fila-linha">
+          <span class="reld-fila-dot" style="background: var(--kanban-yellow);"></span>
+          <span class="reld-fila-nome">Entrega hoje</span>
+          <span class="reld-fila-num">${fila.hojeCerto}</span>
+        </div>
+        <div class="reld-fila-linha">
+          <span class="reld-fila-dot" style="background: var(--border);"></span>
+          <span class="reld-fila-nome">Total na fila</span>
+          <span class="reld-fila-num" style="color: var(--text-muted);">${fila.total}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function relatorioDiarioEntreguesDetalheHTML(entregues) {
+  return `
+    <div class="reld-card reld-entregues-card">
+      <div class="reld-card-titulo">Entregues no dia <small>${entregues.length} peça${entregues.length === 1 ? "" : "s"}</small></div>
+      ${entregues.length === 0 ? `<div class="reld-timeline-vazio">Nada entregue neste dia.</div>` : `
+        <div class="reld-entregues-lista">
+          ${entregues.map(relatorioDiarioItemEntregueHTML).join("")}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function relatorioDiarioItemEntregueHTML(e) {
   const pct = calcularEstimatePct(e.workedSeconds || 0, e.tempoMedioMinutos || 0);
   // calcularEstimatePct trava em 100 (é feita pra barra de progresso do
   // card, que não deve "estourar") — aqui precisamos saber se passou de
@@ -2236,40 +2373,15 @@ function relatorioDiarioLinhaEntregueHTML(e) {
   const gasto = formatarHoras(e.workedSeconds || 0);
   const esperado = e.tempoMedioMinutos ? formatarHoras(e.tempoMedioMinutos * 60) : "—";
   return `
-    <div class="reld-linha">
-      <div class="reld-linha-topo">
-        <span class="reld-linha-titulo">${escaparHTML(e.titulo)}${e.viaTransferencia ? ` <span class="reld-selo">transferida</span>` : ""}</span>
-        <span class="reld-linha-cliente">${escaparHTML(e.cliente || "")}</span>
+    <div class="reld-ent-item">
+      <div class="reld-ent-topo">
+        <span class="reld-ent-titulo">${escaparHTML(e.titulo)}${e.viaTransferencia ? `<span class="reld-ent-selo">transferida</span>` : ""}</span>
+        <span class="reld-ent-cliente">${escaparHTML(e.cliente || "")}</span>
       </div>
-      <div class="reld-linha-barra-wrap">
-        <div class="reld-linha-barra ${passouDoEsperado ? "reld-passou" : ""}" style="width:${Math.min(100, pct)}%"></div>
+      <div class="reld-ent-barra-wrap">
+        <div class="reld-ent-barra ${passouDoEsperado ? "passou" : ""}" style="width:${Math.min(100, pct)}%"></div>
       </div>
-      <div class="reld-linha-tempos">Gastou ${gasto}${e.tempoMedioMinutos ? ` · esperado ${esperado}` : ""}</div>
-    </div>
-  `;
-}
-
-function relatorioDiarioLinhaTransferidaHTML(t) {
-  const gasto = formatarHoras(t.workedSeconds || 0);
-  return `
-    <div class="reld-linha">
-      <div class="reld-linha-topo">
-        <span class="reld-linha-titulo">${escaparHTML(t.titulo)}${t.contouComoEntrega ? ` <span class="reld-selo reld-selo-ok">conta como entrega</span>` : ""}</span>
-        <span class="reld-linha-cliente">${escaparHTML(t.cliente || "")}</span>
-      </div>
-      <div class="reld-linha-tempos">${t.contouComoEntrega ? `Gastou ${gasto} antes de passar adiante` : "Passada adiante sem play"}</div>
-    </div>
-  `;
-}
-
-function relatorioDiarioLinhaEventoHTML(ev) {
-  const icone = ev.tipo === "prioridade" ? "⚡" : "↪";
-  const hora = ev.quando ? new Date(ev.quando).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
-  return `
-    <div class="reld-linha reld-linha-evento">
-      <span class="reld-evento-icone">${icone}</span>
-      <span class="reld-linha-titulo">${escaparHTML(ev.titulo || "")}</span>
-      <span class="reld-evento-hora">${hora}</span>
+      <div class="reld-ent-tempos">Gastou ${gasto}${e.tempoMedioMinutos ? ` · esperado ${esperado}` : ""}</div>
     </div>
   `;
 }
