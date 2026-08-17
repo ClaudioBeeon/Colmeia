@@ -2302,7 +2302,15 @@ function relatorioDiarioTimelineHTML(tocadas, entregues, transferidas, chegaram)
   }));
   eventos.sort((a, b) => (a.quando || 0) - (b.quando || 0));
 
-  const icones = { play: "▶", entrega: "✓", transf: "↪", chegou: "⚡" };
+  // SVG no mesmo traço do resto do app (config.js), não emoji/Unicode cru —
+  // achado do audit hallmark (2026-08-17): misturar ▶✓↪⚡ é misturar 4
+  // "conjuntos de ícone" diferentes, cada um com um traço e um jeito de
+  // renderizar por sistema operacional. `playIcon` e `reopenIcon` são os
+  // MESMOS ícones já usados em todo play/pausa e em "Você recebeu uma
+  // tarefa" (js/pessoas-fotos.js) — reaproveitados aqui, não recriados.
+  const RELD_ICONE_ENTREGA = `<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const RELD_ICONE_CHEGOU = `<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const icones = { play: playIcon, entrega: RELD_ICONE_ENTREGA, transf: reopenIcon, chegou: RELD_ICONE_CHEGOU };
   const verbos = { play: "Tocou", entrega: "Entregou", transf: "Transferiu", chegou: "Chegou" };
 
   return `

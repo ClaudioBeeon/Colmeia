@@ -655,8 +655,10 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 .reld-tl-hora { font-size: 10.5px; color: rgba(255,255,255,.4); font-variant-numeric: tabular-nums; width: 34px; flex: none; padding-top: 2px; }
 .reld-tl-icone {
   width: 21px; height: 21px; border-radius: 999px; flex: none; display: flex; align-items: center;
-  justify-content: center; font-size: 10px; margin-top: 1px;
+  justify-content: center; margin-top: 1px;
 }
+.reld-tl-icone svg { width: 11px; height: 11px; }
+.reld-tl-icone.play svg { width: 9px; height: 9px; } /* playIcon é fill sólido, cheio até a borda do viewBox */
 .reld-tl-icone.play { background: rgba(255,199,0,.18); color: var(--kanban-yellow); }
 .reld-tl-icone.entrega { background: rgba(34,176,125,.18); color: var(--success); }
 .reld-tl-icone.transf { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); }
@@ -683,7 +685,11 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 .reld-ent-item { background: var(--page-bg); border-radius: 12px; padding: 11px 13px; }
 .reld-ent-topo { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .reld-ent-titulo { font-weight: 700; font-size: 12.5px; }
-.reld-ent-cliente { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+/* var(--text-secondary), não var(--text-muted): achado do audit hallmark
+   (2026-08-17) — o nome do cliente e o tempo gasto são informação real
+   pra ler, não legenda decorativa (~2,4:1 de contraste com --text-muted,
+   abaixo do mínimo de 4,5:1 pra texto pequeno). */
+.reld-ent-cliente { color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
 .reld-ent-selo {
   display: inline-block; margin-left: 5px; font-size: 8.5px; font-weight: 800; text-transform: uppercase;
   letter-spacing: .03em; padding: 1.5px 6px; border-radius: 999px; background: var(--border); color: var(--text-secondary);
@@ -691,7 +697,7 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 .reld-ent-barra-wrap { height: 5px; background: var(--border); border-radius: 999px; margin: 8px 0 6px; overflow: hidden; }
 .reld-ent-barra { height: 100%; border-radius: 999px; background: var(--success); }
 .reld-ent-barra.passou { background: var(--danger); }
-.reld-ent-tempos { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.reld-ent-tempos { font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 .reld-carregando, .reld-erro { text-align: center; padding: 60px 0; color: var(--text-muted); }
 .reld-erro button { margin-top: 10px; border: none; background: var(--accent); color: #fff; border-radius: 999px; padding: 8px 16px; cursor: pointer; }
