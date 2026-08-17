@@ -696,6 +696,87 @@ function buscarEventosDoDiaAposHorario(designer, dataISO, horaCorte) {
 }
 
 /**
+ * Eventos "recebida" de um dia inteiro cujo AUTOR (quem repassou/avançou
+ * a sequência) é o designer informado — ou seja, "o que EU passei pra
+ * frente hoje", sem corte de horário nenhum (diferente de
+ * buscarEventosDoDiaAposHorario, que olha pelo lado de quem RECEBEU).
+ * `buscarFeedEventos` não serve aqui porque filtra pelo DONO (quem
+ * recebeu); esta varre o dia inteiro e filtra pelo AUTOR por cima — só
+ * a leitura crua (quando/taskId/titulo), sem checar card mãe nem buscar
+ * dado do Runrun.it (isso é enriquecimento, mora em RunrunLeitura.gs).
+ */
+function buscarEventosRecebidaAutoradosNoDia(designer, dataISO) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  if (!dataISO) return { ok: false, error: 'dataISO não informado.' };
+
+  var inicio = new Date(dataISO + 'T00:00:00-03:00').getTime();
+  var fim = new Date(dataISO + 'T23:59:59-03:00').getTime();
+  var linhas = null;
+
+  if (supabaseManda('feed_eventos')) {
+    var r = supabaseBuscar('feed_eventos',
+      'select=quando,tipo,autor,task_id,titulo' +
+      '&tipo=eq.recebida&quando=gte.' + inicio + '&quando=lte.' + fim);
+    if (r.ok && Array.isArray(r.dados)) {
+      linhas = r.dados.map(function (e) {
+        return [Number(e.quando) || 0, String(e.autor || ''), String(e.task_id || ''), String(e.titulo || '')];
+      });
+    }
+  }
+  if (!linhas) {
+    var sheet = getFeedEventosSheet();
+    var todas = sheet.getDataRange().getValues();
+    linhas = [];
+    for (var i = 1; i < todas.length; i++) {
+      var quando = Number(todas[i][0]) || 0;
+      if (quando < inicio || quando > fim) continue;
+      if (String(todas[i][2]) !== 'recebida') continue;
+      linhas.push([quando, String(todas[i][3] || ''), String(todas[i][4] || ''), String(todas[i][5] || '')]);
+    }
+  }
+
+  var vistos = {}; // taskId -> já incluído (não duplica se repassada mais de uma vez no dia)
+  var eventos = [];
+  linhas.forEach(function (linha) {
+    var autor = linha[1];
+    if (autor.toLowerCase().trim() !== String(designer).toLowerCase().trim()) return;
+    var taskId = linha[2];
+    if (!taskId || vistos[taskId]) return;
+    vistos[taskId] = true;
+    eventos.push({ quando: linha[0], taskId: taskId, titulo: linha[3] });
+  });
+
+  return { ok: true, eventos: eventos };
+}
+
+/**
+ * Se este designer já deu play nesta tarefa em algum momento (log de
+ * plays guarda 60 dias) — usado pelo relatório diário pra decidir se
+ * uma tarefa TRANSFERIDA (não entregue, só passada pra frente) conta
+ * como trabalho de verdade feito por ele, e não só uma repassada sem
+ * ele ter tocado nela.
+ */
+function designerJaTocouTarefa(designer, taskId) {
+  if (!designer || !taskId) return false;
+  var alvo = String(designer).toLowerCase().trim();
+
+  if (supabaseManda('log_plays')) {
+    var r = supabaseBuscar('log_plays',
+      'select=task_id&designer_norm=eq.' + encodeURIComponent(alvo) +
+      '&task_id=eq.' + encodeURIComponent(String(taskId)) + '&limit=1');
+    if (r.ok && Array.isArray(r.dados)) return r.dados.length > 0;
+  }
+
+  var sheet = getLogPlaysSheet();
+  var linhas = sheet.getDataRange().getValues();
+  for (var i = 1; i < linhas.length; i++) {
+    if (String(linhas[i][0]) === String(taskId) &&
+      String(linhas[i][2]).toLowerCase().trim() === alvo) return true;
+  }
+  return false;
+}
+
+/**
  * A cópia inicial do feed. Rodar uma vez, ANTES de virar a chave — o
  * porquê e as regras estão em supabaseCopiaInicial (Supabase.gs).
  * Linha mais velha que a validade fica de fora: seria podada logo.

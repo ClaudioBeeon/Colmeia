@@ -1904,3 +1904,57 @@ function buscarEntreguesDoDiaComTempo(designer, dataISO) {
 
   return { ok: true, entregues: entregues };
 }
+
+/**
+ * Tarefas que este designer TRANSFERIU (avançou a sequência ou reatribuiu
+ * pra outra pessoa) num dia inteiro — sem corte de horário: o expediente
+ * começa às 9h, e as 10h são só quando o coordenador termina de organizar
+ * o Runrun de cada um, não um limite pro que conta como trabalho do dia
+ * (decisão do Cláudio, 2026-08-17). Card mãe nunca conta — transferir o
+ * card mãe é administrativo, não produção de peça.
+ *
+ * `contouComoEntrega` é true quando o designer já deu play nessa tarefa
+ * em algum momento (`designerJaTocouTarefa`, Planilha.gs) — só nesse
+ * caso ela representa trabalho de verdade feito e passado adiante, e o
+ * relatório soma ela junto com as entregues de verdade.
+ */
+function buscarTransferenciasDoDia(designer, dataISO) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  if (!dataISO) return { ok: false, error: 'dataISO não informado.' };
+
+  var brutos = buscarEventosRecebidaAutoradosNoDia(designer, dataISO);
+  if (!brutos.ok) return brutos;
+  if (brutos.eventos.length === 0) return { ok: true, transferencias: [] };
+
+  var mapaVinculos = buscarVinculosDoPainel();
+  var mapaTempoMedio = buscarTempoMedioDoPainel();
+
+  var transferencias = [];
+  brutos.eventos.forEach(function (ev) {
+    var tarefa;
+    try {
+      tarefa = runrunFetch('/tasks/' + ev.taskId);
+    } catch (e) {
+      tarefa = null;
+    }
+    // Não deu pra confirmar (tarefa apagada, Runrun.it instável nesse
+    // pedido) — melhor faltar do que arriscar contar um card mãe.
+    if (!tarefa || tarefa.id === undefined) return;
+    if (tarefaEhCardMae(tarefa)) return;
+
+    var nomeClienteBruto = tarefa.client_name || 'Sem cliente';
+    var nomeClienteResolvido = resolverNomeCanonico(nomeClienteBruto, mapaVinculos);
+    transferencias.push({
+      id: ev.taskId,
+      titulo: tarefa.title || ev.titulo || '',
+      cliente: nomeClienteResolvido,
+      tipo: extrairTipoTarefa(tarefa),
+      quando: ev.quando,
+      workedSeconds: tempoTrabalhadoAoVivo(tarefa),
+      tempoMedioMinutos: mapaTempoMedio[normalizarNomeParaComparar(nomeClienteResolvido)] || 0,
+      contouComoEntrega: designerJaTocouTarefa(designer, ev.taskId)
+    });
+  });
+
+  return { ok: true, transferencias: transferencias };
+}

@@ -2170,6 +2170,7 @@ async function relatorioDiarioRenderizar() {
 function relatorioDiarioCorpoHTML(dados) {
   const tocadas = dados.tocadas || [];
   const entregues = dados.entregues || [];
+  const transferidas = dados.transferidas || [];
   const fila = dados.filaDoDia || { total: 0, atrasadas: 0, hojeCerto: 0 };
   const chegaram = dados.chegaramDepoisDas10h || [];
 
@@ -2182,6 +2183,10 @@ function relatorioDiarioCorpoHTML(dados) {
       <div class="reld-num-card">
         <div class="reld-num">${entregues.length}</div>
         <div class="reld-num-label">Entregues</div>
+      </div>
+      <div class="reld-num-card">
+        <div class="reld-num">${transferidas.length}</div>
+        <div class="reld-num-label">Transferidas</div>
       </div>
       <div class="reld-num-card">
         <div class="reld-num">${fila.total}</div>
@@ -2198,6 +2203,15 @@ function relatorioDiarioCorpoHTML(dados) {
       ${entregues.length === 0 ? `<div class="reld-vazio">Nada entregue neste dia.</div>` : `
         <div class="reld-lista">
           ${entregues.map(relatorioDiarioLinhaEntregueHTML).join("")}
+        </div>
+      `}
+    </div>
+
+    <div class="reld-secao">
+      <div class="reld-secao-titulo">Transferidas hoje</div>
+      ${transferidas.length === 0 ? `<div class="reld-vazio">Nada transferido neste dia.</div>` : `
+        <div class="reld-lista">
+          ${transferidas.map(relatorioDiarioLinhaTransferidaHTML).join("")}
         </div>
       `}
     </div>
@@ -2224,13 +2238,26 @@ function relatorioDiarioLinhaEntregueHTML(e) {
   return `
     <div class="reld-linha">
       <div class="reld-linha-topo">
-        <span class="reld-linha-titulo">${escaparHTML(e.titulo)}</span>
+        <span class="reld-linha-titulo">${escaparHTML(e.titulo)}${e.viaTransferencia ? ` <span class="reld-selo">transferida</span>` : ""}</span>
         <span class="reld-linha-cliente">${escaparHTML(e.cliente || "")}</span>
       </div>
       <div class="reld-linha-barra-wrap">
         <div class="reld-linha-barra ${passouDoEsperado ? "reld-passou" : ""}" style="width:${Math.min(100, pct)}%"></div>
       </div>
       <div class="reld-linha-tempos">Gastou ${gasto}${e.tempoMedioMinutos ? ` · esperado ${esperado}` : ""}</div>
+    </div>
+  `;
+}
+
+function relatorioDiarioLinhaTransferidaHTML(t) {
+  const gasto = formatarHoras(t.workedSeconds || 0);
+  return `
+    <div class="reld-linha">
+      <div class="reld-linha-topo">
+        <span class="reld-linha-titulo">${escaparHTML(t.titulo)}${t.contouComoEntrega ? ` <span class="reld-selo reld-selo-ok">conta como entrega</span>` : ""}</span>
+        <span class="reld-linha-cliente">${escaparHTML(t.cliente || "")}</span>
+      </div>
+      <div class="reld-linha-tempos">${t.contouComoEntrega ? `Gastou ${gasto} antes de passar adiante` : "Passada adiante sem play"}</div>
     </div>
   `;
 }
