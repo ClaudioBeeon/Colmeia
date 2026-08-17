@@ -172,6 +172,24 @@ function pararOutrasTarefasRodando(exceto) {
   });
 }
 
+// "Mantém viva" — mitigação pro relato do Cláudio de o cronômetro parar
+// sozinho quando a tela fica em descanso ("precisa clicar pra voltar a
+// rodar"). A auditoria não achou nenhum código do Colmeia que pause a
+// tarefa por inatividade — toda chamada de pausarTarefaNoBackend vem de
+// um clique de verdade ou de transferir/entregar. A hipótese mais
+// provável é o Runrun.it parar o `is_working_on` sozinho, do lado dele,
+// depois de um tempo sem nenhuma chamada relacionada à tarefa — então,
+// enquanto a aba está visível e uma tarefa MINHA está rodando, o Colmeia
+// reforça o play de tempos em tempos. `manterTarefaViva` (RunrunEscrita.gs)
+// chama o mesmo endpoint de play, mas sem registrar um play novo no log.
+const MANTER_VIVA_INTERVALO_MS = 5 * 60 * 1000;
+setInterval(() => {
+  if (!podeBaterNoBackendAgora()) return;
+  const rodando = tasks.find(t => t.running && typeof ehMinhaTarefa === "function" && ehMinhaTarefa(t));
+  if (!rodando) return;
+  chamarBackend({ acao: "manterTarefaViva", taskId: rodando.id, designer: DESIGNER_LOGADO }).catch(() => {});
+}, MANTER_VIVA_INTERVALO_MS);
+
 async function pausarTarefaNoBackend(taskId) {
   if (!COLMEIA_API_URL || !taskId) return false;
   try {

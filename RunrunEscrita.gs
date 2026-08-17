@@ -27,6 +27,25 @@ function tocarTarefa(taskId, taskTitle, designer) {
   return { ok: true };
 }
 
+/**
+ * "Batimento cardíaco" do cronômetro: chama o MESMO endpoint de play,
+ * mas sem registrar um play novo no log (ver tocarTarefa acima) — existe
+ * só pra manter a tarefa marcada como rodando no Runrun.it enquanto o
+ * Colmeia fica com a aba aberta e visível, na hipótese de que o
+ * Runrun.it para o cronômetro sozinho depois de um tempo sem nenhuma
+ * chamada (relatado pelo Cláudio: "para quando a tela fica em
+ * descanso"). Chamada em js/kanban-polling.js, de tempos em tempos,
+ * só enquanto uma tarefa MINHA está rodando e a aba está visível.
+ */
+function manterTarefaViva(taskId, designer) {
+  if (!taskId) return { ok: false, error: 'taskId não informado.' };
+  var resultado = runrunPost('/tasks/' + taskId + '/play', null, tokenRunrunDoAutor(designer));
+  if (!resultado.ok) {
+    return { ok: false, error: 'Runrun.it recusou manter a tarefa viva (status ' + resultado.status + ').' };
+  }
+  return { ok: true };
+}
+
 function pausarTarefa(taskId, autor) {
   if (!taskId) return { ok: false, error: 'taskId não informado.' };
   var resultado = runrunPost('/tasks/' + taskId + '/pause', null, tokenRunrunDoAutor(autor));

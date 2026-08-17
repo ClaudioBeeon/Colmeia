@@ -251,6 +251,8 @@ function handleRequest(e, method) {
         output = tocarTarefa(body.taskId, body.taskTitle, body.designer);
       } else if (body.acao === 'buscarTarefasHoje') {
         output = buscarPlaysDeHoje(body.designer, body.janela);
+      } else if (body.acao === 'manterTarefaViva') {
+        output = manterTarefaViva(body.taskId, body.designer);
       } else if (body.acao === 'pausarTarefa') {
         output = pausarTarefa(body.taskId, body.autor);
       } else if (body.acao === 'listarComentarios') {
