@@ -533,6 +533,14 @@ button.pnl-pill:hover { filter: brightness(0.96); }
    visível inteiro (sobra só a barra lateral, à esquerda). */
 .reld-overlay {
   position: fixed; top: 22px; right: 22px; bottom: 22px; left: 106px; z-index: 100;
+  /* A fonte do resto do app vem de `.page` (css/01-base.css:129), não de
+     `body` — e este pop-up, igual `.task-detail`, é anexado como IRMÃO de
+     `.page`, não filho dela. Sem isto ele herdava direto do `<body>`, que
+     não define fonte nenhuma, e caía no serifado padrão do navegador
+     (relatado pelo Cláudio: "fonte errada e estranha"). */
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
 }
 /* O atributo `hidden` do HTML normalmente já esconde qualquer elemento
    (display:none da folha de estilo do próprio navegador), mas o
