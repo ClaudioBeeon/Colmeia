@@ -2078,3 +2078,28 @@ async function renderConfigVinculosClientesMantendoAviso() {
   pnlVincMensagem = avisoPendente;
   pnlVincDesenhar();
 }
+
+// ===== Relatório diário — cache com teto (mesmo padrão de outros Map de
+// cache do app: cresce sem limite numa aba aberta o dia todo se não tiver
+// teto — ver CLAUDE.md, "Caches — todos têm teto ou validade"). =====
+const RELATORIO_CACHE_TETO = 60;
+const relatorioDiarioCache = new Map();
+
+function relatorioDiarioChave(designer, dataISO) {
+  return designer + "::" + dataISO;
+}
+
+async function buscarRelatorioDiario(designer, dataISO) {
+  const chave = relatorioDiarioChave(designer, dataISO);
+  if (relatorioDiarioCache.has(chave)) return relatorioDiarioCache.get(chave);
+
+  const data = await chamarBackend({ acao: "relatorioDiarioDesigner", designer, dataISO });
+  if (caiuARede(data) || !data.ok) return null;
+
+  if (relatorioDiarioCache.size >= RELATORIO_CACHE_TETO) {
+    const primeiraChave = relatorioDiarioCache.keys().next().value;
+    relatorioDiarioCache.delete(primeiraChave);
+  }
+  relatorioDiarioCache.set(chave, data);
+  return data;
+}
