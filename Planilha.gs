@@ -1852,13 +1852,18 @@ function registrarPlay(taskId, taskTitle, designer) {
  * corridos) — usa o timestamp de verdade (quando), não a data em texto,
  * pra "48h"/"semana" cortarem na hora certa, não só no dia.
  */
-function buscarPlaysDeHoje(designer, janela) {
+function buscarPlaysDeHoje(designer, janela, dataISO) {
   if (!designer) return { ok: false, error: 'designer não informado.' };
   var sheet = getLogPlaysSheet();
   var linhas = sheet.getDataRange().getValues();
   var agora = new Date();
-  var corte;
-  if (janela === '48h') {
+  var corte, corteFim;
+  if (dataISO) {
+    // Dia específico (navegação do relatório diário): do início ao fim
+    // daquele dia, fuso de São Paulo — nunca "desde agora pra trás".
+    corte = new Date(dataISO + 'T00:00:00-03:00').getTime();
+    corteFim = new Date(dataISO + 'T23:59:59-03:00').getTime();
+  } else if (janela === '48h') {
     corte = agora.getTime() - 48 * 60 * 60 * 1000;
   } else if (janela === 'semana') {
     corte = agora.getTime() - 7 * 24 * 60 * 60 * 1000;
@@ -1880,6 +1885,7 @@ function buscarPlaysDeHoje(designer, janela) {
   for (var i = 1; i < linhas.length; i++) {
     var taskId = linhas[i][0], titulo = linhas[i][1], nomeDesigner = linhas[i][2], quando = linhas[i][3];
     if (Number(quando) < corte) continue;
+    if (corteFim && Number(quando) > corteFim) continue;
     if (String(nomeDesigner).toLowerCase().trim() !== String(designer).toLowerCase().trim()) continue;
     if (!porTarefa[taskId]) {
       porTarefa[taskId] = { taskId: taskId, titulo: titulo, primeiroPlay: quando, ultimoPlay: quando };
