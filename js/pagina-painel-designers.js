@@ -1317,6 +1317,19 @@ function pnlTrocarDataOtimista(st, t, novaData) {
     .then(resultado => {
       if (resultado && resultado.ok) {
         if (pnlTarefasEstadoAtual === st && typeof agendarAtualizacaoKanban === "function") agendarAtualizacaoKanban();
+        // Esta é a ação mais consequente e mais barata da tela ao mesmo
+        // tempo: mexe na entrega de um cliente de verdade com um clique,
+        // dezenas de vezes por dia (achado da crítica de 2026-08-17).
+        // mostrarToastComDesfazer já existe (js/config.js) — feita pro
+        // mesmo padrão noutra tela. A escrita já saiu pro backend acima,
+        // então "confirmar" (6s depois, sem clicar em nada) não precisa
+        // fazer mais nada; "Desfazer" chama esta MESMA função de novo com
+        // a data velha — como ela já é otimista, desfazer é só trocar de novo.
+        mostrarToastComDesfazer(
+          `Entrega de "${t.title}" mudou pra ${t.due}.`,
+          () => pnlTrocarDataOtimista(st, t, dueISOAntigo),
+          null
+        );
         return;
       }
       // Recusa de verdade — devolve a data antiga e tira a proteção, senão
@@ -1482,6 +1495,11 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista) {
   const etapaCor = pnlCorDaEtapa(t);
   const rotuloEtapa = typeof rotuloDaEtapa === "function" ? rotuloDaEtapa(t) : (t.runrunStage || "Sem etapa");
   const publicacaoCurta = pnlFormatDataCurta(t.dataPublicacao);
+  // Entrega marcada DEPOIS do dia de postar — o erro que o calendário da
+  // Central já existe pra pegar, mas nesta tela (onde ele é COMETIDO) não
+  // avisava nada (achado da crítica de 2026-08-17). Avisa, não bloqueia:
+  // às vezes atrasar a entrega é a decisão certa.
+  const depoisDaPublicacao = !!(t.dataPublicacao && t.dueISO && t.dueISO > t.dataPublicacao);
   // Tempo cadastrado pelo Cláudio na aba do designer (ver pnlTempoMedioCadastrado)
   // — não a média genérica do Runrun.it. `null` = nunca cadastrou pra essa
   // dupla designer+cliente; a pílula mostra "—", não "0min" (achado da
@@ -1504,7 +1522,7 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista) {
         </div>
       </div>
       <div class="pnl-tarefa-right">
-        <button type="button" class="pnl-pill pnl-pill-data ${atrasada ? "atrasada" : ""}" data-pnl-editar-data="${escaparHTML(String(t.id))}" title="Clique pra trocar a Entrega Desejada">${escaparHTML(dataCurta)}</button>
+        <button type="button" class="pnl-pill pnl-pill-data ${atrasada ? "atrasada" : ""} ${depoisDaPublicacao ? "pos-publicacao" : ""}" data-pnl-editar-data="${escaparHTML(String(t.id))}" title="${depoisDaPublicacao ? "Entrega marcada DEPOIS do dia de postar (" + escaparHTML(publicacaoCurta) + ") — clique pra trocar" : "Clique pra trocar a Entrega Desejada"}">${escaparHTML(dataCurta)}</button>
         <span class="pnl-pill pnl-pill-tempo ${semTempo ? "sem-tempo" : ""}" title="${escaparHTML(tituloTempo)}">${semTempo ? "—" : escaparHTML(pnlFormatTempo(tempoCadastrado))}</span>
         <button type="button" class="pnl-pill pnl-pill-etapa" style="background:${etapaCor.bg};color:${etapaCor.fg};" data-pnl-editar-etapa="${escaparHTML(String(t.id))}" title="Clique pra mudar a etapa">${escaparHTML(rotuloEtapa)}</button>
         ${t.link ? `<a class="pnl-tarefa-link" href="${escaparHTML(t.link)}" target="_blank" rel="noopener" title="Abrir no Runrun.it">↗</a>` : ""}

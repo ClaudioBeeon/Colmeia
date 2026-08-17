@@ -355,6 +355,10 @@ button.pnl-pill:hover { filter: brightness(0.96); }
    claro (medido: 2,47:1 e 3,43:1, achado da crítica de 2026-08-17). */
 .pnl-pill-data { background: var(--pnl-sucesso-suave); color: var(--success-on-soft); width: 62px; }
 .pnl-pill-data.atrasada { background: var(--danger-soft); color: var(--danger-on-soft); }
+/* Entrega marcada depois do dia de postar — mesma convenção de cor do
+   calendário da Central, que já sinaliza exatamente este caso. Avisa, não
+   bloqueia. */
+.pnl-pill-data.pos-publicacao { background: var(--warning-soft); color: var(--warning-on-soft); }
 .pnl-pill-tempo { background: var(--pnl-sucesso-suave); color: var(--success-on-soft); width: 72px; }
 /* Sem cadastro ≠ zero: fica neutra, não verde, pra não parecer um número. */
 .pnl-pill-tempo.sem-tempo { background: var(--border); color: var(--text-secondary); }
