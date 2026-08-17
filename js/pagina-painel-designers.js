@@ -1165,6 +1165,14 @@ function pnlAbrirEsforcoModal(filtroInicial) {
     compacto: pnlLerPref("compacto", "0") === "1",
     selecionadas: new Set(),
   };
+  // Fotografia da carga de cada um AO ABRIR, pra comparar com o que ficou
+  // ao fechar (ver pnlFecharTarefasModal) — o pop-up existe pra mudar o
+  // dia do time, e fechar nunca dizia o que mudou (achado da crítica de
+  // 2026-08-17, pergunta provocativa "e se fechar mostrasse o resultado?").
+  pnlTarefasEstadoAtual._esforcoInicial = {};
+  Object.keys(pnlTarefasEstadoAtual.esforco).forEach(nome => {
+    pnlTarefasEstadoAtual._esforcoInicial[nome] = pnlTarefasEstadoAtual.esforco[nome].min;
+  });
   document.getElementById("pnlTarefasOverlay").hidden = false;
   document.querySelector(".pnl-tarefas-modal")?.classList.add("pnl-modal-esforco");
   pnlRenderTarefasModal();
@@ -1172,12 +1180,25 @@ function pnlAbrirEsforcoModal(filtroInicial) {
 }
 
 function pnlFecharTarefasModal() {
+  const st = pnlTarefasEstadoAtual;
   document.getElementById("pnlTarefasOverlay").hidden = true;
-  pnlTarefasEstadoAtual = null;
   // Se a pessoa fechou o pop-up com o calendário, o menu de etapa ou o
   // seletor de pessoa ainda abertos por cima, eles ficariam órfãos na tela.
   document.querySelectorAll(".colmeia-calendario, .status-menu, .pnl-menu-pessoa, .pnl-menu-data").forEach(el => el.remove());
   pnlSoltarFocoDoModal();
+
+  // Resumo do que mudou, só quando algo mudou de verdade — compara a
+  // carga de quando abriu com a de agora (recalculada na hora, não
+  // guardada: reflete tudo que aconteceu, inclusive edições feitas por
+  // trás enquanto o pop-up estava aberto).
+  if (st && st.modoEsforco && st._esforcoInicial) {
+    const agora = pnlEsforcoPorResponsavel();
+    const mudou = Object.keys(st._esforcoInicial)
+      .filter(nome => agora[nome] && agora[nome].min !== st._esforcoInicial[nome])
+      .map(nome => `${nome}: ${pnlFormatTempo(st._esforcoInicial[nome])} → ${pnlFormatTempo(agora[nome].min)}`);
+    if (mudou.length) mostrarToast("Você reorganizou: " + mudou.join(" · "), "sucesso");
+  }
+  pnlTarefasEstadoAtual = null;
 }
 
 function pnlRenderTarefasModal() {
