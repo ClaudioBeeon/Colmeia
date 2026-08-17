@@ -1435,6 +1435,74 @@ async function pnlAbrirSeletorDePessoa(t, ancoraEl, aoEscolher) {
   });
 }
 
+/** Quanto essa pessoa JÁ tem marcado pra um dia específico — usado no menu
+ *  de atalho de data, pra o dia de destino deixar de ser uma aposta às
+ *  cegas (achado da crítica de 2026-08-17). Mesma regra de
+ *  pnlTempoMedioCadastrado: tarefa sem cadastro não soma no minuto, mas
+ *  ainda conta como carga (semCadastro). */
+function pnlCargaDoDiaPra(nomeDesigner, iso) {
+  let min = 0, semCadastro = 0;
+  pnlTarefasAbertas().forEach(t => {
+    if (t.dueISO !== iso || (t.assignee || "") !== nomeDesigner) return;
+    const m = pnlTempoMedioCadastrado(t.assignee, t.client);
+    if (m === null) semCadastro++; else min += m;
+  });
+  return { min, semCadastro };
+}
+
+/** Próximos N dias ÚTEIS a partir de hoje (pula sábado/domingo — a agência
+ *  não posta nem entrega fim de semana). */
+function pnlProximosDiasUteis(n) {
+  const dias = [];
+  const d = new Date();
+  while (dias.length < n) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const diaDaSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()];
+    const rotulo = dias.length === 0 ? "Amanhã" : `${diaDaSemana} · ${d.getDate()} ${MESES_ABREV[d.getMonth()]}`;
+    dias.push({ iso, rotulo });
+  }
+  return dias;
+}
+
+/**
+ * Menu de atalho ao clicar na pílula de data: os próximos 3 dias úteis,
+ * cada um já mostrando a carga que a pessoa tem NAQUELE dia — em vez de
+ * abrir o mês inteiro direto pra "joga pra amanhã", o caso mais comum
+ * (achado da crítica de 2026-08-17: "o dia de destino era uma aposta às
+ * cegas"). "Escolher outra data…" no fim cai no calendário de sempre.
+ */
+function pnlAbrirMenuDeData(st, t, ancoraEl, aoEscolher) {
+  document.querySelectorAll(".pnl-menu-data").forEach(m => m.remove());
+  const menu = document.createElement("div");
+  menu.className = "pnl-menu-data";
+  const dias = pnlProximosDiasUteis(3);
+  menu.innerHTML = dias.map(d => {
+    const carga = pnlCargaDoDiaPra(t.assignee, d.iso);
+    const nivel = pnlNivelDeCarga(carga.min);
+    return `<button type="button" data-pnl-dia="${d.iso}">${escaparHTML(d.rotulo)}
+      <span class="pnl-menu-data-carga nivel-${nivel}">${carga.min ? escaparHTML(pnlFormatTempo(carga.min)) : "livre"}</span></button>`;
+  }).join("") + `<hr><button type="button" data-pnl-dia="calendario">Escolher outra data…</button>`;
+  document.body.appendChild(menu);
+  posicionarPopupFixo(menu, ancoraEl);
+
+  const fechar = () => { menu.remove(); document.removeEventListener("click", foraDoMenu); };
+  const foraDoMenu = ev => { if (!menu.contains(ev.target) && ev.target !== ancoraEl) fechar(); };
+  setTimeout(() => document.addEventListener("click", foraDoMenu), 0);
+
+  menu.querySelectorAll("[data-pnl-dia]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      fechar();
+      if (btn.dataset.pnlDia === "calendario") {
+        abrirCalendarioColmeia({ ancoraEl, valorInicial: t.dueISO || "", onEscolher: aoEscolher });
+      } else {
+        aoEscolher(btn.dataset.pnlDia);
+      }
+    });
+  });
+}
+
 /** Pisca a linha da tarefa que acabou de mudar — é o que dá a sensação de
  *  "pronto, mudou" sem nenhum "Salvando..." no meio. */
 function pnlPiscarLinhaDaTarefa(taskId) {
@@ -1531,11 +1599,7 @@ function pnlWireLinhasDoModal(corpo, st) {
       ev.stopPropagation();
       const t = pnlAcharTarefaPorId(st, btn.dataset.pnlEditarData);
       if (!t || typeof abrirCalendarioColmeia !== "function") return;
-      abrirCalendarioColmeia({
-        ancoraEl: btn,
-        valorInicial: t.dueISO || "",
-        onEscolher: novaData => pnlTrocarDataOtimista(st, t, novaData),
-      });
+      pnlAbrirMenuDeData(st, t, btn, novaData => pnlTrocarDataOtimista(st, t, novaData));
     });
   });
 
