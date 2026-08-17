@@ -531,6 +531,14 @@ button.pnl-pill:hover { filter: brightness(0.96); }
   background: rgba(0,0,0,.45);
   display: flex; align-items: center; justify-content: center;
 }
+/* O atributo `hidden` do HTML normalmente já esconde qualquer elemento
+   (display:none da folha de estilo do próprio navegador), mas o
+   `display:flex` da regra acima, vindo de uma folha de estilo NOSSA,
+   tem prioridade sobre a do navegador — então o pop-up ficava visível
+   em QUALQUER tela do app, o tempo todo, mesmo sem ninguém ter clicado
+   em nada (relatado pelo Cláudio, aparecendo por cima do Quadro).
+   Precisa desta regra explícita pra `hidden` voltar a valer. */
+.reld-overlay[hidden] { display: none; }
 .reld-painel {
   width: min(640px, 92vw); max-height: 88vh; overflow-y: auto;
   background: var(--card-bg); border-radius: 20px; padding: 24px;
