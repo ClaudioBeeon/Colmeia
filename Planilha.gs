@@ -669,6 +669,33 @@ function buscarFeedEventos(designer) {
 }
 
 /**
+ * Eventos "recebida" (repasse/sequência) e "prioridade" de UM designer,
+ * num dia específico, que aconteceram DEPOIS de um horário de corte —
+ * usado pelo relatório diário pra mostrar "o que chegou no meio do
+ * caminho" (ex: prioridade que entrou depois das 10h, quando o
+ * coordenador já tinha organizado o Runrun deles). Reaproveita
+ * buscarFeedEventos (mesma fonte, mesma janela de retenção) e filtra por
+ * cima — o feed já é pouca linha, não vale duplicar a leitura.
+ */
+function buscarEventosDoDiaAposHorario(designer, dataISO, horaCorte) {
+  if (!designer) return { ok: false, error: 'designer não informado.' };
+  if (!dataISO || !horaCorte) return { ok: false, error: 'dataISO/horaCorte não informado.' };
+
+  var resultado = buscarFeedEventos(designer);
+  if (!resultado.ok) return resultado;
+
+  var inicioCorte = new Date(dataISO + 'T' + horaCorte + ':00-03:00').getTime();
+  var fimDoDia = new Date(dataISO + 'T23:59:59-03:00').getTime();
+
+  var eventos = resultado.eventos.filter(function (ev) {
+    if (ev.tipo !== 'recebida' && ev.tipo !== 'prioridade') return false;
+    return ev.quando >= inicioCorte && ev.quando <= fimDoDia;
+  });
+
+  return { ok: true, eventos: eventos };
+}
+
+/**
  * A cópia inicial do feed. Rodar uma vez, ANTES de virar a chave — o
  * porquê e as regras estão em supabaseCopiaInicial (Supabase.gs).
  * Linha mais velha que a validade fica de fora: seria podada logo.
