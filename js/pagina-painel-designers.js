@@ -522,7 +522,7 @@ function pnlRenderDesigners() {
         <div class="pnl-dcard-top" data-pnl-toggle="${escaparHTML(designer)}">
           <div class="pnl-dcard-linha1">
             <div class="pnl-dcard-avatar-wrap">
-              <div class="pnl-dcard-avatar" style="background:${col.bg};color:${col.fg}">${avatarInner}</div>
+              <div class="pnl-dcard-avatar" style="background:${col.bg};color:${col.fg}" data-pnl-relatorio="${escaparHTML(designer)}">${avatarInner}</div>
               <button type="button" class="pnl-dcard-foto-btn" data-pnl-foto="${escaparHTML(designer)}" title="Trocar foto">📷</button>
             </div>
             <input type="text" class="pnl-dcard-nome" value="${escaparHTML(designer)}" data-pnl-renomear="${escaparHTML(designer)}">
@@ -606,6 +606,15 @@ function pnlBuildClientCardHTML(c, designer) {
 }
 
 function pnlLigarEventosDaGrade(grid) {
+  // Abrir o relatório diário — clicar no avatar, não no card inteiro
+  // (o card inteiro já expande/recolhe os clientes via data-pnl-toggle).
+  grid.querySelectorAll("[data-pnl-relatorio]").forEach(el => {
+    el.addEventListener("click", ev => {
+      ev.stopPropagation();
+      abrirRelatorioDesigner(el.dataset.pnlRelatorio);
+    });
+  });
+
   // Expandir/recolher.
   grid.querySelectorAll("[data-pnl-toggle]").forEach(el => {
     el.addEventListener("click", ev => {
