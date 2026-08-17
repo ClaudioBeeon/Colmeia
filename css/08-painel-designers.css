@@ -293,6 +293,20 @@
   font-family: var(--font-body); transition: box-shadow var(--dur-fast) var(--ease-apple);
 }
 .pnl-tarefa-row:hover { box-shadow: var(--shadow-hover); }
+.pnl-tarefa-row-marcada { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.pnl-tarefa-chk { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--accent); cursor: pointer; }
+
+/* Barra "N selecionadas" no fim da lista — ver pnlRenderBarraDeLote. */
+.pnl-lote-barra {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 12px; padding: 11px 16px; border-radius: 999px; background: var(--ink); color: var(--on-ink);
+}
+.pnl-lote-barra strong { font-size: 13px; margin-right: auto; }
+.pnl-lote-barra button {
+  border: none; padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+  font-family: inherit; cursor: pointer; background: rgba(255,255,255,.14); color: #fff;
+}
+.pnl-lote-barra button:hover { background: rgba(255,255,255,.24); }
 
 /* "Mudou agora" — o pulso curto que substitui o antigo "Salvando...".
    A mudança já está na tela quando isto roda; a animação só marca ONDE

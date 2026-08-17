@@ -1146,6 +1146,7 @@ function pnlAbrirEsforcoModal(filtroInicial) {
     esforco: pnlEsforcoPorResponsavel(),
     filtroPessoa: filtroInicial || null,
     ordenacao: "data",
+    selecionadas: new Set(),
   };
   document.getElementById("pnlTarefasOverlay").hidden = false;
   document.querySelector(".pnl-tarefas-modal")?.classList.add("pnl-modal-esforco");
@@ -1256,7 +1257,7 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
       <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba" aria-pressed="${st.ordenacao === "aba"}">Aba</button>
     </div>
     <div class="pnl-tarefas-lista">
-      ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
+      ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu, st)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
     </div>
   `);
 
@@ -1272,6 +1273,56 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
   });
 
   pnlWireLinhasDoModal(corpo, st);
+  if (st.selecionadas) pnlRenderBarraDeLote(st, corpo);
+}
+
+/**
+ * Barra "N selecionadas" no fim da lista — só aparece com pelo menos 1
+ * marcada. Reusa pnlAbrirMenuDeData/pnlAbrirSeletorDePessoa (as MESMAS
+ * caixinhas do clique em uma linha só), aplicando o resultado em todas as
+ * selecionadas de uma vez (achado da crítica de 2026-08-17: "o formato
+ * real do trabalho é jogar 4 tarefas pra quinta, não editar 4 vezes").
+ *
+ * Cada tarefa é um registro INDEPENDENTE no Runrun.it (diferente da
+ * aprovação de peças em aprovar.html, que disputa a mesma linha da
+ * planilha) — por isso não precisa de fila sequencial: dispara todas de
+ * uma vez, e cada pnlTrocarDataOtimista/pnlTrocarPessoaOtimista já cuida
+ * do próprio sucesso/erro e do próprio toast, igual faria clicando uma a
+ * uma.
+ */
+function pnlRenderBarraDeLote(st, corpo) {
+  let barra = corpo.querySelector(".pnl-lote-barra");
+  const n = st.selecionadas.size;
+  if (!n) { if (barra) barra.remove(); return; }
+  if (!barra) {
+    barra = document.createElement("div");
+    barra.className = "pnl-lote-barra";
+    corpo.querySelector(".pnl-tarefas-lista")?.after(barra);
+  }
+  barra.innerHTML = `
+    <strong>${n} selecionada${n === 1 ? "" : "s"}</strong>
+    <button type="button" data-pnl-lote-data>Mudar a data das ${n}</button>
+    <button type="button" data-pnl-lote-pessoa>Passar pra outra pessoa</button>
+    <button type="button" data-pnl-lote-limpar>Limpar</button>`;
+  barra.querySelector("[data-pnl-lote-limpar]").onclick = () => { st.selecionadas.clear(); pnlRenderTarefasModal(); };
+  barra.querySelector("[data-pnl-lote-data]").onclick = ev => {
+    const primeira = pnlAcharTarefaPorId(st, [...st.selecionadas][0]);
+    if (!primeira) return;
+    pnlAbrirMenuDeData(st, primeira, ev.target, novaData => {
+      st.selecionadas.forEach(id => { const t = pnlAcharTarefaPorId(st, id); if (t) pnlTrocarDataOtimista(st, t, novaData); });
+      st.selecionadas.clear();
+      pnlRenderTarefasModal();
+    });
+  };
+  barra.querySelector("[data-pnl-lote-pessoa]").onclick = ev => {
+    const primeira = pnlAcharTarefaPorId(st, [...st.selecionadas][0]);
+    if (!primeira) return;
+    pnlAbrirSeletorDePessoa(primeira, ev.target, (userId, nome) => {
+      st.selecionadas.forEach(id => { const t = pnlAcharTarefaPorId(st, id); if (t) pnlTrocarPessoaOtimista(st, t, userId, nome); });
+      st.selecionadas.clear();
+      pnlRenderTarefasModal();
+    });
+  };
 }
 
 /** Acha, em qualquer formato de estado do modal, a tarefa de verdade por id
@@ -1623,6 +1674,20 @@ function pnlWireLinhasDoModal(corpo, st) {
       pnlAbrirSeletorDePessoa(t, btn, (userId, nome) => pnlTrocarPessoaOtimista(st, t, userId, nome));
     });
   });
+
+  // Seleção em lote (só existe quando st.selecionadas foi criado —
+  // ver pnlAbrirEsforcoModal). Não redesenha a lista inteira ao marcar/
+  // desmarcar, só a barra — senão a rolagem e o foco pulariam a cada clique.
+  corpo.querySelectorAll("[data-pnl-marcar]").forEach(chk => {
+    chk.addEventListener("click", ev => ev.stopPropagation());
+    chk.addEventListener("change", () => {
+      if (!st.selecionadas) return;
+      const id = chk.dataset.pnlMarcar;
+      chk.checked ? st.selecionadas.add(id) : st.selecionadas.delete(id);
+      chk.closest(".pnl-tarefa-row")?.classList.toggle("pnl-tarefa-row-marcada", chk.checked);
+      pnlRenderBarraDeLote(st, corpo);
+    });
+  });
 }
 
 // Cores das etapas do quadro — mesmas 5 colunas de columnsDef (js/config.js),
@@ -1653,7 +1718,13 @@ function pnlCorDaEtapa(t) {
 // (stroke-width 1.8) dos outros ícones já usados no painel.
 const PNL_ICONE_CALENDARIO = `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 
-function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista) {
+function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista, st) {
+  // Caixinha de seleção em lote — só quando o chamador passa `st` com
+  // `selecionadas` (hoje só o modal "Esforço de hoje"; o modal genérico de
+  // tarefas continua sem lote, fora de escopo). `pnlAcharTarefaPorId` não
+  // se aplica aqui porque `t` já é o objeto de verdade.
+  const emLote = !!(st && st.selecionadas);
+  const marcada = emLote && st.selecionadas.has(String(t.id));
   const hoje = hojeISO();
   const atrasada = t.dueISO && t.dueISO < hoje && !t.entregue;
   const dataCurta = t.due || "sem data";
@@ -1678,7 +1749,8 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista) {
     : `Tempo médio cadastrado na aba de ${t.assignee || ""}`;
 
   return `
-    <div class="pnl-tarefa-row ${saiuDaLista ? "pnl-tarefa-row-saiu" : ""}" data-pnl-row-id="${escaparHTML(String(t.id))}">
+    <div class="pnl-tarefa-row ${saiuDaLista ? "pnl-tarefa-row-saiu" : ""} ${marcada ? "pnl-tarefa-row-marcada" : ""}" data-pnl-row-id="${escaparHTML(String(t.id))}">
+      ${emLote ? `<input type="checkbox" class="pnl-tarefa-chk" data-pnl-marcar="${escaparHTML(String(t.id))}" ${marcada ? "checked" : ""} aria-label="Selecionar ${escaparHTML(t.title || "tarefa")}">` : ""}
       <div class="pnl-tarefa-info">
         <button type="button" class="pnl-tarefa-titulo-btn" data-pnl-abrir-tarefa="${escaparHTML(String(t.id))}" title="Abrir a tarefa no Colmeia">${escaparHTML(t.title || "Sem título")}</button>
         <div class="pnl-tarefa-badges">
