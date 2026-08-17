@@ -49,6 +49,18 @@
   --on-ink: #FFFFFF;
   --purple-soft: #F1EBFE;
 
+  /* Texto colorido POR CIMA do par --<cor>-soft (pílula de status, etc).
+     --success/--warning/--danger/--purple continuam valendo pra
+     preenchimento sólido e ícone, onde já estão certos — por isso os
+     tokens são novos, não uma troca: escurecer os originais teria
+     estragado esses outros usos. Achado pela crítica de 2026-08-17
+     (contraste medido abaixo de 3:1 em várias pílulas do Painel de
+     Designers, ex. "Fazendo" a 1,84:1 — o mínimo exigido é 4,5:1). */
+  --success-on-soft: #0E6E4A;
+  --warning-on-soft: #7F6400;
+  --danger-on-soft:  #B3181D;
+  --purple-on-soft:  #5B21B6;
+
   --radius-lg: 16px;
   --radius-md: 12px;
 
@@ -80,6 +92,14 @@
   --success: #5FE0AE;
   --purple: #C4B5FD;
   --purple-soft: rgba(196, 181, 253, 0.16);
+
+  /* No escuro os fundos -soft já são translúcidos sobre um fundo escuro,
+     então o texto que já existia (claro) já passa no contraste — estes
+     tokens existem só pra o NOME funcionar nos dois temas. */
+  --success-on-soft: #5FE0AE;
+  --warning-on-soft: #FFC069;
+  --danger-on-soft:  #FF8A8D;
+  --purple-on-soft:  #C4B5FD;
 }
 
 [data-theme="dark"] body {

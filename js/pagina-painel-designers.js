@@ -1403,17 +1403,20 @@ function pnlWireLinhasDoModal(corpo, st) {
 // qualquer uma das 5 a partir daí.
 const PNL_ETAPA_CORES = {
   // ⚠️ "pendentes" NÃO pode usar var(--page-bg): a própria linha da tarefa
-  // (.pnl-tarefa-row) já é var(--page-bg) — a pastilha ficaria invisível
-  // em cima do próprio fundo. var(--border) é o tom seguinte, sempre
-  // diferente de --page-bg nos dois temas (ver css/01-base.css).
+  // (.pnl-tarefa-row) já é var(--card-bg) — a pastilha ficaria quase igual
+  // ao fundo dela. var(--border) é o tom seguinte, sempre diferente nos
+  // dois temas (ver css/01-base.css).
+  // `fg` usa os tokens -on-soft (não --warning/--purple/--danger direto):
+  // aqueles são pra preenchimento sólido e ficavam abaixo de 3,7:1 aqui —
+  // "Fazendo" chegava a 1,84:1 (achado da crítica de 2026-08-17).
   pendentes: { bg: "var(--border)", fg: "var(--text-secondary)" },
   prioridades: { bg: "var(--accent-soft)", fg: "var(--accent)" },
-  fazendo: { bg: "var(--warning-soft)", fg: "var(--warning)" },
-  revisao: { bg: "var(--purple-soft)", fg: "var(--purple)" },
-  ajustes: { bg: "var(--danger-soft)", fg: "var(--danger)" },
+  fazendo: { bg: "var(--warning-soft)", fg: "var(--warning-on-soft)" },
+  revisao: { bg: "var(--purple-soft)", fg: "var(--purple-on-soft)" },
+  ajustes: { bg: "var(--danger-soft)", fg: "var(--danger-on-soft)" },
 };
 function pnlCorDaEtapa(t) {
-  if (t.entregue) return { bg: "var(--pnl-sucesso-suave)", fg: "var(--success)" };
+  if (t.entregue) return { bg: "var(--pnl-sucesso-suave)", fg: "var(--success-on-soft)" };
   return PNL_ETAPA_CORES[t.status] || { bg: "var(--border)", fg: "var(--text-secondary)" };
 }
 
