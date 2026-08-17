@@ -2103,3 +2103,134 @@ async function buscarRelatorioDiario(designer, dataISO) {
   relatorioDiarioCache.set(chave, data);
   return data;
 }
+
+// ===== Pop-up "Relatório diário" (Painel de Designers) =====
+let relatorioDesignerAtual = null; // nome do designer com o pop-up aberto, ou null
+let relatorioDiaAtual = null;      // Date do dia sendo mostrado
+
+function relatorioDataISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+async function abrirRelatorioDesigner(designer) {
+  relatorioDesignerAtual = designer;
+  relatorioDiaAtual = new Date();
+  document.getElementById("reldOverlay").hidden = false;
+  await relatorioDiarioRenderizar();
+}
+
+function fecharRelatorioDesigner() {
+  relatorioDesignerAtual = null;
+  document.getElementById("reldOverlay").hidden = true;
+}
+
+async function relatorioDiarioIrParaDia(delta) {
+  if (!relatorioDiaAtual) return;
+  relatorioDiaAtual.setDate(relatorioDiaAtual.getDate() + delta);
+  await relatorioDiarioRenderizar();
+}
+
+async function relatorioDiarioRenderizar() {
+  const corpo = document.getElementById("reldCorpo");
+  if (!corpo || !relatorioDesignerAtual || !relatorioDiaAtual) return;
+
+  corpo.innerHTML = `<div class="reld-carregando">Carregando relatório...</div>`;
+  document.getElementById("reldTituloDesigner").textContent = relatorioDesignerAtual;
+  document.getElementById("reldDataLabel").textContent =
+    relatorioDiaAtual.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+
+  const dataISO = relatorioDataISO(relatorioDiaAtual);
+  const dados = await buscarRelatorioDiario(relatorioDesignerAtual, dataISO);
+
+  // O designer/dia pode ter mudado enquanto a busca estava no ar (clicou
+  // rápido nas setas, ou fechou o pop-up) — descarta resposta velha.
+  if (!relatorioDesignerAtual || relatorioDataISO(relatorioDiaAtual) !== dataISO) return;
+
+  if (!dados) {
+    corpo.innerHTML = `
+      <div class="reld-erro">
+        Não consegui carregar o relatório de hoje.
+        <button type="button" onclick="relatorioDiarioRenderizar()">Tentar de novo</button>
+      </div>`;
+    return;
+  }
+
+  corpo.innerHTML = relatorioDiarioCorpoHTML(dados);
+}
+
+function relatorioDiarioCorpoHTML(dados) {
+  const tocadas = dados.tocadas || [];
+  const entregues = dados.entregues || [];
+  const fila = dados.filaDoDia || { total: 0, atrasadas: 0, hojeCerto: 0 };
+  const chegaram = dados.chegaramDepoisDas10h || [];
+
+  return `
+    <div class="reld-numeros">
+      <div class="reld-num-card">
+        <div class="reld-num">${tocadas.length}</div>
+        <div class="reld-num-label">Tarefas tocadas</div>
+      </div>
+      <div class="reld-num-card">
+        <div class="reld-num">${entregues.length}</div>
+        <div class="reld-num-label">Entregues</div>
+      </div>
+      <div class="reld-num-card">
+        <div class="reld-num">${fila.total}</div>
+        <div class="reld-num-label">Na fila${fila.atrasadas ? ` <span class="reld-num-sub">${fila.atrasadas} atrasada${fila.atrasadas > 1 ? "s" : ""}</span>` : ""}</div>
+      </div>
+      <div class="reld-num-card">
+        <div class="reld-num">${chegaram.length}</div>
+        <div class="reld-num-label">Chegaram depois das 10h</div>
+      </div>
+    </div>
+
+    <div class="reld-secao">
+      <div class="reld-secao-titulo">Entregues no dia</div>
+      ${entregues.length === 0 ? `<div class="reld-vazio">Nada entregue neste dia.</div>` : `
+        <div class="reld-lista">
+          ${entregues.map(relatorioDiarioLinhaEntregueHTML).join("")}
+        </div>
+      `}
+    </div>
+
+    <div class="reld-secao">
+      <div class="reld-secao-titulo">Chegou depois das 10h</div>
+      ${chegaram.length === 0 ? `<div class="reld-vazio">Nada chegou fora da fila original.</div>` : `
+        <div class="reld-lista">
+          ${chegaram.map(relatorioDiarioLinhaEventoHTML).join("")}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function relatorioDiarioLinhaEntregueHTML(e) {
+  const pct = calcularEstimatePct(e.workedSeconds || 0, e.tempoMedioMinutos || 0);
+  const passouDoEsperado = e.tempoMedioMinutos > 0 && pct > 100;
+  const gasto = formatarHoras(e.workedSeconds || 0);
+  const esperado = e.tempoMedioMinutos ? formatarHoras(e.tempoMedioMinutos * 60) : "—";
+  return `
+    <div class="reld-linha">
+      <div class="reld-linha-topo">
+        <span class="reld-linha-titulo">${escaparHTML(e.titulo)}</span>
+        <span class="reld-linha-cliente">${escaparHTML(e.cliente || "")}</span>
+      </div>
+      <div class="reld-linha-barra-wrap">
+        <div class="reld-linha-barra ${passouDoEsperado ? "reld-passou" : ""}" style="width:${Math.min(100, pct)}%"></div>
+      </div>
+      <div class="reld-linha-tempos">Gastou ${gasto}${e.tempoMedioMinutos ? ` · esperado ${esperado}` : ""}</div>
+    </div>
+  `;
+}
+
+function relatorioDiarioLinhaEventoHTML(ev) {
+  const icone = ev.tipo === "prioridade" ? "⚡" : "↪";
+  const hora = ev.quando ? new Date(ev.quando).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+  return `
+    <div class="reld-linha reld-linha-evento">
+      <span class="reld-evento-icone">${icone}</span>
+      <span class="reld-linha-titulo">${escaparHTML(ev.titulo || "")}</span>
+      <span class="reld-evento-hora">${hora}</span>
+    </div>
+  `;
+}
