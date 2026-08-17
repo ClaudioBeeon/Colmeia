@@ -2215,7 +2215,10 @@ function relatorioDiarioCorpoHTML(dados) {
 
 function relatorioDiarioLinhaEntregueHTML(e) {
   const pct = calcularEstimatePct(e.workedSeconds || 0, e.tempoMedioMinutos || 0);
-  const passouDoEsperado = e.tempoMedioMinutos > 0 && pct > 100;
+  // calcularEstimatePct trava em 100 (é feita pra barra de progresso do
+  // card, que não deve "estourar") — aqui precisamos saber se passou de
+  // verdade, então compara os segundos brutos, não o percentual travado.
+  const passouDoEsperado = e.tempoMedioMinutos > 0 && (e.workedSeconds || 0) > e.tempoMedioMinutos * 60;
   const gasto = formatarHoras(e.workedSeconds || 0);
   const esperado = e.tempoMedioMinutos ? formatarHoras(e.tempoMedioMinutos * 60) : "—";
   return `
