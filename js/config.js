@@ -553,6 +553,12 @@ const ACOES_DEMORADAS = [
   "painelLerEstado",
   "painelSalvarEstado",
   "painelListarClientesParaVinculo",
+  // Relatório diário dos designers (2026-08-17): acha o id do designer,
+  // busca até 50 entregues, e faz UMA ida ao Runrun.it POR TAREFA
+  // transferida no dia (pra checar se não é card mãe) — tudo em
+  // sequência. Com a fila do Apps Script mais cheia, passa dos 25s
+  // padrão com folga (mesmo motivo do calendarioDePostagens acima).
+  "relatorioDiarioDesigner",
 ];
 
 /**
