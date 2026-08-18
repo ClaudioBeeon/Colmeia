@@ -224,6 +224,16 @@ function roteadorSubstituirPelaPaginaAtual() {
   try { history.replaceState({ colmeiaRota: true }, "", url); } catch (e) { /* sem problema */ }
 }
 
+/**
+ * Troca a URL de cima no histórico por outra (`replaceState`), sem
+ * empilhar — usada por `roteadorAoAbrirTarefa` quando a tarefa nova abre
+ * por cima de OUTRA tarefa que já estava na URL (ver o comentário lá).
+ */
+function roteadorSubstituirPor(url, estadoExtra) {
+  if (roteadorReagindoAoHistorico) return;
+  try { history.replaceState({ colmeiaRota: true, ...estadoExtra }, "", url); } catch (e) { /* sem problema */ }
+}
+
 /** Qual `.app-page` está visível agora — fonte da verdade, sem guardar estado à parte. */
 function roteadorPaginaVisivelNoDOM() {
   const ativa = document.querySelector(".app-page:not([hidden])");
@@ -256,9 +266,38 @@ function roteadorAoMostrarPagina(pagina) {
   roteadorIrPara(slug ? ROTA_BASE + slug : ROTA_BASE);
 }
 
-/** Chamado no fim de openDetail (js/detalhe-modal.js). */
+/**
+ * Chamado no fim de openDetail (js/detalhe-modal.js).
+ *
+ * Bug relatado pelo Cláudio (2026-08-18): tarefa abrindo sozinha na tela
+ * inicial (3 seguidas!), sempre já entregue ou repassada, ao usar o botão
+ * Voltar do mouse/gesto do trackpad — e piorando ao fechar, que reabria
+ * outra. Causa raiz: toda vez que uma tarefa abre por cima de OUTRA que já
+ * estava aberta (clicar num link dentro do card, numa notificação, na
+ * paleta de comando — nenhum desses fecha a tarefa de baixo primeiro),
+ * esta função EMPILHAVA mais uma entrada no histórico, com
+ * `colmeiaVoltarPara` apontando pra URL da tarefa anterior. Ao longo de um
+ * dia de trabalho isso vira uma CORRENTE enorme (tarefa A → B → C → ...) —
+ * um único toque de Voltar cai bem no meio dela e reabre uma tarefa de
+ * horas atrás, já resolvida; e fechar essa reabre a anterior da corrente,
+ * e por aí vai (`roteadorAoFecharTarefa` também usa `history.back()`).
+ *
+ * Correção: se JÁ estamos na URL de uma tarefa, esta abertura TROCA essa
+ * entrada em vez de empilhar mais uma (`replaceState`), carregando adiante
+ * o `colmeiaVoltarPara` de ORIGEM — a página de onde a corrente começou,
+ * não a tarefa anterior. Assim a corrente nunca cresce além de 1 nível: só
+ * existe "página → tarefa", nunca "tarefa → tarefa → tarefa", e fechar
+ * sempre volta num passo só pra página de verdade, sem reabrir nada velho.
+ */
 function roteadorAoAbrirTarefa(tarefa) {
   if (!tarefa || tarefa.id === undefined || tarefa.id === null) return;
+  const estadoAtual = history.state;
+  const jaEstaNumaTarefa = !!estadoAtual && estadoAtual.colmeiaRota === true && /^\d+$/.test(roteadorCaminhoAtual());
+  if (jaEstaNumaTarefa) {
+    const voltarPara = typeof estadoAtual.colmeiaVoltarPara === "string" ? estadoAtual.colmeiaVoltarPara : ROTA_BASE;
+    roteadorSubstituirPor(ROTA_BASE + tarefa.id, { colmeiaVoltarPara: voltarPara });
+    return;
+  }
   // Guarda a URL de onde a pessoa estava ANTES de abrir esta tarefa —
   // é o que `roteadorAoFecharTarefa` usa pra saber que dá pra "desfazer"
   // esse passo com um Voltar de verdade, em vez de escrever uma URL nova
