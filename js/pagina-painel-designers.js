@@ -1576,23 +1576,41 @@ function pnlProximosDiasUteis(n) {
 }
 
 /**
- * Menu de atalho ao clicar na pílula de data: os próximos 3 dias úteis,
- * cada um já mostrando a carga que a pessoa tem NAQUELE dia — em vez de
- * abrir o mês inteiro direto pra "joga pra amanhã", o caso mais comum
- * (achado da crítica de 2026-08-17: "o dia de destino era uma aposta às
- * cegas"). "Escolher outra data…" no fim cai no calendário de sempre.
+ * Menu de atalho ao clicar na pílula de data: HOJE + os próximos 3 dias
+ * úteis, cada um já mostrando a carga que a pessoa tem NAQUELE dia — em
+ * vez de abrir o mês inteiro direto pra "joga pra amanhã", o caso mais
+ * comum (achado da crítica de 2026-08-17: "o dia de destino era uma
+ * aposta às cegas"). "Escolher outra data…" no fim cai no calendário de
+ * sempre.
+ *
+ * "Hoje" entrou em 2026-08-17 (pedido do Cláudio): sem ela, jogar uma
+ * tarefa ATRASADA pra hoje mesmo exigia abrir o calendário do mês —
+ * sendo que "corrigir uma atrasada" é o caso mais comum de todos, mais
+ * até que "joga pra amanhã".
  */
 function pnlAbrirMenuDeData(st, t, ancoraEl, aoEscolher) {
   document.querySelectorAll(".pnl-menu-data").forEach(m => m.remove());
   const menu = document.createElement("div");
   menu.className = "pnl-menu-data";
-  const dias = pnlProximosDiasUteis(3);
-  menu.innerHTML = dias.map(d => {
-    const carga = pnlCargaDoDiaPra(t.assignee, d.iso);
+
+  const agora = new Date();
+  const hojeISOStr = typeof hojeISO === "function" ? hojeISO() : `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+  const itens = [
+    { iso: hojeISOStr, badge: hojeISOStr.slice(-2), rotulo: "Hoje", destaque: true },
+    ...pnlProximosDiasUteis(3).map(d => ({ iso: d.iso, badge: d.iso.slice(-2), rotulo: d.rotulo, destaque: false })),
+  ];
+
+  menu.innerHTML = itens.map(item => {
+    const carga = pnlCargaDoDiaPra(t.assignee, item.iso);
     const nivel = pnlNivelDeCarga(carga.min);
-    return `<button type="button" data-pnl-dia="${d.iso}">${escaparHTML(d.rotulo)}
-      <span class="pnl-menu-data-carga nivel-${nivel}">${carga.min ? escaparHTML(pnlFormatTempo(carga.min)) : "livre"}</span></button>`;
-  }).join("") + `<hr><button type="button" data-pnl-dia="calendario">Escolher outra data…</button>`;
+    return `
+      <button type="button" class="pnl-menu-data-item ${item.destaque ? "pnl-menu-data-hoje" : ""}" data-pnl-dia="${item.iso}">
+        <span class="pnl-menu-data-badge">${item.badge}</span>
+        <span class="pnl-menu-data-rotulo">${escaparHTML(item.rotulo)}</span>
+        <span class="pnl-menu-data-carga nivel-${nivel}">${carga.min ? escaparHTML(pnlFormatTempo(carga.min)) : "livre"}</span>
+      </button>
+    `;
+  }).join("") + `<hr><button type="button" class="pnl-menu-data-item" data-pnl-dia="calendario"><span class="pnl-menu-data-badge pnl-menu-data-badge-mais">···</span><span class="pnl-menu-data-rotulo">Escolher outra data…</span></button>`;
   document.body.appendChild(menu);
   posicionarPopupFixo(menu, ancoraEl);
 
@@ -2179,10 +2197,11 @@ function relatorioDiarioCorpoHTML(dados, designer) {
   const transferidas = dados.transferidas || [];
   const fila = dados.filaDoDia || { total: 0, atrasadas: 0, hojeCerto: 0 };
   const chegaram = dados.chegaramDepoisDas10h || [];
+  const horasTrabalhadasSegundos = dados.horasTrabalhadasSegundos || 0;
 
   return `
     <h1 class="reld-h1" id="reldCorpoTitulo">O dia de <b>${escaparHTML(designer)}</b></h1>
-    ${relatorioDiarioBarraEntreguesHTML(entregues.length, fila.total)}
+    ${relatorioDiarioBarraEntreguesHTML(entregues.length, fila.total, horasTrabalhadasSegundos)}
     <div class="reld-grid">
       ${relatorioDiarioPerfilHTML(designer, fila.total)}
       ${relatorioDiarioProducaoHTML(tocadas.length, entregues.length, transferidas.length)}
@@ -2198,7 +2217,7 @@ function relatorioDiarioCorpoHTML(dados, designer) {
 // "Trabalhadas/Restante/Meta" (js/pagina-horas.js, renderBarraDeHoje).
 // `Math.max(pct, 12)` é o mesmo cuidado de lá: sem isso um segmento muito
 // pequeno (ex: 0 entregues) fica estreito demais pro texto caber dentro.
-function relatorioDiarioBarraEntreguesHTML(qtdEntregues, qtdFila) {
+function relatorioDiarioBarraEntreguesHTML(qtdEntregues, qtdFila, horasTrabalhadasSegundos) {
   const feito = Math.min(qtdEntregues, qtdFila || qtdEntregues);
   const restante = Math.max(0, qtdFila - qtdEntregues);
   const pctFeito = qtdFila > 0 ? Math.round((feito / qtdFila) * 100) : (qtdEntregues > 0 ? 100 : 0);
@@ -2218,6 +2237,10 @@ function relatorioDiarioBarraEntreguesHTML(qtdEntregues, qtdFila) {
       <div class="hr-barra-col">
         <div class="hr-barra-labels"><span>Na fila</span></div>
         <div class="hr-barra"><div class="hr-seg branca">${qtdFila}</div></div>
+      </div>
+      <div class="hr-barra-col">
+        <div class="hr-barra-labels"><span>Trabalhadas</span></div>
+        <div class="hr-barra"><div class="hr-seg branca">${formatarHoras(horasTrabalhadasSegundos)}</div></div>
       </div>
     </div>
   `;

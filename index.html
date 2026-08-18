@@ -7,7 +7,11 @@
 <link rel="icon" type="image/png" href="https://res.cloudinary.com/dzqsqxrkw/image/upload/v1785012485/Icone_ifelxw.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Questrial&display=swap" rel="stylesheet">
+<!-- Inter (2026-08-17): só pro Painel de Designers (dashboard, modal
+     "Esforço de hoje", pop-up de relatório diário) — pedido do Cláudio
+     pra deixar só os TÍTULOS em Questrial e o resto do texto em Inter
+     nessas telas específicas. O resto do app continua só em Questrial. -->
+<link href="https://fonts.googleapis.com/css2?family=Questrial&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <!-- PostHog (2026-08-12): erros de todo mundo, replay da sessão que
      quebrou e quais telas o time realmente usa — ver Monitoramento.gs
      pro que isso substitui (rodando em paralelo por enquanto).
@@ -34,14 +38,14 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-08-17p">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-17p">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-17p">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-17p">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-17p">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-17p">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-17p">
-<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-17p">
+<link rel="stylesheet" href="css/01-base.css?v=2026-08-17q">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-08-17q">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-08-17q">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-08-17q">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-08-17q">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-08-17q">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-08-17q">
+<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-08-17q">
 </head>
 <body>
 
@@ -1986,35 +1990,35 @@
      abertura do app: se ele demorar ou não carregar, a tela de login
      continua funcionando com a chave de acesso de sempre. -->
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="js/config.js?v=2026-08-17p"></script>
-<script src="js/cache-tarefas.js?v=2026-08-17p"></script>
-<script src="js/fila-offline.js?v=2026-08-17p"></script>
-<script src="js/notificacoes-uploads.js?v=2026-08-17p"></script>
-<script src="js/pessoas-fotos.js?v=2026-08-17p"></script>
-<script src="js/kanban-polling.js?v=2026-08-17p"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-08-17p"></script>
-<script src="js/regras-briefing.js?v=2026-08-17p"></script>
-<script src="js/kanban-board.js?v=2026-08-17p"></script>
-<script src="js/clientes-hub.js?v=2026-08-17p"></script>
-<script src="js/chat-comentarios.js?v=2026-08-17p"></script>
-<script src="js/detalhe-modal.js?v=2026-08-17p"></script>
-<script src="js/detalhe-cardmae.js?v=2026-08-17p"></script>
-<script src="js/detalhe-alteracao.js?v=2026-08-17p"></script>
-<script src="js/bee.js?v=2026-08-17p"></script>
-<script src="js/paginas-designers.js?v=2026-08-17p"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-08-17p"></script>
-<script src="js/pagina-repasse.js?v=2026-08-17p"></script>
-<script src="js/pagina-horas.js?v=2026-08-17p"></script>
-<script src="js/notificacoes-avisos.js?v=2026-08-17p"></script>
-<script src="js/paleta-comando.js?v=2026-08-17p"></script>
-<script src="js/roteador-url.js?v=2026-08-17p"></script>
-<script src="js/detalhe-historia.js?v=2026-08-17p"></script>
-<script src="js/modo-foco.js?v=2026-08-17p"></script>
-<script src="js/pagina-bee.js?v=2026-08-17p"></script>
-<script src="js/pagina-aprovacao.js?v=2026-08-17p"></script>
-<script src="js/central-atendimento.js?v=2026-08-17p"></script>
-<script src="js/central-atencao.js?v=2026-08-17p"></script>
-<script src="js/pagina-painel-designers.js?v=2026-08-17p"></script>
-<script src="js/login-boot.js?v=2026-08-17p"></script>
+<script src="js/config.js?v=2026-08-17q"></script>
+<script src="js/cache-tarefas.js?v=2026-08-17q"></script>
+<script src="js/fila-offline.js?v=2026-08-17q"></script>
+<script src="js/notificacoes-uploads.js?v=2026-08-17q"></script>
+<script src="js/pessoas-fotos.js?v=2026-08-17q"></script>
+<script src="js/kanban-polling.js?v=2026-08-17q"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-08-17q"></script>
+<script src="js/regras-briefing.js?v=2026-08-17q"></script>
+<script src="js/kanban-board.js?v=2026-08-17q"></script>
+<script src="js/clientes-hub.js?v=2026-08-17q"></script>
+<script src="js/chat-comentarios.js?v=2026-08-17q"></script>
+<script src="js/detalhe-modal.js?v=2026-08-17q"></script>
+<script src="js/detalhe-cardmae.js?v=2026-08-17q"></script>
+<script src="js/detalhe-alteracao.js?v=2026-08-17q"></script>
+<script src="js/bee.js?v=2026-08-17q"></script>
+<script src="js/paginas-designers.js?v=2026-08-17q"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-08-17q"></script>
+<script src="js/pagina-repasse.js?v=2026-08-17q"></script>
+<script src="js/pagina-horas.js?v=2026-08-17q"></script>
+<script src="js/notificacoes-avisos.js?v=2026-08-17q"></script>
+<script src="js/paleta-comando.js?v=2026-08-17q"></script>
+<script src="js/roteador-url.js?v=2026-08-17q"></script>
+<script src="js/detalhe-historia.js?v=2026-08-17q"></script>
+<script src="js/modo-foco.js?v=2026-08-17q"></script>
+<script src="js/pagina-bee.js?v=2026-08-17q"></script>
+<script src="js/pagina-aprovacao.js?v=2026-08-17q"></script>
+<script src="js/central-atendimento.js?v=2026-08-17q"></script>
+<script src="js/central-atencao.js?v=2026-08-17q"></script>
+<script src="js/pagina-painel-designers.js?v=2026-08-17q"></script>
+<script src="js/login-boot.js?v=2026-08-17q"></script>
 </body>
 </html>

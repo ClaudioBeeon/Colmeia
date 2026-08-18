@@ -16,6 +16,20 @@
 
 var RELATORIO_HORA_CORTE = '10:00';
 
+/**
+ * A segunda-feira (AAAA-MM-DD) da semana que contém `dataISO` — mesma
+ * conta que `segundaDaSemana` já faz no front-end (js/pagina-horas.js),
+ * só que aqui porque `buscarHorasDaSemana` (Agenda.gs) só aceita o
+ * início da semana, nunca um dia solto.
+ */
+function relatorioSegundaFeiraDaSemana(dataISO) {
+  var d = new Date(dataISO + 'T12:00:00-03:00');
+  var diaDaSemana = d.getDay(); // 0 = domingo
+  var recuo = diaDaSemana === 0 ? 6 : diaDaSemana - 1;
+  d.setDate(d.getDate() - recuo);
+  return Utilities.formatDate(d, 'America/Sao_Paulo', 'yyyy-MM-dd');
+}
+
 function relatorioDiarioDesigner(designer, dataISO) {
   if (!designer) return { ok: false, error: 'designer não informado.' };
   if (!dataISO) return { ok: false, error: 'dataISO não informado.' };
@@ -24,6 +38,17 @@ function relatorioDiarioDesigner(designer, dataISO) {
   var entreguesResp = buscarEntreguesDoDiaComTempo(designer, dataISO);
   var transferidasResp = buscarTransferenciasDoDia(designer, dataISO);
   var eventosResp = buscarEventosDoDiaAposHorario(designer, dataISO, RELATORIO_HORA_CORTE);
+  // Horas trabalhadas de VERDADE (blocos de trabalho do Runrun.it, a
+  // mesma fonte da aba "Tempo" e da página "Minhas horas") — pedido do
+  // Cláudio, 2026-08-17: "faltou adicionar o horas trabalhadas de cada
+  // designer". `buscarHorasDaSemana` já devolve a semana inteira; só se
+  // aproveita o dia certo dela, sem outra função nova.
+  var horasSemanaResp = buscarHorasDaSemana(designer, relatorioSegundaFeiraDaSemana(dataISO));
+  var horasTrabalhadasSegundos = 0;
+  if (horasSemanaResp && horasSemanaResp.ok && Array.isArray(horasSemanaResp.dias)) {
+    var diaDeHoras = horasSemanaResp.dias.filter(function (d) { return d.data === dataISO; })[0];
+    if (diaDeHoras) horasTrabalhadasSegundos = diaDeHoras.segundos || 0;
+  }
   var quadro = getTarefasColmeia();
 
   var filaDoDia = { total: 0, atrasadas: 0, hojeCerto: 0 };
@@ -69,6 +94,7 @@ function relatorioDiarioDesigner(designer, dataISO) {
     entregues: entregues,
     transferidas: transferidas,
     filaDoDia: filaDoDia,
-    chegaramDepoisDas10h: eventosResp.ok ? eventosResp.eventos : []
+    chegaramDepoisDas10h: eventosResp.ok ? eventosResp.eventos : [],
+    horasTrabalhadasSegundos: horasTrabalhadasSegundos
   };
 }
