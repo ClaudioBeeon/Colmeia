@@ -277,7 +277,9 @@
      motivo/solução já usado em css/06-aprovacao.css e 07-central-atendimento.css. */
   --pnl-sucesso-suave: rgba(34, 176, 125, 0.12);
 }
-.pnl-tarefas-modal.pnl-modal-esforco { width: 860px; height: 84vh; }
+/* Mais largo que antes (860 → 1020px): a coluna de pessoas nova precisa
+   de espaço próprio sem espremer a lista de tarefas ao lado. */
+.pnl-tarefas-modal.pnl-modal-esforco { width: 1020px; height: 84vh; }
 /* #pnlTarefasConteudo É o .rule-modal-body — precisa de flex:1 pra
    ocupar o resto da altura do modal (o .rule-modal-header, acima dele,
    tem altura própria e não sobra sozinho). Sem isso a "height: 84vh" do
@@ -360,7 +362,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .pnl-tarefa-row-mudou { animation: none; }
-  .pnl-esforco-tira-item, .pnl-tarefa-row, .pnl-tarefa-link, .pnl-esforco-linha { transition: none; }
+  .pnl-esforco-cartao, .pnl-tarefa-row, .pnl-tarefa-link, .pnl-esforco-linha { transition: none; }
 }
 .pnl-tarefa-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
 .pnl-tarefa-titulo-btn {
@@ -421,44 +423,56 @@ button.pnl-pill:hover { filter: brightness(0.96); }
 }
 .pnl-tarefa-link:hover { background: var(--accent); color: #fff; border-color: transparent; }
 
-/* ---- Esforço de hoje: a tira de pessoas + ordenar, dentro do modal largo ---- */
-.pnl-esforco-tira { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; flex-shrink: 0; }
-.pnl-esforco-tira-item {
+/* ---- Esforço de hoje: cartão de status, coluna de pessoas à ESQUERDA ----
+   Protótipo comparado e aprovado pelo Cláudio (2026-08-18): a tira de
+   cartões, que antes ficava em cima da lista de tarefas, virou uma coluna
+   à esquerda com a altura INTEIRA do pop-up — mais parecida com uma lista
+   de contatos do que com uma fileira de estatística. */
+.pnl-esforco-corpo { display: grid; grid-template-columns: 268px 1fr; gap: 0; flex: 1; min-height: 0; }
+.pnl-esforco-coluna-pessoas {
+  min-width: 0; min-height: 0; overflow-y: auto; padding: 4px 14px 14px 2px; border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+  /* Fundo BRANCO (--card-bg), igual ao resto do modal — não cinza
+     (--page-bg): o Cláudio achou o cinza destoando do resto da tela. */
+  background: var(--card-bg);
+}
+.pnl-esforco-coluna-tarefas { min-width: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; padding-left: 18px; }
+
+.pnl-esforco-cartao {
   /* Era <div> com clique — virou <button> (achado da crítica de
      2026-08-17: o filtro de pessoa era o único controle central sem
-     teclado). Resets pra não mudar a aparência de antes. */
-  display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%;
-  font-family: inherit; text-align: center;
-  padding: 16px 10px; border-radius: var(--radius-lg); background: var(--card-bg); border: 1px solid var(--border);
+     teclado). Resets pra não parecer botão de formulário. */
+  display: block; width: 100%; text-align: left; font-family: inherit;
+  padding: 13px 14px; border-radius: var(--radius-lg); background: var(--page-bg); border: 1px solid var(--border);
   box-shadow: var(--shadow-card); cursor: pointer;
   transition: border-color var(--dur-fast) var(--ease-apple), box-shadow var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
 }
-.pnl-esforco-tira-item:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
-.pnl-esforco-tira-item.selecionado { border-color: var(--success); box-shadow: 0 0 0 2px var(--success) inset, var(--shadow-hover); }
+.pnl-esforco-cartao:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.pnl-esforco-cartao.selecionado { border-color: var(--success); box-shadow: 0 0 0 2px var(--success) inset, var(--shadow-hover); }
 /* Designer sem nenhuma tarefa hoje — o destino óbvio de qualquer
    reequilíbrio, e antes simplesmente não aparecia na tira. */
-.pnl-esforco-tira-item.livre { opacity: .72; border-style: dashed; box-shadow: none; }
-.pnl-esforco-tira-item.livre:hover { opacity: 1; }
-.pnl-esforco-tira-avatar { width: 46px; height: 46px; border-radius: 50%; }
-.pnl-esforco-tira-nome { font-size: 12.5px; font-weight: 650; color: var(--text-primary); text-align: center; }
-.pnl-esforco-tira-tempo { font-size: 14px; font-weight: 700; }
+.pnl-esforco-cartao.livre { opacity: .72; border-style: dashed; box-shadow: none; }
+.pnl-esforco-cartao.livre:hover { opacity: 1; }
+.pnl-esforco-cartao-topo { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.pnl-esforco-cartao-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; }
+.pnl-esforco-cartao-nome { font-size: 12.5px; font-weight: 700; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnl-esforco-cartao-tempo { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 /* Mesmo limite de 4h que já existia na lista da PÁGINA, agora também
    dentro do pop-up — antes o número ficava verde pra todo mundo aqui
    dentro, inclusive num dia de 8h (achado da crítica de 2026-08-17). */
-.pnl-esforco-tira-tempo.nivel-tranquilo { color: var(--success-on-soft); }
-.pnl-esforco-tira-tempo.nivel-cheio     { color: var(--warning-on-soft); }
-.pnl-esforco-tira-tempo.nivel-estourado { color: var(--danger-on-soft); }
-.pnl-esforco-tira-tempo.nivel-livre     { color: var(--text-muted); }
-.pnl-carga-barra { width: 100%; height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; margin-top: 1px; }
-.pnl-carga-barra span { display: block; height: 100%; border-radius: 999px; background: currentColor; }
-.pnl-carga-barra span.nivel-tranquilo { color: var(--success-on-soft); }
-.pnl-carga-barra span.nivel-cheio     { color: var(--warning-on-soft); }
-.pnl-carga-barra span.nivel-estourado { color: var(--danger-on-soft); }
-.pnl-carga-barra span.nivel-livre     { color: var(--border); }
-.pnl-esforco-tira-aviso { font-size: 10.5px; font-weight: 700; color: var(--warning-on-soft); text-align: center; }
-/* 10,5px estava abaixo do piso de 11px do projeto pra texto funcional, e
-   --text-muted media 2,69:1 nesse tamanho — os dois corrigidos junto. */
-.pnl-esforco-tira-qtd { font-size: 11.5px; color: var(--text-secondary); }
+.pnl-esforco-cartao-tempo.nivel-tranquilo { color: var(--success-on-soft); }
+.pnl-esforco-cartao-tempo.nivel-cheio     { color: var(--warning-on-soft); }
+.pnl-esforco-cartao-tempo.nivel-estourado { color: var(--danger-on-soft); }
+.pnl-esforco-cartao-tempo.nivel-livre     { color: var(--text-muted); }
+/* A barra empilhada mostra em que ETAPA o tempo está (Fazendo/Revisão/...),
+   não só quanto — cada segmento usa a MESMA cor da pastilha de etapa da
+   linha de tarefa (pnlCorDaEtapa), pra não inventar uma legenda nova. */
+.pnl-esforco-cartao-empilhada { display: flex; width: 100%; height: 6px; border-radius: 999px; overflow: hidden; background: var(--border); margin-bottom: 8px; }
+.pnl-esforco-cartao-empilhada span { height: 100%; }
+.pnl-esforco-cartao-legenda { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 10px; color: var(--text-secondary); }
+.pnl-esforco-cartao-legenda-item i { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+.pnl-esforco-cartao-vazio { font-size: 10.5px; color: var(--text-muted); font-style: italic; }
+.pnl-esforco-tira-aviso { font-size: 10.5px; font-weight: 700; color: var(--warning-on-soft); margin-top: 7px; }
 
 /* ---- Menu de trocar pessoa (etiqueta do designer na linha) ---- */
 .pnl-menu-pessoa {
@@ -528,6 +542,12 @@ button.pnl-pill:hover { filter: brightness(0.96); }
   .pnl-tarefas-modal.pnl-modal-esforco { width: calc(100vw - 32px); }
   .pnl-tarefa-row { flex-wrap: wrap; }
   .pnl-tarefa-right { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  /* Sem largura pra duas colunas lado a lado — pessoas empilha em cima,
+     com altura limitada, e as tarefas ficam embaixo. */
+  .pnl-esforco-corpo { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .pnl-esforco-coluna-pessoas { flex-direction: row; flex-wrap: wrap; max-height: 34vh; border-right: none; border-bottom: 1px solid var(--border); padding: 4px 4px 14px; }
+  .pnl-esforco-cartao { width: calc(50% - 5px); }
+  .pnl-esforco-coluna-tarefas { padding-left: 0; padding-top: 14px; }
 }
 
 /* ---- Configurações → Vincular clientes duplicados ---- */

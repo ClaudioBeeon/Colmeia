@@ -1243,25 +1243,58 @@ function pnlRenderTarefasModal() {
   pnlWireLinhasDoModal(corpo, st);
 }
 
-function pnlRenderEsforcoModalCorpo(st, corpo) {
-  const nomes = Object.keys(st.esforco).sort((a, b) => st.esforco[b].min - st.esforco[a].min);
+// Gente que aparece em pnlDesigners mas não trabalha pelo Runrun.it — não
+// tem tarefa nenhuma de verdade pra mostrar aqui, só polui a coluna do
+// "Esforço de hoje" com um cartão sempre vazio (pedido do Cláudio, 2026-08-18).
+// Só afeta ESTA lista; o resto do painel (cadastro de clientes etc.) continua
+// enxergando as duas normalmente.
+const PNL_ESFORCO_SEM_RUNRUN = ["Imane", "Sem designer"];
 
-  const tiraHtml = `
-    <div class="pnl-esforco-tira">
+function pnlRenderEsforcoModalCorpo(st, corpo) {
+  const nomes = Object.keys(st.esforco)
+    .filter(n => !PNL_ESFORCO_SEM_RUNRUN.includes(n))
+    .sort((a, b) => st.esforco[b].min - st.esforco[a].min);
+
+  // Protótipo "Cartão de status" aprovado pelo Cláudio (2026-08-18): a
+  // coluna de pessoas foi pra ESQUERDA, ocupando a altura inteira do
+  // pop-up, e cada pessoa é um cartão maior — a barra de carga é dividida
+  // por ETAPA (quanto é "Fazendo", quanto é "Revisão"...), não só um
+  // número de tempo. Reaproveita pnlCorDaEtapa/rotuloDaEtapa, as MESMAS
+  // cores e nomes que a pastilha de etapa da linha de tarefa já usa.
+  const colunaPessoasHtml = `
+    <div class="pnl-esforco-coluna-pessoas">
       ${nomes.map(nome => {
         const g = st.esforco[nome];
         const qtd = g.tarefas.length;
         const livre = qtd === 0;
         const nivel = livre ? "livre" : pnlNivelDeCarga(g.min);
-        const pct = Math.min(100, Math.round(g.min / PNL_ESFORCO_LIMITE_MIN * 100));
+
+        const porEtapa = {};
+        g.tarefas.forEach(t => {
+          const tempo = pnlTempoMedioCadastrado(t.assignee, t.client);
+          if (tempo === null) return;
+          const chave = t.status || "pendentes";
+          if (!porEtapa[chave]) {
+            porEtapa[chave] = { min: 0, rotulo: typeof rotuloDaEtapa === "function" ? rotuloDaEtapa(t) : chave, cor: pnlCorDaEtapa(t) };
+          }
+          porEtapa[chave].min += tempo;
+        });
+        const segmentos = Object.values(porEtapa);
+        const empilhadaHtml = segmentos.map(s => `<span style="width:${g.min ? Math.round(s.min / g.min * 100) : 0}%;background:${s.cor.fg}"></span>`).join("");
+        const legendaHtml = segmentos.map(s => `<span class="pnl-esforco-cartao-legenda-item"><i style="background:${s.cor.fg}"></i>${escaparHTML(s.rotulo)} ${escaparHTML(pnlFormatTempo(s.min))}</span>`).join("");
+
         return `
-          <button type="button" class="pnl-esforco-tira-item ${st.filtroPessoa === nome ? "selecionado" : ""} ${livre ? "livre" : ""}"
+          <button type="button" class="pnl-esforco-cartao ${st.filtroPessoa === nome ? "selecionado" : ""} ${livre ? "livre" : ""}"
                   data-pnl-esforco-filtro="${escaparHTML(nome)}" aria-pressed="${st.filtroPessoa === nome}">
-            ${typeof avatarHTML === "function" ? avatarHTML(nome, "pnl-esforco-tira-avatar") : ""}
-            <div class="pnl-esforco-tira-nome">${escaparHTML(nome)}</div>
-            <div class="pnl-esforco-tira-tempo nivel-${nivel}">${livre ? "livre" : escaparHTML(pnlFormatTempo(g.min))}</div>
-            <div class="pnl-carga-barra"><span class="nivel-${nivel}" style="width:${pct}%"></span></div>
-            <div class="pnl-esforco-tira-qtd">${qtd} tarefa${qtd === 1 ? "" : "s"}</div>
+            <div class="pnl-esforco-cartao-topo">
+              ${typeof avatarHTML === "function" ? avatarHTML(nome, "pnl-esforco-cartao-avatar") : ""}
+              <div class="pnl-esforco-cartao-nome">${escaparHTML(nome)}</div>
+              <div class="pnl-esforco-cartao-tempo nivel-${nivel}">${livre ? "livre" : escaparHTML(pnlFormatTempo(g.min))}</div>
+            </div>
+            ${g.min ? `
+              <div class="pnl-esforco-cartao-empilhada">${empilhadaHtml}</div>
+              <div class="pnl-esforco-cartao-legenda">${legendaHtml}</div>
+            ` : `<div class="pnl-esforco-cartao-vazio">${livre ? "Sem nada hoje — pode receber carga." : "Nenhuma tarefa com tempo cadastrado."}</div>`}
             ${g.semCadastro ? `<div class="pnl-esforco-tira-aviso">${g.semCadastro} sem tempo cadastrado</div>` : ""}
           </button>
         `;
@@ -1296,17 +1329,21 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
 
   const estaveis = pnlListaEstavel(st, `esf:${st.filtroPessoa || "-"}:${st.ordenacao}`, linhas);
   pnlPintarListaPreservandoRolagem(corpo, `
-    ${tiraHtml}
-    <div class="pnl-ordenar-row">
-      <span class="pnl-ordenar-label">Ordenar por:</span>
-      <button type="button" class="pnl-sort-btn ${st.ordenacao === "data" ? "active" : ""}" data-pnl-ordenar="data" aria-pressed="${st.ordenacao === "data"}">Data</button>
-      <button type="button" class="pnl-sort-btn ${st.ordenacao === "tempo" ? "active" : ""}" data-pnl-ordenar="tempo" aria-pressed="${st.ordenacao === "tempo"}">Tempo</button>
-      <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba" aria-pressed="${st.ordenacao === "aba"}">Aba</button>
-      <span style="flex:1"></span>
-      <button type="button" class="pnl-sort-btn ${st.compacto ? "active" : ""}" data-pnl-compacto aria-pressed="${!!st.compacto}">${st.compacto ? "Compacto" : "Modo compacto"}</button>
-    </div>
-    <div class="pnl-tarefas-lista ${st.compacto ? "compacta" : ""}">
-      ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu, st)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
+    <div class="pnl-esforco-corpo">
+      ${colunaPessoasHtml}
+      <div class="pnl-esforco-coluna-tarefas">
+        <div class="pnl-ordenar-row">
+          <span class="pnl-ordenar-label">Ordenar por:</span>
+          <button type="button" class="pnl-sort-btn ${st.ordenacao === "data" ? "active" : ""}" data-pnl-ordenar="data" aria-pressed="${st.ordenacao === "data"}">Data</button>
+          <button type="button" class="pnl-sort-btn ${st.ordenacao === "tempo" ? "active" : ""}" data-pnl-ordenar="tempo" aria-pressed="${st.ordenacao === "tempo"}">Tempo</button>
+          <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba" aria-pressed="${st.ordenacao === "aba"}">Aba</button>
+          <span style="flex:1"></span>
+          <button type="button" class="pnl-sort-btn ${st.compacto ? "active" : ""}" data-pnl-compacto aria-pressed="${!!st.compacto}">${st.compacto ? "Compacto" : "Modo compacto"}</button>
+        </div>
+        <div class="pnl-tarefas-lista ${st.compacto ? "compacta" : ""}">
+          ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu, st)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
+        </div>
+      </div>
     </div>
   `);
 
