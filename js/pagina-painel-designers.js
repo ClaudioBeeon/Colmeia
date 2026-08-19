@@ -134,8 +134,11 @@ function pnlSalvarPref(sufixo, valor) {
 /** Quanto é um dia cheio, em minutos. Estava escrito na mão só dentro de
  *  pnlRenderEsforcoLista (a lista da PÁGINA) e não chegava no pop-up — que
  *  é justamente onde a pessoa vai DECIDIR o que fazer com a carga (achado
- *  da crítica de 2026-08-17). Um lugar só, os dois desenhos usam. */
-const PNL_ESFORCO_LIMITE_MIN = 240;
+ *  da crítica de 2026-08-17). Um lugar só, os dois desenhos usam.
+ *  8h (480min) é o dia de trabalho de verdade, não 4h (achado do Cláudio,
+ *  2026-08-19) — "cheio" (âmbar) começa em 75% disso, 6h, "estourado"
+ *  (vermelho) só acima das 8h inteiras. */
+const PNL_ESFORCO_LIMITE_MIN = 480;
 function pnlNivelDeCarga(min) {
   if (min > PNL_ESFORCO_LIMITE_MIN) return "estourado";
   if (min > PNL_ESFORCO_LIMITE_MIN * 0.75) return "cheio";
