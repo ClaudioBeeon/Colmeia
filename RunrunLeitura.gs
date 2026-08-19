@@ -852,7 +852,6 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback, contexto) {
     // da página Painel de Designers (js/pagina-painel-designers.js), que
     // reproduz o mesmo campo que o painel-designers-beeon já usava.
     isUrgent: !!t.is_urgent,
-    attachmentsCount: t.attachments_count || 0,
     // Não temos um campo de "desde quando é dessa pessoa" de verdade —
     // isso é a melhor aproximação disponível (data da última mudança na
     // tarefa no Runrun.it), usada na Fila de Repasse pra mostrar "há

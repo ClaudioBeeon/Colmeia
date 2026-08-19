@@ -425,7 +425,6 @@ function mapearTarefaDoBackend(t) {
     entregue: !!t.entregue,
     parentTaskId: t.parentTaskId || null,
     link: t.link,
-    attachmentsCount: t.attachmentsCount || 0,
     lastActivityAt: t.lastActivityAt || null,
     createdAt: t.createdAt || null,
     // Campo "Projeto" do Runrun.it — é onde mora o mês/ano de verdade do

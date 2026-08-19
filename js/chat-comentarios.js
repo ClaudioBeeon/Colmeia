@@ -1239,12 +1239,6 @@ async function carregarComentarios(task) {
   }
 }
 
-/**
- * Busca os anexos de verdade da tarefa (antes disso mostrava "Anexo
- * 01, 02, 03, 04" fixos, sem vir do Runrun.it de verdade). Só faz a
- * chamada se a tarefa realmente tiver anexo (attachmentsCount > 0) —
- * economiza uma chamada à toa pra maioria das tarefas, que não tem.
- */
 function formatarTamanhoArquivo(bytes) {
   if (!bytes) return "";
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -1347,7 +1341,6 @@ function aplicarDadosDaTarefa(task, data, taskId, veioDoCache) {
     task.timerSeconds = Math.max(task.timerSeconds || 0, fresco.timerSeconds);
     task.tempoMedioMinutos = fresco.tempoMedioMinutos;
     task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
-    task.attachmentsCount = fresco.attachmentsCount;
   }
 
   // --- Sequência de responsáveis ---
@@ -1440,7 +1433,17 @@ async function buscarAnexosDeUmaTarefa(taskId) {
  * irmã, então já cai aqui dentro sozinha).
  */
 async function buscarTodosAnexosDaFamilia(task) {
-  const proprios = task.attachmentsCount ? await buscarAnexosDeUmaTarefa(task.id) : [];
+  // Sempre busca — nunca filtrar por `task.attachmentsCount` (achado do
+  // Cláudio, 2026-08-19: "o número de anexos fica sempre em 0"). Esse
+  // campo vem de `attachments_count` do Runrun.it, que conta arquivo
+  // anexado DIRETO na tarefa; mas o que este app trata como "anexo" é
+  // arquivo colado DENTRO de um comentário (buscarAnexosTarefa,
+  // RunrunLeitura.gs, lê `comentario.documents`) — as duas contagens não
+  // têm relação nenhuma, e quase todo anexo da agência entra por
+  // comentário. Filtrar por um número que não mede a coisa certa
+  // escondia anexo de verdade. Chamada só acontece sob demanda (clique
+  // na aba Anexos), então não há custo de background pra economizar.
+  const proprios = await buscarAnexosDeUmaTarefa(task.id);
 
   let cardMae = null;
   let irmas = [];
