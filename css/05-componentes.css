@@ -418,7 +418,10 @@
   pointer-events: none;
 }
 .colmeia-toast {
-  background: #16181D; color: #fff; font-size: 13px; font-weight: 600;
+  /* #colmeiaToasts é filho direto de <body> — só a .page (dentro do body)
+     declara font-family, então sem isto aqui o toast caía na fonte
+     padrão do navegador (Times New Roman), achado do Cláudio 2026-08-19. */
+  background: #16181D; color: #fff; font-family: var(--font-body); font-size: 13px; font-weight: 600;
   padding: 11px 20px; border-radius: 999px; box-shadow: 0 10px 28px rgba(0,0,0,0.28);
   opacity: 0; transform: translateY(10px) scale(0.97);
   transition: opacity 0.2s var(--ease-apple), transform 0.2s var(--ease-apple);
