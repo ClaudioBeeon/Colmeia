@@ -1289,19 +1289,28 @@ function pnlNomeDoDiaOffset(off) {
 /** Tarefas em aberto agrupadas por dia (offset de hoje, 0..PNL_DIAS_A_FRENTE),
  *  respeitando o filtro de pessoa já escolhido na coluna da esquerda — mesma
  *  regra de tempo/semCadastro de pnlEsforcoPorResponsavel, só que pra
- *  qualquer dia, não só hoje. */
+ *  qualquer dia, não só hoje.
+ *
+ *  Atrasada (offset negativo) entra no dia 0 ("hoje") — achado do Cláudio
+ *  2026-08-19: elas tinham sumido da visão por dia. Continua com a DATA
+ *  ORIGINAL dela (pnlLinhaTarefaHTML/pnlCartaoSemanaHTML mostram `t.due`,
+ *  nunca "hoje") — só o AGRUPAMENTO muda, não o dado da tarefa. É esforço
+ *  de hoje de verdade: o que já venceu conta junto do que vence hoje. */
 function pnlTarefasPorDia(st) {
   const porDia = {};
   for (let i = 0; i <= PNL_DIAS_A_FRENTE; i++) porDia[i] = { min: 0, semCadastro: 0, tarefas: [] };
   pnlTarefasAbertas().forEach(t => {
     if (st.filtroPessoa && t.assignee !== st.filtroPessoa) return;
-    const off = pnlOffsetDeHoje(t.dueISO);
-    if (off === null || off < 0 || off > PNL_DIAS_A_FRENTE) return;
+    const offReal = pnlOffsetDeHoje(t.dueISO);
+    if (offReal === null || offReal > PNL_DIAS_A_FRENTE) return;
+    const off = Math.max(0, offReal);
     const min = pnlTempoMedioCadastrado(t.assignee, t.client);
     if (min === null) porDia[off].semCadastro++; else porDia[off].min += min;
     porDia[off].tarefas.push(t);
   });
-  Object.values(porDia).forEach(g => g.tarefas.sort((a, b) => (a.title || "").localeCompare(b.title || "")));
+  // Dentro de "hoje", atrasada primeiro (a mais velha primeiro) — é a que
+  // mais precisa de atenção, não deveria se misturar no meio das outras.
+  Object.values(porDia).forEach(g => g.tarefas.sort((a, b) => (a.dueISO || "").localeCompare(b.dueISO || "") || (a.title || "").localeCompare(b.title || "")));
   return porDia;
 }
 
@@ -1560,6 +1569,11 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
       `}
     `;
   }
+
+  // Comparando dois dias, o pop-up abre mais pra lateral — as duas
+  // colunas cabem confortáveis sem precisar rolar de lado (pedido do
+  // Cláudio, 2026-08-19). CSS: .pnl-modal-esforco.pnl-modo-comparando.
+  document.querySelector(".pnl-tarefas-modal")?.classList.toggle("pnl-modo-comparando", !!st.compararPar);
 
   pnlPintarListaPreservandoRolagem(corpo, `
     <div class="pnl-esforco-corpo">

@@ -279,7 +279,12 @@
 }
 /* Mais largo que antes (860 → 1020px): a coluna de pessoas nova precisa
    de espaço próprio sem espremer a lista de tarefas ao lado. */
-.pnl-tarefas-modal.pnl-modal-esforco { width: 1020px; height: 84vh; }
+.pnl-tarefas-modal.pnl-modal-esforco { width: 1020px; height: 84vh; transition: width var(--dur-slow) var(--ease-apple-spring); }
+/* Comparando dois dias, o pop-up abre mais pra lateral (pedido do
+   Cláudio, 2026-08-19) — as duas colunas ficam confortáveis sem precisar
+   rolar de lado pra ler um card. A classe é ligada/desligada no JS junto
+   com `st.compararPar` (pnlRenderEsforcoModalCorpo). */
+.pnl-tarefas-modal.pnl-modal-esforco.pnl-modo-comparando { width: 1360px; max-width: calc(100vw - 32px); }
 /* #pnlTarefasConteudo É o .rule-modal-body — precisa de flex:1 pra
    ocupar o resto da altura do modal (o .rule-modal-header, acima dele,
    tem altura própria e não sobra sozinho). Sem isso a "height: 84vh" do
