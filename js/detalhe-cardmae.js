@@ -448,6 +448,48 @@ function rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId, pop = false) {
   ajustarAlturaCardMaeNoPill();
 }
 
+/**
+ * Avançar a sequência do card mãe pela setinha do pill — extraída de
+ * dentro de wireFacePillRegraCardMae (2026-08-19) pra poder ser chamada
+ * de dois jeitos: no clique de verdade, e sozinha mais tarde quando
+ * estava na fila (ver pedirAvancarQuandoLiberar, js/detalhe-modal.js —
+ * mesmo cadeado/mesma fila que o pill do cabeçalho da tarefa aberta
+ * usa). Busca o botão de novo aqui dentro em vez de receber por
+ * parâmetro: se rodar como fila, o botão de quando o clique aconteceu
+ * pode já ter sido substituído por um redesenho no meio do caminho.
+ */
+async function avancarSequenciaCardMaeNoPill(cardMaeTask, taskAtualId) {
+  if (cardMaeTask._sequenciaAcaoEmAndamento) {
+    pedirAvancarQuandoLiberar(cardMaeTask, () => avancarSequenciaCardMaeNoPill(cardMaeTask, taskAtualId));
+    return;
+  }
+  cardMaeTask._sequenciaAcaoEmAndamento = true;
+  const nextBtnAgora = document.getElementById("pillCardMaeFace")?.querySelector("#navNextArrow");
+  if (nextBtnAgora) nextBtnAgora.disabled = true;
+
+  // Muda a tela JÁ, antes de qualquer `await`.
+  if (cardMaeTask.sequencia && cardMaeTask.sequencia.length) {
+    const atualIdx = cardMaeTask.sequencia.findIndex(s => s.atual);
+    if (atualIdx !== -1 && atualIdx < cardMaeTask.sequencia.length - 1) {
+      cardMaeTask.sequencia[atualIdx].atual = false;
+      cardMaeTask.sequencia[atualIdx].concluido = true;
+      cardMaeTask.sequencia[atualIdx + 1].atual = true;
+      rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
+      const seqEl = document.getElementById("pillCardMaeSeq");
+      if (seqEl) animarMudancaDaSequencia(seqEl);
+    }
+  }
+
+  const [, resultadoAvanco] = await Promise.all([
+    pararCronometroAoTransferir(cardMaeTask),
+    avancarWorkflowNoBackend(cardMaeTask.id),
+  ]);
+  if (resultadoAvanco.novoResponsavel) { cardMaeTask.assignee = resultadoAvanco.novoResponsavel; agendarAtualizacaoKanban(); }
+  if (!resultadoAvanco.ok) mostrarToast("Não consegui avançar a sequência do card mãe agora.", "erro");
+  await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
+  liberarTravaDeSequencia(cardMaeTask);
+}
+
 // Busca a sequência real do card mãe de novo e redesenha — usado depois
 // de qualquer ação que mexe nela (avançar, desfazer, adicionar, remover
 // pessoa), pra sincronizar com o estado de verdade no Runrun.it.
@@ -676,38 +718,12 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
       ]);
       if (novoResponsavel) { cardMaeTask.assignee = novoResponsavel; agendarAtualizacaoKanban(); }
       await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
-      cardMaeTask._sequenciaAcaoEmAndamento = false;
+      liberarTravaDeSequencia(cardMaeTask);
     });
   }
   const nextBtn = face.querySelector("#navNextArrow");
   if (nextBtn) {
-    nextBtn.addEventListener("click", async () => {
-      if (cardMaeTask._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
-      cardMaeTask._sequenciaAcaoEmAndamento = true;
-      nextBtn.disabled = true;
-
-      // Muda a tela JÁ, antes de qualquer `await`.
-      if (cardMaeTask.sequencia && cardMaeTask.sequencia.length) {
-        const atualIdx = cardMaeTask.sequencia.findIndex(s => s.atual);
-        if (atualIdx !== -1 && atualIdx < cardMaeTask.sequencia.length - 1) {
-          cardMaeTask.sequencia[atualIdx].atual = false;
-          cardMaeTask.sequencia[atualIdx].concluido = true;
-          cardMaeTask.sequencia[atualIdx + 1].atual = true;
-          rerenderFacePillRegraCardMae(cardMaeTask, taskAtualId);
-          const seqEl = document.getElementById("pillCardMaeSeq");
-          if (seqEl) animarMudancaDaSequencia(seqEl);
-        }
-      }
-
-      const [, resultadoAvanco] = await Promise.all([
-        pararCronometroAoTransferir(cardMaeTask),
-        avancarWorkflowNoBackend(cardMaeTask.id),
-      ]);
-      if (resultadoAvanco.novoResponsavel) { cardMaeTask.assignee = resultadoAvanco.novoResponsavel; agendarAtualizacaoKanban(); }
-      if (!resultadoAvanco.ok) mostrarToast("Não consegui avançar a sequência do card mãe agora.", "erro");
-      await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
-      cardMaeTask._sequenciaAcaoEmAndamento = false;
-    });
+    nextBtn.addEventListener("click", () => avancarSequenciaCardMaeNoPill(cardMaeTask, taskAtualId));
   }
   const addPersonBtn = face.querySelector("#navAddPersonBtn");
   if (addPersonBtn) {
@@ -748,7 +764,7 @@ function wireFacePillRegraCardMae(cardMaeTask, taskAtualId) {
         deliverBtn.disabled = false;
         mostrarToast("Não consegui entregar o card mãe agora.", "erro");
       }
-      cardMaeTask._sequenciaAcaoEmAndamento = false;
+      liberarTravaDeSequencia(cardMaeTask);
     });
   }
 }
@@ -807,7 +823,7 @@ async function abrirQuickPickerCardMaeNoPill(cardMaeTask, taskAtualId, btn) {
         if (!ok) mostrarToast("Não consegui adicionar essa pessoa na sequência agora.", "erro");
         await recarregarRegraCardMaeNoPill(cardMaeTask, taskAtualId);
       } finally {
-        cardMaeTask._sequenciaAcaoEmAndamento = false;
+        liberarTravaDeSequencia(cardMaeTask);
       }
     });
   });

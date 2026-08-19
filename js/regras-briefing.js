@@ -135,7 +135,13 @@ function assinaturaDaSequencia(seq) {
  *      desfaz sozinho.
  */
 async function avancarSequenciaOtimista(task) {
-  if (task._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; } // trava contra clique duplo — dois avanços de uma vez já causaram entrega indevida
+  // AVANÇAR não recusa mais na cara quando outra mudança (adicionar/
+  // remover pessoa) ainda está confirmando — fica na fila e dispara
+  // sozinho assim que ela terminar (2026-08-19, pedido do Cláudio: "não
+  // tem como isso carregar em background, sem erro, só ficar como
+  // próxima coisa a fazer?"). Ver pedirAvancarQuandoLiberar/
+  // liberarTravaDeSequencia, js/detalhe-modal.js.
+  if (task._sequenciaAcaoEmAndamento) { pedirAvancarQuandoLiberar(task, () => avancarSequenciaOtimista(task)); return; }
   task._sequenciaAcaoEmAndamento = true;
   try {
     const seq = task.sequencia || [];
@@ -182,7 +188,7 @@ async function avancarSequenciaOtimista(task) {
       mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
     }
   } finally {
-    task._sequenciaAcaoEmAndamento = false;
+    liberarTravaDeSequencia(task);
   }
 }
 
@@ -216,7 +222,7 @@ async function voltarSequenciaOtimista(task) {
     }
     await atualizarSequenciaEModal(task); // confirma ou desfaz sozinho
   } finally {
-    task._sequenciaAcaoEmAndamento = false;
+    liberarTravaDeSequencia(task);
   }
 }
 
@@ -275,7 +281,7 @@ function removerPessoaOtimista(task, elementId) {
   task._sequenciaAcaoEmAndamento = true;
   removerDaRegraNoBackend(task.workflowId, elementId)
     .then(() => atualizarSequenciaEModal(task))
-    .finally(() => { task._sequenciaAcaoEmAndamento = false; });
+    .finally(() => { liberarTravaDeSequencia(task); });
 }
 
 async function removerDaRegraNoBackend(workflowId, elementId) {
@@ -432,7 +438,7 @@ async function adicionarPessoaOtimista(task, usuario) {
     await adicionarNaRegraNoBackend(task.workflowId, usuario.id);
     await atualizarSequenciaEModal(task);
   } finally {
-    task._sequenciaAcaoEmAndamento = false;
+    liberarTravaDeSequencia(task);
   }
 }
 

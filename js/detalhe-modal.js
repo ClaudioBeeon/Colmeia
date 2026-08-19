@@ -259,16 +259,117 @@ async function carregarSequencia(task) {
 }
 
 /**
- * Clicou em avançar/voltar bem no meio de outra mudança na sequência
- * (adicionar/remover pessoa, ou outro avançar/voltar ainda confirmando)?
- * O cadeado `_sequenciaAcaoEmAndamento` já impede a ação de rodar — isto
- * aqui só avisa por quê, pra não parecer que o clique simplesmente não
- * funcionou (2026-08-14). Sem aviso nenhum, alguém que acabou de
- * adicionar uma pessoa e clicasse "Transferir" na sequência via só a
- * tela travada, sem entender que é de propósito e passageiro.
+ * Clicou em voltar/adicionar/remover bem no meio de outra mudança na
+ * sequência ainda confirmando? O cadeado `_sequenciaAcaoEmAndamento` já
+ * impede a ação de rodar — isto aqui só avisa por quê (2026-08-14). Ver
+ * `pedirAvancarQuandoLiberar` logo abaixo pro caso de AVANÇAR: esse não
+ * bloqueia mais, fica na fila (2026-08-19, pedido do Cláudio).
  */
 function avisarAcaoDeSequenciaOcupada() {
   mostrarToast("Espera confirmar a mudança anterior na sequência pra continuar.", "erro");
+}
+
+/**
+ * Solta o cadeado da sequência — E, se tinha um "avançar" esperando na
+ * fila (ver pedirAvancarQuandoLiberar), dispara ele agora, sozinho, sem
+ * precisar de outro clique. É o par desse cadeado: todo lugar que ligava
+ * `task._sequenciaAcaoEmAndamento = false` direto passa a chamar esta
+ * função no lugar, senão a fila nunca seria escoada.
+ */
+function liberarTravaDeSequencia(task) {
+  task._sequenciaAcaoEmAndamento = false;
+  const pendente = task._acaoDeSequenciaPendente;
+  if (pendente) {
+    task._acaoDeSequenciaPendente = null;
+    pendente();
+  }
+}
+
+/**
+ * "Avançar" clicado bem no meio de adicionar/remover pessoa ainda
+ * confirmando (2026-08-19, pedido do Cláudio: "não tem como isso
+ * carregar em background, sem erro, só ficar como próxima coisa a
+ * fazer?"). Em vez de recusar com um aviso, guarda o pedido — assim que
+ * a mudança em andamento confirmar, `liberarTravaDeSequencia` dispara
+ * este avanço sozinho, sem precisar de outro clique. Só guarda o ÚLTIMO
+ * pedido (não faz sentido empilhar "avançar" 3 vezes clicando rápido
+ * enquanto travado).
+ */
+function pedirAvancarQuandoLiberar(task, executarAvancar) {
+  task._acaoDeSequenciaPendente = executarAvancar;
+  mostrarToast(`Assim que a mudança anterior confirmar, "${task.title || "essa tarefa"}" passa pra frente sozinha.`, "sucesso");
+}
+
+/**
+ * Avançar a sequência pela setinha do pill do cabeçalho — extraída de
+ * dentro de wireWorkflowArrows (2026-08-19) pra poder ser chamada de dois
+ * jeitos: no clique de verdade, e sozinha mais tarde quando estava na
+ * fila (`pedirAvancarQuandoLiberar`). Por isso busca o botão de novo aqui
+ * dentro (`document.getElementById`) em vez de receber por parâmetro — se
+ * rodar como fila, o botão de quando o clique ACONTECEU pode já ter sido
+ * substituído por um redesenho no meio do caminho.
+ */
+async function avancarSequenciaHeaderPill(task) {
+  // Trava contra clique duplo — mesmo motivo do botão de desfazer, em
+  // wireWorkflowArrows. Só que AVANÇAR não recusa mais na cara: fica na
+  // fila e dispara sozinho assim que a mudança anterior confirmar
+  // (2026-08-19, pedido do Cláudio — "não tem como isso carregar em
+  // background, sem erro, só ficar como próxima coisa a fazer?").
+  if (task._sequenciaAcaoEmAndamento) { pedirAvancarQuandoLiberar(task, () => avancarSequenciaHeaderPill(task)); return; }
+  task._sequenciaAcaoEmAndamento = true;
+  const nextBtnAgora = document.getElementById("workflowSeqGroup")?.querySelector("#navNextArrow");
+  if (nextBtnAgora) nextBtnAgora.disabled = true;
+
+  // Guarda quem estava com a tarefa ANTES de mexer em qualquer coisa (nem
+  // a animação otimista logo abaixo ainda) — usado depois pra conferir
+  // com o estado real do Runrun.it se a transferência aconteceu de
+  // verdade, mesmo que a chamada abaixo devolva erro (ex: Apps Script
+  // sobrecarregado/lento nesse instante).
+  const atualIdxAntesDeTudo = task.sequencia && task.sequencia.length ? task.sequencia.findIndex(s => s.atual) : -1;
+  const nomeAtualAntes = atualIdxAntesDeTudo !== -1 ? task.sequencia[atualIdxAntesDeTudo].nome : null;
+
+  // MUDA A TELA JÁ, antes de qualquer `await`: já mostra a transferência
+  // acontecendo na hora, mesmo sem confirmação nenhuma do Runrun.it ainda
+  // — se a chamada de baixo falhar, o carregarSequencia final busca o
+  // estado real e desfaz a animação sozinho.
+  if (task.sequencia && task.sequencia.length) {
+    const atualIdx = task.sequencia.findIndex(s => s.atual);
+    if (atualIdx !== -1 && atualIdx < task.sequencia.length - 1) {
+      task.sequencia[atualIdx].atual = false;
+      task.sequencia[atualIdx].concluido = true;
+      task.sequencia[atualIdx + 1].atual = true;
+      const seqEl = document.getElementById("workflowSeqGroup");
+      if (seqEl) {
+        seqEl.innerHTML = renderSequenciaHTML(task);
+        wireWorkflowArrows(task);
+        animarMudancaDaSequencia(seqEl);
+      }
+    }
+  }
+
+  // Pausar o cronômetro e avançar de verdade no Runrun.it acontecem
+  // JUNTOS (não um esperando o outro terminar) — é o que tira o maior
+  // pedaço da espera, já que a tela nem depende mais dessas duas
+  // respostas pra parecer que "aconteceu".
+  const [, resultadoAvanco] = await Promise.all([
+    pararCronometroAoTransferir(task),
+    avancarWorkflowNoBackend(task.id),
+  ]);
+  if (resultadoAvanco.novoResponsavel) {
+    task.assignee = resultadoAvanco.novoResponsavel;
+    task.assigneeAvatarUrl = null;
+    render();
+    agendarAtualizacaoKanban();
+  }
+  // Sincroniza com o Runrun.it de verdade (confirma ou desfaz a animação
+  // otimista de cima, se o Runrun.it recusou) ANTES de decidir se mostra
+  // o erro — só reclama se de fato não avançou.
+  await carregarSequencia(task);
+  const atualIdxDepois = task.sequencia && task.sequencia.length ? task.sequencia.findIndex(s => s.atual) : -1;
+  const nomeAtualDepois = atualIdxDepois !== -1 ? task.sequencia[atualIdxDepois].nome : null;
+  const realmenteNaoAvancou = nomeAtualDepois === nomeAtualAntes;
+  if (!resultadoAvanco.ok && realmenteNaoAvancou) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
+  liberarTravaDeSequencia(task);
 }
 
 /**
@@ -344,70 +445,11 @@ function wireWorkflowArrows(task) {
       // Sincroniza com o Runrun.it de verdade — se a chamada acima
       // falhou, isso já devolve a sequência real (volta sozinho).
       await carregarSequencia(task);
-      task._sequenciaAcaoEmAndamento = false;
+      liberarTravaDeSequencia(task);
     });
   }
   if (nextBtn) {
-    nextBtn.addEventListener("click", async () => {
-      // Trava contra clique duplo — mesmo motivo do botão de desfazer,
-      // acima (ver o comentário grande lá).
-      if (task._sequenciaAcaoEmAndamento) { avisarAcaoDeSequenciaOcupada(); return; }
-      task._sequenciaAcaoEmAndamento = true;
-      nextBtn.disabled = true;
-
-      // Guarda quem estava com a tarefa ANTES de mexer em qualquer coisa
-      // (nem a animação otimista logo abaixo ainda) — usado depois pra
-      // conferir com o estado real do Runrun.it se a transferência
-      // aconteceu de verdade, mesmo que a chamada abaixo devolva erro
-      // (ex: Apps Script sobrecarregado/lento nesse instante).
-      const atualIdxAntesDeTudo = task.sequencia && task.sequencia.length ? task.sequencia.findIndex(s => s.atual) : -1;
-      const nomeAtualAntes = atualIdxAntesDeTudo !== -1 ? task.sequencia[atualIdxAntesDeTudo].nome : null;
-
-      // MUDA A TELA JÁ, antes de qualquer `await` (mesmo motivo do botão
-      // de desfazer, acima): já mostra a transferência acontecendo na
-      // hora, mesmo sem confirmação nenhuma do Runrun.it ainda — se a
-      // chamada de baixo falhar, o carregarSequencia final busca o estado
-      // real e desfaz a animação sozinho.
-      if (task.sequencia && task.sequencia.length) {
-        const atualIdx = task.sequencia.findIndex(s => s.atual);
-        if (atualIdx !== -1 && atualIdx < task.sequencia.length - 1) {
-          task.sequencia[atualIdx].atual = false;
-          task.sequencia[atualIdx].concluido = true;
-          task.sequencia[atualIdx + 1].atual = true;
-          const seqEl = document.getElementById("workflowSeqGroup");
-          if (seqEl) {
-            seqEl.innerHTML = renderSequenciaHTML(task);
-            wireWorkflowArrows(task);
-            animarMudancaDaSequencia(seqEl);
-          }
-        }
-      }
-
-      // Pausar o cronômetro e avançar de verdade no Runrun.it acontecem
-      // JUNTOS (não um esperando o outro terminar) — é o que tira o maior
-      // pedaço da espera, já que a tela nem depende mais dessas duas
-      // respostas pra parecer que "aconteceu".
-      const [, resultadoAvanco] = await Promise.all([
-        pararCronometroAoTransferir(task),
-        avancarWorkflowNoBackend(task.id),
-      ]);
-      if (resultadoAvanco.novoResponsavel) {
-        task.assignee = resultadoAvanco.novoResponsavel;
-        task.assigneeAvatarUrl = null;
-        render();
-        agendarAtualizacaoKanban();
-      }
-      if (!resultadoAvanco.ok) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
-      // Sincroniza com o Runrun.it de verdade (confirma ou desfaz a
-      // animação otimista de cima, se o Runrun.it recusou) ANTES de
-      // decidir se mostra o erro — só reclama se de fato não avançou.
-      await carregarSequencia(task);
-      const atualIdxDepois = task.sequencia && task.sequencia.length ? task.sequencia.findIndex(s => s.atual) : -1;
-      const nomeAtualDepois = atualIdxDepois !== -1 ? task.sequencia[atualIdxDepois].nome : null;
-      const realmenteNaoAvancou = nomeAtualDepois === nomeAtualAntes;
-      if (!resultadoAvanco.ok && realmenteNaoAvancou) mostrarToast("Não consegui avançar a sequência dessa tarefa agora.", "erro");
-      task._sequenciaAcaoEmAndamento = false;
-    });
+    nextBtn.addEventListener("click", () => avancarSequenciaHeaderPill(task));
   }
   const addPersonBtn = grupo ? grupo.querySelector("#navAddPersonBtn") : null;
   if (addPersonBtn) {
