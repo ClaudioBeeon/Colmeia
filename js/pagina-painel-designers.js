@@ -1171,7 +1171,14 @@ function pnlAbrirEsforcoModal(filtroInicial) {
     // Lembradas por designer (achado da crítica de 2026-08-17: reabrir
     // sempre voltava pra "Data", obrigando reclicar em "Tempo" todo dia).
     ordenacao: pnlLerPref("ordenacao", "data"),
-    compacto: pnlLerPref("compacto", "0") === "1",
+    // "Modo compacto" saiu (pedido do Cláudio, 2026-08-19) — no lugar,
+    // uma visão por dia: anéis (padrão) ou semana em colunas. Ver
+    // pnlRenderEsforcoModalCorpo mais abaixo.
+    visaoPorDia: pnlLerPref("visaoPorDia", "aneis"),
+    filtroDia: null,
+    compararPar: null,           // [offA, offB] quando dois dias estão em comparação
+    modoEscolhendoComparar: false,
+    bufferEscolha: [],
     selecionadas: new Set(),
   };
   // Fotografia da carga de cada um AO ABRIR, pra comparar com o que ficou
@@ -1250,6 +1257,208 @@ function pnlRenderTarefasModal() {
 // enxergando as duas normalmente.
 const PNL_ESFORCO_SEM_RUNRUN = ["Imane", "Sem designer"];
 
+// ===== Visão por dia (anéis / semana em colunas) — 2026-08-19 =====
+// Substituiu o "Modo compacto": em vez de encolher a mesma lista, mostra
+// quantas tarefas existem em cada um dos próximos dias, com duas formas de
+// olhar (anéis com "comparar dois dias" + arrastar; ou a semana inteira em
+// colunas, cartão por tarefa). As duas leem os MESMOS dados
+// (pnlTarefasPorDia) e escrevem pela MESMA função de sempre
+// (pnlTrocarDataOtimista) — nada de escrita nova, só uma leitura nova.
+const PNL_DIAS_A_FRENTE = 9; // hoje + 9 = 10 dias nos anéis
+const PNL_DOW_ABREV = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+function pnlOffsetDeHoje(iso) {
+  if (!iso) return null;
+  const [a1, m1, d1] = hojeISO().split("-").map(Number);
+  const [a2, m2, d2] = iso.split("-").map(Number);
+  return Math.round((Date.UTC(a2, m2 - 1, d2) - Date.UTC(a1, m1 - 1, d1)) / 86400000);
+}
+function pnlIsoDoOffset(off) {
+  const d = new Date();
+  d.setDate(d.getDate() + off);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function pnlNumeroDoDia(off) { return Number(pnlIsoDoOffset(off).split("-")[2]); }
+function pnlDiaDaSemanaAbrev(off) { const d = new Date(); d.setDate(d.getDate() + off); return PNL_DOW_ABREV[d.getDay()]; }
+function pnlNomeDoDiaOffset(off) {
+  if (off === 0) return "Hoje";
+  if (off === 1) return "Amanhã";
+  return `${pnlDiaDaSemanaAbrev(off)} ${pnlNumeroDoDia(off)}`;
+}
+
+/** Tarefas em aberto agrupadas por dia (offset de hoje, 0..PNL_DIAS_A_FRENTE),
+ *  respeitando o filtro de pessoa já escolhido na coluna da esquerda — mesma
+ *  regra de tempo/semCadastro de pnlEsforcoPorResponsavel, só que pra
+ *  qualquer dia, não só hoje. */
+function pnlTarefasPorDia(st) {
+  const porDia = {};
+  for (let i = 0; i <= PNL_DIAS_A_FRENTE; i++) porDia[i] = { min: 0, semCadastro: 0, tarefas: [] };
+  pnlTarefasAbertas().forEach(t => {
+    if (st.filtroPessoa && t.assignee !== st.filtroPessoa) return;
+    const off = pnlOffsetDeHoje(t.dueISO);
+    if (off === null || off < 0 || off > PNL_DIAS_A_FRENTE) return;
+    const min = pnlTempoMedioCadastrado(t.assignee, t.client);
+    if (min === null) porDia[off].semCadastro++; else porDia[off].min += min;
+    porDia[off].tarefas.push(t);
+  });
+  Object.values(porDia).forEach(g => g.tarefas.sort((a, b) => (a.title || "").localeCompare(b.title || "")));
+  return porDia;
+}
+
+function pnlAnelSVG(pct, nivel) {
+  const r = 18, c = 2 * Math.PI * r, offset = c - (Math.min(100, pct) / 100) * c;
+  return `<svg class="pnl-anel-svg" viewBox="0 0 46 46">
+    <circle class="pnl-anel-trilho" cx="23" cy="23" r="${r}"></circle>
+    <circle class="pnl-anel-progresso nivel-${nivel}" cx="23" cy="23" r="${r}" stroke-dasharray="${c}" stroke-dashoffset="${offset}"></circle>
+  </svg>`;
+}
+function pnlClasseDoAnel(st, off) {
+  if (st.compararPar) return st.compararPar[0] === off ? "pnl-anel-par-a" : st.compararPar[1] === off ? "pnl-anel-par-b" : "";
+  if (st.modoEscolhendoComparar) return st.bufferEscolha.includes(off) ? "pnl-anel-escolhendo" : "";
+  return st.filtroDia === off ? "pnl-anel-sel" : "";
+}
+function pnlBadgeEscolhaAnel(st, off) {
+  if (!st.modoEscolhendoComparar) return "";
+  const i = st.bufferEscolha.indexOf(off);
+  return i === -1 ? "" : `<span class="pnl-anel-badge-ordem">${i + 1}</span>`;
+}
+function pnlAneisHTML(st) {
+  const dados = pnlTarefasPorDia(st);
+  const offs = Object.keys(dados).map(Number).sort((a, b) => a - b);
+  return `<div class="pnl-aneis-fileira">${offs.map(off => {
+    const g = dados[off];
+    const nivel = g.tarefas.length ? pnlNivelDeCarga(g.min) : "vazio";
+    const pct = Math.min(100, g.min / PNL_ESFORCO_LIMITE_MIN * 100);
+    return `
+      <button type="button" class="pnl-anel-item ${pnlClasseDoAnel(st, off)} ${off === 0 ? "pnl-anel-hoje" : ""}" data-pnl-anel="${off}"
+              aria-pressed="${st.filtroDia === off}" title="${pnlNomeDoDiaOffset(off)} — ${g.tarefas.length} tarefa${g.tarefas.length === 1 ? "" : "s"}">
+        ${pnlBadgeEscolhaAnel(st, off)}
+        <span class="pnl-anel-dow">${off === 0 ? "hoje" : pnlDiaDaSemanaAbrev(off)}</span>
+        <div class="pnl-anel-wrap">${pnlAnelSVG(pct, nivel)}<span class="pnl-anel-num">${pnlNumeroDoDia(off)}</span></div>
+        <span class="pnl-anel-qtd">${g.tarefas.length || "livre"}</span>
+      </button>`;
+  }).join("")}</div>`;
+}
+
+function pnlAoClicarAnel(st, off) {
+  if (!st.modoEscolhendoComparar) { st.filtroDia = st.filtroDia === off ? null : off; pnlRenderTarefasModal(); return; }
+  if (st.bufferEscolha.includes(off)) { st.bufferEscolha = st.bufferEscolha.filter(x => x !== off); pnlRenderTarefasModal(); return; }
+  st.bufferEscolha.push(off);
+  if (st.bufferEscolha.length === 2) { st.compararPar = [...st.bufferEscolha]; st.modoEscolhendoComparar = false; st.bufferEscolha = []; }
+  pnlRenderTarefasModal();
+}
+function pnlLigarModoComparar(st) { st.modoEscolhendoComparar = !st.modoEscolhendoComparar; st.bufferEscolha = []; pnlRenderTarefasModal(); }
+function pnlSairDaComparacaoDeDias(st) { st.compararPar = null; pnlRenderTarefasModal(); }
+
+function pnlAcaoAneisHTML(st) {
+  if (st.compararPar) {
+    return `<div class="pnl-esforco-acao-linha"><span class="pnl-dica">Comparando ${pnlNomeDoDiaOffset(st.compararPar[0])} × ${pnlNomeDoDiaOffset(st.compararPar[1])} — arraste tarefas entre as colunas, ou pra qualquer anel acima.</span><button type="button" class="pnl-sort-btn" data-pnl-sair-comparar>Sair da comparação</button></div>`;
+  }
+  return `<div class="pnl-esforco-acao-linha">
+    <button type="button" class="pnl-sort-btn ${st.modoEscolhendoComparar ? "active" : ""}" data-pnl-comparar>${st.modoEscolhendoComparar ? "Cancelar" : "Comparar dois dias"}</button>
+    <span class="pnl-dica">${st.modoEscolhendoComparar ? "Clique em dois dias pra escolher o par." : "Arraste uma tarefa pra cima de um dia pra mudar a entrega dela."}</span>
+  </div>`;
+}
+
+/** Painel de comparação — duas colunas lado a lado, cada uma um alvo de
+ *  arraste (data-pnl-drop-dia), reaproveitando pnlLinhaTarefaHTML de sempre. */
+function pnlColunaCompararHTML(st, off) {
+  const dados = pnlTarefasPorDia(st)[off];
+  const nivel = dados.tarefas.length ? pnlNivelDeCarga(dados.min) : "vazio";
+  return `<div class="pnl-comparar-col" data-pnl-drop-dia="${off}">
+    <div class="pnl-comparar-col-hdr">
+      <span class="pnl-comparar-col-nome">${pnlNomeDoDiaOffset(off)}</span>
+      <span class="pnl-comparar-col-tempo nivel-${nivel}">${escaparHTML(pnlFormatTempo(dados.min))} · ${dados.tarefas.length} tarefa${dados.tarefas.length === 1 ? "" : "s"}</span>
+    </div>
+    <div class="pnl-comparar-col-lista">
+      ${dados.tarefas.length ? dados.tarefas.map(t => pnlLinhaTarefaHTML(t, true, false, st)).join("") : `<div class="pnl-comparar-col-vazia">Dia livre.<br>Arraste uma tarefa pra cá.</div>`}
+    </div>
+  </div>`;
+}
+function pnlPainelCompararHTML(st) {
+  return `<div class="pnl-comparar-painel">${pnlColunaCompararHTML(st, st.compararPar[0])}${pnlColunaCompararHTML(st, st.compararPar[1])}</div>`;
+}
+
+/** Cartão enxuto da "Semana em colunas" (pedido do Cláudio, 2026-08-19,
+ *  baseado numa referência visual que ele mandou): só o título, o cliente
+ *  como pílula, e as duas datas no rodapé — publicação à esquerda, entrega
+ *  à direita. Sem caixinha de seleção de propósito (o arraste aqui é
+ *  sempre de uma tarefa por vez — lote continua sendo coisa da lista/anéis). */
+function pnlCartaoSemanaHTML(t) {
+  const pubCurta = pnlFormatDataCurta(t.dataPublicacao);
+  const atrasada = !!(t.dataPublicacao && t.dueISO && t.dueISO > t.dataPublicacao);
+  const clienteCor = t.client ? pnlCorPorHash(t.client) : null;
+  return `
+    <div class="pnl-semana-card" data-pnl-row-id="${escaparHTML(String(t.id))}" draggable="true" style="background:${clienteCor ? clienteCor.bg : "var(--card-bg)"}">
+      <button type="button" class="pnl-semana-card-tit" data-pnl-abrir-tarefa="${escaparHTML(String(t.id))}" title="Abrir a tarefa no Colmeia">${escaparHTML(t.title || "Sem título")}</button>
+      ${t.client ? `<span class="pnl-semana-card-cliente">${escaparHTML(t.client)}</span>` : ""}
+      <div class="pnl-semana-card-rodape">
+        <span class="pnl-semana-card-data pnl-semana-card-pub" title="Data de Publicação">${pubCurta ? escaparHTML(pubCurta) : "—"}</span>
+        <span class="pnl-semana-card-data pnl-semana-card-entrega ${atrasada ? "atrasada" : ""}" title="Entrega desejada">${escaparHTML(t.due || "sem data")}</span>
+      </div>
+    </div>`;
+}
+function pnlSemanaEmColunasHTML(st) {
+  const dados = pnlTarefasPorDia(st);
+  const offs = Array.from({ length: 7 }, (_, i) => i);
+  return `<div class="pnl-semana-wrap">${offs.map(off => {
+    const g = dados[off];
+    return `<div class="pnl-semana-col ${off === 0 ? "pnl-semana-col-hoje" : ""}" data-pnl-drop-dia="${off}">
+      <div class="pnl-semana-col-hdr">
+        <div class="pnl-semana-col-dow">${off === 0 ? "Hoje" : pnlDiaDaSemanaAbrev(off)}</div>
+        <div class="pnl-semana-col-data"><span class="pnl-semana-col-num">${pnlNumeroDoDia(off)}</span><span class="pnl-semana-col-qtd">${g.tarefas.length} tarefa${g.tarefas.length === 1 ? "" : "s"}</span></div>
+      </div>
+      <div class="pnl-semana-col-corpo">${g.tarefas.length ? g.tarefas.map(pnlCartaoSemanaHTML).join("") : `<div class="pnl-semana-col-vazia">Dia livre</div>`}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+/* ---------- arrastar tarefa(s) pra outro dia — usado pelos anéis, pelo
+   painel de comparação e pela semana em colunas ---------- */
+let pnlArrastandoIds = [];
+function pnlAoArrastarInicioLinha(ev, st, id) {
+  const idStr = String(id);
+  pnlArrastandoIds = (st.selecionadas && st.selecionadas.has(idStr) && st.selecionadas.size > 1) ? [...st.selecionadas] : [idStr];
+  ev.dataTransfer.effectAllowed = "move";
+  try { ev.dataTransfer.setData("text/plain", idStr); } catch (e) { /* sem problema */ }
+}
+function pnlAoArrastarFimLinha() {
+  pnlArrastandoIds = [];
+  document.querySelectorAll(".pnl-anel-arraste-sobre").forEach(el => { el.classList.remove("pnl-anel-arraste-sobre"); el.querySelector(".pnl-anel-ghost")?.remove(); });
+  document.querySelectorAll(".pnl-arraste-sobre").forEach(el => el.classList.remove("pnl-arraste-sobre"));
+}
+function pnlAoArrastarSobreAnel(ev, off) {
+  ev.preventDefault();
+  const el = ev.currentTarget;
+  if (el.classList.contains("pnl-anel-arraste-sobre")) return;
+  el.classList.add("pnl-anel-arraste-sobre");
+  const st = pnlTarefasEstadoAtual;
+  const dados = st ? pnlTarefasPorDia(st)[off] : null;
+  const soma = pnlArrastandoIds.reduce((s, id) => {
+    const t = st ? pnlAcharTarefaPorId(st, id) : null;
+    return s + (t ? (pnlTempoMedioCadastrado(t.assignee, t.client) || 0) : 0);
+  }, 0);
+  const ghost = document.createElement("div");
+  ghost.className = "pnl-anel-ghost";
+  ghost.textContent = "→ " + pnlFormatTempo((dados ? dados.min : 0) + soma);
+  el.appendChild(ghost);
+}
+function pnlAoSairDoAnel(ev) { ev.currentTarget.classList.remove("pnl-anel-arraste-sobre"); ev.currentTarget.querySelector(".pnl-anel-ghost")?.remove(); }
+function pnlSoltarEmDia(st, off) {
+  if (!pnlArrastandoIds.length) return;
+  const novaISO = pnlIsoDoOffset(off);
+  const ids = [...pnlArrastandoIds];
+  pnlArrastandoIds = [];
+  ids.forEach(id => { const t = pnlAcharTarefaPorId(st, id); if (t) pnlTrocarDataOtimista(st, t, novaISO); });
+  if (st.selecionadas) st.selecionadas.clear();
+}
+function pnlAoSoltarNoAnel(ev, st, off) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove("pnl-anel-arraste-sobre");
+  ev.currentTarget.querySelector(".pnl-anel-ghost")?.remove();
+  pnlSoltarEmDia(st, off);
+}
+
 function pnlRenderEsforcoModalCorpo(st, corpo) {
   const nomes = Object.keys(st.esforco)
     .filter(n => !PNL_ESFORCO_SEM_RUNRUN.includes(n))
@@ -1302,47 +1511,62 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
     </div>
   `;
 
-  let linhas = [];
-  nomes.forEach(nome => {
-    if (st.filtroPessoa && st.filtroPessoa !== nome) return;
-    st.esforco[nome].tarefas.forEach(t => linhas.push(t));
-  });
+  const semanaAtiva = st.visaoPorDia === "semana";
+  const toggleVisaoHtml = `
+    <div class="pnl-visao-toggle-row">
+      <button type="button" class="pnl-sort-btn" data-pnl-visao-toggle>${semanaAtiva ? "Ver anéis" : "Ver semana em colunas"}</button>
+    </div>`;
 
-  if (st.ordenacao === "tempo") {
-    // null (sem cadastro) vai pro FIM, não pro topo — não é "tarefa de zero
-    // minuto", é dado faltando.
-    linhas.sort((a, b) => {
-      const ta = pnlTempoMedioCadastrado(a.assignee, a.client);
-      const tb = pnlTempoMedioCadastrado(b.assignee, b.client);
-      if (ta === null && tb === null) return 0;
-      if (ta === null) return 1;
-      if (tb === null) return -1;
-      return tb - ta;
-    });
-  } else if (st.ordenacao === "aba") {
-    const ordemEtapa = {};
-    (typeof columnsDef !== "undefined" ? columnsDef : []).forEach((c, i) => { ordemEtapa[c.key] = i; });
-    linhas.sort((a, b) => (ordemEtapa.hasOwnProperty(a.status) ? ordemEtapa[a.status] : 99) - (ordemEtapa.hasOwnProperty(b.status) ? ordemEtapa[b.status] : 99));
+  let corpoTarefasHtml, estaveis = [];
+  if (semanaAtiva) {
+    corpoTarefasHtml = pnlSemanaEmColunasHTML(st);
   } else {
-    linhas.sort((a, b) => (a.dueISO || "9999").localeCompare(b.dueISO || "9999"));
-  }
+    const diaAtivo = st.filtroDia ?? 0;
+    let linhas = pnlTarefasPorDia(st)[diaAtivo].tarefas.slice();
 
-  const estaveis = pnlListaEstavel(st, `esf:${st.filtroPessoa || "-"}:${st.ordenacao}`, linhas);
-  pnlPintarListaPreservandoRolagem(corpo, `
-    <div class="pnl-esforco-corpo">
-      ${colunaPessoasHtml}
-      <div class="pnl-esforco-coluna-tarefas">
+    if (st.ordenacao === "tempo") {
+      // null (sem cadastro) vai pro FIM, não pro topo — não é "tarefa de
+      // zero minuto", é dado faltando.
+      linhas.sort((a, b) => {
+        const ta = pnlTempoMedioCadastrado(a.assignee, a.client);
+        const tb = pnlTempoMedioCadastrado(b.assignee, b.client);
+        if (ta === null && tb === null) return 0;
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        return tb - ta;
+      });
+    } else if (st.ordenacao === "aba") {
+      const ordemEtapa = {};
+      (typeof columnsDef !== "undefined" ? columnsDef : []).forEach((c, i) => { ordemEtapa[c.key] = i; });
+      linhas.sort((a, b) => (ordemEtapa.hasOwnProperty(a.status) ? ordemEtapa[a.status] : 99) - (ordemEtapa.hasOwnProperty(b.status) ? ordemEtapa[b.status] : 99));
+    } else {
+      linhas.sort((a, b) => (a.dueISO || "9999").localeCompare(b.dueISO || "9999"));
+    }
+
+    estaveis = pnlListaEstavel(st, `esf:${st.filtroPessoa || "-"}:${st.ordenacao}:${diaAtivo}`, linhas);
+    corpoTarefasHtml = `
+      ${pnlAneisHTML(st)}
+      ${pnlAcaoAneisHTML(st)}
+      ${st.compararPar ? pnlPainelCompararHTML(st) : `
         <div class="pnl-ordenar-row">
           <span class="pnl-ordenar-label">Ordenar por:</span>
           <button type="button" class="pnl-sort-btn ${st.ordenacao === "data" ? "active" : ""}" data-pnl-ordenar="data" aria-pressed="${st.ordenacao === "data"}">Data</button>
           <button type="button" class="pnl-sort-btn ${st.ordenacao === "tempo" ? "active" : ""}" data-pnl-ordenar="tempo" aria-pressed="${st.ordenacao === "tempo"}">Tempo</button>
           <button type="button" class="pnl-sort-btn ${st.ordenacao === "aba" ? "active" : ""}" data-pnl-ordenar="aba" aria-pressed="${st.ordenacao === "aba"}">Aba</button>
-          <span style="flex:1"></span>
-          <button type="button" class="pnl-sort-btn ${st.compacto ? "active" : ""}" data-pnl-compacto aria-pressed="${!!st.compacto}">${st.compacto ? "Compacto" : "Modo compacto"}</button>
         </div>
-        <div class="pnl-tarefas-lista ${st.compacto ? "compacta" : ""}">
-          ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu, st)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra hoje.</div>`}
+        <div class="pnl-tarefas-lista">
+          ${estaveis.length ? estaveis.map(x => pnlLinhaTarefaHTML(x.t, true, x.saiu, st)).join("") : `<div class="pnl-vazio">Nenhuma tarefa planejada pra ${pnlNomeDoDiaOffset(diaAtivo).toLowerCase()}.</div>`}
         </div>
+      `}
+    `;
+  }
+
+  pnlPintarListaPreservandoRolagem(corpo, `
+    <div class="pnl-esforco-corpo">
+      ${colunaPessoasHtml}
+      <div class="pnl-esforco-coluna-tarefas">
+        ${toggleVisaoHtml}
+        ${corpoTarefasHtml}
       </div>
     </div>
   `);
@@ -1351,8 +1575,15 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
     el.addEventListener("click", () => {
       const nome = el.dataset.pnlEsforcoFiltro;
       st.filtroPessoa = st.filtroPessoa === nome ? null : nome;
+      st.filtroDia = null; st.compararPar = null; st.modoEscolhendoComparar = false; st.bufferEscolha = [];
       pnlRenderTarefasModal();
     });
+  });
+  corpo.querySelector("[data-pnl-visao-toggle]")?.addEventListener("click", () => {
+    st.visaoPorDia = st.visaoPorDia === "semana" ? "aneis" : "semana";
+    pnlSalvarPref("visaoPorDia", st.visaoPorDia);
+    st.compararPar = null; st.modoEscolhendoComparar = false; st.bufferEscolha = [];
+    pnlRenderTarefasModal();
   });
   corpo.querySelectorAll("[data-pnl-ordenar]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -1361,14 +1592,28 @@ function pnlRenderEsforcoModalCorpo(st, corpo) {
       pnlRenderTarefasModal();
     });
   });
-  corpo.querySelector("[data-pnl-compacto]")?.addEventListener("click", () => {
-    st.compacto = !st.compacto;
-    pnlSalvarPref("compacto", st.compacto ? "1" : "0");
-    pnlRenderTarefasModal();
+  corpo.querySelectorAll("[data-pnl-anel]").forEach(el => {
+    const off = Number(el.dataset.pnlAnel);
+    el.addEventListener("click", () => pnlAoClicarAnel(st, off));
+    el.addEventListener("dragover", ev => pnlAoArrastarSobreAnel(ev, off));
+    el.addEventListener("dragleave", pnlAoSairDoAnel);
+    el.addEventListener("drop", ev => pnlAoSoltarNoAnel(ev, st, off));
+  });
+  corpo.querySelector("[data-pnl-comparar]")?.addEventListener("click", () => pnlLigarModoComparar(st));
+  corpo.querySelector("[data-pnl-sair-comparar]")?.addEventListener("click", () => pnlSairDaComparacaoDeDias(st));
+  corpo.querySelectorAll("[data-pnl-drop-dia]").forEach(col => {
+    const off = Number(col.dataset.pnlDropDia);
+    col.addEventListener("dragover", ev => { ev.preventDefault(); col.classList.add("pnl-arraste-sobre"); });
+    col.addEventListener("dragleave", () => col.classList.remove("pnl-arraste-sobre"));
+    col.addEventListener("drop", ev => { ev.preventDefault(); col.classList.remove("pnl-arraste-sobre"); pnlSoltarEmDia(st, off); });
+  });
+  corpo.querySelectorAll("[data-pnl-row-id][draggable]").forEach(row => {
+    row.addEventListener("dragstart", ev => pnlAoArrastarInicioLinha(ev, st, row.dataset.pnlRowId));
+    row.addEventListener("dragend", pnlAoArrastarFimLinha);
   });
 
   pnlWireLinhasDoModal(corpo, st);
-  if (st.selecionadas) pnlRenderBarraDeLote(st, corpo);
+  if (st.selecionadas && !st.compararPar && !semanaAtiva) pnlRenderBarraDeLote(st, corpo);
 }
 
 /**
@@ -1861,8 +2106,13 @@ function pnlLinhaTarefaHTML(t, mostrarDesigner, saiuDaLista, st) {
     ? `Sem tempo cadastrado pra ${t.assignee || "esse designer"} + ${t.client || "esse cliente"} — esta tarefa não conta no esforço do dia`
     : `Tempo médio cadastrado na aba de ${t.assignee || ""}`;
 
+  // Arrastável pra outro dia SÓ dentro do "Esforço de hoje" (achado
+  // desta rodada, 2026-08-19: arrastar tarefa pra um anel/coluna é como
+  // se muda a entrega ali) — o modal genérico de tarefas não usa isso.
+  const arrastavel = !!(st && st.modoEsforco);
+
   return `
-    <div class="pnl-tarefa-row ${saiuDaLista ? "pnl-tarefa-row-saiu" : ""} ${marcada ? "pnl-tarefa-row-marcada" : ""}" data-pnl-row-id="${escaparHTML(String(t.id))}">
+    <div class="pnl-tarefa-row ${saiuDaLista ? "pnl-tarefa-row-saiu" : ""} ${marcada ? "pnl-tarefa-row-marcada" : ""}" data-pnl-row-id="${escaparHTML(String(t.id))}" ${arrastavel ? 'draggable="true"' : ""}>
       ${emLote ? `<input type="checkbox" class="pnl-tarefa-chk" data-pnl-marcar="${escaparHTML(String(t.id))}" ${marcada ? "checked" : ""} aria-label="Selecionar ${escaparHTML(t.title || "tarefa")}">` : ""}
       <div class="pnl-tarefa-info">
         <button type="button" class="pnl-tarefa-titulo-btn" data-pnl-abrir-tarefa="${escaparHTML(String(t.id))}" title="Abrir a tarefa no Colmeia">${escaparHTML(t.title || "Sem título")}</button>
