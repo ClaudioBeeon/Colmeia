@@ -450,6 +450,27 @@ function diagnosticoAlterarDataPublicacao() {
   Logger.log('LEITURA DEPOIS -> data publicação: ' + extrairDataPublicacaoTarefa(leitura));
 }
 
+// TEMPORÁRIO (2026-08-20): versão HTTP do diagnóstico abaixo, só pra
+// investigar ao vivo por que "Entrega desejada" está caindo em 00:00 em
+// vez de 18:00 mesmo mandando desired_date_with_time — sem acesso ao
+// editor do Apps Script nesta sessão. Remover depois de usar.
+function diagnosticoAlterarDataEntregaHTTP(taskId, novaData, autor) {
+  if (!taskId || !novaData) return { ok: false, error: 'taskId ou novaData ausente.' };
+  var antes = runrunFetch('/tasks/' + taskId);
+  var resultado = runrunRequest('/tasks/' + taskId, 'put', {
+    desired_date: novaData,
+    desired_date_with_time: novaData + 'T18:00:00-03:00'
+  }, tokenRunrunDoAutor(autor));
+  var depois = runrunFetch('/tasks/' + taskId);
+  return {
+    ok: true,
+    statusDoPut: resultado.status,
+    corpoDoPut: resultado.body,
+    antes: { desired_date: antes.desired_date, desired_date_with_time: antes.desired_date_with_time },
+    depois: { desired_date: depois.desired_date, desired_date_with_time: depois.desired_date_with_time }
+  };
+}
+
 // Rode manualmente pelo editor numa tarefa de teste, pra confirmar que
 // a data realmente muda (não só aceita com status 200 e ignora).
 function diagnosticoAlterarDataEntrega() {
