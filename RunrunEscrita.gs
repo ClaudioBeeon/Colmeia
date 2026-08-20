@@ -486,6 +486,13 @@ function diagnosticoAlterarDataEntregaHTTP(taskId, novaData, autor) {
   }, token);
   tentativas.push({ tentativa: 'com_estimated_delivery_date', status: c.status, depois: ler() });
 
+  // Tentativa D: a hora DENTRO do próprio desired_date (datetime completo),
+  // sem desired_date_with_time nenhum.
+  var d = runrunRequest('/tasks/' + taskId, 'put', {
+    desired_date: novaData + 'T18:00:00-03:00'
+  }, token);
+  tentativas.push({ tentativa: 'hora_dentro_do_desired_date', status: d.status, corpo: d.body && d.body.error, depois: ler() });
+
   return {
     ok: true,
     tentativas: tentativas
