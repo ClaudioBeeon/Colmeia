@@ -395,18 +395,23 @@ function moverParaEtapaArbitraria(taskId, taskStateId, autor) {
 
 /**
  * Altera a data de entrega desejada (desired_date) de uma tarefa.
- * ✅ Mesma implementação que já funciona no painel-designers-beeon:
- * o pulo do gato é mandar "desired_date_with_time" JUNTO com
- * "desired_date" — sem isso o Runrun.it aceita a chamada (status 200)
- * mas ignora o valor e a Entrega Desejada não muda de verdade. O
- * horário fica fixo em 18:00 (horário de Brasília).
+ *
+ * ⚠️ Achado ao vivo em 2026-08-20 (relato do Cláudio: entrega caindo
+ * sempre às 00:00, marcando atrasada à toa): a crença antiga aqui — mandar
+ * "desired_date_with_time" JUNTO com "desired_date" — está ERRADA. Testei
+ * contra uma tarefa de verdade (curl direto no backend): o Runrun.it
+ * aceita esse par com status 200, mas `desired_date_with_time` continua
+ * exatamente igual a ANTES da chamada — ele é ignorado por completo nessa
+ * rota (PUT /tasks/{id}). A hora só pega de um jeito: dentro do PRÓPRIO
+ * "desired_date", como datetime completo (ex: "2026-08-20T18:00:00-03:00"),
+ * SEM mandar "desired_date_with_time" nenhum. Confirmado lendo a tarefa de
+ * volta depois da escrita.
  */
 function alterarDataEntregaTarefa(taskId, novaData, autor) {
   if (!taskId || !novaData) return { ok: false, error: 'taskId ou novaData ausente.' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(novaData)) return { ok: false, error: 'Formato de data inválido (esperado AAAA-MM-DD).' };
   var resultado = runrunRequest('/tasks/' + taskId, 'put', {
-    desired_date: novaData,
-    desired_date_with_time: novaData + 'T18:00:00-03:00'
+    desired_date: novaData + 'T18:00:00-03:00'
   }, tokenRunrunDoAutor(autor));
   if (!resultado.ok) {
     return { ok: false, error: 'Runrun.it recusou alterar a data de entrega (status ' + resultado.status + ').' };
@@ -450,63 +455,15 @@ function diagnosticoAlterarDataPublicacao() {
   Logger.log('LEITURA DEPOIS -> data publicação: ' + extrairDataPublicacaoTarefa(leitura));
 }
 
-// TEMPORÁRIO (2026-08-20): versão HTTP do diagnóstico abaixo, só pra
-// investigar ao vivo por que "Entrega desejada" está caindo em 00:00 em
-// vez de 18:00 mesmo mandando desired_date_with_time — sem acesso ao
-// editor do Apps Script nesta sessão. Remover depois de usar.
-function diagnosticoAlterarDataEntregaHTTP(taskId, novaData, autor) {
-  if (!taskId || !novaData) return { ok: false, error: 'taskId ou novaData ausente.' };
-  var token = tokenRunrunDoAutor(autor);
-  function ler() {
-    var t = runrunFetch('/tasks/' + taskId);
-    return { desired_date: t.desired_date, desired_date_with_time: t.desired_date_with_time };
-  }
-  var tentativas = [];
-
-  // Tentativa A: só desired_date_with_time, SEM desired_date junto — pra
-  // ver se mandar os dois juntos é o que faz o Runrun.it ignorar a hora.
-  var a = runrunRequest('/tasks/' + taskId, 'put', {
-    desired_date_with_time: novaData + 'T18:00:00-03:00'
-  }, token);
-  tentativas.push({ tentativa: 'so_with_time', status: a.status, depois: ler() });
-
-  // Tentativa B: desired_date_with_time sem o offset -03:00 (só a hora local crua).
-  var b = runrunRequest('/tasks/' + taskId, 'put', {
-    desired_date_with_time: novaData + 'T18:00:00'
-  }, token);
-  tentativas.push({ tentativa: 'sem_offset', status: b.status, depois: ler() });
-
-  // Tentativa C: campo estimated_delivery_date (o único que já vinha com
-  // hora de verdade na leitura) — só pra registrar se ele reage, não é o
-  // campo certo pra "Entrega Desejada" mas ajuda a entender o padrão.
-  var c = runrunRequest('/tasks/' + taskId, 'put', {
-    desired_date: novaData,
-    desired_date_with_time: novaData + 'T18:00:00-03:00',
-    estimated_delivery_date: novaData + 'T18:00:00-03:00'
-  }, token);
-  tentativas.push({ tentativa: 'com_estimated_delivery_date', status: c.status, depois: ler() });
-
-  // Tentativa D: a hora DENTRO do próprio desired_date (datetime completo),
-  // sem desired_date_with_time nenhum.
-  var d = runrunRequest('/tasks/' + taskId, 'put', {
-    desired_date: novaData + 'T18:00:00-03:00'
-  }, token);
-  tentativas.push({ tentativa: 'hora_dentro_do_desired_date', status: d.status, corpo: d.body && d.body.error, depois: ler() });
-
-  return {
-    ok: true,
-    tentativas: tentativas
-  };
-}
-
 // Rode manualmente pelo editor numa tarefa de teste, pra confirmar que
-// a data realmente muda (não só aceita com status 200 e ignora).
+// a data realmente muda (não só aceita com status 200 e ignora). Formato
+// corrigido em 2026-08-20 — ver o comentário grande em
+// alterarDataEntregaTarefa pro achado completo.
 function diagnosticoAlterarDataEntrega() {
   var taskId = 57295; // troque pelo ID de uma tarefa de teste
   var novaData = '2026-08-15'; // troque pela data de teste (AAAA-MM-DD)
   var resultado = runrunRequest('/tasks/' + taskId, 'put', {
-    desired_date: novaData,
-    desired_date_with_time: novaData + 'T18:00:00-03:00'
+    desired_date: novaData + 'T18:00:00-03:00'
   });
   Logger.log('TROCAR DATA -> status ' + resultado.status + ': ' + JSON.stringify(resultado.body, null, 2));
   var leitura = runrunFetch('/tasks/' + taskId);
@@ -575,9 +532,10 @@ function criarTarefaRunrun(dados) {
   // O `user_id` que estava aqui antes era aceito com 200 e ignorado — a
   // tarefa nascia com "Alocados" vazio.
   if (responsavelId) corpoTask.assignments = [{ assignee_id: responsavelId }];
+  // Mesmo achado de alterarDataEntregaTarefa (2026-08-20): a hora vai
+  // DENTRO do próprio desired_date — desired_date_with_time é ignorado.
   if (dados.desiredDate) {
-    corpoTask.desired_date = dados.desiredDate;
-    corpoTask.desired_date_with_time = dados.desiredDate + 'T18:00:00-03:00';
+    corpoTask.desired_date = dados.desiredDate + 'T18:00:00-03:00';
   }
 
   var descricaoFinal = '';

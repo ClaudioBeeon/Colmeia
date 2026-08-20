@@ -2306,7 +2306,8 @@ function devolverParaDesigner(dados) {
     responsavelNome: designer,
     descricao: corpo + assinatura,
     // Entrega HOJE — criarTarefaRunrun completa sozinho com as 18:00
-    // (desired_date_with_time). Sem data, a tarefa nasce sem prazo e
+    // (dentro do próprio desired_date, ver o achado de 2026-08-20 em
+    // RunrunEscrita.gs). Sem data, a tarefa nasce sem prazo e
     // afunda no fim da coluna, que é ordenada por entrega: o pedido do
     // Cláudio é exatamente esse, "se não o card se perde".
     desiredDate: hojeNoFusoDaAgencia(),

@@ -454,9 +454,6 @@ function handleRequest(e, method) {
         output = moverEtapaTarefa(body.taskId, body.chaveColuna, body.autor);
       } else if (body.acao === 'moverEtapaArbitraria') {
         output = moverParaEtapaArbitraria(body.taskId, body.taskStateId, body.autor);
-      } else if (body.acao === 'diagnosticoTemp2026_08_20') {
-        // TEMPORÁRIO — ver RunrunEscrita.gs. Remover esta rota junto da função.
-        output = diagnosticoAlterarDataEntregaHTTP(body.taskId, body.novaData, body.autor);
       } else if (body.acao === 'alterarEntrega') {
         output = alterarDataEntregaTarefa(body.taskId, body.novaData, body.autor);
       } else if (body.acao === 'alterarPublicacao') {
