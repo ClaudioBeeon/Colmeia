@@ -456,18 +456,39 @@ function diagnosticoAlterarDataPublicacao() {
 // editor do Apps Script nesta sessão. Remover depois de usar.
 function diagnosticoAlterarDataEntregaHTTP(taskId, novaData, autor) {
   if (!taskId || !novaData) return { ok: false, error: 'taskId ou novaData ausente.' };
-  var antes = runrunFetch('/tasks/' + taskId);
-  var resultado = runrunRequest('/tasks/' + taskId, 'put', {
-    desired_date: novaData,
+  var token = tokenRunrunDoAutor(autor);
+  function ler() {
+    var t = runrunFetch('/tasks/' + taskId);
+    return { desired_date: t.desired_date, desired_date_with_time: t.desired_date_with_time };
+  }
+  var tentativas = [];
+
+  // Tentativa A: só desired_date_with_time, SEM desired_date junto — pra
+  // ver se mandar os dois juntos é o que faz o Runrun.it ignorar a hora.
+  var a = runrunRequest('/tasks/' + taskId, 'put', {
     desired_date_with_time: novaData + 'T18:00:00-03:00'
-  }, tokenRunrunDoAutor(autor));
-  var depois = runrunFetch('/tasks/' + taskId);
+  }, token);
+  tentativas.push({ tentativa: 'so_with_time', status: a.status, depois: ler() });
+
+  // Tentativa B: desired_date_with_time sem o offset -03:00 (só a hora local crua).
+  var b = runrunRequest('/tasks/' + taskId, 'put', {
+    desired_date_with_time: novaData + 'T18:00:00'
+  }, token);
+  tentativas.push({ tentativa: 'sem_offset', status: b.status, depois: ler() });
+
+  // Tentativa C: campo estimated_delivery_date (o único que já vinha com
+  // hora de verdade na leitura) — só pra registrar se ele reage, não é o
+  // campo certo pra "Entrega Desejada" mas ajuda a entender o padrão.
+  var c = runrunRequest('/tasks/' + taskId, 'put', {
+    desired_date: novaData,
+    desired_date_with_time: novaData + 'T18:00:00-03:00',
+    estimated_delivery_date: novaData + 'T18:00:00-03:00'
+  }, token);
+  tentativas.push({ tentativa: 'com_estimated_delivery_date', status: c.status, depois: ler() });
+
   return {
     ok: true,
-    statusDoPut: resultado.status,
-    corpoDoPut: resultado.body,
-    antes: { desired_date: antes.desired_date, desired_date_with_time: antes.desired_date_with_time },
-    depois: { desired_date: depois.desired_date, desired_date_with_time: depois.desired_date_with_time }
+    tentativas: tentativas
   };
 }
 
