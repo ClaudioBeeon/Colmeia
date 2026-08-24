@@ -768,12 +768,25 @@ async function atualizarKanbanEmBackground() {
         // do Runrun.it e desfazia visualmente o play que a pessoa
         // acabou de dar (o card voltava, o pill amarelo sumia), mesmo a
         // tarefa já estando rodando de verdade lá. Confia no estado
-        // local por uns segundos depois de QUALQUER toggle (play OU
-        // pause, próprio ou de outra tarefa parada junto), depois volta
-        // a confiar no Runrun.it normalmente. Calculado ANTES do
+        // local por um tempo depois de QUALQUER toggle (play OU pause,
+        // próprio ou de outra tarefa parada junto), depois volta a
+        // confiar no Runrun.it normalmente. Calculado ANTES do
         // timerSeconds de propósito — o clamp de baixo depende do
         // resultado disso.
-        const RECEM_MEXIDO_MS = 8000;
+        //
+        // ⚠️ Esse prazo tem que cobrir não só "o Runrun.it demorou uns
+        // segundos pra confirmar", mas a janela INTEIRA de tentativas
+        // automáticas de play (PLAY_RETRY_DELAYS_MS, js/kanban-polling.js
+        // — até ~1min tentando sozinho antes de desistir, pedido do
+        // Cláudio pra não precisar ficar clicando de novo toda vez que a
+        // rede soluça). Sem cobrir essa janela toda, uma sincronização no
+        // MEIO das tentativas via running:false (que ainda não confirmou,
+        // mas vai) derrubava o cronômetro otimista antes da última
+        // tentativa ter a chance de dar certo — voltando o mesmo bug do
+        // relógio "fantasma" de outro jeito.
+        const RECEM_MEXIDO_MS = typeof PLAY_RETRY_DELAYS_MS !== "undefined"
+          ? PLAY_RETRY_DELAYS_MS.reduce((soma, ms) => soma + ms, 0) + 30000
+          : 8000;
         if (antiga._runningToggleEm && (Date.now() - antiga._runningToggleEm) < RECEM_MEXIDO_MS) {
           nova.running = antiga.running;
           nova._runningToggleEm = antiga._runningToggleEm;

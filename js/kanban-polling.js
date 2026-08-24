@@ -87,19 +87,27 @@ async function salvarPrioridadeNoBackend(taskId, prioridade) {
   }
 }
 
+// Espaçamento entre tentativas automáticas de play, depois da primeira
+// falha: 3s, 8s, 15s, 30s — quase 1 minuto tentando sozinho antes de
+// desistir e avisar a pessoa. Pedido do Cláudio: "não quero ficar parado
+// vendo se o relógio vai funcionar" — um soluço de rede de alguns
+// segundos (o caso mais comum) se resolve sozinho nesse meio-tempo, sem
+// precisar clicar de novo. Só multiplica, não cresce sem fim: um play
+// que falha por 1 minuto inteiro já é problema de verdade (Runrun.it
+// fora do ar, token vencido), aí sim vale interromper e avisar.
+const PLAY_RETRY_DELAYS_MS = [3000, 8000, 15000, 30000];
+
 /**
  * Dá play numa tarefa de verdade no Runrun.it.
  *
  * ⚠️ Quem chama essa função já marcou `task.running = true` NA HORA
  * (otimista, antes de qualquer resposta) e o cronômetro de 1s
  * (detalhe-modal.js) já está somando segundo a segundo em cima disso.
- * Se o Runrun.it recusar ou a chamada nem chegar, essa função DESFAZ o
- * otimismo — sem isso, o relógio do Colmeia continuava contando pra
- * sempre (a tarefa nunca tinha começado a rodar de verdade lá), e
- * ninguém percebia até checar o Runrun.it e ver zerado. Busca o objeto
- * VIVO em `tasks` de novo (não fecha sobre o de quando foi chamada):
- * pode ter sido recriado por atualizarKanbanEmBackground enquanto essa
- * chamada estava no ar.
+ * Se a primeira tentativa falhar, tenta de novo sozinha (ver
+ * PLAY_RETRY_DELAYS_MS) — só desfaz o otimismo se TODAS as tentativas
+ * falharem. Sem isso, o relógio do Colmeia continuava contando pra
+ * sempre num soluço de rede que se resolveria sozinho em segundos, e
+ * ninguém percebia até checar o Runrun.it e ver zerado.
  */
 async function tocarTarefaNoBackend(taskId, taskTitle) {
   if (!COLMEIA_API_URL || !taskId) return;
@@ -135,17 +143,43 @@ async function tocarTarefaNoBackend(taskId, taskTitle) {
     if (typeof moverEtapaNoBackend === "function") moverEtapaNoBackend(taskId, "fazendo");
   }
 
+  // "Essa marca" identifica ESTE clique de play, não a tarefa em si — se
+  // a pessoa pausar ou tocar outra coisa enquanto as tentativas ainda
+  // estão rolando, `_runningToggleEm` muda, e é assim que uma tentativa
+  // atrasada percebe que já não vale mais nada e desiste em silêncio (ver
+  // a checagem dentro de tentarTocarComRetentativa).
+  const marcaDesteToggle = tarefaViva ? tarefaViva._runningToggleEm : null;
+  await tentarTocarComRetentativa(taskId, taskTitle, marcaDesteToggle, 0);
+}
+
+async function tentarTocarComRetentativa(taskId, taskTitle, marcaDesteToggle, tentativa) {
   let data;
   try {
     data = await chamarBackend({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO });
   } catch (err) {
     console.error("Falha ao dar play no Runrun.it:", err);
-    data = { ok: false };
+    data = { ok: false, error: "falha de conexão" };
   }
-  if (!data.ok) {
-    console.error("Runrun.it recusou o play:", data.error);
-    desfazerPlayOtimista(taskId, data.error);
+  if (data.ok) return; // deu certo — o cronômetro otimista já estava certo o tempo todo
+
+  // A resposta (de uma tentativa que pode ter levado alguns segundos)
+  // chegou depois de a pessoa já ter mudado de ideia — pausou essa
+  // mesma tarefa, ou tocou outra. Não desfaz nada (desfazer agora
+  // atropelaria uma decisão mais nova) e não tenta de novo (não faz
+  // mais sentido play numa tarefa que a pessoa já pausou por conta própria).
+  const tarefaViva = tasks.find(t => String(t.id) === String(taskId));
+  if (!tarefaViva || !tarefaViva.running || tarefaViva._runningToggleEm !== marcaDesteToggle) return;
+
+  if (tentativa < PLAY_RETRY_DELAYS_MS.length) {
+    setTimeout(
+      () => tentarTocarComRetentativa(taskId, taskTitle, marcaDesteToggle, tentativa + 1),
+      PLAY_RETRY_DELAYS_MS[tentativa]
+    );
+    return;
   }
+
+  console.error("Runrun.it recusou o play (mesmo tentando de novo sozinho):", data.error);
+  desfazerPlayOtimista(taskId, data.error);
 }
 
 /**
@@ -167,7 +201,7 @@ function desfazerPlayOtimista(taskId, motivo) {
     if (typeof updateNowPlaying === "function") updateNowPlaying();
   }
   if (typeof mostrarToast === "function") {
-    mostrarToast(`Não consegui iniciar essa tarefa no Runrun.it${motivo ? ": " + String(motivo).slice(0, 60) : ""}. O cronômetro foi parado — dá play de novo.`, "erro");
+    mostrarToast(`Não consegui iniciar essa tarefa no Runrun.it mesmo tentando de novo por quase 1 minuto${motivo ? " (" + String(motivo).slice(0, 60) + ")" : ""}. O cronômetro foi parado — dá play de novo.`, "erro");
   }
   // Busca o tempo real de novo em breve — os poucos segundos que o
   // cronômetro local somou entre o clique e essa resposta ficam
