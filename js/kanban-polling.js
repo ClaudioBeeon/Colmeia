@@ -88,9 +88,18 @@ async function salvarPrioridadeNoBackend(taskId, prioridade) {
 }
 
 /**
- * Dá play numa tarefa de verdade no Runrun.it. Se der erro (ex: endpoint
- * ainda não confirmado), avisa no console mas não trava a tela — o
- * cronômetro local continua rodando mesmo assim.
+ * Dá play numa tarefa de verdade no Runrun.it.
+ *
+ * ⚠️ Quem chama essa função já marcou `task.running = true` NA HORA
+ * (otimista, antes de qualquer resposta) e o cronômetro de 1s
+ * (detalhe-modal.js) já está somando segundo a segundo em cima disso.
+ * Se o Runrun.it recusar ou a chamada nem chegar, essa função DESFAZ o
+ * otimismo — sem isso, o relógio do Colmeia continuava contando pra
+ * sempre (a tarefa nunca tinha começado a rodar de verdade lá), e
+ * ninguém percebia até checar o Runrun.it e ver zerado. Busca o objeto
+ * VIVO em `tasks` de novo (não fecha sobre o de quando foi chamada):
+ * pode ter sido recriado por atualizarKanbanEmBackground enquanto essa
+ * chamada estava no ar.
  */
 async function tocarTarefaNoBackend(taskId, taskTitle) {
   if (!COLMEIA_API_URL || !taskId) return;
@@ -126,12 +135,46 @@ async function tocarTarefaNoBackend(taskId, taskTitle) {
     if (typeof moverEtapaNoBackend === "function") moverEtapaNoBackend(taskId, "fazendo");
   }
 
+  let data;
   try {
-    const data = await chamarBackend({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO });
-    if (!data.ok) console.error("Runrun.it recusou o play:", data.error);
+    data = await chamarBackend({ acao: "tocarTarefa", taskId, taskTitle, designer: DESIGNER_LOGADO });
   } catch (err) {
     console.error("Falha ao dar play no Runrun.it:", err);
+    data = { ok: false };
   }
+  if (!data.ok) {
+    console.error("Runrun.it recusou o play:", data.error);
+    desfazerPlayOtimista(taskId, data.error);
+  }
+}
+
+/**
+ * Desfaz o "já mostra rodando" de tocarTarefaNoBackend quando o play não
+ * chegou a valer de verdade no Runrun.it. Para o relógio local (senão
+ * ele fica contando um tempo que não existe pra ninguém além do
+ * navegador) e avisa — sem aviso, a pessoa segue achando que está
+ * batendo ponto normalmente.
+ */
+function desfazerPlayOtimista(taskId, motivo) {
+  const tarefaViva = tasks.find(t => String(t.id) === String(taskId));
+  if (tarefaViva && tarefaViva.running) {
+    tarefaViva.running = false;
+    tarefaViva._runningToggleEm = Date.now();
+    if (typeof render === "function") render();
+    if (typeof renderDetail === "function" && typeof detailIdx !== "undefined" && tasks[detailIdx] && String(tasks[detailIdx].id) === String(taskId)) {
+      renderDetail();
+    }
+    if (typeof updateNowPlaying === "function") updateNowPlaying();
+  }
+  if (typeof mostrarToast === "function") {
+    mostrarToast(`Não consegui iniciar essa tarefa no Runrun.it${motivo ? ": " + String(motivo).slice(0, 60) : ""}. O cronômetro foi parado — dá play de novo.`, "erro");
+  }
+  // Busca o tempo real de novo em breve — os poucos segundos que o
+  // cronômetro local somou entre o clique e essa resposta ficam
+  // "sobrando" até essa sincronização (o clamp em pessoas-fotos.js só
+  // protege tempo pra frente enquanto `running` é true, então essa
+  // rodada já vai corrigir pro valor de verdade do Runrun.it).
+  if (typeof agendarAtualizacaoKanban === "function") agendarAtualizacaoKanban();
 }
 
 /**

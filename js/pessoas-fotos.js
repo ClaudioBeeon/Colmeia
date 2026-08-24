@@ -760,11 +760,39 @@ async function atualizarKanbanEmBackground() {
     novasTarefas.forEach(nova => {
       const antiga = tasks.find(t => t.id === nova.id);
       if (antiga) {
-        // Nunca deixa o tempo "voltar" pra trás, mesmo que o Runrun.it
-        // ainda não tenha confirmado que a tarefa está rodando (a API
-        // dele às vezes demora a refletir isso, e aí devolvia um valor
-        // mais baixo — às vezes 0 — que sobrescrevia o tempo certo).
-        nova.timerSeconds = Math.max(nova.timerSeconds, antiga.timerSeconds);
+        // Mesmo problema do timerSeconds logo abaixo, mas pro "está
+        // rodando": o Runrun.it às vezes demora alguns segundos pra
+        // confirmar o play/pause (mesmo já tendo aceitado a chamada) —
+        // sem essa proteção, uma atualização automática do quadro que
+        // caísse bem nesse meio-tempo trazia "running: false" de volta
+        // do Runrun.it e desfazia visualmente o play que a pessoa
+        // acabou de dar (o card voltava, o pill amarelo sumia), mesmo a
+        // tarefa já estando rodando de verdade lá. Confia no estado
+        // local por uns segundos depois de QUALQUER toggle (play OU
+        // pause, próprio ou de outra tarefa parada junto), depois volta
+        // a confiar no Runrun.it normalmente. Calculado ANTES do
+        // timerSeconds de propósito — o clamp de baixo depende do
+        // resultado disso.
+        const RECEM_MEXIDO_MS = 8000;
+        if (antiga._runningToggleEm && (Date.now() - antiga._runningToggleEm) < RECEM_MEXIDO_MS) {
+          nova.running = antiga.running;
+          nova._runningToggleEm = antiga._runningToggleEm;
+        }
+        // Nunca deixa o tempo "voltar" pra trás — MAS só enquanto a
+        // tarefa ainda está (ou parece estar, dentro da janela de
+        // toggle acima) rodando de verdade. Existe pra cobrir o
+        // Runrun.it demorando a refletir os últimos segundos de uma
+        // tarefa que SEGUE rodando. ⚠️ Sem a condição `nova.running`,
+        // isso também escondia pra sempre um play que nunca chegou a
+        // ir pro Runrun.it (ex: um soluço de rede bem na hora do
+        // clique): o relógio local subia sozinho por minutos, e quando
+        // o Colmeia finalmente sincronizava e via running:false vindo
+        // de lá, o cronômetro PARAVA de andar (por causa do
+        // `if (task.running)` no setInterval de 1s, detalhe-modal.js)
+        // mas o `Math.max` continuava escolhendo o valor inflado local
+        // pra sempre, em vez de aceitar o 0 real do Runrun.it — o
+        // cronômetro ficava "travado" num tempo que nunca existiu.
+        nova.timerSeconds = nova.running ? Math.max(nova.timerSeconds, antiga.timerSeconds) : nova.timerSeconds;
         // A barra de progresso é sempre recalculada a partir do tempo real
         // (já protegido contra "voltar no tempo" acima) e do tempo médio do
         // cliente — nunca travada no valor antigo, senão ela para de andar
@@ -813,22 +841,6 @@ async function atualizarKanbanEmBackground() {
         // clique em "Enviar para revisão" ser instantâneo.
         if (antiga._pecasParaRevisao !== undefined) nova._pecasParaRevisao = antiga._pecasParaRevisao;
         if (antiga._chaveUploadPreparada !== undefined) nova._chaveUploadPreparada = antiga._chaveUploadPreparada;
-        // Mesmo problema do timerSeconds acima, mas pro "está rodando":
-        // o Runrun.it às vezes demora alguns segundos pra confirmar o
-        // play/pause (mesmo já tendo aceitado a chamada) — sem essa
-        // proteção, uma atualização automática do quadro que caísse
-        // bem nesse meio-tempo trazia "running: false" de volta do
-        // Runrun.it e desfazia visualmente o play que a pessoa acabou
-        // de dar (o card voltava, o pill amarelo sumia), mesmo a tarefa
-        // já estando rodando de verdade lá. Confia no estado local por
-        // uns segundos depois de QUALQUER toggle (play OU pause,
-        // próprio ou de outra tarefa parada junto), depois volta a
-        // confiar no Runrun.it normalmente.
-        const RECEM_MEXIDO_MS = 8000;
-        if (antiga._runningToggleEm && (Date.now() - antiga._runningToggleEm) < RECEM_MEXIDO_MS) {
-          nova.running = antiga.running;
-          nova._runningToggleEm = antiga._runningToggleEm;
-        }
       }
     });
 
