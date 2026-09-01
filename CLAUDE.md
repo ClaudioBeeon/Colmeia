@@ -1708,7 +1708,7 @@ quadro", porque ele varre o Runrun.it AO VIVO, dentro do pedido de quem está es
 cheia, esse pedido específico é o que mais trava ela pros outros.
 
 **A ideia:** em vez de `getTarefasColmeia` (Código.gs) ligar pro Runrun.it na hora de cada pedido, um
-**gatilho de tempo separado** (`sincronizarTarefasParaSupabase`, RunrunLeitura.gs, a cada 2 minutos —
+**gatilho de tempo separado** (`sincronizarTarefasParaSupabase`, RunrunLeitura.gs, a cada 5 minutos —
 `configurarGatilhoSincronizacaoDeTarefas`) varre o Runrun.it por conta própria e grava o resultado
 numa tabela nova (`tarefas`, `supabase/13-tarefas.sql`: `id` + `dados jsonb` com o objeto inteiro que
 `transformarTarefaParaColmeia` já produz, sem redesenhar nada). Toda leitura do quadro passa a ser
@@ -1723,7 +1723,7 @@ antigo, e comparar o quadro na tela com o conteúdo da tabela antes de acrescent
 
 **Prioridades e focos continuam ao vivo, nunca congelados no retrato.** `aplicarPrioridadesEFocos`
 (Código.gs) é a MESMA função nos dois caminhos (Supabase e o ao vivo de sempre) — mudar uma
-prioridade agora vale já na próxima leitura, sem esperar os 2 minutos do gatilho.
+prioridade agora vale já na próxima leitura, sem esperar os 5 minutos do gatilho.
 
 **Nunca devolve vazio numa falha, o mesmo cuidado de sempre.** `getTarefasColmeiaDoSupabase` devolve
 `null` (não `[]`) se a leitura falhar OU vier vazia — "vazio de verdade" é raro demais pra confiar
@@ -1736,9 +1736,11 @@ rodada (entregue, repassada) é apagada, comparando ids; senão a tabela só cre
 não responder NAQUELA rodada do gatilho, a função simplesmente não mexe em nada (nem grava, nem
 apaga) — o último retrato bom continua valendo até a rodada seguinte dar certo.
 
-**Gatilho a cada 2 minutos, não 1** — cota diária de execução de gatilhos (conta gratuita, ~90
-min/dia, dividida com os outros gatilhos que já existem: `fazerBackupDaPlanilha`,
-`verificarLinksDoErickNoRunrun`). A 1 min, a cota se esgotaria sozinha; a 2 min sobra folga.
+**Gatilho a cada 5 minutos, não 1** — `everyMinutes` só aceita 1, 5, 10, 15 ou 30 (confirmado na
+prática: 2 estoura "The value you passed to everyMinutes was invalid"). Entre as opções válidas, 1
+minuto arrisca a cota diária de execução de gatilhos (conta gratuita, ~90 min/dia, dividida com os
+outros gatilhos que já existem: `fazerBackupDaPlanilha`, `verificarLinksDoErickNoRunrun`); 5 minutos
+sobra folga enorme.
 
 ⚠️ **Passos manuais que eu não alcanço daqui** (mesma limitação de sempre — chave do Supabase e
 gatilhos não sobem por push): rodar o SQL de `supabase/13-tarefas.sql` no editor do Supabase, e

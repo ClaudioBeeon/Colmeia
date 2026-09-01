@@ -987,7 +987,7 @@ function sincronizarTarefasParaSupabase() {
   } catch (e) {
     // O Runrun.it não respondeu nesta rodada — a tabela fica como estava
     // (o último retrato bom), e o gatilho tenta de novo sozinho daqui a
-    // 2 minutos. Nunca apaga a tabela por causa de uma falha passageira.
+    // 5 minutos. Nunca apaga a tabela por causa de uma falha passageira.
     Logger.log('❌ Falha ao buscar tarefas do Runrun.it: ' + (e && e.message || e));
     return;
   }
@@ -1030,21 +1030,25 @@ function sincronizarTarefasParaSupabase() {
  * RODAR UMA ÚNICA VEZ, manualmente, pelo editor do Apps Script — mesmo
  * padrão de configurarGatilhoErick (AprovacaoInterna.gs) e
  * configurarGatilhoBackup (Drive.gs). Configura o gatilho que faz
- * sincronizarTarefasParaSupabase rodar sozinha a cada 2 minutos.
+ * sincronizarTarefasParaSupabase rodar sozinha a cada 5 minutos.
  *
- * ⚠️ Por que 2 minutos, não 1: gatilhos de tempo têm cota diária de
- * execução (conta gratuita: por volta de 90 min/dia, dividida com os
- * outros gatilhos que já existem). A 1 min, uma varredura de alguns
- * segundos já gastaria a cota sozinha; a 2 min sobra folga.
+ * ⚠️ Por que 5 minutos, não 1 ou 2: `everyMinutes` só aceita 1, 5, 10, 15
+ * ou 30 (confirmado na prática — 2 estoura "The value you passed to
+ * everyMinutes was invalid"). Entre as opções válidas, 1 minuto é
+ * arriscado pra cota diária de execução de gatilhos (conta gratuita: por
+ * volta de 90 min/dia, dividida com os outros gatilhos que já existem —
+ * fazerBackupDaPlanilha, verificarLinksDoErickNoRunrun); 5 minutos fica
+ * bem dentro da cota (no máximo ~288 execuções/dia) e ainda assim é uma
+ * folga enorme sobre os 45s-60s de atraso que o quadro já tinha antes.
  */
 function configurarGatilhoSincronizacaoDeTarefas() {
   var triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(function (t) {
     if (t.getHandlerFunction() === 'sincronizarTarefasParaSupabase') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('sincronizarTarefasParaSupabase').timeBased().everyMinutes(2).create();
+  ScriptApp.newTrigger('sincronizarTarefasParaSupabase').timeBased().everyMinutes(5).create();
   sincronizarTarefasParaSupabase(); // já roda uma vez agora
-  Logger.log('Gatilho configurado: sincronizarTarefasParaSupabase vai rodar sozinha a cada 2 minutos.');
+  Logger.log('Gatilho configurado: sincronizarTarefasParaSupabase vai rodar sozinha a cada 5 minutos.');
 }
 
 var JANELA_ENTREGUES_RUNRUN_COMPLETO_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
