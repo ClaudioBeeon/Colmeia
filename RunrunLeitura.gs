@@ -958,6 +958,95 @@ function buscarTarefasRunrun() {
   return buscarTarefasAbertasSeparadas().normais;
 }
 
+// ============================================================
+// CÓPIA DO QUADRO NO SUPABASE — lida por getTarefasColmeia (Código.gs)
+// em vez de ligar pro Runrun.it na hora do pedido de cada pessoa.
+// Ver "Ler o quadro do Supabase em vez do Runrun.it ao vivo" no
+// CLAUDE.md pro porquê.
+// ============================================================
+
+/**
+ * Varre o Runrun.it (a MESMA varredura de sempre, buscarTarefasRunrun,
+ * sem alteração nenhuma) e grava o resultado no Supabase — uma linha
+ * por tarefa, upsert por id. Chamada pelo gatilho de tempo (ver
+ * configurarGatilhoSincronizacaoDeTarefas logo abaixo), nunca por um
+ * pedido de alguém — é isso que tira a varredura de dentro da fila de
+ * execução compartilhada.
+ *
+ * Tarefa que estava na tabela e não veio nesta rodada (entregue,
+ * repassada, etc.) é apagada — senão a tabela só cresceria pra sempre.
+ */
+function sincronizarTarefasParaSupabase() {
+  if (!supabaseConfigurado()) {
+    Logger.log('❌ Supabase não configurado — nada a sincronizar.');
+    return;
+  }
+  var tarefas;
+  try {
+    tarefas = buscarTarefasRunrun();
+  } catch (e) {
+    // O Runrun.it não respondeu nesta rodada — a tabela fica como estava
+    // (o último retrato bom), e o gatilho tenta de novo sozinho daqui a
+    // 2 minutos. Nunca apaga a tabela por causa de uma falha passageira.
+    Logger.log('❌ Falha ao buscar tarefas do Runrun.it: ' + (e && e.message || e));
+    return;
+  }
+  if (!tarefas || !tarefas.length) {
+    // Lista vazia de verdade é rara (precisaria não ter NENHUMA tarefa
+    // aberta pra nenhum dos designers). Mais provável é ter sido uma
+    // falha silenciosa lá dentro — não confia, não apaga a tabela.
+    Logger.log('⚠️ buscarTarefasRunrun devolveu vazio — não mexendo na tabela por segurança.');
+    return;
+  }
+
+  var idsAgora = {};
+  var linhas = tarefas.map(function (t) {
+    idsAgora[String(t.id)] = true;
+    return { id: t.id, dados: t, atualizado_em: new Date().toISOString() };
+  });
+  var resultado = supabaseSalvar('tarefas', linhas);
+  if (!resultado.ok) {
+    Logger.log('❌ Falha ao gravar tarefas no Supabase: ' + resultado.erro);
+    return;
+  }
+
+  // Tira quem não está mais aberto. Busca só os ids (select=id) — a
+  // tabela pode ter centenas de linhas, e não precisamos do `dados`
+  // inteiro só pra decidir quem apagar.
+  var existentes = supabaseBuscarTudo('tarefas', 'select=id');
+  if (existentes) {
+    var idsPraApagar = existentes
+      .map(function (l) { return String(l.id); })
+      .filter(function (id) { return !idsAgora[id]; });
+    if (idsPraApagar.length) {
+      supabaseApagar('tarefas', 'id=in.(' + idsPraApagar.join(',') + ')');
+    }
+  }
+
+  Logger.log('✅ Sincronizei ' + tarefas.length + ' tarefa(s) com o Supabase.');
+}
+
+/**
+ * RODAR UMA ÚNICA VEZ, manualmente, pelo editor do Apps Script — mesmo
+ * padrão de configurarGatilhoErick (AprovacaoInterna.gs) e
+ * configurarGatilhoBackup (Drive.gs). Configura o gatilho que faz
+ * sincronizarTarefasParaSupabase rodar sozinha a cada 2 minutos.
+ *
+ * ⚠️ Por que 2 minutos, não 1: gatilhos de tempo têm cota diária de
+ * execução (conta gratuita: por volta de 90 min/dia, dividida com os
+ * outros gatilhos que já existem). A 1 min, uma varredura de alguns
+ * segundos já gastaria a cota sozinha; a 2 min sobra folga.
+ */
+function configurarGatilhoSincronizacaoDeTarefas() {
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function (t) {
+    if (t.getHandlerFunction() === 'sincronizarTarefasParaSupabase') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sincronizarTarefasParaSupabase').timeBased().everyMinutes(2).create();
+  sincronizarTarefasParaSupabase(); // já roda uma vez agora
+  Logger.log('Gatilho configurado: sincronizarTarefasParaSupabase vai rodar sozinha a cada 2 minutos.');
+}
+
 var JANELA_ENTREGUES_RUNRUN_COMPLETO_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
 
 /**

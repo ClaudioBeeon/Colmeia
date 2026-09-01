@@ -708,33 +708,74 @@ function lerDoCacheEmFatias(cache, chaveBase) {
   }
 }
 
+/**
+ * Prioridade salva (ou herdada da etapa) e foco ativo, por cima de cada
+ * tarefa — em COMUM entre o caminho ao vivo e o caminho do Supabase
+ * (getTarefasColmeiaDoSupabase, logo abaixo), pra nunca divergir. As
+ * duas fontes (prioridades, focos) continuam lidas NA HORA em ambos os
+ * caminhos — mudar uma prioridade agora vale já na próxima leitura, sem
+ * esperar o gatilho de sincronização rodar de novo.
+ */
+function aplicarPrioridadesEFocos(tarefas) {
+  var prioridadesSalvas = getPrioridadesSalvas();
+  var focosAtivos = getFocosAtivos();
+  tarefas.forEach(function (t) {
+    if (prioridadesSalvas.hasOwnProperty(t.id)) {
+      t.priority = prioridadesSalvas[t.id];
+    } else if (t.status === 'prioridades') {
+      t.priority = 'alta';
+    } else {
+      t.priority = 'media';
+    }
+    // Pra que o resto do time veja "Fulano em foco até 15:40" no card
+    // dela (ver modo foco, js/modo-foco.js) — comparação por NOME de
+    // propósito: é o mesmo nome que a pessoa usou pra entrar em foco
+    // (DESIGNER_LOGADO), não uma decisão de "de quem é a tarefa".
+    if (t.assignee && focosAtivos.hasOwnProperty(t.assignee)) {
+      t.assigneeEmFocoAte = focosAtivos[t.assignee];
+    }
+  });
+  return tarefas;
+}
+
+/**
+ * O caminho novo (2026-08-20): lê a cópia do quadro que
+ * sincronizarTarefasParaSupabase (RunrunLeitura.gs) mantém fresca a
+ * cada 2 minutos, em vez de ligar pro Runrun.it dentro do pedido da
+ * pessoa — é essa ida ao vivo que ocupava a fila de execução
+ * compartilhada do Apps Script por vários segundos, pra todo mundo.
+ *
+ * Devolve `null` (nunca lista vazia) quando não dá pra confiar no que
+ * voltou — quem chama cai pro caminho ao vivo de sempre nesse caso.
+ */
+function getTarefasColmeiaDoSupabase() {
+  var linhas = supabaseBuscarTudo('tarefas', 'select=dados');
+  if (!linhas) return null; // a leitura em si falhou
+  if (!linhas.length) return null; // vazio de verdade é raro demais pra confiar — mais provável é o gatilho ainda não ter rodado a primeira vez
+  var tarefas = aplicarPrioridadesEFocos(linhas.map(function (l) { return l.dados; }));
+  return { ok: true, tarefas: tarefas, colunas: Object.keys(COLUNAS_PRINCIPAIS) };
+}
+
 function getTarefasColmeia() {
+  // Enquanto "tarefas" não estiver em SUPABASE_TABELAS, supabaseManda
+  // devolve false e nada aqui muda — o gatilho pode já estar rodando e
+  // enchendo a tabela em paralelo, sem risco nenhum, antes de virar a
+  // chave de verdade (mesmo princípio de toda tabela já migrada).
+  if (supabaseManda('tarefas')) {
+    var doBanco = getTarefasColmeiaDoSupabase();
+    if (doBanco) return doBanco;
+    // Supabase não respondeu ou a tabela ainda está vazia — cai pro
+    // caminho ao vivo abaixo em vez de devolver erro. "Não deu pra
+    // perguntar ao banco" não é "não tem tarefa nenhuma".
+  }
+
   var cache = CacheService.getScriptCache();
   var cacheado = lerDoCacheEmFatias(cache, CACHE_QUADRO_CHAVE);
   if (cacheado) {
     try { return JSON.parse(cacheado); } catch (e) { /* varre de novo abaixo */ }
   }
   try {
-    var tarefas = buscarTarefasRunrun();
-    var prioridadesSalvas = getPrioridadesSalvas();
-    var focosAtivos = getFocosAtivos();
-
-    tarefas.forEach(function (t) {
-      if (prioridadesSalvas.hasOwnProperty(t.id)) {
-        t.priority = prioridadesSalvas[t.id];
-      } else if (t.status === 'prioridades') {
-        t.priority = 'alta';
-      } else {
-        t.priority = 'media';
-      }
-      // Pra que o resto do time veja "Fulano em foco até 15:40" no card
-      // dela (ver modo foco, js/modo-foco.js) — comparação por NOME de
-      // propósito: é o mesmo nome que a pessoa usou pra entrar em foco
-      // (DESIGNER_LOGADO), não uma decisão de "de quem é a tarefa".
-      if (t.assignee && focosAtivos.hasOwnProperty(t.assignee)) {
-        t.assigneeEmFocoAte = focosAtivos[t.assignee];
-      }
-    });
+    var tarefas = aplicarPrioridadesEFocos(buscarTarefasRunrun());
 
     var resultado = { ok: true, tarefas: tarefas, colunas: Object.keys(COLUNAS_PRINCIPAIS) };
     // Guarda pra quem pedir nos próximos segundos aproveitar a mesma

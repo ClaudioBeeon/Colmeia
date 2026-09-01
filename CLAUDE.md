@@ -1688,9 +1688,62 @@ chave pública (anon) não lê nem escreve nada, e só o backend passa.
 de linha: número de linha só existe na planilha. Os dois lados recebem o mesmo carimbo de tempo,
 guardado numa variável antes das duas gravações — dois `new Date().getTime()` separados dariam
 milissegundos diferentes e a conferência acusaria diferença toda vez.
-5. Login com sessão de verdade — hoje a senha sozinha identifica a PESSOA.
-6. As abas de cadastro (LinksClientes, Pessoas, AcessoRapido) — **talvez nunca**: quase não têm
+5. `Tarefas` ⏳ (código pronto, falta o passo manual — ver a seção abaixo) — **diferente de toda
+   etapa anterior**: não vem de uma aba, vem do Runrun.it. Era o
+   gatilho explícito deixado em "A foto do quadro" (mais abaixo neste arquivo) pra decidir quando
+   valeria a pena: *"vale quando o quadro lento virar reclamação real do time"* — aconteceu em
+   2026-08-20, junto com o relato do play "fantasma" (ver a seção do play, mais abaixo). Ver a seção
+   própria "Ler o quadro do Supabase em vez do Runrun.it ao vivo" logo depois desta lista.
+6. Login com sessão de verdade — hoje a senha sozinha identifica a PESSOA.
+7. As abas de cadastro (LinksClientes, Pessoas, AcessoRapido) — **talvez nunca**: quase não têm
    escrita concorrente, e vale muito poder abrir a planilha e corrigir uma linha na mão.
+
+### Etapa 5 — Ler o quadro do Supabase em vez do Runrun.it ao vivo (2026-08-20)
+
+**O problema, medido em relato de verdade:** o Cláudio reportou o quadro "perdendo conexão do nada"
+e o play "fantasma" (o cronômetro corria no Colmeia sem valer no Runrun.it — ver a seção própria mais
+abaixo). A raiz dos dois é a mesma: o Web App roda como `USER_DEPLOYING` — TODO pedido de TODA
+pessoa entra na MESMA fila de execução do Google — e o pedido mais caro que existe é "me dá o
+quadro", porque ele varre o Runrun.it AO VIVO, dentro do pedido de quem está esperando. Com a fila
+cheia, esse pedido específico é o que mais trava ela pros outros.
+
+**A ideia:** em vez de `getTarefasColmeia` (Código.gs) ligar pro Runrun.it na hora de cada pedido, um
+**gatilho de tempo separado** (`sincronizarTarefasParaSupabase`, RunrunLeitura.gs, a cada 2 minutos —
+`configurarGatilhoSincronizacaoDeTarefas`) varre o Runrun.it por conta própria e grava o resultado
+numa tabela nova (`tarefas`, `supabase/13-tarefas.sql`: `id` + `dados jsonb` com o objeto inteiro que
+`transformarTarefaParaColmeia` já produz, sem redesenhar nada). Toda leitura do quadro passa a ser
+"pega o que já está pronto no banco" — nunca espera o Runrun.it, nunca compete na fila lenta.
+
+**Diferente de toda tabela anterior — não tem "cópia de uma aba".** A fonte é o Runrun.it, não uma
+planilha: a primeira rodada do próprio gatilho já é a cópia inicial. Por isso não existe
+`migrarTarefasParaSupabase()` nem `supabaseConferir` no formato de sempre (aquele compara planilha ×
+banco). A conferência foi visual: deixar o gatilho rodando um tempo com a leitura ainda no caminho
+antigo, e comparar o quadro na tela com o conteúdo da tabela antes de acrescentar `tarefas` em
+`SUPABASE_TABELAS`.
+
+**Prioridades e focos continuam ao vivo, nunca congelados no retrato.** `aplicarPrioridadesEFocos`
+(Código.gs) é a MESMA função nos dois caminhos (Supabase e o ao vivo de sempre) — mudar uma
+prioridade agora vale já na próxima leitura, sem esperar os 2 minutos do gatilho.
+
+**Nunca devolve vazio numa falha, o mesmo cuidado de sempre.** `getTarefasColmeiaDoSupabase` devolve
+`null` (não `[]`) se a leitura falhar OU vier vazia — "vazio de verdade" é raro demais pra confiar
+(mais provável é o gatilho não ter rodado ainda); nos dois casos, `getTarefasColmeia` cai pro
+caminho ao vivo de sempre (varredura direta + o cache de 45s + a foto do quadro como último recurso),
+exatamente como funcionava antes desta etapa existir.
+
+**`sincronizarTarefasParaSupabase` também PODA a tabela** — tarefa que estava lá e não veio na
+rodada (entregue, repassada) é apagada, comparando ids; senão a tabela só cresceria. E se o Runrun.it
+não responder NAQUELA rodada do gatilho, a função simplesmente não mexe em nada (nem grava, nem
+apaga) — o último retrato bom continua valendo até a rodada seguinte dar certo.
+
+**Gatilho a cada 2 minutos, não 1** — cota diária de execução de gatilhos (conta gratuita, ~90
+min/dia, dividida com os outros gatilhos que já existem: `fazerBackupDaPlanilha`,
+`verificarLinksDoErickNoRunrun`). A 1 min, a cota se esgotaria sozinha; a 2 min sobra folga.
+
+⚠️ **Passos manuais que eu não alcanço daqui** (mesma limitação de sempre — chave do Supabase e
+gatilhos não sobem por push): rodar o SQL de `supabase/13-tarefas.sql` no editor do Supabase, e
+rodar `configurarGatilhoSincronizacaoDeTarefas()` uma vez pelo editor do Apps Script. Só depois de
+conferir por um tempo, acrescentar `tarefas` em `SUPABASE_TABELAS` é o que liga a leitura de verdade.
 
 **Toda aba migrada precisa da CÓPIA INICIAL antes de virar a chave.** Gravar nos dois lugares só
 vale dali pra frente — sem copiar o que já está na aba, a tela daquela aba apareceria vazia até o
