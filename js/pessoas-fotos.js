@@ -547,21 +547,31 @@ async function carregarTarefasReais() {
     const data = await chamarBackendGet("?tipo=tarefas");
     if (!data.ok) {
       console.error("Erro ao buscar tarefas do Colmeia:", data.error);
-      // Se o problema é o Runrun.it estar fora, avisa em português em vez
-      // de deixar a pessoa achando que o Colmeia está quebrado.
-      if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(data.runrunFora);
+      // Mostra a faixa mesmo quando NÃO foi o Runrun.it que caiu (ex: o
+      // Apps Script nem respondeu a tempo) — ver o comentário grande em
+      // mostrarAvisoRunrunFora (js/config.js) sobre o "sumiu sem
+      // explicação" que isso corrigia.
+      if (typeof mostrarAvisoRunrunFora === "function") {
+        mostrarAvisoRunrunFora(true, undefined, data.runrunFora ? "runrun" : "conexao");
+      }
       tasks = tasksFake;
       carregandoTarefas = false;
       buildBoard();
       render();
+      // Tenta nascer de novo sozinho, mais rápido que esperar o próximo
+      // poll de 60s (ver agendarNovaTentativaDoQuadro) — sem isso, quem
+      // abrisse o Colmeia bem na hora de um soluço do Apps Script ficava
+      // olhando pro quadro de demonstração até dar F5 na mão.
+      if (typeof agendarNovaTentativaDoQuadro === "function") agendarNovaTentativaDoQuadro();
       return;
     }
+    _falhasConsecutivasDoQuadro = 0;
     // `daFoto` = o Runrun.it não respondeu e o backend devolveu a última
     // foto conhecida no lugar (ver lerFotoDoQuadro, Código.gs). Vem com
     // ok:true porque tem quadro pra mostrar — mas NÃO é o quadro de
     // agora, e as duas coisas abaixo dependem dessa diferença.
     if (typeof mostrarAvisoRunrunFora === "function") {
-      mostrarAvisoRunrunFora(!!data.daFoto || !!data.runrunFora, data.fotoQuando);
+      mostrarAvisoRunrunFora(!!data.daFoto || !!data.runrunFora, data.fotoQuando, "runrun");
     }
     // Só guarda foto de varredura de verdade. Guardar uma foto vinda de
     // outra foto carimbaria a hora de agora num quadro velho — e aí ele
@@ -592,11 +602,38 @@ async function carregarTarefasReais() {
     }
   } catch (err) {
     console.error("Falha ao conectar com o backend do Colmeia:", err);
+    if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(true, undefined, "conexao");
     tasks = tasksFake;
     carregandoTarefas = false;
     buildBoard();
     render();
+    if (typeof agendarNovaTentativaDoQuadro === "function") agendarNovaTentativaDoQuadro();
   }
+}
+
+// Quantas vezes seguidas a busca do quadro falhou — zera assim que uma
+// dá certo. Usado só pra escolher o espaçamento da PRÓXIMA tentativa
+// (ver logo abaixo), nunca lido em outro lugar.
+let _falhasConsecutivasDoQuadro = 0;
+
+// Espera crescente entre tentativas depois de uma falha: 3s, 8s, 20s,
+// 40s — depois disso o poll normal de 60s (setInterval em
+// js/kanban-polling.js) já cobre sozinho, então não vale a pena um quinto
+// degrau. Pedido do Cláudio (mesmo espírito da retentativa do play): "não
+// quero ficar parado vendo se vai voltar" — um soluço passageiro no Apps
+// Script (ver o comentário grande em js/cache-tarefas.js sobre a fila de
+// execução compartilhada) se resolve sozinho nesse meio-tempo.
+const RETENTATIVA_QUADRO_DELAYS_MS = [3000, 8000, 20000, 40000];
+
+function agendarNovaTentativaDoQuadro() {
+  const espera = RETENTATIVA_QUADRO_DELAYS_MS[Math.min(_falhasConsecutivasDoQuadro, RETENTATIVA_QUADRO_DELAYS_MS.length - 1)];
+  _falhasConsecutivasDoQuadro++;
+  setTimeout(() => {
+    // Mesma checagem do poll normal de 60s (js/kanban-polling.js): não
+    // insiste sozinho com a aba escondida ou sem ninguém logado.
+    if (typeof podeBaterNoBackendAgora === "function" && !podeBaterNoBackendAgora()) return;
+    atualizarKanbanEmBackground();
+  }, espera);
 }
 
 /**
@@ -614,12 +651,19 @@ async function atualizarKanbanEmBackground() {
     if (!data.ok) {
       // A atualização de fundo é o lugar mais provável de PERCEBER que o
       // Runrun.it caiu (roda a cada 60s), e também de perceber que voltou.
-      if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(data.runrunFora);
+      // Mostra a faixa mesmo quando NÃO foi o Runrun.it (ver o comentário
+      // grande em mostrarAvisoRunrunFora, js/config.js) — e tenta de novo
+      // sozinho mais rápido que o próximo poll de 60s.
+      if (typeof mostrarAvisoRunrunFora === "function") {
+        mostrarAvisoRunrunFora(true, undefined, data.runrunFora ? "runrun" : "conexao");
+      }
+      agendarNovaTentativaDoQuadro();
       return;
     }
+    _falhasConsecutivasDoQuadro = 0;
     // Mesma distinção da carga inicial: foto não é quadro de agora.
     if (typeof mostrarAvisoRunrunFora === "function") {
-      mostrarAvisoRunrunFora(!!data.daFoto || !!data.runrunFora, data.fotoQuando);
+      mostrarAvisoRunrunFora(!!data.daFoto || !!data.runrunFora, data.fotoQuando, "runrun");
     }
 
     if (!data.daFoto) salvarSnapshotDoQuadro(data.tarefas); // mantém a foto do quadro sempre fresca
@@ -907,6 +951,8 @@ async function atualizarKanbanEmBackground() {
     if (repassePagina && !repassePagina.hidden && !temPopupAbertoNaFila) renderRepasse();
   } catch (err) {
     console.error("Falha ao atualizar o kanban em background:", err);
+    if (typeof mostrarAvisoRunrunFora === "function") mostrarAvisoRunrunFora(true, undefined, "conexao");
+    agendarNovaTentativaDoQuadro();
   }
 }
 

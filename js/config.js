@@ -1028,8 +1028,19 @@ function idadeDaFotoDoQuadro(quandoMs) {
  *   foi tirada (epoch ms), se o que a pessoa está vendo for uma foto e
  *   não o quadro de agora. Dizer a idade dela é o que impede o retrato
  *   de se passar por atual — ver guardarFotoDoQuadro, Código.gs.
+ * @param {string} [motivo] "runrun" (padrão) ou "conexao". Antes, um
+ *   pedido que falhasse SEM o backend ter marcado "Runrun.it fora do ar"
+ *   (ex: o Apps Script nem respondeu a tempo — ele processa o pedido de
+ *   TODO MUNDO na mesma fila, ver o comentário grande em
+ *   js/cache-tarefas.js) não mostrava aviso NENHUM: a faixa só existe
+ *   quando `estaFora` é true, e esse caso chegava com `runrunFora` falso.
+ *   A pessoa via o quadro simplesmente parar de atualizar (ou virar o
+ *   quadro de demonstração, na carga inicial) sem explicação — parecia
+ *   "perdeu a conexão do nada". Agora os dois casos mostram a faixa,
+ *   só com um texto diferente: um é culpa do Runrun.it, o outro é o
+ *   Colmeia não tendo conseguido falar com o próprio servidor.
  */
-function mostrarAvisoRunrunFora(estaFora, fotoQuando) {
+function mostrarAvisoRunrunFora(estaFora, fotoQuando, motivo) {
   const existente = document.getElementById("avisoRunrunFora");
 
   if (!estaFora) {
@@ -1038,25 +1049,45 @@ function mostrarAvisoRunrunFora(estaFora, fotoQuando) {
     return;
   }
 
+  const ehConexao = motivo === "conexao";
   const linhaDaFoto = fotoQuando
     ? `Você está vendo o quadro ${idadeDaFotoDoQuadro(fotoQuando)}.`
     : "Você continua vendo suas tarefas,";
 
   if (existente) {
     // Já está na tela — mas a idade da foto envelhece enquanto o
-    // Runrun.it não volta, então o texto precisa acompanhar.
+    // Runrun.it não volta, então o texto precisa acompanhar. Também
+    // troca de "Runrun.it fora do ar" pra "Colmeia sem conexão" (ou
+    // vice-versa) se o motivo mudou de uma checagem pra outra.
+    existente.classList.toggle("aviso-runrun-conexao", ehConexao);
+    const tituloEl = existente.querySelector(".aviso-runrun-titulo");
+    const tituloTexto = ehConexao ? "O Colmeia não conseguiu falar com o servidor agora." : "O Runrun.it está fora do ar.";
+    if (tituloEl && tituloEl.textContent !== tituloTexto) tituloEl.textContent = tituloTexto;
     const alvo = existente.querySelector(".aviso-runrun-quando");
-    if (alvo && alvo.textContent !== linhaDaFoto) alvo.textContent = linhaDaFoto;
+    if (alvo) {
+      const texto = ehConexao ? "" : linhaDaFoto;
+      if (alvo.textContent !== texto) alvo.textContent = texto;
+    }
     return;
   }
 
   const faixa = document.createElement("div");
   faixa.id = "avisoRunrunFora";
-  faixa.className = "aviso-runrun-fora";
-  faixa.innerHTML = `
+  faixa.className = "aviso-runrun-fora" + (ehConexao ? " aviso-runrun-conexao" : "");
+  faixa.innerHTML = ehConexao ? `
     <span class="aviso-runrun-ico">🐝</span>
     <span class="aviso-runrun-txt">
-      <b>O Runrun.it está fora do ar.</b>
+      <b class="aviso-runrun-titulo">O Colmeia não conseguiu falar com o servidor agora.</b>
+      <span class="aviso-runrun-quando"></span>
+      Pode ser um instante de congestionamento — o Colmeia tenta de novo sozinho, sem precisar recarregar a página.
+    </span>
+    <button type="button" class="aviso-runrun-x" title="Esconder este aviso" aria-label="Esconder">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  ` : `
+    <span class="aviso-runrun-ico">🐝</span>
+    <span class="aviso-runrun-txt">
+      <b class="aviso-runrun-titulo">O Runrun.it está fora do ar.</b>
       <span class="aviso-runrun-quando">${linhaDaFoto}</span>
       Dar play, comentar e entregar não vão funcionar até eles voltarem.
       O Colmeia tenta sozinho de tempos em tempos.
