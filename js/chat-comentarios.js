@@ -916,7 +916,11 @@ function peneirarHTMLDeComentario(html) {
 
       // Tira TODOS os atributos (é aí que moram os onclick, style, etc)...
       const href = filho.tagName === "A" ? filho.getAttribute("href") : null;
-      const srcImagem = filho.tagName === "IMG" ? filho.getAttribute("src") : null;
+      // Endereço relativo vira absoluto (ver enderecoCompletoDaImagem) —
+      // senão o print colado num comentário era jogado fora logo abaixo.
+      const srcImagem = filho.tagName === "IMG"
+        ? enderecoCompletoDaImagem(filho.getAttribute("src") || filho.getAttribute("data-src"))
+        : null;
       Array.from(filho.attributes).forEach(attr => filho.removeAttribute(attr.name));
 
       if (filho.tagName === "IMG") {
@@ -1036,9 +1040,90 @@ function formatarDescricaoRunrun(html) {
   // (ver lá embaixo) — se o endereço original ficasse no lugar, o
   // navegador ia tentar buscar sozinho, tomar "não autorizado" e desenhar
   // o ícone de quebrada antes da imagem certa chegar.
-  doc.querySelectorAll("img[src]").forEach(img => prepararImagemProBackend(img, img.getAttribute("src")));
+  doc.querySelectorAll("img").forEach(img => {
+    const src = enderecoCompletoDaImagem(img.getAttribute("src") || img.getAttribute("data-src"));
+    if (src && src.startsWith("data:image/")) {
+      // Já vem embutida — mostra direto.
+      img.setAttribute("src", src);
+      img.setAttribute("class", "desc-imagem");
+    } else if (src) {
+      prepararImagemProBackend(img, src);
+    } else {
+      img.remove(); // sem endereço nenhum não tem o que mostrar
+    }
+  });
 
   return doc.body.innerHTML;
+}
+
+/**
+ * O editor do Runrun.it às vezes grava o print com endereço RELATIVO
+ * ("/api/.../imagem.png" ou "//storage.../imagem.png"). Relativo, o
+ * navegador completava com o endereço do COLMEIA (colmeia.beeon.com.br),
+ * que não tem imagem nenhuma — e `ehEnderecoDeImagemNaInternet` nem
+ * reconhecia como imagem pra buscar pelo backend. Completa aqui com o
+ * endereço do Runrun.it, que é de onde a descrição veio.
+ */
+function enderecoCompletoDaImagem(src) {
+  if (!src) return "";
+  const s = String(src).trim();
+  if (/^https?:\/\//i.test(s) || s.startsWith("data:image/")) return s;
+  if (s.startsWith("//")) return "https:" + s;
+  if (s.startsWith("/")) return "https://runrun.it" + s;
+  return "";
+}
+
+/**
+ * Os prints da descrição, numa faixa própria LOGO ABAIXO do briefing
+ * organizado (2026-09-28, relato do Cláudio: "os prints que colocam no
+ * Runrun.it nas descrições não aparecem no Colmeia").
+ *
+ * Eles existiam — mas só dentro da "versão original" da descrição, que
+ * fica escondida atrás do "Ver briefing original". O que aparece por
+ * padrão é o briefing organizado pela Bee, que é só TEXTO (a IA lê as
+ * palavras, não as imagens). Na prática, ninguém via print nenhum.
+ *
+ * Recebe o HTML já passado por formatarDescricaoRunrun (as imagens já vêm
+ * preparadas pro backend) e só REAPROVEITA essas imagens — a busca de
+ * verdade continua sendo carregarImagensDaDescricao, com o mesmo cache,
+ * então a mesma imagem não é baixada duas vezes por aparecer em dois lugares.
+ */
+function renderPrintsDaDescricao(htmlFormatado) {
+  const alvo = document.getElementById("descPrints");
+  if (!alvo) return;
+  const doc = new DOMParser().parseFromString(htmlFormatado || "", "text/html");
+  const imagens = [...doc.querySelectorAll("img")];
+  if (!imagens.length) {
+    alvo.hidden = true;
+    alvo.innerHTML = "";
+    return;
+  }
+  alvo.innerHTML = `
+    <div class="desc-prints-titulo">Prints da descrição <span class="desc-prints-qtd">${imagens.length}</span></div>
+    <div class="desc-prints-grade">
+      ${imagens.map((img, i) => {
+        const urlOriginal = img.getAttribute("data-url-original");
+        const src = urlOriginal ? PIXEL_TRANSPARENTE : (img.getAttribute("src") || "");
+        return `
+          <button type="button" class="desc-print" data-print-i="${i}" title="Ver maior">
+            <img class="desc-imagem${urlOriginal ? " carregando" : ""}" src="${escaparHTML(src)}"
+              ${urlOriginal ? `data-url-original="${escaparHTML(urlOriginal)}"` : ""} alt="Print ${i + 1} da descrição">
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+  alvo.hidden = false;
+  alvo.querySelectorAll(".desc-print").forEach(btn => {
+    btn.addEventListener("click", () => {
+      // Lê o src NA HORA do clique: a imagem de verdade chega depois do
+      // desenho (é trocada no lugar do pixel transparente).
+      const img = btn.querySelector("img");
+      if (!img || img.classList.contains("carregando") || img.src === PIXEL_TRANSPARENTE) return;
+      abrirImagemAmpliadaDaFonte(img.src, `Print ${Number(btn.dataset.printI) + 1} da descrição`);
+    });
+  });
+  carregarImagensDaDescricao(alvo);
 }
 
 // ===== Imagens coladas na descrição =====
@@ -1193,8 +1278,10 @@ async function carregarDescricao(task) {
     // backend responde de verdade "" é que a tarefa está mesmo sem texto.
     if (texto === null) el.innerHTML = "Não consegui carregar a descrição agora.";
     else {
-      el.innerHTML = texto ? formatarDescricaoRunrun(texto) : "Sem descrição cadastrada nessa tarefa.";
+      const formatado = texto ? formatarDescricaoRunrun(texto) : "";
+      el.innerHTML = formatado || "Sem descrição cadastrada nessa tarefa.";
       carregarImagensDaDescricao(el);
+      renderPrintsDaDescricao(formatado);
     }
   }
 }
@@ -1364,10 +1451,10 @@ function aplicarDadosDaTarefa(task, data, taskId, veioDoCache) {
 
   const descEl = document.getElementById("descTextReal");
   if (descEl) {
-    descEl.innerHTML = data.descricao
-      ? formatarDescricaoRunrun(data.descricao)
-      : "Sem descrição cadastrada nessa tarefa.";
+    const formatado = data.descricao ? formatarDescricaoRunrun(data.descricao) : "";
+    descEl.innerHTML = formatado || "Sem descrição cadastrada nessa tarefa.";
     carregarImagensDaDescricao(descEl);
+    renderPrintsDaDescricao(formatado);
   }
   // Guarda a descrição na própria tarefa: Todos os comentários/Linha do
   // tempo mostram ela como a primeira mensagem (ver

@@ -1469,6 +1469,26 @@ function garantirVisualizadorDeImagem() {
   return overlay;
 }
 
+/**
+ * Mesmo pop-up de abrirImagemAmpliadaDoDrive, pra uma imagem que JÁ está
+ * carregada na tela (ex: print da descrição, que chega embutido pelo
+ * backend) — não precisa buscar nada, só mostrar grande.
+ */
+function abrirImagemAmpliadaDaFonte(src, legenda) {
+  if (!src) return;
+  const overlay = garantirVisualizadorDeImagem();
+  overlay.hidden = false;
+  requestAnimationFrame(() => overlay.classList.add("aberto"));
+  _visualizadorImagemPedidoAtual = null;
+  document.getElementById("visualizadorImagemLegenda").textContent = legenda || "";
+  const corpo = document.getElementById("visualizadorImagemCorpo");
+  corpo.innerHTML = "";
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = legenda || "";
+  corpo.appendChild(img);
+}
+
 /** Abre o pop-up quase em tela cheia com a imagem CHEIA (não a miniatura) de um arquivo do Drive. */
 function abrirImagemAmpliadaDoDrive(fileId, nomeArquivo) {
   if (!fileId) return;

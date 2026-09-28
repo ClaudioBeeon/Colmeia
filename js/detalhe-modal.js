@@ -922,6 +922,11 @@ function renderDetail() {
                 <div class="ai-briefing-result" id="briefingResult">
                   ${task.briefingHTML !== undefined ? task.briefingHTML : `<p class="workflow-seq-empty">Carregando briefing...</p>`}
                 </div>
+                <!-- Prints colados na descrição do Runrun.it — o briefing da
+                     Bee é só texto, então sem isto eles só apareciam atrás do
+                     "Ver briefing original". Preenchido por
+                     renderPrintsDaDescricao (js/chat-comentarios.js). -->
+                <div class="desc-prints" id="descPrints" hidden></div>
                 <div class="desc-actions-row">
                   <button type="button" class="ai-briefing-toggle" id="verOriginalBtn">Ver briefing original</button>
                   ${task.id ? `<button type="button" class="ai-briefing-toggle" id="editarDescricaoBtn">Editar descrição</button>` : ""}
@@ -1341,6 +1346,9 @@ function renderDetail() {
       const escondido = original.hidden;
       original.hidden = !escondido;
       verOriginalBtn.textContent = escondido ? "Ocultar briefing original" : "Ver briefing original";
+      // Com a versão original aberta, os prints já aparecem dentro dela, no
+      // lugar exato onde foram colados — a faixa de cima só repetiria.
+      document.getElementById("descPrints")?.classList.toggle("oculto-pelo-original", escondido);
     });
   }
 
@@ -1848,6 +1856,21 @@ function renderDetail() {
   // buscados, redesenha na hora — senão a mensagem ficava eternamente
   // na tela, porque a busca só acontecia na abertura do card.
   redesenharAnexosGuardados(task);
+
+  // Mesmo cuidado pra descrição e os prints dela: o redesenho voltava a
+  // descrição pra "Carregando..." e escondia a faixa de prints, e nada
+  // buscava de novo. Se a descrição já chegou antes, redesenha na hora —
+  // as imagens vêm do cache de carregarImagensDaDescricao, sem rede.
+  const tarefaDaVez = tasks[detailIdx] || task;
+  if (tarefaDaVez.descricaoTexto !== undefined && typeof formatarDescricaoRunrun === "function") {
+    const descEl = document.getElementById("descTextReal");
+    if (descEl && !descEl.classList.contains("editando")) {
+      const formatado = tarefaDaVez.descricaoTexto ? formatarDescricaoRunrun(tarefaDaVez.descricaoTexto) : "";
+      descEl.innerHTML = formatado || "Sem descrição cadastrada nessa tarefa.";
+      carregarImagensDaDescricao(descEl);
+      renderPrintsDaDescricao(formatado);
+    }
+  }
 
   applyCommentsState();
 }

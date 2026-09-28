@@ -97,6 +97,39 @@
 }
 .desc-imagem-falhou:hover { opacity: 1; }
 
+/* Faixa "Prints da descrição", logo abaixo do briefing da Bee (ver
+   renderPrintsDaDescricao, js/chat-comentarios.js). Miniaturas em grade;
+   clicar abre grande no mesmo visualizador das peças do Drive. */
+.desc-prints { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.desc-prints[hidden], .desc-prints.oculto-pelo-original { display: none; }
+.desc-prints-titulo {
+  font-size: 12px; font-weight: 700; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 6px;
+}
+.desc-prints-qtd {
+  font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  background: var(--page-bg); color: var(--text-secondary); font-variant-numeric: tabular-nums;
+}
+.desc-prints-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.desc-print {
+  padding: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  background: var(--page-bg); cursor: zoom-in; aspect-ratio: 4 / 3;
+  transition: border-color var(--dur-fast) var(--ease-apple), transform var(--dur-fast) var(--ease-apple);
+}
+.desc-print:hover { border-color: var(--text-muted); transform: translateY(-1px); }
+.desc-print:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.desc-print .desc-imagem {
+  width: 100%; height: 100%; object-fit: cover; margin: 0; border-radius: 0;
+}
+.desc-print .desc-imagem.carregando { min-height: 0; }
+/* Imagem que não deu pra buscar vira o link "abrir no Runrun.it" (ver
+   marcarImagemQuebrada) — dentro da miniatura, ocupa o quadradinho todo. */
+.desc-print .desc-imagem-falhou {
+  margin: 0; height: 100%; display: flex; align-items: center; justify-content: center;
+  text-align: center; font-size: 11px; border-radius: 0;
+}
+@media (prefers-reduced-motion: reduce) { .desc-print { transition: none; } }
+
 .desc-text-real.editando {
   outline: none; border: 1.5px solid var(--kanban-yellow); border-radius: 10px;
   padding: 10px 12px; background: var(--page-bg);
@@ -1049,7 +1082,26 @@ body.card-aberto .quick-access-panel { display: none; }
 .ai-briefing-cat-valor {
   font-size: 13.5px; line-height: 1.6; white-space: pre-wrap;
 }
-.ai-briefing-cat-valor a { text-decoration: none; font-weight: 600; }
+/* Link dentro de uma caixinha do briefing herda a COR DA CAIXINHA (a
+   mesma do texto em volta, que já é pensada pros dois temas) e se marca
+   pelo sublinhado. Antes ficava sem cor nenhuma = o azul-escuro padrão do
+   navegador, ilegível no modo escuro (relato do Cláudio, 2026-09-28). O
+   `overflow-wrap` quebra link gigante (Figma, Drive) em vez de ele
+   atravessar a caixinha. */
+.ai-briefing-cat-valor a {
+  color: inherit; font-weight: 600;
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+.ai-briefing-cat-valor a:hover { text-decoration-thickness: 2px; }
+
+/* Mesmo buraco no texto original da descrição (e no "ver versão
+   original" de cada caixinha): link sem cor = azul-escuro do navegador. */
+.desc-text-real a, .ai-briefing-original-texto a {
+  color: var(--accent); overflow-wrap: anywhere;
+}
+[data-theme="dark"] .desc-text-real a,
+[data-theme="dark"] .ai-briefing-original-texto a { color: #A5A5FF; }
 
 /* Lista de pills quando um campo tem vários links (ex: vários vídeos) —
    em vez de despejar tudo em texto corrido, um pill por link. */
