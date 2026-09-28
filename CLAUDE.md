@@ -1736,6 +1736,20 @@ rodada (entregue, repassada) é apagada, comparando ids; senão a tabela só cre
 não responder NAQUELA rodada do gatilho, a função simplesmente não mexe em nada (nem grava, nem
 apaga) — o último retrato bom continua valendo até a rodada seguinte dar certo.
 
+**⚠️ A cópia NÃO pode ser lida logo depois de uma ação (2026-09-28).** Na primeira versão, a
+leitura pelo Supabase ignorava o `invalidarCacheDoQuadro()` que toda ação (entregar, pausar, mover)
+já dispara — e a atualização do quadro, 900ms depois do clique, trazia o retrato de até 5 min
+atrás: a tarefa entregue voltava "rodando" e "não entregue". Sintomas relatados pelo Cláudio: o
+cronômetro não parava ao entregar, e a pergunta de transferir o card mãe sumia (a tela achava que
+a subtarefa não tinha sido entregue). Hoje há duas marcas de tempo no CacheService:
+`marcarEscritaNoQuadro` (posta por `invalidarCacheDoQuadro`) e `marcarCopiaDoQuadroGravada`
+(posta quando a cópia é gravada, com a hora em que a VARREDURA começou).
+`copiaDoQuadroNoSupabaseEstaAtual` só deixa ler do banco quando a cópia começou depois da última
+escrita; senão a leitura vai ao vivo **e regrava a cópia** (`gravarTarefasNoSupabase`), então os
+pedidos seguintes voltam a ser rápidos. E uma varredura do gatilho que começou ANTES de uma escrita
+não grava nada — gravaria o estado velho por cima. ⚠️ Ação nova que mexe no quadro tem que estar em
+`ACOES_QUE_MUDAM_O_QUADRO`, senão a cópia velha continua sendo servida depois dela.
+
 **Gatilho a cada 5 minutos, não 1** — `everyMinutes` só aceita 1, 5, 10, 15 ou 30 (confirmado na
 prática: 2 estoura "The value you passed to everyMinutes was invalid"). Entre as opções válidas, 1
 minuto arrisca a cota diária de execução de gatilhos (conta gratuita, ~90 min/dia, dividida com os

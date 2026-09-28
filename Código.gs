@@ -761,7 +761,10 @@ function getTarefasColmeia() {
   // devolve false e nada aqui muda — o gatilho pode já estar rodando e
   // enchendo a tabela em paralelo, sem risco nenhum, antes de virar a
   // chave de verdade (mesmo princípio de toda tabela já migrada).
-  if (supabaseManda('tarefas')) {
+  var leCopiaDoSupabase = supabaseManda('tarefas');
+  // Cópia velha (alguém entregou/pausou/moveu depois dela) → vai ao vivo.
+  // Ver o comentário grande antes de copiaDoQuadroNoSupabaseEstaAtual.
+  if (leCopiaDoSupabase && copiaDoQuadroNoSupabaseEstaAtual()) {
     var doBanco = getTarefasColmeiaDoSupabase();
     if (doBanco) return doBanco;
     // Supabase não respondeu ou a tabela ainda está vazia — cai pro
@@ -775,7 +778,14 @@ function getTarefasColmeia() {
     try { return JSON.parse(cacheado); } catch (e) { /* varre de novo abaixo */ }
   }
   try {
-    var tarefas = aplicarPrioridadesEFocos(buscarTarefasRunrun());
+    var inicioDaVarredura = Date.now();
+    var cruas = buscarTarefasRunrun();
+    // A leitura ao vivo já pagou a varredura — aproveita pra deixar a
+    // cópia do Supabase em dia, pros próximos pedidos voltarem a ser
+    // rápidos. ANTES das prioridades/focos: a cópia guarda só o que veio
+    // do Runrun.it (a sobreposição é sempre aplicada na hora da leitura).
+    if (leCopiaDoSupabase) gravarTarefasNoSupabase(cruas, inicioDaVarredura);
+    var tarefas = aplicarPrioridadesEFocos(cruas);
 
     var resultado = { ok: true, tarefas: tarefas, colunas: Object.keys(COLUNAS_PRINCIPAIS) };
     // Guarda pra quem pedir nos próximos segundos aproveitar a mesma
@@ -926,6 +936,11 @@ function buscarHistoriaDaTarefa(taskId) {
  * anterior por até 45 segundos, guardado do momento antes da ação.
  */
 function invalidarCacheDoQuadro() {
+  // Marca a HORA da mudança, pra a cópia do quadro no Supabase saber que
+  // ficou velha (ver copiaDoQuadroNoSupabaseEstaAtual, logo abaixo).
+  // Separado do try de baixo de propósito: se limpar o cache falhar, a
+  // marca ainda precisa ser gravada.
+  marcarEscritaNoQuadro();
   try {
     var cache = CacheService.getScriptCache();
     var total = Number(cache.get(CACHE_QUADRO_CHAVE + '_n')) || 0;
@@ -936,4 +951,57 @@ function invalidarCacheDoQuadro() {
     for (var i = 0; i < total; i++) chaves.push(CACHE_QUADRO_CHAVE + '_' + i);
     cache.removeAll(chaves);
   } catch (e) { /* sem cache pra limpar, segue */ }
+}
+
+// ---------------------------------------------------------------------
+// A CÓPIA DO QUADRO NO SUPABASE PRECISA SABER QUANDO FICOU VELHA
+// (2026-09-28)
+//
+// O bug que isso resolve, relatado pelo Cláudio logo depois de ligar a
+// leitura pelo Supabase: entregava uma subtarefa e (1) o cronômetro
+// voltava a correr, (2) a pergunta de transferir o card mãe sumia.
+//
+// Antes da cópia existir, toda ação que muda o quadro (entregar, pausar,
+// mover...) chamava invalidarCacheDoQuadro, e a leitura SEGUINTE vinha
+// fresca do Runrun.it. A leitura pelo Supabase ignorava isso: logo depois
+// de entregar, o quadro recebia a cópia de até 5 minutos atrás — com a
+// subtarefa "rodando" e "não entregue" — e a tela desfazia a entrega.
+//
+// A regra agora: cada escrita anota a HORA em que aconteceu, e cada
+// gravação da cópia anota a hora em que a varredura DELA começou. Se houve
+// escrita depois da última cópia, a cópia está velha → a leitura volta a
+// ser ao vivo (exatamente como antes da migração), e essa leitura ao vivo
+// regrava a cópia, que volta a valer pros pedidos seguintes.
+// ---------------------------------------------------------------------
+var CHAVE_QUADRO_ULTIMA_ESCRITA = 'quadroUltimaEscritaEm';
+var CHAVE_QUADRO_COPIA_SUPABASE = 'quadroCopiaSupabaseEm';
+var MARCAS_DO_QUADRO_SEGUNDOS = 21600; // 6h, o teto do CacheService
+
+function marcarEscritaNoQuadro() {
+  try {
+    CacheService.getScriptCache().put(CHAVE_QUADRO_ULTIMA_ESCRITA, String(Date.now()), MARCAS_DO_QUADRO_SEGUNDOS);
+  } catch (e) { /* sem cache: a cópia é tratada como velha abaixo, mais seguro */ }
+}
+
+function horaDaUltimaEscritaNoQuadro() {
+  try { return Number(CacheService.getScriptCache().get(CHAVE_QUADRO_ULTIMA_ESCRITA)) || 0; }
+  catch (e) { return 0; }
+}
+
+/** Anota que a cópia no Supabase reflete o Runrun.it de `inicioDaVarredura` em diante. */
+function marcarCopiaDoQuadroGravada(inicioDaVarredura) {
+  try {
+    CacheService.getScriptCache().put(CHAVE_QUADRO_COPIA_SUPABASE, String(inicioDaVarredura), MARCAS_DO_QUADRO_SEGUNDOS);
+  } catch (e) { /* segue: sem a marca, a próxima leitura só vai ao vivo */ }
+}
+
+function copiaDoQuadroNoSupabaseEstaAtual() {
+  var ultimaEscrita = horaDaUltimaEscritaNoQuadro();
+  if (!ultimaEscrita) return true; // nenhuma escrita registrada nas últimas 6h
+  var copiaEm;
+  try { copiaEm = Number(CacheService.getScriptCache().get(CHAVE_QUADRO_COPIA_SUPABASE)) || 0; }
+  catch (e) { return false; }
+  // A varredura da cópia tem que ter COMEÇADO depois da última escrita —
+  // uma varredura que começou antes pode ter lido o estado de antes dela.
+  return copiaEm > ultimaEscrita;
 }

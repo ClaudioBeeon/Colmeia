@@ -981,6 +981,7 @@ function sincronizarTarefasParaSupabase() {
     Logger.log('❌ Supabase não configurado — nada a sincronizar.');
     return;
   }
+  var inicioDaVarredura = Date.now();
   var tarefas;
   try {
     tarefas = buscarTarefasRunrun();
@@ -991,39 +992,69 @@ function sincronizarTarefasParaSupabase() {
     Logger.log('❌ Falha ao buscar tarefas do Runrun.it: ' + (e && e.message || e));
     return;
   }
+  if (gravarTarefasNoSupabase(tarefas, inicioDaVarredura)) {
+    Logger.log('✅ Sincronizei ' + tarefas.length + ' tarefa(s) com o Supabase.');
+  }
+}
+
+/**
+ * Grava uma varredura do quadro na cópia do Supabase — usada pelo gatilho
+ * (acima) E pela leitura ao vivo de getTarefasColmeia (Código.gs), que já
+ * pagou a varredura e aproveita pra deixar a cópia em dia.
+ *
+ * `inicioDaVarredura` = quando a busca no Runrun.it COMEÇOU. Se alguém
+ * entregou/pausou/moveu algo depois disso (ver marcarEscritaNoQuadro,
+ * Código.gs), esta varredura pode ter lido o estado de ANTES — não grava,
+ * senão devolveria pra cópia justamente o que acabou de mudar. A próxima
+ * leitura ao vivo grava a versão certa.
+ *
+ * Só marca a cópia como atual (marcarCopiaDoQuadroGravada) se gravou E
+ * podou: uma tarefa entregue que ficou na tabela por falha na poda faria
+ * a entrega "desaparecer" de novo na tela.
+ *
+ * Devolve true se a cópia ficou em dia.
+ */
+function gravarTarefasNoSupabase(tarefas, inicioDaVarredura) {
+  if (!supabaseConfigurado()) return false;
   if (!tarefas || !tarefas.length) {
     // Lista vazia de verdade é rara (precisaria não ter NENHUMA tarefa
     // aberta pra nenhum dos designers). Mais provável é ter sido uma
     // falha silenciosa lá dentro — não confia, não apaga a tabela.
-    Logger.log('⚠️ buscarTarefasRunrun devolveu vazio — não mexendo na tabela por segurança.');
-    return;
+    Logger.log('⚠️ Varredura veio vazia — não mexendo na tabela por segurança.');
+    return false;
+  }
+  if (horaDaUltimaEscritaNoQuadro() >= inicioDaVarredura) {
+    Logger.log('⏭️ Alguém mexeu no quadro durante a varredura — não gravo um retrato que pode estar velho.');
+    return false;
   }
 
   var idsAgora = {};
+  var agoraIso = new Date().toISOString();
   var linhas = tarefas.map(function (t) {
     idsAgora[String(t.id)] = true;
-    return { id: t.id, dados: t, atualizado_em: new Date().toISOString() };
+    return { id: t.id, dados: t, atualizado_em: agoraIso };
   });
   var resultado = supabaseSalvar('tarefas', linhas);
   if (!resultado.ok) {
     Logger.log('❌ Falha ao gravar tarefas no Supabase: ' + resultado.erro);
-    return;
+    return false;
   }
 
   // Tira quem não está mais aberto. Busca só os ids (select=id) — a
   // tabela pode ter centenas de linhas, e não precisamos do `dados`
   // inteiro só pra decidir quem apagar.
   var existentes = supabaseBuscarTudo('tarefas', 'select=id');
-  if (existentes) {
-    var idsPraApagar = existentes
-      .map(function (l) { return String(l.id); })
-      .filter(function (id) { return !idsAgora[id]; });
-    if (idsPraApagar.length) {
-      supabaseApagar('tarefas', 'id=in.(' + idsPraApagar.join(',') + ')');
-    }
+  if (!existentes) return false;
+  var idsPraApagar = existentes
+    .map(function (l) { return String(l.id); })
+    .filter(function (id) { return !idsAgora[id]; });
+  if (idsPraApagar.length) {
+    var apagou = supabaseApagar('tarefas', 'id=in.(' + idsPraApagar.join(',') + ')');
+    if (!apagou.ok) return false;
   }
 
-  Logger.log('✅ Sincronizei ' + tarefas.length + ' tarefa(s) com o Supabase.');
+  marcarCopiaDoQuadroGravada(inicioDaVarredura);
+  return true;
 }
 
 /**

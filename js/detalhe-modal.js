@@ -552,7 +552,7 @@ function wireWorkflowArrows(task) {
           // Por isso força de novo, comparando por id (nunca por
           // referência — mesmo bug documentado no restante do app).
           const tarefaViva = tasks.find(x => String(x.id) === String(task.id));
-          if (tarefaViva) tarefaViva.running = false;
+          if (tarefaViva) { tarefaViva.running = false; tarefaViva._runningToggleEm = Date.now(); }
           if (tarefaViva) { tarefaViva.entregue = true; tarefaViva._entregueEm = Date.now(); }
           // O crachá de etapa tem que virar "Entregue ✓" na hora: entregar no
           // Runrun.it FECHA a tarefa mas não muda a etapa dela, então sem

@@ -306,6 +306,12 @@ async function pararCronometroAoTransferir(task) {
   const tarefaViva = (task.id && tasks.find(t => String(t.id) === String(task.id))) || task;
   if (!tarefaViva.running) return true;
   tarefaViva.running = false;
+  // Carimba o toggle, igual qualquer pause de clique: é o que faz
+  // atualizarKanbanEmBackground (js/pessoas-fotos.js) confiar no "parado"
+  // daqui por alguns instantes, em vez de religar o relógio com uma
+  // leitura que ainda não viu o pause (relato 2026-09-28: entregava e o
+  // cronômetro continuava correndo).
+  tarefaViva._runningToggleEm = Date.now();
   render();
   updateNowPlaying();
   const detailPlayBtn = document.getElementById("detailPlay");
