@@ -558,6 +558,22 @@ function formatoNoTexto(texto, aceitaEstatico) {
   return null;
 }
 
+/**
+ * Quem está com a tarefa AGORA (2026-10-01). Nem toda tarefa vem com
+ * `responsible_id`/`responsible_name`: card mãe com regra (workflow) chega
+ * só com a lista `assignments` — conferido na API em 117484 e 118441. Sem
+ * isso o card mãe saía "Sem responsável", e a pergunta "Transferir o card
+ * mãe também?" nunca aparecia (ela só pergunta se o card mãe é seu).
+ * Da lista vale quem está trabalhando nela; senão a primeira em aberto.
+ */
+function responsavelAtualDaTarefa(t) {
+  if (t.responsible_id) return { id: t.responsible_id, nome: t.responsible_name || null };
+  var lista = Array.isArray(t.assignments) ? t.assignments : [];
+  var a = lista.filter(function (x) { return x.is_working_on; })[0] ||
+    lista.filter(function (x) { return !x.is_closed; })[0] || lista[0];
+  return a ? { id: a.assignee_id || null, nome: a.assignee_name || null } : { id: null, nome: t.responsible_name || null };
+}
+
 function extrairFotoResponsavel(tarefa) {
   if (Array.isArray(tarefa.assignments) && tarefa.assignments.length > 0) {
     return tarefa.assignments[0].assignee_avatar_url || null;
@@ -838,6 +854,7 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback, contexto) {
   var nomeClienteBruto = t.client_name || 'Sem cliente';
   var nomeClienteResolvido = resolverNomeCanonico(nomeClienteBruto, mapaVinculos);
   var tempoMedioMinutos = mapaTempoMedio[normalizarNomeParaComparar(nomeClienteResolvido)] || 0;
+  var responsavel = responsavelAtualDaTarefa(t);
   return {
     id: t.id,
     title: t.title,
@@ -848,13 +865,13 @@ function transformarTarefaParaColmeia(t, nomeDesignerFallback, contexto) {
     // Entrega Desejada) — mesmo campo custom_24 já confirmado e usado
     // no painel-designers-beeon.
     dataPublicacao: extrairDataPublicacaoTarefa(t),
-    assignee: nomeDesignerFallback || t.responsible_name || 'Sem responsável',
+    assignee: nomeDesignerFallback || responsavel.nome || 'Sem responsável',
     // ID de verdade de quem está com a tarefa no Runrun.it. Antes o Colmeia
     // só tinha o NOME, e decidia "essa tarefa é minha?" comparando nomes por
     // "um é começo do outro" — o que acerta "Gio" = "Giovanna", mas "Manu"
     // bateria tanto com "Manuel" quanto com "Manuela". Com o id, essa
     // decisão passa a ser exata (ver ehMinhaTarefa no front-end).
-    assigneeId: t.responsible_id || null,
+    assigneeId: responsavel.id || null,
     assigneeAvatarUrl: extrairFotoResponsavel(t),
     estimateMinutes: Math.round((t.current_estimate_seconds || 0) / 60),
     // Meta da barra de progresso do card: tempo médio de criação DESSE
