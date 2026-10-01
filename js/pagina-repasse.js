@@ -1556,6 +1556,9 @@ function mostrarPagina(page) {
   document.querySelectorAll(".nav-ic[data-page]").forEach(l => l.classList.toggle("active", l.dataset.page === page));
   document.querySelectorAll(".app-page").forEach(p => p.hidden = true);
   document.getElementById("page-" + page).hidden = false;
+  // O botão "Ajustar o quadro" (js/kanban-board.js) só faz sentido no quadro.
+  const ajusteWrap = document.getElementById("ajusteQuadroWrap");
+  if (ajusteWrap) ajusteWrap.hidden = page !== "kanban";
 
   // ⚠️ O endereço do navegador é ajustado AQUI, antes dos build*Page()
   // logo abaixo — não no fim da função (onde estava até 2026-08-12).

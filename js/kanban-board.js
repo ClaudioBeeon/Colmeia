@@ -786,3 +786,97 @@ if (novaTarefaModalOverlayEl) {
 // Links de clientes cadastrados pelo coordenador (Drive, Banco de
 // imagens, Biblioteca Adobe, Pasta de publicações + extras avulsos),
 // carregados do backend do Colmeia.
+
+// ===== AJUSTAR O QUADRO (2026-10-01) =====
+// Duas barrinhas de arrastar no botão de ajuste do topo: tamanho dos cards
+// e largura das colunas. Preferência VISUAL de cada pessoa, então mora no
+// localStorage (ver "Decisões/padrões" no CLAUDE.md) — perder isso custa
+// só arrastar de novo. O CSS está no fim de css/02-quadro.css.
+const AJUSTE_QUADRO_CHAVE = "colmeia_ajuste_quadro_v1";
+const AJUSTE_QUADRO_PADRAO = { cards: 100, colunas: null }; // colunas null = esticar pra preencher (o de sempre)
+
+function lerAjusteDoQuadro() {
+  try {
+    const salvo = JSON.parse(localStorage.getItem(AJUSTE_QUADRO_CHAVE) || "null");
+    if (salvo && typeof salvo === "object") return { ...AJUSTE_QUADRO_PADRAO, ...salvo };
+  } catch (e) { /* sem localStorage: fica o padrão */ }
+  return { ...AJUSTE_QUADRO_PADRAO };
+}
+
+function salvarAjusteDoQuadro(ajuste) {
+  try { localStorage.setItem(AJUSTE_QUADRO_CHAVE, JSON.stringify(ajuste)); } catch (e) {}
+}
+
+// Aplica no #board por variáveis de CSS — o quadro é redesenhado a cada
+// atualização (render), mas o #board em si não é recriado, então o ajuste
+// sobrevive a todas elas sem precisar ser reaplicado.
+function aplicarAjusteDoQuadro(ajuste) {
+  const board = document.getElementById("board");
+  if (!board) return;
+  board.style.setProperty("--card-escala", String((ajuste.cards || 100) / 100));
+  if (ajuste.colunas) {
+    board.style.setProperty("--coluna-largura", ajuste.colunas + "px");
+    board.classList.add("colunas-fixas");
+  } else {
+    board.style.removeProperty("--coluna-largura");
+    board.classList.remove("colunas-fixas");
+  }
+}
+
+function ligarAjusteDoQuadro() {
+  const btn = document.getElementById("ajusteQuadroBtn");
+  const pop = document.getElementById("ajusteQuadroPop");
+  const rCards = document.getElementById("ajusteCardsRange");
+  const rCols = document.getElementById("ajusteColunasRange");
+  const vCards = document.getElementById("ajusteCardsValor");
+  const vCols = document.getElementById("ajusteColunasValor");
+  const padrao = document.getElementById("ajusteQuadroPadrao");
+  if (!btn || !pop || !rCards || !rCols) return;
+
+  let ajuste = lerAjusteDoQuadro();
+
+  // A barrinha de colunas precisa de um ponto de partida mesmo quando a
+  // pessoa nunca mexeu: a largura que a coluna TEM agora na tela (que
+  // muda com o tamanho do monitor), pra o primeiro arraste não dar pulo.
+  function larguraAtualDaColuna() {
+    const col = document.querySelector("#board .column");
+    return col ? Math.round(col.getBoundingClientRect().width / 10) * 10 : 254;
+  }
+
+  function mostrarValores() {
+    rCards.value = ajuste.cards;
+    vCards.textContent = ajuste.cards + "%";
+    rCols.value = ajuste.colunas || larguraAtualDaColuna();
+    vCols.textContent = ajuste.colunas ? ajuste.colunas + "px" : "automática";
+  }
+
+  function mudou() {
+    aplicarAjusteDoQuadro(ajuste);
+    salvarAjusteDoQuadro(ajuste);
+    mostrarValores();
+  }
+
+  rCards.addEventListener("input", () => { ajuste.cards = Number(rCards.value); mudou(); });
+  rCols.addEventListener("input", () => { ajuste.colunas = Number(rCols.value); mudou(); });
+  padrao.addEventListener("click", () => { ajuste = { ...AJUSTE_QUADRO_PADRAO }; mudou(); });
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const abrir = pop.hidden;
+    pop.hidden = !abrir;
+    btn.setAttribute("aria-expanded", String(abrir));
+    if (abrir) mostrarValores();
+  });
+  pop.addEventListener("click", (e) => e.stopPropagation());
+  document.addEventListener("click", () => {
+    if (!pop.hidden) { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !pop.hidden) { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+  });
+
+  aplicarAjusteDoQuadro(ajuste);
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ligarAjusteDoQuadro);
+else ligarAjusteDoQuadro();

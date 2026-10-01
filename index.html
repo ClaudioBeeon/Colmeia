@@ -38,14 +38,14 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-09-28b">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-09-28b">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-09-28b">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-09-28b">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-09-28b">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-09-28b">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-09-28b">
-<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-09-28b">
+<link rel="stylesheet" href="css/01-base.css?v=2026-10-01a">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-10-01a">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-10-01a">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-10-01a">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-10-01a">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-10-01a">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-10-01a">
+<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-10-01a">
 </head>
 <body>
 
@@ -299,6 +299,27 @@
           <svg viewBox="0 0 24 24" fill="none"><path d="M3 11l18-7-7 18-2.5-7.5L3 11z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span class="icon-btn-badge" id="avisosBadge" hidden>0</span>
         </button>
+
+        <!-- Ajustar o quadro: tamanho dos cards e largura das colunas, por
+             pessoa (js/kanban-board.js, ligarAjusteDoQuadro). Só aparece
+             no quadro — mostrarPagina esconde nas outras páginas. -->
+        <div class="ajuste-quadro-wrap" id="ajusteQuadroWrap">
+          <button type="button" class="icon-btn-circle" id="ajusteQuadroBtn" title="Ajustar o quadro" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="10" cy="17" r="2" stroke="currentColor" stroke-width="1.8"/></svg>
+          </button>
+          <div class="ajuste-quadro-pop" id="ajusteQuadroPop" hidden>
+            <div class="ajuste-quadro-titulo">Ajustar o quadro</div>
+            <label class="ajuste-quadro-linha">
+              <span class="ajuste-quadro-rotulo">Tamanho dos cards <b id="ajusteCardsValor"></b></span>
+              <input type="range" id="ajusteCardsRange" min="70" max="120" step="5">
+            </label>
+            <label class="ajuste-quadro-linha">
+              <span class="ajuste-quadro-rotulo">Largura das colunas <b id="ajusteColunasValor"></b></span>
+              <input type="range" id="ajusteColunasRange" min="170" max="420" step="10">
+            </label>
+            <button type="button" class="ajuste-quadro-padrao" id="ajusteQuadroPadrao">Voltar ao padrão</button>
+          </div>
+        </div>
 
         <button type="button" class="icon-btn-circle accent" id="quickAccessBtn" title="Acesso rápido">
           <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/></svg>
@@ -1990,35 +2011,35 @@
      abertura do app: se ele demorar ou não carregar, a tela de login
      continua funcionando com a chave de acesso de sempre. -->
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="js/config.js?v=2026-09-28b"></script>
-<script src="js/cache-tarefas.js?v=2026-09-28b"></script>
-<script src="js/fila-offline.js?v=2026-09-28b"></script>
-<script src="js/notificacoes-uploads.js?v=2026-09-28b"></script>
-<script src="js/pessoas-fotos.js?v=2026-09-28b"></script>
-<script src="js/kanban-polling.js?v=2026-09-28b"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-09-28b"></script>
-<script src="js/regras-briefing.js?v=2026-09-28b"></script>
-<script src="js/kanban-board.js?v=2026-09-28b"></script>
-<script src="js/clientes-hub.js?v=2026-09-28b"></script>
-<script src="js/chat-comentarios.js?v=2026-09-28b"></script>
-<script src="js/detalhe-modal.js?v=2026-09-28b"></script>
-<script src="js/detalhe-cardmae.js?v=2026-09-28b"></script>
-<script src="js/detalhe-alteracao.js?v=2026-09-28b"></script>
-<script src="js/bee.js?v=2026-09-28b"></script>
-<script src="js/paginas-designers.js?v=2026-09-28b"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-09-28b"></script>
-<script src="js/pagina-repasse.js?v=2026-09-28b"></script>
-<script src="js/pagina-horas.js?v=2026-09-28b"></script>
-<script src="js/notificacoes-avisos.js?v=2026-09-28b"></script>
-<script src="js/paleta-comando.js?v=2026-09-28b"></script>
-<script src="js/roteador-url.js?v=2026-09-28b"></script>
-<script src="js/detalhe-historia.js?v=2026-09-28b"></script>
-<script src="js/modo-foco.js?v=2026-09-28b"></script>
-<script src="js/pagina-bee.js?v=2026-09-28b"></script>
-<script src="js/pagina-aprovacao.js?v=2026-09-28b"></script>
-<script src="js/central-atendimento.js?v=2026-09-28b"></script>
-<script src="js/central-atencao.js?v=2026-09-28b"></script>
-<script src="js/pagina-painel-designers.js?v=2026-09-28b"></script>
-<script src="js/login-boot.js?v=2026-09-28b"></script>
+<script src="js/config.js?v=2026-10-01a"></script>
+<script src="js/cache-tarefas.js?v=2026-10-01a"></script>
+<script src="js/fila-offline.js?v=2026-10-01a"></script>
+<script src="js/notificacoes-uploads.js?v=2026-10-01a"></script>
+<script src="js/pessoas-fotos.js?v=2026-10-01a"></script>
+<script src="js/kanban-polling.js?v=2026-10-01a"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-10-01a"></script>
+<script src="js/regras-briefing.js?v=2026-10-01a"></script>
+<script src="js/kanban-board.js?v=2026-10-01a"></script>
+<script src="js/clientes-hub.js?v=2026-10-01a"></script>
+<script src="js/chat-comentarios.js?v=2026-10-01a"></script>
+<script src="js/detalhe-modal.js?v=2026-10-01a"></script>
+<script src="js/detalhe-cardmae.js?v=2026-10-01a"></script>
+<script src="js/detalhe-alteracao.js?v=2026-10-01a"></script>
+<script src="js/bee.js?v=2026-10-01a"></script>
+<script src="js/paginas-designers.js?v=2026-10-01a"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-10-01a"></script>
+<script src="js/pagina-repasse.js?v=2026-10-01a"></script>
+<script src="js/pagina-horas.js?v=2026-10-01a"></script>
+<script src="js/notificacoes-avisos.js?v=2026-10-01a"></script>
+<script src="js/paleta-comando.js?v=2026-10-01a"></script>
+<script src="js/roteador-url.js?v=2026-10-01a"></script>
+<script src="js/detalhe-historia.js?v=2026-10-01a"></script>
+<script src="js/modo-foco.js?v=2026-10-01a"></script>
+<script src="js/pagina-bee.js?v=2026-10-01a"></script>
+<script src="js/pagina-aprovacao.js?v=2026-10-01a"></script>
+<script src="js/central-atendimento.js?v=2026-10-01a"></script>
+<script src="js/central-atencao.js?v=2026-10-01a"></script>
+<script src="js/pagina-painel-designers.js?v=2026-10-01a"></script>
+<script src="js/login-boot.js?v=2026-10-01a"></script>
 </body>
 </html>

@@ -2509,6 +2509,21 @@ note que ali o nome é **declarado, não provado**: qualquer um com o código es
 lista. Pra quem tem e-mail cadastrado, o "Entrar com o Google" é ao mesmo tempo mais seguro e **um
 passo a menos** (não digita código nem escolhe nome).
 
+## Ajustar o quadro — tamanho dos cards e largura das colunas (2026-10-01)
+
+Botão de controles deslizantes no topo (`#ajusteQuadroBtn`, só visível na página do quadro —
+`mostrarPagina` esconde nas outras) com duas barrinhas: **tamanho dos cards** (70–120%) e
+**largura das colunas** (170–420px), mais "Voltar ao padrão". Código em `ligarAjusteDoQuadro`
+(fim de js/kanban-board.js), CSS no fim de css/02-quadro.css.
+
+- **Cards usam `zoom`, não font-size:** o card é todo em px, e `zoom` escala tudo junto.
+- **Coluna só fica com largura fixa quando a pessoa mexe** (`#board.colunas-fixas`); sem isso
+  continua o `flex: 1` de sempre, que estica pra preencher a tela.
+- Aplicado por variáveis de CSS no `#board`, que não é recriado pelo `render()` — por isso o
+  ajuste sobrevive às atualizações automáticas sem ser reaplicado.
+- Preferência visual → `localStorage` (`colmeia_ajuste_quadro_v1`), por navegador.
+- Só o quadro principal (`#board`); o Runrun completo também usa `.column` e não é afetado.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização

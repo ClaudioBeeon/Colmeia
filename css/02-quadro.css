@@ -206,3 +206,46 @@ body.bee-aberta .column { min-width: 190px; }
   box-shadow: 0 0 0 2px var(--accent), var(--shadow-hover);
 }
 
+
+/* ===== AJUSTAR O QUADRO (2026-10-01) =====
+   Tamanho dos cards e largura das colunas, escolhidos por cada pessoa
+   (ligarAjusteDoQuadro, js/kanban-board.js). Só no quadro principal
+   (#board) — o Runrun completo também usa .column e fica como está.
+
+   - Cards: `zoom`, não font-size. O card é todo em px (padding, fonte,
+     fotos, botões); `zoom` encolhe/aumenta tudo junto na mesma proporção,
+     que é o que "card menor" quer dizer.
+   - Colunas: só quando a pessoa mexe (classe .colunas-fixas) a coluna
+     deixa de esticar pra preencher a tela e passa a ter largura fixa —
+     sem a classe, o comportamento de sempre (flex: 1) continua. */
+#board .task-card { zoom: var(--card-escala, 1); }
+#board.colunas-fixas .column {
+  flex: 0 0 var(--coluna-largura, 254px);
+  min-width: 0;
+  width: var(--coluna-largura, 254px);
+}
+
+.ajuste-quadro-wrap { position: relative; }
+.ajuste-quadro-wrap[hidden] { display: none; }
+.ajuste-quadro-pop {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;
+  width: 270px; padding: 16px;
+  background: var(--card-bg); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 18px;
+  box-shadow: var(--shadow-hover);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.ajuste-quadro-pop[hidden] { display: none; }
+.ajuste-quadro-titulo { font-weight: 600; font-size: 14px; }
+.ajuste-quadro-linha { display: flex; flex-direction: column; gap: 8px; }
+.ajuste-quadro-rotulo {
+  display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);
+}
+.ajuste-quadro-rotulo b { color: var(--text-primary); font-weight: 600; }
+.ajuste-quadro-linha input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.ajuste-quadro-padrao {
+  align-self: flex-start; border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); border-radius: 999px; padding: 6px 14px;
+  font-size: 12px; cursor: pointer;
+}
+.ajuste-quadro-padrao:hover { color: var(--text-primary); border-color: var(--text-muted); }
