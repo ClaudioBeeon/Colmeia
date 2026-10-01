@@ -2573,6 +2573,14 @@ NADA de `.gs` chega no Apps Script.** Conserto (só o Cláudio, no computador de
 `CLASP_CREDENTIALS` no GitHub e rodar de novo o último "Deploy Código.gs" (Actions → Re-run).
 Ao terminar qualquer mudança em `.gs`, conferir se esse workflow ficou verde.
 
+## Responsável do card mãe vem de `assignments` (2026-10-01)
+
+O Runrun.it manda card mãe com regra SEM `responsible_id`/`responsible_name` — só a lista
+`assignments`. Lendo só os dois, o card mãe saía "Sem responsável" e a pergunta "Transferir o card
+mãe também?" (que só aparece se o card mãe é seu) sumiu. `responsavelAtualDaTarefa`
+(RunrunLeitura.gs) cai pra lista quando faltam esses campos. ⚠️ Código novo que precise de "quem
+está com a tarefa" deve usar essa função, não `t.responsible_id` direto.
+
 ## Foto no Painel de Designers: uma fonte só (2026-10-01)
 
 O card de cada designer (e o perfil do relatório diário) lia a foto SÓ de `pnlPhotos` — o cadastro
