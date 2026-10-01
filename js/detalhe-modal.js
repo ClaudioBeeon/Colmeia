@@ -34,6 +34,85 @@ function sugestoesDeProgramaParaTarefa(task) {
   return apps;
 }
 
+// ===== Publicação, tempo × estimativa e subtarefas no card aberto (2026-10-01) =====
+// O que a comparação lado a lado com o Runrun.it mostrou que faltava aqui
+// (aprovado pelo Cláudio): a Data de Publicação só existia no calendário
+// da Central, o tempo gasto contra a estimativa só no card do quadro (e
+// contra o tempo médio do cliente, não contra a estimativa do Runrun.it),
+// e o card mãe só listava as subtarefas escondidas atrás da setinha.
+
+// "2026-09-23" → "23 set". Lido NA MÃO, nunca por `new Date(texto)`: data
+// sem hora vira meia-noite UTC e, em UTC-3, cai no dia anterior (mesmo
+// cuidado de centralCalCurta, js/central-atendimento.js).
+function dataCurtaDeISO(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "";
+  return Number(m[3]) + " " + MESES_ABREV[Number(m[2]) - 1];
+}
+
+function dataPublicacaoHTML(task) {
+  const curta = dataCurtaDeISO(task.dataPublicacao);
+  if (!curta) return "";
+  // Entrega marcada pra DEPOIS de postar = a peça fica pronta atrasada em
+  // relação à publicação — o mesmo alerta do calendário da Central.
+  const depois = task.dueISO && task.dueISO > String(task.dataPublicacao).slice(0, 10);
+  return `
+    <div class="side-sublinha ${depois ? "alerta" : ""}" title="${depois ? "A entrega está marcada pra depois do dia de postar" : "Data de publicação no Runrun.it"}">
+      <span class="side-sublinha-rotulo">Publicação</span>
+      <span class="side-sublinha-valor">${curta}</span>
+    </div>`;
+}
+
+function formatarHorasCurtas(segundos) {
+  const min = Math.floor((segundos || 0) / 60);
+  return Math.floor(min / 60) + "h" + String(min % 60).padStart(2, "0");
+}
+
+function tempoEstimativaHTML(task) {
+  if (!task.id || !task.temEstimativa || !task.estimateMinutes) return "";
+  return `
+    <div class="side-tempo" id="sideTempoEstimativa" title="Tempo gasto nesta tarefa contra a estimativa do Runrun.it">
+      <div class="side-sublinha">
+        <span class="side-sublinha-rotulo">Tempo</span>
+        <span class="side-sublinha-valor"><b id="sideTempoGasto"></b> de ${formatarHorasCurtas(task.estimateMinutes * 60)}</span>
+      </div>
+      <div class="side-tempo-trilho"><div class="side-tempo-barra" id="sideTempoBarra"></div></div>
+    </div>`;
+}
+
+// Chamada no relógio de 1s e logo depois de desenhar o card, pra a barra
+// andar junto com o cronômetro sem redesenhar o painel inteiro.
+function atualizarTempoEstimativaNaTela(task) {
+  const gasto = document.getElementById("sideTempoGasto");
+  const barra = document.getElementById("sideTempoBarra");
+  if (!gasto || !barra || !task || !task.estimateMinutes) return;
+  const pct = (task.timerSeconds || 0) / (task.estimateMinutes * 60) * 100;
+  gasto.textContent = formatarHorasCurtas(task.timerSeconds);
+  barra.style.width = Math.min(100, pct) + "%";
+  barra.classList.toggle("estourou", pct > 100);
+}
+
+function subtarefasDoCardMaeHTML(task) {
+  const lista = task.isMotherCard ? (task.subtarefasResumo || []) : [];
+  if (!lista.length) return "";
+  const abertas = lista.filter(s => !s.fechada).length;
+  return `
+    <div class="side-block">
+      <span class="side-label">Subtarefas <span class="side-subtarefas-conta">${abertas} aberta${abertas === 1 ? "" : "s"} de ${lista.length}</span></span>
+      <div class="side-subtarefas">
+        ${lista.map(s => `
+          <button type="button" class="side-subtarefa ${s.fechada ? "fechada" : ""}" data-child-id="${s.id}" title="Abrir ${escaparHTML(s.title)}">
+            ${avatarHTML(s.responsavel, "avatar-sm", s.foto)}
+            <span class="side-subtarefa-txt">
+              <span class="side-subtarefa-titulo">${escaparHTML(s.title)}</span>
+              <span class="side-subtarefa-etapa">${s.fechada ? "Entregue" : escaparHTML(s.etapa || "")}</span>
+            </span>
+          </button>
+        `).join("")}
+      </div>
+    </div>`;
+}
+
 function sugestaoDeProgramaHTML(task) {
   const apps = sugestoesDeProgramaParaTarefa(task);
   if (!apps.length) return "";
@@ -994,7 +1073,10 @@ function renderDetail() {
                 </button>
               ` : ""}
             </div>
+            ${dataPublicacaoHTML(task)}
+            ${tempoEstimativaHTML(task)}
           </div>
+          ${subtarefasDoCardMaeHTML(task)}
           ${task.id ? `
             <div class="side-block">
               <button type="button" class="pasta-drive-btn" id="criarPastaDriveBtn">
@@ -1253,6 +1335,10 @@ function renderDetail() {
       applyCommentsState();
     });
   }
+  document.querySelectorAll(".side-subtarefa[data-child-id]").forEach(item => {
+    item.addEventListener("click", () => abrirTarefaPorId(Number(item.dataset.childId)));
+  });
+  atualizarTempoEstimativaNaTela(task);
   document.querySelectorAll(".child-item").forEach(item => {
     item.addEventListener("click", () => {
       childrenOpen = false;
@@ -1327,7 +1413,7 @@ function renderDetail() {
       // do card se recalcula em cima dela), e volta sozinha se o Runrun.it
       // recusar.
       const estimativaAntes = task.estimateMinutes;
-      marcarEscritaOtimista(task, { estimateMinutes: Math.round(horas * 60) });
+      marcarEscritaOtimista(task, { estimateMinutes: Math.round(horas * 60), temEstimativa: true });
       render();
       ajustarEstimativaNoBackend(task.id, horas * 60).then(ok => {
         if (ok) return;
@@ -2502,6 +2588,9 @@ setInterval(() => {
           playBtn.setAttribute("aria-label", "Pausar tarefa");
         }
       }
+      // Só a tarefa ABERTA mexe na barra do card aberto — este laço passa
+      // por TODAS as que estão rodando (inclusive as dos colegas).
+      if (idx === detailIdx) atualizarTempoEstimativaNaTela(task);
       if (task.tempoMedioMinutos) {
         task.estimatePct = calcularEstimatePct(task.timerSeconds, task.tempoMedioMinutos);
         const fill = document.querySelector(`.progress-fill[data-idx="${idx}"]`);

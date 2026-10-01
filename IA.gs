@@ -461,3 +461,77 @@ function resumirAlteracao(taskId, idOriginal) {
   salvarBriefingCacheado(chaveCache, hash, resultado.dados);
   return { ok: true, resumo: resultado.dados };
 }
+
+// ===== Briefings preparados em segundo plano (2026-10-01) =====
+//
+// O briefing organizado pela IA só ficava pronto ANTES de alguém abrir a
+// tarefa se o navegador DAQUELA pessoa tivesse pré-carregado ela
+// (js/cache-tarefas.js) — e isso só cobre as tarefas DELA, de hoje e
+// atrasadas. Card mãe, tarefa de amanhã ou de outra pessoa: a primeira
+// pessoa a abrir esperava a IA escrever ao vivo ("Carregando briefing..."
+// por 10, 20 segundos). Relato do Cláudio: "já tinha definido de carregar
+// tudo em segundo plano, pra não ficar esperando nada".
+//
+// Agora o próprio servidor prepara, aproveitando o gatilho que já roda a
+// cada 5 minutos (sincronizarTarefasParaSupabase). gerarBriefingDaTarefa
+// guarda o resultado na aba "Briefings", que vale pra TODO mundo e qualquer
+// computador — quem abrir depois recebe pronto.
+//
+// Três freios, porque cada briefing é uma chamada de IA e o gatilho tem
+// cota diária de tempo:
+// - só tarefas que vencem até BRIEFING_PREPARO_DIAS_A_FRENTE dias (ou já
+//   atrasadas) e os cards mãe delas — é o que alguém vai abrir logo;
+// - no máximo BRIEFING_PREPARO_MAX_POR_RODADA por rodada, parando antes se
+//   passar de BRIEFING_PREPARO_TEMPO_MS;
+// - cada tarefa é preparada UMA vez (lista em BRIEFINGS_PREPARADOS_CHAVE).
+//   Se a descrição mudar depois, o hash muda e a abertura gera de novo,
+//   como sempre foi.
+var BRIEFING_PREPARO_DIAS_A_FRENTE = 3;
+var BRIEFING_PREPARO_MAX_POR_RODADA = 4;
+var BRIEFING_PREPARO_TEMPO_MS = 90000;
+var BRIEFINGS_PREPARADOS_CHAVE = 'briefingsPreparados';
+
+function prepararBriefingsEmSegundoPlano(tarefas) {
+  if (!Array.isArray(tarefas) || !tarefas.length) return 0;
+  var inicio = Date.now();
+  var props = PropertiesService.getScriptProperties();
+  var preparados = {};
+  try { preparados = JSON.parse(props.getProperty(BRIEFINGS_PREPARADOS_CHAVE) || '{}'); } catch (e) { preparados = {}; }
+
+  var limite = Utilities.formatDate(new Date(Date.now() + BRIEFING_PREPARO_DIAS_A_FRENTE * 86400000), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  var naJanela = tarefas
+    .filter(function (t) { return t && t.id && t.due && t.due <= limite; })
+    .sort(function (a, b) { return a.due < b.due ? -1 : a.due > b.due ? 1 : 0; });
+
+  // Os cards mãe das tarefas da janela vêm logo depois delas: é o briefing
+  // que o designer mais consulta e o que nunca entrava em pré-carga nenhuma.
+  var fila = [];
+  var vistos = {};
+  naJanela.forEach(function (t) { if (!vistos[t.id]) { vistos[t.id] = 1; fila.push(t.id); } });
+  naJanela.forEach(function (t) {
+    if (t.parentTaskId && !vistos[t.parentTaskId]) { vistos[t.parentTaskId] = 1; fila.push(t.parentTaskId); }
+  });
+
+  // A lista de "já preparados" só guarda quem ainda está na fila — senão
+  // cresceria pra sempre (propriedade de script tem limite de tamanho).
+  var podado = {};
+  fila.forEach(function (id) { if (preparados[id]) podado[id] = 1; });
+  preparados = podado;
+
+  var feitos = 0;
+  for (var i = 0; i < fila.length && feitos < BRIEFING_PREPARO_MAX_POR_RODADA; i++) {
+    if (preparados[fila[i]]) continue;
+    if (Date.now() - inicio > BRIEFING_PREPARO_TEMPO_MS) break;
+    try {
+      var r = gerarBriefingDaTarefa(fila[i]);
+      // Só marca o que deu certo (ou que não tem descrição pra organizar):
+      // erro da IA fica de fora pra ser tentado na próxima rodada.
+      if (r && r.ok) { preparados[fila[i]] = 1; if (!r.doCache && !r.semDescricao) feitos++; }
+    } catch (e) {
+      Logger.log('Briefing de ' + fila[i] + ' não saiu: ' + (e && e.message || e));
+    }
+  }
+  try { props.setProperty(BRIEFINGS_PREPARADOS_CHAVE, JSON.stringify(preparados)); } catch (e) { /* segue */ }
+  if (feitos) Logger.log('📝 Preparei ' + feitos + ' briefing(s) em segundo plano.');
+  return feitos;
+}

@@ -1021,6 +1021,12 @@ function sincronizarTarefasParaSupabase() {
   if (gravarTarefasNoSupabase(tarefas, inicioDaVarredura)) {
     Logger.log('✅ Sincronizei ' + tarefas.length + ' tarefa(s) com o Supabase.');
   }
+  // Aproveita a varredura que acabou de chegar pra deixar briefings
+  // prontos antes de alguém abrir a tarefa (IA.gs). Falhar aqui nunca
+  // atrapalha a sincronização, que já terminou acima.
+  try { prepararBriefingsEmSegundoPlano(tarefas); } catch (e) {
+    Logger.log('Preparo de briefings falhou: ' + (e && e.message || e));
+  }
 }
 
 /**

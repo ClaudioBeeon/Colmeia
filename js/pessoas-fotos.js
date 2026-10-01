@@ -12,7 +12,9 @@ const ATENDIMENTO_PHOTOS_BEEON = {
   "Manu": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833487/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_amarelo_claro_mantendo_as_mes_372247_biwncc.png",
   "Laura": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833986/Firefly_gpt-image_Altere_o_fundo_para_roxo_bem_claro_22904_s2j7cx.png",
   "Giovanna": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833487/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_azul_claro_mantendo_as_mesmas_372247_1_eroaek.png",
-  "João Teles": "https://link-da-foto-do-joao.jpg",
+  // "João Teles" tinha aqui um endereço de EXEMPLO ("link-da-foto-do-joao.jpg"),
+  // que nunca carregava — saiu em 2026-10-01. A foto dele vem de
+  // Configurações → Pessoas; sem ela, aparecem as iniciais.
   "Lucas": "https://res.cloudinary.com/dzqsqxrkw/image/upload/v1784833905/Firefly_gpt-image_Transforme_essa_pessoa_em_um_emoji_do_IOS_em_um_fundo_laranja_bem_claro_mantendo_as_372247_sdfav1.png",
 };
 
@@ -441,6 +443,10 @@ function mapearTarefaDoBackend(t) {
     timerSeconds: t.workedSeconds || 0,
     running: !!t.isRunning,
     estimateMinutes: t.estimateMinutes || 30,
+    // O `|| 30` de cima esconde se a tarefa TEM estimativa no Runrun.it.
+    // A barra "Tempo × estimativa" do card aberto só aparece quando tem —
+    // senão mediria contra 30min inventados (ver tempoEstimativaHTML).
+    temEstimativa: !!t.estimateMinutes,
     // Meta da barra de progresso: tempo médio de criação desse cliente
     // (cadastrado no painel-designers-beeon, ex: 20min pro Alden 348).
     // 0% quando o cronômetro está em 00:00, 100% ao bater esse tempo.

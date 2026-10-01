@@ -1336,3 +1336,42 @@
   background: var(--kanban-yellow); color: var(--ink);
   font-size: 11px; font-weight: 800; line-height: 21px; text-align: center;
 }
+
+/* ===== Publicação, tempo × estimativa e subtarefas (2026-10-01) =====
+   Vindos da comparação com o Runrun.it (ver tempoEstimativaHTML e
+   vizinhas, js/detalhe-modal.js). Publicação e tempo moram DENTRO do
+   bloco da Entrega desejada, como linhas menores: são datas/prazos da
+   mesma tarefa, e um card novo pra cada voltaria à pilha de cards
+   idênticos que o redesenho de 2026-08-14 desmontou. */
+.side-sublinha {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  font-size: 13px; color: var(--text-secondary);
+  padding-top: 8px; border-top: 1px solid var(--border);
+}
+.side-sublinha-rotulo { font-weight: 600; }
+.side-sublinha-valor { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.side-sublinha-valor b { font-weight: 700; }
+.side-sublinha.alerta .side-sublinha-valor { color: var(--danger); }
+.side-tempo { display: flex; flex-direction: column; gap: 6px; }
+.side-tempo-trilho { height: 6px; border-radius: 999px; background: var(--page-bg); overflow: hidden; }
+[data-theme="dark"] .side-tempo-trilho { background: rgba(255,255,255,0.08); }
+.side-tempo-barra {
+  height: 100%; width: 0; border-radius: 999px;
+  background: linear-gradient(90deg, #FFDF00, #FFA200);
+  transition: width 0.4s var(--ease-apple);
+}
+.side-tempo-barra.estourou { background: var(--danger); }
+
+.side-subtarefas-conta { text-transform: none; letter-spacing: 0; font-weight: 500; margin-left: 4px; }
+.side-subtarefas { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; margin: 0 -8px; }
+.side-subtarefa {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 8px; border: none; border-radius: 10px; background: transparent;
+  text-align: left; font-family: inherit; color: var(--text-primary); cursor: pointer;
+}
+.side-subtarefa:hover { background: var(--page-bg); }
+.side-subtarefa-txt { display: flex; flex-direction: column; min-width: 0; }
+.side-subtarefa-titulo { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-subtarefa-etapa { font-size: 11.5px; color: var(--text-muted); }
+.side-subtarefa.fechada { opacity: 0.55; }
+.side-subtarefa.fechada .side-subtarefa-titulo { text-decoration: line-through; }

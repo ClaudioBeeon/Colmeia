@@ -2536,6 +2536,41 @@ motion, youtube → Vídeo; e-mail, mail mkt, newsletter → E-mail), sem acento
 inteira; sem pista, Estático. ⚠️ Ao acrescentar palavra-chave, testar com títulos reais — "reel"
 não pode casar dentro de outra palavra.
 
+## Card aberto: publicação, tempo × estimativa e subtarefas (2026-10-01)
+
+Vindos da comparação lado a lado com o Runrun.it, aprovados pelo Cláudio. `dataPublicacaoHTML`,
+`tempoEstimativaHTML` e `subtarefasDoCardMaeHTML` (js/detalhe-modal.js) + bloco no fim de
+css/03-detalhe.css. Publicação e tempo moram DENTRO do bloco "Entrega desejada" como linhas menores
+(não cards novos — ver o redesenho de 2026-08-14 da coluna da direita).
+
+- **A barra mede contra a estimativa DO RUNRUN.IT**, não contra o tempo médio do cliente (que é o
+  que a barra do card no quadro usa). `mapearTarefaDoBackend` faz `estimateMinutes || 30`, o que
+  esconde se existe estimativa — por isso o campo `temEstimativa`; sem ele a barra mediria contra
+  30min inventados. "Ajustar horas" liga `temEstimativa` junto.
+- ⚠️ **O relógio de 1s passa por TODAS as tarefas rodando** (as dos colegas também). A barra do card
+  aberto só pode ser atualizada quando `idx === detailIdx` — a primeira versão esqueceu isso e
+  mostrou "10h49 de 0h10" num card mãe parado, que era o tempo de outra tarefa.
+- Publicação vermelha = entrega marcada pra DEPOIS do dia de postar (mesmo alerta do calendário).
+
+## Briefings preparados pelo servidor (2026-10-01)
+
+`prepararBriefingsEmSegundoPlano` (IA.gs), chamada no fim de `sincronizarTarefasParaSupabase` (o
+gatilho de 5 min). A pré-carga do navegador (js/cache-tarefas.js) só cobre as tarefas DA PESSOA de
+hoje/atrasadas; card mãe, tarefa futura e de colega ficavam em "Carregando briefing..." pra quem
+abrisse primeiro. Agora o servidor gera e a aba "Briefings" serve todo mundo. Freios: só tarefas
+que vencem em até 3 dias (+ atrasadas) e os cards mãe delas, no máximo 4 gerações de IA por rodada
+e 90s, e cada tarefa uma vez só (lista em `briefingsPreparados`, podada a cada rodada).
+
+## ⚠️ Deploy do Apps Script: login do clasp venceu (2026-10-01)
+
+Desde 2026-09-28 o workflow "Deploy Código.gs" falha em `clasp push` com `invalid_grant /
+invalid_rapt` — o Google exigiu reautenticação da conta e o token guardado no secret
+`CLASP_CREDENTIALS` deixou de valer. **O push continua "dando certo" no git e o site publica, mas
+NADA de `.gs` chega no Apps Script.** Conserto (só o Cláudio, no computador dele): `npx
+@google/clasp@3.3.0 login`, copiar o conteúdo novo de `~/.clasprc.json` pro secret
+`CLASP_CREDENTIALS` no GitHub e rodar de novo o último "Deploy Código.gs" (Actions → Re-run).
+Ao terminar qualquer mudança em `.gs`, conferir se esse workflow ficou verde.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização
