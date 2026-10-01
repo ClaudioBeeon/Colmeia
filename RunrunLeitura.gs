@@ -502,27 +502,53 @@ function buscarIdsResponsaveisRunrun() {
   return mapa;
 }
 
+/**
+ * Estático, Vídeo ou E-mail — a etiqueta colorida de cada card.
+ *
+ * ⚠️ Até 2026-10-01 só o campo Tipo do Runrun.it era lido, procurando a
+ * palavra "vídeo" nele. Só que os tipos de lá viraram coisas como
+ * "Acompanhar Tarefa", "Arte para rede social" e "Anúncio - Youtube" — nenhum
+ * diz o formato —, e TODO card caía no "Estático" do fim, inclusive Reels e
+ * vídeos (achado comparando o Colmeia com o Runrun.it lado a lado).
+ *
+ * Agora, em ordem:
+ *  1. um campo personalizado "Tipo" que diga o formato com todas as letras
+ *     manda — é a escolha explícita de alguém;
+ *  2. senão, procura o formato no TÍTULO e no nome do tipo do Runrun.it
+ *     ("Vídeo - Criativo 11", "Reels Picanha", "Anúncio - Youtube",
+ *     "E-mail MKT 2");
+ *  3. sem pista nenhuma, Estático (o caso mais comum da agência).
+ */
 function extrairTipoTarefa(tarefa) {
-  var bruto = '';
-
+  var campoTipo = '';
   if (Array.isArray(tarefa.custom_fields)) {
     for (var i = 0; i < tarefa.custom_fields.length; i++) {
       var campo = tarefa.custom_fields[i];
       var nomeCampo = (campo.name || campo.title || '').toString().trim().toLowerCase();
       if (nomeCampo === CAMPO_TIPO_TAREFA.toLowerCase()) {
-        bruto = (campo.value || campo.option_name || '').toString();
+        campoTipo = (campo.value || campo.option_name || '').toString();
         break;
       }
     }
   }
 
-  if (!bruto && tarefa.type_name) bruto = tarefa.type_name;
+  var doCampo = formatoNoTexto(campoTipo, true);
+  if (doCampo) return doCampo;
+  return formatoNoTexto((tarefa.title || '') + ' | ' + (tarefa.type_name || ''), false) || 'estatico';
+}
 
-  bruto = bruto.toLowerCase();
-  if (bruto.indexOf('víde') !== -1 || bruto.indexOf('vide') !== -1) return 'video';
-  if (bruto.indexOf('mail') !== -1) return 'email';
-  if (bruto.indexOf('está') !== -1 || bruto.indexOf('esta') !== -1) return 'estatico';
-  return 'estatico';
+// Lê o formato num texto livre. Compara sem acento e por PALAVRA inteira —
+// "reel" não pode casar dentro de outra palavra qualquer. `aceitaEstatico`
+// só vale pro campo Tipo: num título, "estático" quase nunca aparece, e
+// quando aparece é o padrão de qualquer jeito.
+function formatoNoTexto(texto, aceitaEstatico) {
+  var t = ' ' + String(texto || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ') + ' ';
+  if (/ (e ?mail|mail mkt|email mkt|newsletter) /.test(t)) return 'email';
+  if (/ (videos?|reels?|animacao|animacoes|motion|youtube) /.test(t)) return 'video';
+  if (aceitaEstatico && / estatic[oa]s? /.test(t)) return 'estatico';
+  return null;
 }
 
 function extrairFotoResponsavel(tarefa) {

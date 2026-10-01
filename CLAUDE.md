@@ -2526,6 +2526,16 @@ Botão de controles deslizantes no topo (`#ajusteQuadroBtn`, só visível na pá
 - Preferência visual → `localStorage` (`colmeia_ajuste_quadro_v1`), por navegador.
 - Só o quadro principal (`#board`); o Runrun completo também usa `.column` e não é afetado.
 
+## Etiqueta Estático/Vídeo/E-mail lê o TÍTULO também (2026-10-01)
+
+`extrairTipoTarefa` (RunrunLeitura.gs) lia só o campo Tipo do Runrun.it, procurando "vídeo". Os
+tipos de lá viraram "Acompanhar Tarefa", "Arte para rede social" etc., e TODO card virava
+"Estático" (achado na comparação lado a lado com o Runrun.it). Agora: campo "Tipo" que diga o
+formato manda; senão `formatoNoTexto` procura no título + `type_name` (vídeo, reels, animação,
+motion, youtube → Vídeo; e-mail, mail mkt, newsletter → E-mail), sem acento e por palavra
+inteira; sem pista, Estático. ⚠️ Ao acrescentar palavra-chave, testar com títulos reais — "reel"
+não pode casar dentro de outra palavra.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização
