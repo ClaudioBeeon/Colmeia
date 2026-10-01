@@ -222,26 +222,32 @@ body.bee-aberta .column { min-width: 190px; }
    - Colunas: só quando a pessoa mexe (classe .colunas-fixas) a coluna
      deixa de esticar pra preencher a tela e passa a ter largura fixa —
      sem a classe, o comportamento de sempre (flex: 1) continua. */
+/* Tudo arredondado pra pixel INTEIRO com round() (2026-10-01): com o card
+   em 75%, a data e a prioridade ficavam em 8,25px/9px, e letra em tamanho
+   quebrado sai borrada em muita tela (relato do Cláudio: "meio embaçado").
+   Fonte de até 13px ganha piso de 10px — menor que isso não se lê.
+   A primeira declaração de cada par é a reserva pra navegador sem round();
+   a segunda, quando entendida, vence por vir depois. */
 #board { --e: var(--card-escala, 1); }
-#board .column-cards { gap: calc(14px * var(--e)); }
-#board .task-card { padding: calc(20px * var(--e)) calc(20px * var(--e)) calc(18px * var(--e)); border-radius: calc(20px * var(--e)); }
-#board .card-top { margin-bottom: calc(14px * var(--e)); gap: calc(6px * var(--e)); }
-#board .badge { font-size: calc(12px * var(--e)); padding: calc(5px * var(--e)) calc(16px * var(--e)); }
-#board .card-priority-tag { font-size: calc(11px * var(--e)); padding: calc(2px * var(--e)) calc(9px * var(--e)); }
-#board .card-title { font-size: calc(19px * var(--e)); margin-bottom: calc(4px * var(--e)); }
-#board .card-client { font-size: calc(13px * var(--e)); margin-bottom: calc(20px * var(--e)); }
-#board .card-alteracao-de { font-size: calc(11.5px * var(--e)); }
-#board .card-progress { margin-bottom: calc(16px * var(--e)); }
-#board .progress-head { gap: calc(8px * var(--e)); margin-bottom: calc(8px * var(--e)); }
-#board .progress-track { height: calc(9px * var(--e)); }
-#board .play-btn { width: calc(26px * var(--e)); height: calc(26px * var(--e)); }
-#board .play-btn svg { width: calc(10px * var(--e)); height: calc(10px * var(--e)); }
-#board .timer-text { font-size: calc(13px * var(--e)); }
-#board .card-bottom { padding-top: calc(14px * var(--e)); }
-#board .card-due-simple { font-size: calc(12px * var(--e)); gap: calc(5px * var(--e)); }
-#board .card-due-simple svg { width: calc(13px * var(--e)); height: calc(13px * var(--e)); }
-#board .card-bottom .avatar-sm { width: calc(22px * var(--e)); height: calc(22px * var(--e)); font-size: calc(9.5px * var(--e)); }
-#board .assignee-foco-badge { font-size: calc(11px * var(--e)); }
+#board .column-cards { gap: calc(14px * var(--e)); gap: round(calc(14px * var(--e)), 1px); }
+#board .task-card { padding: calc(20px * var(--e)) calc(20px * var(--e)) calc(18px * var(--e)); padding: round(calc(20px * var(--e)), 1px) round(calc(20px * var(--e)), 1px) round(calc(18px * var(--e)), 1px); border-radius: calc(20px * var(--e)); border-radius: round(calc(20px * var(--e)), 1px); }
+#board .card-top { margin-bottom: calc(14px * var(--e)); margin-bottom: round(calc(14px * var(--e)), 1px); gap: calc(6px * var(--e)); gap: round(calc(6px * var(--e)), 1px); }
+#board .badge { font-size: calc(12px * var(--e)); font-size: round(max(10px, calc(12px * var(--e))), 1px); padding: calc(5px * var(--e)) calc(16px * var(--e)); padding: round(calc(5px * var(--e)), 1px) round(calc(16px * var(--e)), 1px); }
+#board .card-priority-tag { font-size: calc(11px * var(--e)); font-size: round(max(10px, calc(11px * var(--e))), 1px); padding: calc(2px * var(--e)) calc(9px * var(--e)); padding: round(calc(2px * var(--e)), 1px) round(calc(9px * var(--e)), 1px); }
+#board .card-title { font-size: calc(19px * var(--e)); font-size: round(calc(19px * var(--e)), 1px); margin-bottom: calc(4px * var(--e)); margin-bottom: round(calc(4px * var(--e)), 1px); }
+#board .card-client { font-size: calc(13px * var(--e)); font-size: round(max(10px, calc(13px * var(--e))), 1px); margin-bottom: calc(20px * var(--e)); margin-bottom: round(calc(20px * var(--e)), 1px); }
+#board .card-alteracao-de { font-size: calc(11.5px * var(--e)); font-size: round(max(10px, calc(11.5px * var(--e))), 1px); }
+#board .card-progress { margin-bottom: calc(16px * var(--e)); margin-bottom: round(calc(16px * var(--e)), 1px); }
+#board .progress-head { gap: calc(8px * var(--e)); gap: round(calc(8px * var(--e)), 1px); margin-bottom: calc(8px * var(--e)); margin-bottom: round(calc(8px * var(--e)), 1px); }
+#board .progress-track { height: calc(9px * var(--e)); height: round(calc(9px * var(--e)), 1px); }
+#board .play-btn { width: calc(26px * var(--e)); width: round(calc(26px * var(--e)), 1px); height: calc(26px * var(--e)); height: round(calc(26px * var(--e)), 1px); }
+#board .play-btn svg { width: calc(10px * var(--e)); width: round(calc(10px * var(--e)), 1px); height: calc(10px * var(--e)); height: round(calc(10px * var(--e)), 1px); }
+#board .timer-text { font-size: calc(13px * var(--e)); font-size: round(max(10px, calc(13px * var(--e))), 1px); }
+#board .card-bottom { padding-top: calc(14px * var(--e)); padding-top: round(calc(14px * var(--e)), 1px); }
+#board .card-due-simple { font-size: calc(12px * var(--e)); font-size: round(max(10px, calc(12px * var(--e))), 1px); gap: calc(5px * var(--e)); gap: round(calc(5px * var(--e)), 1px); }
+#board .card-due-simple svg { width: calc(13px * var(--e)); width: round(calc(13px * var(--e)), 1px); height: calc(13px * var(--e)); height: round(calc(13px * var(--e)), 1px); }
+#board .card-bottom .avatar-sm { width: calc(22px * var(--e)); width: round(calc(22px * var(--e)), 1px); height: calc(22px * var(--e)); height: round(calc(22px * var(--e)), 1px); font-size: calc(9.5px * var(--e)); font-size: round(max(10px, calc(9.5px * var(--e))), 1px); }
+#board .assignee-foco-badge { font-size: calc(11px * var(--e)); font-size: round(max(10px, calc(11px * var(--e))), 1px); }
 #board.colunas-fixas .column {
   flex: 0 0 var(--coluna-largura, 254px);
   min-width: 0;
