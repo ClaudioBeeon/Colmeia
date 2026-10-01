@@ -2516,7 +2516,9 @@ Botão de controles deslizantes no topo (`#ajusteQuadroBtn`, só visível na pá
 **largura das colunas** (170–420px), mais "Voltar ao padrão". Código em `ligarAjusteDoQuadro`
 (fim de js/kanban-board.js), CSS no fim de css/02-quadro.css.
 
-- **Cards usam `zoom`, não font-size:** o card é todo em px, e `zoom` escala tudo junto.
+- **Cards: cada medida é multiplicada por `--card-escala`, nunca `zoom`/`transform: scale`.** A
+  primeira versão usava `zoom` e o texto ficou embaçado (o navegador redimensiona o card já
+  desenhado). Parte nova no card → acrescentar a medida dela no bloco do fim de 02-quadro.css.
 - **Coluna só fica com largura fixa quando a pessoa mexe** (`#board.colunas-fixas`); sem isso
   continua o `flex: 1` de sempre, que estica pra preencher a tela.
 - Aplicado por variáveis de CSS no `#board`, que não é recriado pelo `render()` — por isso o
