@@ -507,8 +507,8 @@ function pnlRenderDesigners() {
     const expandidoAgora = pnlExpandidos.has(designer) || (termo && clientesQueBatem.length > 0);
 
     const col = pnlCorDoDesigner(designer);
-    const foto = pnlPhotos[designer];
-    const avatarInner = foto ? `<img src="${escaparHTML(foto)}" alt="">` : (typeof initials === "function" ? initials(designer) : designer.slice(0, 2).toUpperCase());
+    const foto = pnlFotoDoDesigner(designer);
+    const avatarInner = foto ? pnlImgDaFotoHTML(foto, designer) : (typeof initials === "function" ? initials(designer) : designer.slice(0, 2).toUpperCase());
 
     const totalCriativos = clientes.reduce((s, c) => s + (c.criativos || 0), 0);
     const totalMin = clientes.reduce((s, c) => s + ((c.criativos || 0) * (c.tempo || 0)), 0);
@@ -640,6 +640,12 @@ function pnlLigarEventosDaGrade(grid) {
     btn.addEventListener("click", ev => {
       ev.stopPropagation();
       const designer = btn.dataset.pnlFoto;
+      // A foto de Configurações → Pessoas vence a do painel (pnlFotoDoDesigner):
+      // trocar aqui não mudaria nada na tela, então avisa onde trocar.
+      if (typeof resolverFotoManual === "function" && resolverFotoManual({ nome: designer })) {
+        mostrarToast(`A foto de ${designer} vem de Configurações → Pessoas — troque por lá pra valer no Colmeia todo.`, "info");
+        return;
+      }
       const url = prompt(`Cole o link da foto de ${designer} (URL da imagem):`, pnlPhotos[designer] || "");
       if (url === null) return;
       if (url.trim()) pnlPhotos[designer] = url.trim(); else delete pnlPhotos[designer];
@@ -2550,14 +2556,33 @@ function relatorioDiarioBarraEntreguesHTML(qtdEntregues, qtdFila, horasTrabalhad
   `;
 }
 
+// Foto de um designer do painel (2026-10-01). Antes o card e o relatório
+// liam SÓ `pnlPhotos` (o cadastro do painel-designers-beeon), enquanto o
+// resto do Colmeia — inclusive a coluna da direita desta mesma página —
+// usa avatarHTML, que olha primeiro Configurações → Pessoas. Quem só tinha
+// foto lá aparecia com foto num canto da tela e com iniciais no outro
+// (relato do Cláudio). Mesma ordem do avatarHTML: o cadastro de Pessoas
+// manda; o do painel é a reserva.
+function pnlFotoDoDesigner(designer) {
+  const doCadastro = typeof resolverFotoManual === "function" ? resolverFotoManual({ nome: designer }) : null;
+  return doCadastro || (typeof pnlPhotos !== "undefined" && pnlPhotos[designer]) || null;
+}
+
+// Foto que não abre (endereço velho/apagado no cadastro do painel — era o
+// caso da Imane e do "Sem designer") vira as iniciais, em vez do ícone de
+// imagem quebrada.
+function pnlImgDaFotoHTML(foto, designer) {
+  return `<img src="${escaparHTML(foto)}" alt="" data-nome="${escaparHTML(designer)}" onerror="this.replaceWith(document.createTextNode(initials(this.dataset.nome)))">`;
+}
+
 function relatorioDiarioPerfilHTML(designer, qtdFila) {
-  const foto = (typeof pnlPhotos !== "undefined" && pnlPhotos[designer]) || null;
+  const foto = pnlFotoDoDesigner(designer);
   const iniciais = typeof initials === "function" ? initials(designer) : designer.slice(0, 2).toUpperCase();
   return `
     <div class="reld-card reld-perfil">
       <div class="reld-perfil-fundo"></div>
       <div class="reld-perfil-corpo">
-        <div class="reld-perfil-avatar">${foto ? `<img src="${escaparHTML(foto)}" alt="">` : escaparHTML(iniciais)}</div>
+        <div class="reld-perfil-avatar">${foto ? pnlImgDaFotoHTML(foto, designer) : escaparHTML(iniciais)}</div>
         <div class="reld-perfil-nome">${escaparHTML(designer)}</div>
       </div>
       <div class="reld-perfil-chip">${qtdFila} na fila</div>

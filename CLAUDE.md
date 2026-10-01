@@ -2573,6 +2573,16 @@ NADA de `.gs` chega no Apps Script.** Conserto (só o Cláudio, no computador de
 `CLASP_CREDENTIALS` no GitHub e rodar de novo o último "Deploy Código.gs" (Actions → Re-run).
 Ao terminar qualquer mudança em `.gs`, conferir se esse workflow ficou verde.
 
+## Foto no Painel de Designers: uma fonte só (2026-10-01)
+
+O card de cada designer (e o perfil do relatório diário) lia a foto SÓ de `pnlPhotos` — o cadastro
+do painel-designers-beeon —, enquanto o resto do app, inclusive a coluna da direita da mesma
+página, usa `avatarHTML` (Configurações → Pessoas primeiro). Várias fotos do painel tinham
+endereço que não abre mais: o card mostrava imagem quebrada e a coluna ao lado mostrava a foto
+certa. Hoje `pnlFotoDoDesigner` segue a mesma ordem do `avatarHTML` (Pessoas manda, painel é
+reserva) e `pnlImgDaFotoHTML` troca imagem que não carrega pelas iniciais. O 📷 do card avisa pra
+trocar em Configurações → Pessoas quando a foto de lá existe — trocar no painel não mudaria nada.
+
 ## Bug recorrente conhecido
 
 Nunca comparar tarefas por referência de objeto (`tasks[detailIdx] === task`). A atualização
