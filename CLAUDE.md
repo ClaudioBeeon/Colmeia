@@ -2531,9 +2531,11 @@ Botão de controles deslizantes no topo (`#ajusteQuadroBtn`, só visível na pá
 `extrairTipoTarefa` (RunrunLeitura.gs) lia só o campo Tipo do Runrun.it, procurando "vídeo". Os
 tipos de lá viraram "Acompanhar Tarefa", "Arte para rede social" etc., e TODO card virava
 "Estático" (achado na comparação lado a lado com o Runrun.it). Agora: campo "Tipo" que diga o
-formato manda; senão `formatoNoTexto` procura no título + `type_name` (vídeo, reels, animação,
-motion, youtube → Vídeo; e-mail, mail mkt, newsletter → E-mail), sem acento e por palavra
-inteira; sem pista, Estático. ⚠️ Ao acrescentar palavra-chave, testar com títulos reais — "reel"
+formato manda; senão o `type_name` do Runrun.it quando diz o formato ("Edição de vídeo 60s" →
+Vídeo; "Apenas arte ou foto" → Estático); senão o título (vídeo, reels, animação, motion, youtube →
+Vídeo; e-mail, mail mkt, newsletter → E-mail), sem acento e por palavra inteira; sem pista,
+Estático. O tipo vence o título de propósito: "Arte - Criativo 2 - Vídeo" é do tipo "Apenas arte
+ou foto" — a arte DE um criativo de vídeo (conferido na API do Runrun.it em 2026-10-01). ⚠️ Ao acrescentar palavra-chave, testar com títulos reais — "reel"
 não pode casar dentro de outra palavra.
 
 ## Card aberto: publicação, tempo × estimativa e subtarefas (2026-10-01)

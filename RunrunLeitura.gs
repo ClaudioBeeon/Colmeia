@@ -514,10 +514,10 @@ function buscarIdsResponsaveisRunrun() {
  * Agora, em ordem:
  *  1. um campo personalizado "Tipo" que diga o formato com todas as letras
  *     manda — é a escolha explícita de alguém;
- *  2. senão, procura o formato no TÍTULO e no nome do tipo do Runrun.it
- *     ("Vídeo - Criativo 11", "Reels Picanha", "Anúncio - Youtube",
- *     "E-mail MKT 2");
- *  3. sem pista nenhuma, Estático (o caso mais comum da agência).
+ *  2. senão, o TIPO do Runrun.it, quando ele diz o formato ("Edição de
+ *     vídeo 60s", "Anúncio - Youtube", "Apenas arte ou foto");
+ *  3. senão, o TÍTULO ("Vídeo - Criativo 11", "Reels Picanha", "E-mail MKT 2");
+ *  4. sem pista nenhuma, Estático (o caso mais comum da agência).
  */
 function extrairTipoTarefa(tarefa) {
   var campoTipo = '';
@@ -534,7 +534,14 @@ function extrairTipoTarefa(tarefa) {
 
   var doCampo = formatoNoTexto(campoTipo, true);
   if (doCampo) return doCampo;
-  return formatoNoTexto((tarefa.title || '') + ' | ' + (tarefa.type_name || ''), false) || 'estatico';
+  // O TIPO do Runrun.it vem antes do título quando diz o formato: "Arte -
+  // Criativo 2 - Vídeo" tem o tipo "Arte para rede social (Apenas arte ou
+  // foto)" — é a arte DE um criativo de vídeo, e quem criou a tarefa disse
+  // isso escolhendo o tipo. O título só decide quando o tipo não diz nada
+  // ("Acompanhar Tarefa").
+  var doTipo = formatoNoTexto(tarefa.type_name, true);
+  if (doTipo) return doTipo;
+  return formatoNoTexto(tarefa.title, false) || 'estatico';
 }
 
 // Lê o formato num texto livre. Compara sem acento e por PALAVRA inteira —
@@ -547,7 +554,7 @@ function formatoNoTexto(texto, aceitaEstatico) {
     .replace(/[^a-z0-9]+/g, ' ') + ' ';
   if (/ (e ?mail|mail mkt|email mkt|newsletter) /.test(t)) return 'email';
   if (/ (videos?|reels?|animacao|animacoes|motion|youtube) /.test(t)) return 'video';
-  if (aceitaEstatico && / estatic[oa]s? /.test(t)) return 'estatico';
+  if (aceitaEstatico && / (estatic[oa]s?|apenas arte|arte ou foto) /.test(t)) return 'estatico';
   return null;
 }
 
