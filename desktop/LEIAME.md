@@ -15,6 +15,14 @@ senha de administrador).
   computador, nunca dentro da janela;
 - as páginas do CLIENTE (`aprovar.html`, `ajuste.html`, `/adn/...`) também abrem no navegador.
 
+## O painel do ponto
+Botão do relógio na barra do topo (só aparece no programa). Abre o site de ponto
+(`app.mywork.com.br/ponto`) numa telinha nativa dentro da MESMA janela, encostada à direita, e o
+mesmo botão fecha. Não dá pra fazer isso numa página comum porque o site do ponto proíbe ser
+mostrado dentro de outra página (`X-Frame-Options`). O login do ponto fica guardado no programa.
+O site do Colmeia só pode pedir isso ao programa (comando `alternar_ponto`, ver
+`capabilities/main.json`) — nada além.
+
 ## Gerar um instalador novo
 GitHub → **Actions** → "Programa desktop (instalador do Windows)" → **Run workflow**. Sai na
 página Releases. Pra mudar a versão, altere `version` em `src-tauri/tauri.conf.json` e

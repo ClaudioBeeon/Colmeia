@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-alternar-ponto"
+description = "Enables the alternar_ponto command without any pre-configured scope."
+commands.allow = ["alternar_ponto"]
+
+[[permission]]
+identifier = "deny-alternar-ponto"
+description = "Denies the alternar_ponto command without any pre-configured scope."
+commands.deny = ["alternar_ponto"]

@@ -466,3 +466,26 @@ if (sessaoSalva && sessaoSalva.nome && sessaoSalva.papel) {
 }
 // Senão, a tela de login (já visível por padrão no HTML) fica esperando
 // o formulário ser enviado — o resto acontece no listener do submit acima.
+
+
+// ===== Programa de desktop: painel do ponto (2026-10-05) =====
+// No programa (Tauri, ver desktop/), o site de ponto abre numa telinha
+// nativa dentro da própria janela — ele não pode ser mostrado numa <iframe>
+// (manda X-Frame-Options: SAMEORIGIN). No navegador comum esta função não
+// faz nada e o botão continua escondido: `__TAURI_INTERNALS__` só existe
+// dentro do programa.
+(function ligarPontoDoDesktop() {
+  const ponte = window.__TAURI_INTERNALS__;
+  const botao = document.getElementById("pontoDesktopBtn");
+  if (!ponte || !botao) return;
+  botao.style.display = "";
+  botao.addEventListener("click", async () => {
+    try {
+      const aberto = await ponte.invoke("alternar_ponto");
+      botao.classList.toggle("accent", !!aberto);
+    } catch (err) {
+      console.error("Não consegui abrir o painel do ponto:", err);
+      mostrarToast("Não consegui abrir o ponto agora.", "erro");
+    }
+  });
+})();

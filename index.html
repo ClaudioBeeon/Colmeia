@@ -38,14 +38,14 @@
      vence a que foi escrita depois — então trocar a ordem desses arquivos
      muda a aparência do app. É a mesma ordem em que o conteúdo estava no
      arquivo único. -->
-<link rel="stylesheet" href="css/01-base.css?v=2026-10-05c">
-<link rel="stylesheet" href="css/02-quadro.css?v=2026-10-05c">
-<link rel="stylesheet" href="css/03-detalhe.css?v=2026-10-05c">
-<link rel="stylesheet" href="css/04-paginas.css?v=2026-10-05c">
-<link rel="stylesheet" href="css/05-componentes.css?v=2026-10-05c">
-<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-10-05c">
-<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-10-05c">
-<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-10-05c">
+<link rel="stylesheet" href="css/01-base.css?v=2026-10-05d">
+<link rel="stylesheet" href="css/02-quadro.css?v=2026-10-05d">
+<link rel="stylesheet" href="css/03-detalhe.css?v=2026-10-05d">
+<link rel="stylesheet" href="css/04-paginas.css?v=2026-10-05d">
+<link rel="stylesheet" href="css/05-componentes.css?v=2026-10-05d">
+<link rel="stylesheet" href="css/06-aprovacao.css?v=2026-10-05d">
+<link rel="stylesheet" href="css/07-central-atendimento.css?v=2026-10-05d">
+<link rel="stylesheet" href="css/08-painel-designers.css?v=2026-10-05d">
 </head>
 <body>
 
@@ -321,6 +321,13 @@
             <button type="button" class="ajuste-quadro-padrao" id="ajusteQuadroPadrao">Voltar ao padrão</button>
           </div>
         </div>
+
+        <!-- Só existe no programa de desktop (nasce escondido; ver
+             ligarPontoDoDesktop, js/login-boot.js): abre/fecha o painel do
+             ponto, uma telinha nativa encostada à direita da janela. -->
+        <button type="button" class="icon-btn-circle" id="pontoDesktopBtn" title="Bater o ponto" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 9.5V13l2.5 1.5M9 2h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
 
         <button type="button" class="icon-btn-circle accent" id="quickAccessBtn" title="Acesso rápido">
           <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/></svg>
@@ -2012,35 +2019,35 @@
      abertura do app: se ele demorar ou não carregar, a tela de login
      continua funcionando com a chave de acesso de sempre. -->
 <script src="https://accounts.google.com/gsi/client" async></script>
-<script src="js/config.js?v=2026-10-05c"></script>
-<script src="js/cache-tarefas.js?v=2026-10-05c"></script>
-<script src="js/fila-offline.js?v=2026-10-05c"></script>
-<script src="js/notificacoes-uploads.js?v=2026-10-05c"></script>
-<script src="js/pessoas-fotos.js?v=2026-10-05c"></script>
-<script src="js/kanban-polling.js?v=2026-10-05c"></script>
-<script src="js/painel-pessoas-clientes.js?v=2026-10-05c"></script>
-<script src="js/regras-briefing.js?v=2026-10-05c"></script>
-<script src="js/kanban-board.js?v=2026-10-05c"></script>
-<script src="js/clientes-hub.js?v=2026-10-05c"></script>
-<script src="js/chat-comentarios.js?v=2026-10-05c"></script>
-<script src="js/detalhe-modal.js?v=2026-10-05c"></script>
-<script src="js/detalhe-cardmae.js?v=2026-10-05c"></script>
-<script src="js/detalhe-alteracao.js?v=2026-10-05c"></script>
-<script src="js/bee.js?v=2026-10-05c"></script>
-<script src="js/paginas-designers.js?v=2026-10-05c"></script>
-<script src="js/pagina-tipos-runrun.js?v=2026-10-05c"></script>
-<script src="js/pagina-repasse.js?v=2026-10-05c"></script>
-<script src="js/pagina-horas.js?v=2026-10-05c"></script>
-<script src="js/notificacoes-avisos.js?v=2026-10-05c"></script>
-<script src="js/paleta-comando.js?v=2026-10-05c"></script>
-<script src="js/roteador-url.js?v=2026-10-05c"></script>
-<script src="js/detalhe-historia.js?v=2026-10-05c"></script>
-<script src="js/modo-foco.js?v=2026-10-05c"></script>
-<script src="js/pagina-bee.js?v=2026-10-05c"></script>
-<script src="js/pagina-aprovacao.js?v=2026-10-05c"></script>
-<script src="js/central-atendimento.js?v=2026-10-05c"></script>
-<script src="js/central-atencao.js?v=2026-10-05c"></script>
-<script src="js/pagina-painel-designers.js?v=2026-10-05c"></script>
-<script src="js/login-boot.js?v=2026-10-05c"></script>
+<script src="js/config.js?v=2026-10-05d"></script>
+<script src="js/cache-tarefas.js?v=2026-10-05d"></script>
+<script src="js/fila-offline.js?v=2026-10-05d"></script>
+<script src="js/notificacoes-uploads.js?v=2026-10-05d"></script>
+<script src="js/pessoas-fotos.js?v=2026-10-05d"></script>
+<script src="js/kanban-polling.js?v=2026-10-05d"></script>
+<script src="js/painel-pessoas-clientes.js?v=2026-10-05d"></script>
+<script src="js/regras-briefing.js?v=2026-10-05d"></script>
+<script src="js/kanban-board.js?v=2026-10-05d"></script>
+<script src="js/clientes-hub.js?v=2026-10-05d"></script>
+<script src="js/chat-comentarios.js?v=2026-10-05d"></script>
+<script src="js/detalhe-modal.js?v=2026-10-05d"></script>
+<script src="js/detalhe-cardmae.js?v=2026-10-05d"></script>
+<script src="js/detalhe-alteracao.js?v=2026-10-05d"></script>
+<script src="js/bee.js?v=2026-10-05d"></script>
+<script src="js/paginas-designers.js?v=2026-10-05d"></script>
+<script src="js/pagina-tipos-runrun.js?v=2026-10-05d"></script>
+<script src="js/pagina-repasse.js?v=2026-10-05d"></script>
+<script src="js/pagina-horas.js?v=2026-10-05d"></script>
+<script src="js/notificacoes-avisos.js?v=2026-10-05d"></script>
+<script src="js/paleta-comando.js?v=2026-10-05d"></script>
+<script src="js/roteador-url.js?v=2026-10-05d"></script>
+<script src="js/detalhe-historia.js?v=2026-10-05d"></script>
+<script src="js/modo-foco.js?v=2026-10-05d"></script>
+<script src="js/pagina-bee.js?v=2026-10-05d"></script>
+<script src="js/pagina-aprovacao.js?v=2026-10-05d"></script>
+<script src="js/central-atendimento.js?v=2026-10-05d"></script>
+<script src="js/central-atencao.js?v=2026-10-05d"></script>
+<script src="js/pagina-painel-designers.js?v=2026-10-05d"></script>
+<script src="js/login-boot.js?v=2026-10-05d"></script>
 </body>
 </html>
