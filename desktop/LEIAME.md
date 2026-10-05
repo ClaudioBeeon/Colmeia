@@ -17,8 +17,8 @@ senha de administrador).
 
 ## O painel do ponto
 Botão do relógio na barra do topo (só aparece no programa). Abre o site de ponto
-(`app.mywork.com.br/ponto`) numa telinha nativa dentro da MESMA janela, encostada à direita, e o
-mesmo botão fecha. Não dá pra fazer isso numa página comum porque o site do ponto proíbe ser
+(`app.mywork.com.br`, a página inicial — `/ponto` dá "página não encontrada" sem login) numa telinha nativa dentro da MESMA janela, encostada à direita, e o
+mesmo botão esconde/mostra (a página fica onde estava). Não dá pra fazer isso numa página comum porque o site do ponto proíbe ser
 mostrado dentro de outra página (`X-Frame-Options`). O login do ponto fica guardado no programa.
 O site do Colmeia só pode pedir isso ao programa (comando `alternar_ponto`, ver
 `capabilities/main.json`) — nada além.

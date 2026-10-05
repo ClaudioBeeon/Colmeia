@@ -19,7 +19,12 @@ const SITE: &str = "https://colmeia.beeon.com.br/";
 // telinha nativa dentro da MESMA janela, encostada à direita. Ela começa
 // abaixo da barra do topo (TOPO_PONTO) de propósito: assim o botão que abre
 // o painel continua à vista pra fechá-lo.
-const PONTO_URL: &str = "https://app.mywork.com.br/ponto";
+// Começa na página INICIAL, não em /ponto: o site responde "página não
+// encontrada" pra /ponto quando não há login, e a janelinha do ponto começa
+// sem login. Depois de entrar, a pessoa vai ao ponto pelo próprio site, e o
+// painel só ESCONDE ao fechar (não destrói), então ela continua onde parou.
+const PONTO_URL: &str = "https://app.mywork.com.br/";
+static PONTO_VISIVEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 const LARGURA_PONTO: f64 = 460.0;
 const TOPO_PONTO: f64 = 84.0;
 
@@ -41,17 +46,26 @@ fn ajustar(window: &tauri::Window) {
     }
 }
 
-// Abre o painel do ponto, ou fecha se já estiver aberto. `async` é
+// Abre o painel do ponto, ou esconde se já estiver aberto. `async` é
 // obrigatório: criar uma telinha dentro de um comando comum trava o Windows.
 // O login do ponto fica guardado (é o mesmo armazenamento do programa), então
 // ao reabrir o painel normalmente já está logado.
 #[tauri::command]
 async fn alternar_ponto(app: tauri::AppHandle) -> Result<bool, String> {
-    if let Some(wv) = app.get_webview("ponto") {
-        wv.close().map_err(|e| e.to_string())?;
-        return Ok(false);
-    }
+    use std::sync::atomic::Ordering;
     let window = app.get_window("main").ok_or("janela não encontrada")?;
+    if let Some(wv) = app.get_webview("ponto") {
+        // Já existe: só alterna entre mostrar e esconder (mantém a página).
+        if PONTO_VISIVEL.load(Ordering::SeqCst) {
+            wv.hide().map_err(|e| e.to_string())?;
+            PONTO_VISIVEL.store(false, Ordering::SeqCst);
+            return Ok(false);
+        }
+        ajustar(&window);
+        wv.show().map_err(|e| e.to_string())?;
+        PONTO_VISIVEL.store(true, Ordering::SeqCst);
+        return Ok(true);
+    }
     let url: Url = PONTO_URL.parse().map_err(|_| "endereço inválido".to_string())?;
     window
         .add_child(
@@ -61,6 +75,7 @@ async fn alternar_ponto(app: tauri::AppHandle) -> Result<bool, String> {
         )
         .map_err(|e| e.to_string())?;
     ajustar(&window);
+    PONTO_VISIVEL.store(true, Ordering::SeqCst);
     Ok(true)
 }
 
