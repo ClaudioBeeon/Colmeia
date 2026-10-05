@@ -1,0 +1,47 @@
+name: Programa desktop (instalador do Windows)
+
+# Gera o instalador do Colmeia pra Windows e publica na página "Releases" do
+# repositório. É uma MOLDURA em volta do site (ver desktop/LEIAME.md): o
+# conteúdo continua vindo de colmeia.beeon.com.br, então este processo só
+# precisa rodar quando a moldura mudar — não a cada mudança do Colmeia.
+#
+# Como rodar: GitHub → aba Actions → "Programa desktop" → Run workflow.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/programa-desktop.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: desktop-v__VERSION__
+          releaseName: "Colmeia para Windows v__VERSION__"
+          releaseBody: "Instalador do Colmeia para Windows. Baixe o arquivo .exe abaixo, abra e siga os passos."
+          releaseDraft: false
+          prerelease: false
+          args: --bundles nsis

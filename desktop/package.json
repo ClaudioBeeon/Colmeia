@@ -1,0 +1,13 @@
+{
+  "name": "colmeia-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Colmeia em janela própria (Windows). Só uma moldura em volta do site — ver desktop/LEIAME.md.",
+  "scripts": {
+    "icones": "tauri icon icone.png",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
