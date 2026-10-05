@@ -476,6 +476,7 @@ dependencies = [
 name = "colmeia-desktop"
 version = "0.3.0"
 dependencies = [
+ "serde",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

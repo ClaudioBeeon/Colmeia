@@ -530,6 +530,8 @@ function handleRequest(e, method) {
         output = buscarUploadsRecentesDoCard(body.taskId, body.cliente);
       } else if (body.acao === 'linkDoCaminhoLocal') {
         output = linkDoCaminhoLocalNoDrive(body.caminho, body.pastaCardUrl);
+      } else if (body.acao === 'ancestraisDaPastaDoCard') {
+        output = ancestraisDaPastaDoCard(body.pastaUrl);
       } else if (body.acao === 'buscarThumbnailDrive') {
         output = buscarThumbnailDrive(body.fileId);
       } else if (body.acao === 'buscarImagemCheiaDrive') {

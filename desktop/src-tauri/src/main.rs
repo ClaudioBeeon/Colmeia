@@ -137,6 +137,50 @@ async fn escolher_caminho(app: tauri::AppHandle, pasta: bool) -> Result<Option<S
     }
 }
 
+#[derive(serde::Deserialize)]
+struct Passo {
+    id: String,
+    nome: String,
+}
+
+// Abre no Explorador de Arquivos a pasta do card, a partir da CADEIA de
+// pastas do Drive (da do card até a mais de cima — ver
+// `ancestraisDaPastaDoCard`, Drive.gs). Procura, do ancestral mais alto pro
+// mais baixo, o primeiro cujo ID existe em `X:\.shortcut-targets-by-id\` e
+// monta o resto pelos nomes. Dois formatos já vistos pro mesmo ID: a pasta
+// aparece DENTRO do diretório do ID (`<ID>\<Nome>`) ou o próprio diretório do
+// ID é a pasta — tenta os dois.
+#[tauri::command]
+async fn abrir_pasta_no_computador(app: tauri::AppHandle, cadeia: Vec<Passo>) -> Result<String, String> {
+    use std::path::PathBuf;
+    for letra in 'D'..='Z' {
+        let base = PathBuf::from(format!("{}:\\.shortcut-targets-by-id", letra));
+        if !base.is_dir() {
+            continue;
+        }
+        for i in (0..cadeia.len()).rev() {
+            let dir_id = base.join(&cadeia[i].id);
+            if !dir_id.is_dir() {
+                continue;
+            }
+            for raiz in [dir_id.join(&cadeia[i].nome), dir_id.clone()] {
+                let mut alvo = raiz;
+                for passo in cadeia[..i].iter().rev() {
+                    alvo = alvo.join(&passo.nome);
+                }
+                if alvo.is_dir() {
+                    let texto = alvo.to_string_lossy().to_string();
+                    app.opener()
+                        .open_path(texto.clone(), None::<&str>)
+                        .map_err(|e| e.to_string())?;
+                    return Ok(texto);
+                }
+            }
+        }
+    }
+    Err("Não achei essa pasta no Drive do computador. Ela pode ainda estar sincronizando, ou o Drive não está aberto.".to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         // Abrir o programa de novo só traz a janela que já existe pra frente.
@@ -150,7 +194,7 @@ fn main() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![alternar_ponto, escolher_caminho])
+        .invoke_handler(tauri::generate_handler![alternar_ponto, escolher_caminho, abrir_pasta_no_computador])
         .setup(|app| {
             let handle = app.handle().clone();
             let window = WindowBuilder::new(app, "main")

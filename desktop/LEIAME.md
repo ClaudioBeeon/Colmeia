@@ -31,6 +31,13 @@ arquivo em lugar nenhum legível. Ponto de partida: o ID de `.shortcut-targets-b
 caminho, ou a pasta já linkada no card. O link é copiado e colocado no campo de comentário (sem
 enviar). Se houver dois itens com o mesmo nome no mesmo lugar, o servidor avisa em vez de chutar.
 
+## Abrir a pasta do card no computador
+Botão "Abrir a pasta do card no computador" (mesmo bloco). O servidor devolve a CADEIA de pastas do
+Drive, da pasta do card até a mais de cima (`ancestraisDaPastaDoCard`, Drive.gs); o programa
+(`abrir_pasta_no_computador`) acha qual ID da cadeia existe em `X:\.shortcut-targets-by-id\` e monta
+o resto pelos nomes, tentando os dois formatos (`<ID>\<Nome>` e `<ID>` direto). Abre no Explorador.
+Só pastas compartilhadas (`.shortcut-targets-by-id`) por enquanto — "Meu Drive" não.
+
 ## ⚠️ Arrastar e soltar no Windows
 O programa usa `disable_drag_drop_handler()` na janela do Colmeia. Sem isso o Tauri captura todo
 arrastar de arquivo e o arrastar e soltar do PRÓPRIO site (cards do quadro, clientes entre

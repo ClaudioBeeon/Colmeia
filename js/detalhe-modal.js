@@ -1098,9 +1098,10 @@ function renderDetail() {
             <!-- Só no programa de desktop (ver linkDoDriveDoComputador, logo
                  abaixo): nasce escondido e a ligação do clique o mostra. -->
             <div class="side-block" id="linkDriveLocalBloco" style="display:none">
-              <span class="side-label">Link do Drive de algo no computador</span>
-              <button type="button" class="pasta-link-manual-btn" id="linkDriveLocalArquivoBtn">Escolher um arquivo</button>
-              <button type="button" class="pasta-link-manual-btn" id="linkDriveLocalPastaBtn">Escolher uma pasta</button>
+              <span class="side-label">No computador (Drive)</span>
+              <button type="button" class="pasta-link-manual-btn" id="abrirPastaLocalBtn">Abrir a pasta do card no computador</button>
+              <button type="button" class="pasta-link-manual-btn" id="linkDriveLocalArquivoBtn">Link de um arquivo</button>
+              <button type="button" class="pasta-link-manual-btn" id="linkDriveLocalPastaBtn">Link de uma pasta</button>
             </div>
           ` : ""}
           ${sugestaoDeProgramaHTML(task)}
@@ -1315,6 +1316,7 @@ function renderDetail() {
   const linkLocalBloco = document.getElementById("linkDriveLocalBloco");
   if (linkLocalBloco && window.__TAURI_INTERNALS__) {
     linkLocalBloco.style.display = "";
+    document.getElementById("abrirPastaLocalBtn").addEventListener("click", () => abrirPastaDoCardNoComputador(task));
     document.getElementById("linkDriveLocalArquivoBtn").addEventListener("click", () => linkDoDriveDoComputador(task, false));
     document.getElementById("linkDriveLocalPastaBtn").addEventListener("click", () => linkDoDriveDoComputador(task, true));
   }
@@ -2704,4 +2706,35 @@ async function linkDoDriveDoComputador(task, pasta) {
   mostrarToast(copiou
     ? `Link de "${resp.nome}" copiado e colocado no comentário. Revisa e envia.`
     : `Link de "${resp.nome}" colocado no comentário. Revisa e envia.`, "sucesso");
+}
+
+
+/**
+ * Abre no Explorador de Arquivos a pasta do card (2026-10-05). O servidor
+ * devolve a cadeia de pastas do Drive da pasta do card até a de cima; o
+ * programa de desktop acha no computador qual delas é a pasta compartilhada
+ * montada em `X:\\.shortcut-targets-by-id\\<ID>` e monta o resto pelos nomes
+ * (ver abrir_pasta_no_computador, desktop/src-tauri/src/main.rs).
+ */
+async function abrirPastaDoCardNoComputador(task) {
+  const ponte = window.__TAURI_INTERNALS__;
+  if (!ponte) return;
+  if (!task.pastaUrlSalva) {
+    mostrarToast("Esse card ainda não tem pasta linkada. Crie ou linke a pasta primeiro.", "erro");
+    return;
+  }
+  const resp = await chamarBackend({ acao: "ancestraisDaPastaDoCard", pastaUrl: task.pastaUrlSalva });
+  if (caiuARede(resp)) {
+    mostrarToast("Sem conexão com o servidor agora. Tenta de novo em instantes.", "erro");
+    return;
+  }
+  if (!resp || !resp.ok) {
+    mostrarToast((resp && resp.error) || "Não consegui ler a pasta no Drive.", "erro");
+    return;
+  }
+  try {
+    await ponte.invoke("abrir_pasta_no_computador", { cadeia: resp.cadeia });
+  } catch (err) {
+    mostrarToast(typeof err === "string" ? err : "Não consegui abrir a pasta no computador.", "erro");
+  }
 }

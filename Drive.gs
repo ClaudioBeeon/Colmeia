@@ -1200,3 +1200,29 @@ function linkDoCaminhoLocalNoDrive(caminho, pastaCardUrl) {
   }
   return { ok: false, error: 'Não consegui resolver o caminho.' };
 }
+
+
+// ===== Abrir a pasta do card no computador (2026-10-05) =====
+// O Drive no computador monta pastas compartilhadas como
+//   X:\.shortcut-targets-by-id\<ID da pasta compartilhada>\...
+// O programa de desktop precisa saber QUAL ancestral da pasta do card é essa
+// pasta compartilhada — o servidor não sabe, e o computador não sabe os IDs
+// das pastas de baixo. Então o servidor devolve a CADEIA inteira, da pasta do
+// card até a mais de cima (id + nome de cada uma), e o programa procura no
+// computador qual dos IDs existe lá e monta o resto pelos nomes.
+function ancestraisDaPastaDoCard(pastaUrl) {
+  var id = extrairIdDeUrlDrive(String(pastaUrl || ''));
+  if (!id) return { ok: false, error: 'Esse card ainda não tem uma pasta linkada.' };
+  var cadeia = [];
+  try {
+    var f = DriveApp.getFolderById(id);
+    for (var n = 0; n < 15 && f; n++) {
+      cadeia.push({ id: f.getId(), nome: f.getName() });
+      var pais = f.getParents();
+      f = pais.hasNext() ? pais.next() : null;
+    }
+  } catch (e) {
+    if (!cadeia.length) return { ok: false, error: 'Não tenho acesso a essa pasta no Drive.' };
+  }
+  return { ok: true, cadeia: cadeia };
+}

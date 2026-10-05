@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-abrir-pasta-no-computador"
+description = "Enables the abrir_pasta_no_computador command without any pre-configured scope."
+commands.allow = ["abrir_pasta_no_computador"]
+
+[[permission]]
+identifier = "deny-abrir-pasta-no-computador"
+description = "Denies the abrir_pasta_no_computador command without any pre-configured scope."
+commands.deny = ["abrir_pasta_no_computador"]

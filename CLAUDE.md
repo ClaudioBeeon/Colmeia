@@ -2598,11 +2598,13 @@ atualizando sozinho; o instalador só precisa ser refeito quando a moldura muda 
 "Programa desktop" → Run workflow; sai em Releases). A pasta `desktop/` NÃO é publicada no site
 (`montar-frontend.js` só copia o que lista). O site detecta o programa por `window.__TAURI_INTERNALS__`
 e só pode pedir a ele os comandos de `desktop/src-tauri/capabilities/main.json`
-(`alternar_ponto`, `escolher_caminho`). Sobre isso:
+(`alternar_ponto`, `escolher_caminho`, `abrir_pasta_no_computador`). Sobre isso:
 - **Painel do ponto** (`app.mywork.com.br/ponto`): telinha nativa dentro da mesma janela. Não dá numa
   iframe (X-Frame-Options: SAMEORIGIN). Botão do relógio no topo (`#pontoDesktopBtn`).
 - **Link do Drive do computador**: `linkDoDriveDoComputador` (js/detalhe-modal.js) +
   `linkDoCaminhoLocalNoDrive` (Drive.gs). O link é achado andando pelas pastas pelo NOME.
+- **Abrir a pasta do card no computador**: `abrirPastaDoCardNoComputador` (js/detalhe-modal.js) +
+  `ancestraisDaPastaDoCard` (Drive.gs) + `abrir_pasta_no_computador` (main.rs).
 - ⚠️ **`disable_drag_drop_handler()` é obrigatório** — sem ele o arrastar e soltar do próprio site
   (quadro, atendimentos, arquivo no card) quebra no Windows. Foi um bug das versões 0.1 e 0.2.
 - Links externos e as páginas do cliente (aprovar/ajuste/`/adn/`) abrem no navegador, nunca na janela.

@@ -5,5 +5,5 @@
   "windows": ["main"],
   "webviews": ["main"],
   "remote": { "urls": ["https://colmeia.beeon.com.br/*"] },
-  "permissions": ["allow-alternar-ponto", "allow-escolher-caminho"]
+  "permissions": ["allow-alternar-ponto", "allow-escolher-caminho", "allow-abrir-pasta-no-computador"]
 }
