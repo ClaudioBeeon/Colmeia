@@ -241,6 +241,22 @@ fn varrer_modelos(dir: &std::path::Path, nivel: u8, saida: &mut Vec<Modelo>) {
     }
 }
 
+// A pasta de modelos mais provável: "Meu Drive\\Modelos" no Drive do computador
+// (a letra da unidade varia de máquina pra máquina, então procura em todas).
+// Devolve `None` se não achar — aí o site pede pra pessoa escolher.
+#[tauri::command]
+async fn pasta_de_modelos_padrao() -> Result<Option<String>, String> {
+    for letra in 'D'..='Z' {
+        for meu_drive in ["Meu Drive", "My Drive"] {
+            let candidata = std::path::PathBuf::from(format!("{}:\\{}\\Modelos", letra, meu_drive));
+            if candidata.is_dir() {
+                return Ok(Some(candidata.to_string_lossy().to_string()));
+            }
+        }
+    }
+    Ok(None)
+}
+
 #[tauri::command]
 async fn listar_modelos(pasta: String) -> Result<Vec<Modelo>, String> {
     let dir = std::path::PathBuf::from(&pasta);
@@ -500,7 +516,8 @@ fn main() {
             nav_estado,
             nav_comando,
             listar_modelos,
-            criar_projeto
+            criar_projeto,
+            pasta_de_modelos_padrao
         ])
         .setup(|app| {
             let handle = app.handle().clone();

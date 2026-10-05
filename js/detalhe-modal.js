@@ -2785,7 +2785,13 @@ async function criarProjetoDoCard(task) {
     return;
   }
   let pasta = lerPastaDeModelos();
-  if (!pasta) { pasta = await escolherPastaDeModelos(); if (!pasta) return; }
+  if (!pasta) {
+    // Primeiro tenta o lugar de sempre ("Meu Drive\\Modelos", em qualquer letra
+    // de unidade); só pergunta se não achar.
+    try { pasta = (await ponte.invoke("pasta_de_modelos_padrao")) || ""; } catch (err) { pasta = ""; }
+    if (pasta) salvarPastaDeModelos(pasta);
+    else { pasta = await escolherPastaDeModelos(); if (!pasta) return; }
+  }
   let modelos;
   try { modelos = await ponte.invoke("listar_modelos", { pasta }); }
   catch (err) {

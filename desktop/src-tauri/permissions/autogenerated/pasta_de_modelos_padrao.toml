@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-pasta-de-modelos-padrao"
+description = "Enables the pasta_de_modelos_padrao command without any pre-configured scope."
+commands.allow = ["pasta_de_modelos_padrao"]
+
+[[permission]]
+identifier = "deny-pasta-de-modelos-padrao"
+description = "Denies the pasta_de_modelos_padrao command without any pre-configured scope."
+commands.deny = ["pasta_de_modelos_padrao"]

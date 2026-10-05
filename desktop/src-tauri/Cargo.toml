@@ -1,6 +1,6 @@
 [package]
 name = "colmeia-desktop"
-version = "0.6.0"
+version = "0.6.1"
 description = "Colmeia (Beeon) em janela própria"
 edition = "2021"
 

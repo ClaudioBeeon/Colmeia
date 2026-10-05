@@ -5,5 +5,5 @@
   "windows": ["main"],
   "webviews": ["main"],
   "remote": { "urls": ["https://colmeia.beeon.com.br/*"] },
-  "permissions": ["allow-alternar-ponto", "allow-escolher-caminho", "allow-abrir-pasta-no-computador", "allow-nav-mostrar", "allow-nav-esconder", "allow-nav-fechar", "allow-nav-posicionar", "allow-nav-estado", "allow-nav-comando", "allow-listar-modelos", "allow-criar-projeto"]
+  "permissions": ["allow-alternar-ponto", "allow-escolher-caminho", "allow-abrir-pasta-no-computador", "allow-nav-mostrar", "allow-nav-esconder", "allow-nav-fechar", "allow-nav-posicionar", "allow-nav-estado", "allow-nav-comando", "allow-listar-modelos", "allow-criar-projeto", "allow-pasta-de-modelos-padrao"]
 }
