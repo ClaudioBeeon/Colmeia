@@ -195,7 +195,7 @@ function pdClientCardHTML(group) {
   }).join("");
 
   return `
-    <div class="pd-client-card">
+    <div class="pd-client-card" data-chave-cliente="${normalizarParaComparar(group.clienteName).replace(/"/g, "")}">
       <div class="pd-client-top-row">
         <div class="pd-client-icon" style="background:${col.bg};color:${col.fg};">${initials(group.clienteName)}</div>
         <div class="pd-client-name-wrap">${group.clienteName}</div>
@@ -572,6 +572,106 @@ function buildAtendimentoPage() {
       buildAtendimentoPage();
     });
   });
+
+  ligarArrastarClienteEntreAtendimentos(grid);
+}
+
+// ===== Arrastar um cliente pra outro atendimento (2026-10-05) =====
+// Só quem coordena (mesma regra do Painel de Designers). O arraste muda o
+// campo `atend` do cliente NO painel-designers-beeon — o dado continua
+// morando lá, então o salvamento é o mesmo do Painel (painelSalvarEstado).
+let atendArrastando = null; // { chave, de }
+
+function ligarArrastarClienteEntreAtendimentos(grid) {
+  if (typeof souCoordenadorDoAtendimento !== "function" || !souCoordenadorDoAtendimento()) return;
+
+  grid.querySelectorAll(".pd-client-card").forEach(card => {
+    card.draggable = true;
+    card.classList.add("pd-client-arrastavel");
+    card.addEventListener("dragstart", ev => {
+      const chave = card.dataset.chaveCliente;
+      const de = card.closest(".pd-designer-card").dataset.atend;
+      atendArrastando = { chave, de };
+      card.classList.add("pd-client-arrastando");
+      ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("text/plain", chave); // o Firefox só arrasta com isto
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("pd-client-arrastando");
+      grid.querySelectorAll(".pd-soltar-aqui").forEach(el => el.classList.remove("pd-soltar-aqui"));
+      atendArrastando = null;
+    });
+  });
+
+  grid.querySelectorAll(".pd-designer-card").forEach(alvo => {
+    alvo.addEventListener("dragover", ev => {
+      if (!atendArrastando || alvo.dataset.atend === atendArrastando.de) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "move";
+      alvo.classList.add("pd-soltar-aqui");
+    });
+    alvo.addEventListener("dragleave", ev => {
+      if (!alvo.contains(ev.relatedTarget)) alvo.classList.remove("pd-soltar-aqui");
+    });
+    alvo.addEventListener("drop", ev => {
+      ev.preventDefault();
+      alvo.classList.remove("pd-soltar-aqui");
+      if (!atendArrastando || alvo.dataset.atend === atendArrastando.de) return;
+      const { chave, de } = atendArrastando;
+      atendArrastando = null;
+      moverClienteDeAtendimento(chave, de, alvo.dataset.atend);
+    });
+  });
+}
+
+/**
+ * Troca o atendimento de um cliente. Muda na tela NA HORA e salva por trás;
+ * se não salvar, desfaz e avisa. O painel guarda tudo numa célula só (salvar
+ * é tudo-ou-nada), então o salvamento parte da versão MAIS RECENTE lida do
+ * servidor e não da cópia que está na tela — senão uma alteração de outra
+ * pessoa feita nesse meio-tempo seria apagada.
+ */
+async function moverClienteDeAtendimento(chave, de, para) {
+  const entradas = pdTodosClientesPlano()
+    .filter(({ c }) => normalizarParaComparar(c.cliente) === chave && c.atend === de);
+  if (!entradas.length) return;
+  const nomeCliente = entradas[0].c.cliente;
+
+  entradas.forEach(({ c }) => { c.atend = para; });
+  atendimentoExpandido.add(para);
+  buildAtendimentoPage();
+
+  const desfazer = () => {
+    entradas.forEach(({ c }) => { c.atend = de; });
+    buildAtendimentoPage();
+  };
+
+  const lido = await chamarBackend({ acao: "painelLerEstado" });
+  if (!lido || !lido.ok || lido.empty || !lido.data || !lido.data.state) {
+    desfazer();
+    mostrarToast("Não consegui mover agora — nada foi alterado. Tenta de novo.", "erro");
+    return;
+  }
+  const dados = lido.data;
+  let trocados = 0;
+  Object.values(dados.state).forEach(lista => (lista || []).forEach(c => {
+    if (normalizarParaComparar(c.cliente) === chave && c.atend === de) { c.atend = para; trocados++; }
+  }));
+  if (!trocados) {
+    desfazer();
+    mostrarToast(`${formatarNomeExibicao(nomeCliente)} já tinha sido alterado por outra pessoa. Atualizei a tela.`, "erro");
+    carregarDadosPainelBeeon();
+    return;
+  }
+
+  const salvo = await chamarBackend({ acao: "painelSalvarEstado", dados });
+  if (!salvo || !salvo.ok) {
+    desfazer();
+    mostrarToast("Não consegui salvar a troca de atendimento. Nada foi alterado.", "erro");
+    return;
+  }
+  if (typeof salvarSnapshotDoPainelBeeon === "function") salvarSnapshotDoPainelBeeon();
+  mostrarToast(`${formatarNomeExibicao(nomeCliente)} agora é do atendimento ${para}.`, "sucesso");
 }
 
 /**
