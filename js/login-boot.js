@@ -83,7 +83,12 @@ function iniciarAppPosLogin() {
     const rota = roteadorInterpretarRota();
     return rota.tipo === "pagina" && rota.pagina === "coordenacao";
   })();
-  if (PAPEL_LOGADO === "atendimento" && !veioParaCoordenacao && typeof abrirCentralAtendimento === "function") {
+  // João Paulo e Lucas caem na Central QUALQUER que seja o papel na planilha
+  // (2026-10-05): entrando pela chave ou pelo Google o papel pode vir
+  // "coordenador" (aí cairiam no quadro de designer), e só pelo código do
+  // atendimento vem "atendimento". Quem decide é o nome, como no resto.
+  const coordenaSoOAtendimento = souCoordenadorDoAtendimento() && !souClaudio();
+  if ((PAPEL_LOGADO === "atendimento" || coordenaSoOAtendimento) && !veioParaCoordenacao && typeof abrirCentralAtendimento === "function") {
     abrirCentralAtendimento();
   }
 
