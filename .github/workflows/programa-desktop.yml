@@ -28,6 +28,10 @@ jobs:
         with:
           node-version: 22
 
+      - name: Instalar as ferramentas do Tauri
+        working-directory: desktop
+        run: npm ci
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: swatinem/rust-cache@v2
