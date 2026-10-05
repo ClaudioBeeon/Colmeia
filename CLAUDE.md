@@ -2616,7 +2616,12 @@ e só pode pedir a ele os comandos de `desktop/src-tauri/capabilities/main.json`
   (cheia/metade/terço); painel compacto da tarefa. ⚠️ Uma telinha nativa fica SEMPRE por cima da
   página (a página não consegue cobri-la) — por isso o site é posicionado a partir do retângulo do
   `.main` (`navRect`) e ENCOLHE quando um painel lateral abre, em vez de ser coberto. Com um site
-  aberto a barra da esquerda não expande no hover (empurraria a página e o site pularia). Ao mexer
+  ⚠️ A telinha nativa é RETANGULAR (não arredonda): o site fica dentro de uma moldura arredondada
+  (`#navegadorArea`) com folga de 8px (`NAV_FOLGA`). ⚠️ O clique nos tiles do Acesso rápido é
+  escutado na `window` (captura), não no `document`: o programa tem um atalho no document que manda
+  links "nova aba" pro navegador do sistema e rodava antes — o site abria nos dois lugares.
+  No modo dividido o card grande da tarefa começa abaixo do pill (`--nav-topo`/`--nav-esq`).
+  Com um site aberto a barra da esquerda não expande no hover (empurraria a página e o site pularia). Ao mexer
   em layout do topo/lateral, conferir se `navRect` ainda mede o espaço certo. Ganchos:
   `navAoMostrarPagina` (pagina-repasse.js) e `navAoAbrirTarefa` (detalhe-modal.js).
 - ⚠️ **`disable_drag_drop_handler()` é obrigatório** — sem ele o arrastar e soltar do próprio site

@@ -149,11 +149,19 @@
     const m = main.getBoundingClientRect(), t = topo.getBoundingClientRect();
     const y = Math.round(t.bottom + 12);
     const largura = Math.round(m.width * FRACAO[modo]);
-    return { x: Math.round(m.right - largura), y, w: largura, h: Math.max(1, Math.round(m.bottom - y)) };
+    return { x: Math.round(m.right - largura), y, w: largura, h: Math.max(1, Math.round(m.bottom - y)), esq: Math.round(m.left) };
   }
+  // A telinha nativa do site é RETANGULAR e não dá pra arredondar. A moldura
+  // (#navegadorArea) é arredondada e o site fica dentro dela, com uma folga de
+  // NAV_FOLGA em cada lado — o canto quadrado do site cabe dentro do arredondado.
+  const NAV_FOLGA = 8;
+  const retDoSite = r => ({ x: r.x + NAV_FOLGA, y: r.y + NAV_FOLGA, w: Math.max(1, r.w - 2 * NAV_FOLGA), h: Math.max(1, r.h - 2 * NAV_FOLGA) });
   function pintarArea(r) {
     area.style.left = r.x + "px"; area.style.top = r.y + "px";
     area.style.width = r.w + "px"; area.style.height = r.h + "px";
+    // O card da tarefa (tela grande), no modo dividido, começa ABAIXO do pill.
+    document.documentElement.style.setProperty("--nav-topo", r.y + "px");
+    document.documentElement.style.setProperty("--nav-esq", r.esq + "px");
     // Reserva da direita pro resto da página (Colmeia) no modo dividido.
     document.documentElement.style.setProperty("--nav-reserva", modo === "cheia" ? "0px" : (r.w + 14) + "px");
   }
@@ -164,7 +172,7 @@
       rectEnviando = false;
       const r = navRect(); if (!r || !ativa) return;
       pintarArea(r);
-      try { await invocar("nav_posicionar", { ret: r }); } catch (e) { /* telinha ainda não existe: o próximo envio acerta */ }
+      try { await invocar("nav_posicionar", { ret: retDoSite(r) }); } catch (e) { /* telinha ainda não existe: o próximo envio acerta */ }
     });
   }
   const mainEl = document.querySelector(".page > .main");
@@ -197,7 +205,7 @@
     desenharAbas();
     atualizarTarefa();
     try {
-      await invocar("nav_mostrar", { id, url: aba.url, ret: r });
+      await invocar("nav_mostrar", { id, url: aba.url, ret: retDoSite(r) });
     } catch (err) {
       console.error("Não consegui abrir o site:", err);
       mostrarToast("Não consegui abrir esse site aqui dentro.", "erro");
@@ -406,7 +414,11 @@
   // ---------- ligações com o resto do Colmeia ----------
   // Clicou num site do Acesso rápido: abre AQUI (links que não são http — como
   // adbps:// do Photoshop — continuam saindo pro sistema, de propósito).
-  document.addEventListener("click", e => {
+  // ⚠️ Escuta na JANELA (fase de captura), não no document: o programa tem um
+  // atalho no document que manda todo link "nova aba" pro navegador do
+  // sistema. A janela vem ANTES do document no caminho do clique, então aqui
+  // dá pra tomar o clique primeiro — senão o site abria nos dois lugares.
+  window.addEventListener("click", e => {
     const tile = e.target.closest(".acesso-rapido-tile");
     if (!tile || e.target.closest(".acesso-rapido-tile-remover")) return;
     const href = tile.getAttribute("href") || "";
