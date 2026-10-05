@@ -217,16 +217,18 @@ struct Modelo {
     nome: String,
     caminho: String,
     ext: String,
+    // Subpasta dentro da pasta de modelos (ex: "Photoshop", "Premiere").
+    grupo: String,
 }
 
 // Lista os modelos da pasta (e das subpastas, até 2 níveis).
-fn varrer_modelos(dir: &std::path::Path, nivel: u8, saida: &mut Vec<Modelo>) {
+fn varrer_modelos(base: &std::path::Path, dir: &std::path::Path, nivel: u8, saida: &mut Vec<Modelo>) {
     let Ok(itens) = std::fs::read_dir(dir) else { return };
     for item in itens.flatten() {
         let caminho = item.path();
         if caminho.is_dir() {
             if nivel < 2 {
-                varrer_modelos(&caminho, nivel + 1, saida);
+                varrer_modelos(base, &caminho, nivel + 1, saida);
             }
             continue;
         }
@@ -236,6 +238,10 @@ fn varrer_modelos(dir: &std::path::Path, nivel: u8, saida: &mut Vec<Modelo>) {
                 nome: caminho.file_stem().and_then(|n| n.to_str()).unwrap_or("").to_string(),
                 caminho: caminho.to_string_lossy().to_string(),
                 ext,
+                grupo: dir
+                    .strip_prefix(base)
+                    .map(|r| r.to_string_lossy().replace('\\', " / "))
+                    .unwrap_or_default(),
             });
         }
     }
@@ -264,7 +270,7 @@ async fn listar_modelos(pasta: String) -> Result<Vec<Modelo>, String> {
         return Err("A pasta de modelos não foi encontrada. Escolha de novo.".to_string());
     }
     let mut lista = Vec::new();
-    varrer_modelos(&dir, 0, &mut lista);
+    varrer_modelos(&dir, &dir, 0, &mut lista);
     lista.sort_by(|a, b| a.nome.to_lowercase().cmp(&b.nome.to_lowercase()));
     Ok(lista)
 }

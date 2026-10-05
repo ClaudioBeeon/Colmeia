@@ -2767,11 +2767,19 @@ async function escolherPastaDeModelos() {
 function notaDoModelo(tituloDoCard, modelo) {
   const sem = x => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const t = sem(tituloDoCard), n = sem(modelo.nome);
-  const ehStories = /stor(y|ies)/.test(t), ehFeed = /feed/.test(t), ehVideo = /(reel|video|animacao|motion)/.test(t);
+  const ehStories = /stor(y|ies)/.test(t), ehFeed = /feed/.test(t), ehDisplay = /(display|banner)/.test(t);
+  const ehVideo = /(reel|video|animacao|motion|youtube)/.test(t);
+  const ehReels = /reel/.test(t), ehHorizontal = /(youtube|hdtv|horizontal)/.test(t);
   if (ehStories && /stor/.test(n)) return 3;
   if (ehFeed && /feed/.test(n)) return 3;
-  if (ehVideo && (modelo.ext === "prproj" || modelo.ext === "aep")) return 3;
-  if (ehVideo && /(reel|video)/.test(n)) return 2;
+  if (ehDisplay && /display/.test(n)) return 3;
+  if (ehVideo) {
+    // Os dois projetos do Premiere são formatos diferentes: vertical (Reels) e
+    // horizontal (HDTV/YouTube). Só sugere um quando o título diz qual.
+    if (ehHorizontal && /(hdtv|1920x1080)/.test(n)) return 4;
+    if (ehReels && /reel/.test(n)) return 4;
+    if (modelo.ext === "prproj" || modelo.ext === "aep") return 2;
+  }
   return 0;
 }
 const ROTULO_EXT = { psd: "Ps", psb: "Ps", psdt: "Ps", ai: "Ai", indd: "Id", prproj: "Pr", aep: "Ae", mogrt: "Ae" };
@@ -2818,7 +2826,7 @@ function abrirEscolhaDeModelo(task, modelos) {
             const r = ROTULO_EXT[m.ext] || m.ext.toUpperCase();
             return `<button type="button" class="proj-item" data-i="${i}">` +
               `<span class="proj-ext" style="background:${COR_EXT[r] || "#14151A;color:#fff"}">${escaparHTML(r)}</span>` +
-              `<span class="proj-nome">${escaparHTML(m.nome)}</span>` +
+              `<span class="proj-nome">${escaparHTML(m.nome)}${m.grupo ? `<small>${escaparHTML(m.grupo)}</small>` : ""}</span>` +
               (m.nota >= 3 ? `<span class="proj-sug">sugerido</span>` : "") +
             `</button>`;
           }).join("")}</div>`
