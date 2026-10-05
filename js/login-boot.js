@@ -63,6 +63,14 @@ function iniciarAppPosLogin() {
   // porque é o mesmo dado do mesmo painel.
   const painelDesignersNav = document.querySelector('.nav-ic[data-page="painel-designers"]');
   if (painelDesignersNav) painelDesignersNav.hidden = !souCoordenadorDoAtendimento();
+  // Quem coordena o atendimento SEM ser o Cláudio (João Paulo e Lucas) só
+  // tem 3 destinos: Central, Painel de Designers e Clientes por
+  // atendimento. O Painel e os Clientes são páginas do Colmeia normal —
+  // ao abrir uma delas a Central fecha e aparece a barra INTEIRA (Kanban,
+  // Runrun completo, Minhas horas, Bee...), que não é a visão deles
+  // (2026-10-05). A classe esconde o resto da barra; ver css/01-base.css.
+  document.body.classList.toggle("so-coordenacao",
+    souCoordenadorDoAtendimento() && !souClaudio());
   const configTabVinculos = document.getElementById("configTabVinculos");
   if (configTabVinculos) configTabVinculos.hidden = !souCoordenadorDoAtendimento();
   // ⚠️ Exceção (2026-08-12): se a rota é /coordenacao, quem abre a Central

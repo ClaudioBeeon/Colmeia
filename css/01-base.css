@@ -755,3 +755,16 @@ body { background: var(--page-bg); transition: background 0.2s var(--ease-apple)
   height: 1px;
   background: rgba(255, 255, 255, 0.18);
 }
+
+/* Coordenação do atendimento (João Paulo, Lucas): na barra normal ficam só
+   Clientes por atendimento, Painel de Designers e Central do Atendimento. */
+body.so-coordenacao .nav-ic[data-page="kanban"],
+body.so-coordenacao .nav-ic[data-page="clientes"],
+body.so-coordenacao .nav-ic[data-page="tipos"],
+body.so-coordenacao .nav-ic[data-page="runrun"],
+body.so-coordenacao .nav-ic[data-page="horas"],
+body.so-coordenacao .nav-ic[data-page="repasse"],
+body.so-coordenacao .nav-ic[data-page="bee"],
+body.so-coordenacao .nav-ic[data-page="aprovacao"] {
+  display: none !important;
+}
