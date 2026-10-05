@@ -1085,3 +1085,118 @@ function configurarGatilhoBackup() {
   fazerBackupDaPlanilha(); // já roda uma vez agora, pra não ficar sem nenhum backup até amanhã de madrugada
   Logger.log('Gatilho configurado: fazerBackupDaPlanilha vai rodar sozinho todo dia por volta das 3h da manhã.');
 }
+
+
+// ===== Link do Drive a partir de um caminho do computador (2026-10-05) =====
+// O programa de desktop (desktop/) lê o caminho de um arquivo/pasta do Drive
+// montado no computador — ex: G:\.shortcut-targets-by-id\<ID>\Clientes\VBC\... —
+// e manda pra cá. O Drive no computador NÃO guarda em lugar nenhum legível o ID
+// do arquivo final (só o da pasta compartilhada raiz, no caminho), então o link
+// é achado ANDANDO pelas pastas pelo nome, a partir de um ponto de ID conhecido.
+//
+// Dois pontos de partida possíveis:
+//   1. `.shortcut-targets-by-id\<ID>\` no caminho: <ID> é a pasta raiz.
+//   2. Sem isso (ex: "Meu Drive", "Drives compartilhados"): a pasta do card já
+//      linkada na tarefa — o caminho é procurado a partir do nome dela.
+// Nada aqui altera compartilhamento: devolve o link que o Drive já tem, e quem
+// abrir precisa ter acesso, como em qualquer link do Drive.
+
+var EXTENSOES_GOOGLE_NO_DESKTOP = /\.(gdoc|gsheet|gslides|gform|gdraw|gmap|gsite)$/i;
+
+function nomeDeDriveParaComparar(nome) {
+  return String(nome || '')
+    .replace(EXTENSOES_GOOGLE_NO_DESKTOP, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// Acha UM filho de `pasta` com esse nome. Devolve {item, tipo} ou
+// {erro: 'nao-achou' | 'ambiguo'}. Primeiro o nome exato (rápido, o Drive
+// resolve), depois varrendo com comparação tolerante (acento, espaço sobrando,
+// extensão .gdoc que o Drive no computador acrescenta).
+function acharFilhoDoDrivePorNome(pasta, nome, aceitaArquivo) {
+  var achados = [];
+  var it = pasta.getFoldersByName(nome);
+  while (it.hasNext()) achados.push({ item: it.next(), tipo: 'pasta' });
+  if (aceitaArquivo) {
+    var fi = pasta.getFilesByName(nome);
+    while (fi.hasNext()) achados.push({ item: fi.next(), tipo: 'arquivo' });
+  }
+  if (!achados.length) {
+    var alvo = nomeDeDriveParaComparar(nome);
+    var todas = pasta.getFolders();
+    while (todas.hasNext()) {
+      var p = todas.next();
+      if (nomeDeDriveParaComparar(p.getName()) === alvo) achados.push({ item: p, tipo: 'pasta' });
+    }
+    if (aceitaArquivo) {
+      var arqs = pasta.getFiles();
+      while (arqs.hasNext()) {
+        var a = arqs.next();
+        if (nomeDeDriveParaComparar(a.getName()) === alvo) achados.push({ item: a, tipo: 'arquivo' });
+      }
+    }
+  }
+  if (!achados.length) return { erro: 'nao-achou' };
+  if (achados.length > 1) return { erro: 'ambiguo', quantos: achados.length };
+  return achados[0];
+}
+
+function linkDoCaminhoLocalNoDrive(caminho, pastaCardUrl) {
+  var segs = String(caminho || '').split(/[\\\/]+/).filter(function (s) { return s; });
+  if (segs.length && /^[A-Za-z]:$/.test(segs[0])) segs.shift(); // tira "G:"
+  if (!segs.length) return { ok: false, error: 'O caminho veio vazio.' };
+
+  var raizId = null, resto = null;
+  var i = segs.indexOf('.shortcut-targets-by-id');
+  if (i !== -1 && segs[i + 1]) {
+    raizId = segs[i + 1];
+    resto = segs.slice(i + 2);
+  } else if (pastaCardUrl) {
+    var idCard = extrairIdDeUrlDrive(String(pastaCardUrl));
+    if (idCard) {
+      try {
+        var nomeCard = nomeDeDriveParaComparar(DriveApp.getFolderById(idCard).getName());
+        for (var k = segs.length - 1; k >= 0; k--) {
+          if (nomeDeDriveParaComparar(segs[k]) === nomeCard) { raizId = idCard; resto = segs.slice(k + 1); break; }
+        }
+      } catch (e) { /* sem acesso à pasta do card: cai no erro abaixo */ }
+    }
+  }
+  if (!raizId) {
+    return { ok: false, error: 'Não consegui descobrir onde esse caminho está no Drive. Funciona com arquivos dentro de pastas compartilhadas (.shortcut-targets-by-id) ou dentro da pasta já linkada neste card.' };
+  }
+
+  var atual;
+  try { atual = DriveApp.getFolderById(raizId); }
+  catch (e) { return { ok: false, error: 'Não tenho acesso à pasta de origem desse caminho no Drive.' }; }
+
+  // O ID do `.shortcut-targets-by-id` pode ser a própria pasta que o caminho
+  // cita logo em seguida (ex: o ID é a pasta "Clientes" e o caminho começa em
+  // "Clientes\VBC") ou uma pasta que a CONTÉM. Se o primeiro nome não é filho
+  // da raiz mas é o nome dela, ele é a própria raiz — pula.
+  if (resto.length && acharFilhoDoDrivePorNome(atual, resto[0], resto.length === 1).erro === 'nao-achou'
+      && nomeDeDriveParaComparar(resto[0]) === nomeDeDriveParaComparar(atual.getName())) {
+    resto = resto.slice(1);
+  }
+
+  if (!resto.length) {
+    return { ok: true, tipo: 'pasta', nome: atual.getName(), url: atual.getUrl(), id: atual.getId() };
+  }
+
+  for (var j = 0; j < resto.length; j++) {
+    var ultimo = j === resto.length - 1;
+    var r = acharFilhoDoDrivePorNome(atual, resto[j], ultimo);
+    if (r.erro === 'nao-achou') {
+      return { ok: false, error: 'Não achei "' + resto[j] + '" no Drive' + (ultimo ? '. Se o arquivo acabou de ser salvo, o Drive pode ainda estar sincronizando — tenta de novo em instantes.' : '.') };
+    }
+    if (r.erro === 'ambiguo') {
+      return { ok: false, error: 'Tem ' + r.quantos + ' itens chamados "' + resto[j] + '" no mesmo lugar do Drive, e não dá pra saber qual é. Renomeie um deles.' };
+    }
+    if (ultimo) {
+      return { ok: true, tipo: r.tipo, nome: r.item.getName(), url: r.item.getUrl(), id: r.item.getId() };
+    }
+    atual = r.item;
+  }
+  return { ok: false, error: 'Não consegui resolver o caminho.' };
+}

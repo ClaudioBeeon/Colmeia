@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-escolher-caminho"
+description = "Enables the escolher_caminho command without any pre-configured scope."
+commands.allow = ["escolher_caminho"]
+
+[[permission]]
+identifier = "deny-escolher-caminho"
+description = "Denies the escolher_caminho command without any pre-configured scope."
+commands.deny = ["escolher_caminho"]

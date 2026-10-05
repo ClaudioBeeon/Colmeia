@@ -23,6 +23,20 @@ mostrado dentro de outra página (`X-Frame-Options`). O login do ponto fica guar
 O site do Colmeia só pode pedir isso ao programa (comando `alternar_ponto`, ver
 `capabilities/main.json`) — nada além.
 
+## Link do Drive de algo que está no computador
+No card (coluna da direita, só no programa): "Escolher um arquivo" / "Escolher uma pasta". O programa
+abre o seletor do Windows e devolve o CAMINHO; o servidor (`linkDoCaminhoLocalNoDrive`, Drive.gs)
+descobre o link andando pelas pastas do Drive pelo NOME — o Drive no computador não guarda o ID do
+arquivo em lugar nenhum legível. Ponto de partida: o ID de `.shortcut-targets-by-id\<ID>\` no
+caminho, ou a pasta já linkada no card. O link é copiado e colocado no campo de comentário (sem
+enviar). Se houver dois itens com o mesmo nome no mesmo lugar, o servidor avisa em vez de chutar.
+
+## ⚠️ Arrastar e soltar no Windows
+O programa usa `disable_drag_drop_handler()` na janela do Colmeia. Sem isso o Tauri captura todo
+arrastar de arquivo e o arrastar e soltar do PRÓPRIO site (cards do quadro, clientes entre
+atendimentos, arquivo solto no card) para de funcionar. O preço: um arquivo arrastado chega ao site
+sem o caminho dele — por isso o link do Drive usa o seletor, não o arrastar.
+
 ## Gerar um instalador novo
 GitHub → **Actions** → "Programa desktop (instalador do Windows)" → **Run workflow**. Sai na
 página Releases. Pra mudar a versão, altere `version` em `src-tauri/tauri.conf.json` e

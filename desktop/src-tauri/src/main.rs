@@ -108,6 +108,35 @@ fn fica_no_app(url: &Url) -> bool {
     }
 }
 
+// Abre a janelinha do Windows pra escolher um arquivo (ou pasta) e devolve o
+// CAMINHO. É a única forma do Colmeia saber onde um arquivo está no
+// computador: o site, sozinho, nunca recebe caminho. Começa no Drive
+// (a letra do Drive no computador varia — procura a que tem a pasta
+// `.shortcut-targets-by-id`). Devolve `None` se a pessoa cancelar.
+#[tauri::command]
+async fn escolher_caminho(app: tauri::AppHandle, pasta: bool) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let mut dialogo = app
+        .dialog()
+        .file()
+        .set_title(if pasta { "Escolha a pasta" } else { "Escolha o arquivo" });
+    for letra in 'D'..='Z' {
+        let raiz = format!("{}:\\", letra);
+        if std::path::Path::new(&format!("{}.shortcut-targets-by-id", raiz)).exists() {
+            dialogo = dialogo.set_directory(raiz);
+            break;
+        }
+    }
+    let escolhido = if pasta { dialogo.blocking_pick_folder() } else { dialogo.blocking_pick_file() };
+    match escolhido {
+        None => Ok(None),
+        Some(p) => p
+            .into_path()
+            .map(|c| Some(c.to_string_lossy().to_string()))
+            .map_err(|e| e.to_string()),
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         // Abrir o programa de novo só traz a janela que já existe pra frente.
@@ -120,7 +149,8 @@ fn main() {
         }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![alternar_ponto])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![alternar_ponto, escolher_caminho])
         .setup(|app| {
             let handle = app.handle().clone();
             let window = WindowBuilder::new(app, "main")
@@ -131,6 +161,12 @@ fn main() {
 
             let colmeia = WebviewBuilder::new("main", WebviewUrl::External(SITE.parse().unwrap()))
                 .initialization_script(SCRIPT)
+                // ⚠️ OBRIGATÓRIO no Windows: com o tratador de arrastar do
+                // Tauri ligado (o padrão), o arrastar e soltar do PRÓPRIO site
+                // para de funcionar — cards do quadro, clientes entre
+                // atendimentos, arquivo solto no card. Ver a documentação de
+                // `disable_drag_drop_handler`.
+                .disable_drag_drop_handler()
                 .on_navigation(move |url| {
                     if fica_no_app(url) {
                         return true;

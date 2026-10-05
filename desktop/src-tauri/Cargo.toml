@@ -1,6 +1,6 @@
 [package]
 name = "colmeia-desktop"
-version = "0.2.0"
+version = "0.3.0"
 description = "Colmeia (Beeon) em janela própria"
 edition = "2021"
 
@@ -12,6 +12,7 @@ tauri = { version = "2", features = ["unstable"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
 
 [profile.release]
 opt-level = "s"

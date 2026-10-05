@@ -1094,6 +1094,15 @@ function renderDetail() {
               <button type="button" class="pasta-link-manual-btn" id="pastaLinkManualBtn">Linkar pasta certa</button>
             </div>
           ` : ""}
+          ${task.id ? `
+            <!-- Só no programa de desktop (ver linkDoDriveDoComputador, logo
+                 abaixo): nasce escondido e a ligação do clique o mostra. -->
+            <div class="side-block" id="linkDriveLocalBloco" style="display:none">
+              <span class="side-label">Link do Drive de algo no computador</span>
+              <button type="button" class="pasta-link-manual-btn" id="linkDriveLocalArquivoBtn">Escolher um arquivo</button>
+              <button type="button" class="pasta-link-manual-btn" id="linkDriveLocalPastaBtn">Escolher uma pasta</button>
+            </div>
+          ` : ""}
           ${sugestaoDeProgramaHTML(task)}
           <!-- Tipo + Cliente fundidos num bloco denso só (2026-08-14,
                achado do impeccable critique: 8 cards com o mesmo peso
@@ -1301,6 +1310,15 @@ function renderDetail() {
       });
     });
   }
+  // Link do Drive de um arquivo/pasta do COMPUTADOR — só existe no programa
+  // de desktop, que é quem consegue abrir o seletor e ler o caminho.
+  const linkLocalBloco = document.getElementById("linkDriveLocalBloco");
+  if (linkLocalBloco && window.__TAURI_INTERNALS__) {
+    linkLocalBloco.style.display = "";
+    document.getElementById("linkDriveLocalArquivoBtn").addEventListener("click", () => linkDoDriveDoComputador(task, false));
+    document.getElementById("linkDriveLocalPastaBtn").addEventListener("click", () => linkDoDriveDoComputador(task, true));
+  }
+
   const linkManualBtn = document.getElementById("pastaLinkManualBtn");
   if (linkManualBtn) linkManualBtn.addEventListener("click", () => abrirLinkarPastaManual(task, criarPastaBtn));
 
@@ -2636,3 +2654,54 @@ document.querySelectorAll("#themeSwitch button").forEach(btn => {
   if (salvo === "dark" || salvo === "light") aplicarTema(salvo);
 })();
 
+
+
+/**
+ * "Qual o link do Drive disso que está no meu computador?" (2026-10-05).
+ * O programa de desktop abre o seletor e devolve o CAMINHO (o site, sozinho,
+ * nunca recebe caminho). O servidor descobre o link andando pelas pastas do
+ * Drive pelo nome (ver linkDoCaminhoLocalNoDrive, Drive.gs). Copia o link e
+ * já deixa no campo de comentário — SEM enviar: quem decide mandar é a pessoa,
+ * como em toda fala que mexe com o Runrun.it.
+ */
+async function linkDoDriveDoComputador(task, pasta) {
+  const ponte = window.__TAURI_INTERNALS__;
+  if (!ponte) return;
+  let caminho;
+  try {
+    caminho = await ponte.invoke("escolher_caminho", { pasta });
+  } catch (err) {
+    console.error("Não consegui abrir o seletor de arquivo:", err);
+    mostrarToast("Não consegui abrir o seletor de arquivos agora.", "erro");
+    return;
+  }
+  if (!caminho) return; // cancelou
+
+  mostrarToast("Procurando no Drive…");
+  const resp = await chamarBackend({
+    acao: "linkDoCaminhoLocal",
+    caminho,
+    pastaCardUrl: task.pastaUrlSalva || ""
+  });
+  if (caiuARede(resp)) {
+    mostrarToast("Sem conexão com o servidor agora. Tenta de novo em instantes.", "erro");
+    return;
+  }
+  if (!resp || !resp.ok) {
+    mostrarToast((resp && resp.error) || "Não consegui achar o link desse item no Drive.", "erro");
+    return;
+  }
+
+  const copiou = await copiarTexto(resp.url, "Copie o link:");
+  // Acrescenta ao comentário (nunca apaga o que já estava escrito).
+  abrirThreadComentarios(task);
+  const campo = document.getElementById("commentInput");
+  if (campo) {
+    const linha = `${resp.nome}: ${resp.url}`;
+    campo.value = campo.value ? `${campo.value}\n${linha}` : linha;
+    campo.focus();
+  }
+  mostrarToast(copiou
+    ? `Link de "${resp.nome}" copiado e colocado no comentário. Revisa e envia.`
+    : `Link de "${resp.nome}" colocado no comentário. Revisa e envia.`, "sucesso");
+}

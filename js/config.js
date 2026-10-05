@@ -507,6 +507,7 @@ const TIMEOUT_BACKEND_MS = 25000; // Apps Script "acordando" pode levar uns segu
 // cortar trabalho que legitimamente demora.
 const TIMEOUT_LONGO_MS = 90000;
 const ACOES_DEMORADAS = [
+  "linkDoCaminhoLocal", // anda pelas pastas do Drive uma a uma
   "gerarBriefing",        // IA escrevendo o briefing
   "gerarFraseDoDia",      // IA
   "resumoAlteracao",      // IA

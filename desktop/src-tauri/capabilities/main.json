@@ -1,9 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "colmeia-site",
-  "description": "O site do Colmeia pode pedir ao programa só uma coisa: abrir/fechar o painel de ponto.",
+  "description": "O site do Colmeia pode pedir ao programa só uma coisa: abrir/fechar o painel de ponto e escolher um arquivo/pasta do computador.",
   "windows": ["main"],
   "webviews": ["main"],
   "remote": { "urls": ["https://colmeia.beeon.com.br/*"] },
-  "permissions": ["allow-alternar-ponto"]
+  "permissions": ["allow-alternar-ponto", "allow-escolher-caminho"]
 }
