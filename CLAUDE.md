@@ -94,6 +94,8 @@ Páginas trocadas via `hidden` attribute, todas dentro de `<section class="app-p
 
 ## Estrutura do frontend (js/)
 
+(Em 2026-10-05 entrou o 31º arquivo, `js/navegador-desktop.js`, carregado antes do `login-boot.js` — só age dentro do programa de desktop.)
+
 Em 2026-07-28 o antigo `script.js` (~6.000 linhas, um arquivo só) foi separado em 15 arquivos
 (em 2026-07-30 o `detalhe-modal.js` passou de 2.000 linhas e virou 3, totalizando 17; em seguida
 entrou a fila offline, 18; depois a Bee, 19; a página de horas, 20; a paleta de comando, 21; o
@@ -2598,13 +2600,22 @@ atualizando sozinho; o instalador só precisa ser refeito quando a moldura muda 
 "Programa desktop" → Run workflow; sai em Releases). A pasta `desktop/` NÃO é publicada no site
 (`montar-frontend.js` só copia o que lista). O site detecta o programa por `window.__TAURI_INTERNALS__`
 e só pode pedir a ele os comandos de `desktop/src-tauri/capabilities/main.json`
-(`alternar_ponto`, `escolher_caminho`, `abrir_pasta_no_computador`). Sobre isso:
+(`alternar_ponto`, `escolher_caminho`, `abrir_pasta_no_computador`, `nav_*`). Sobre isso:
 - **Painel do ponto** (`app.mywork.com.br/ponto`): telinha nativa dentro da mesma janela. Não dá numa
   iframe (X-Frame-Options: SAMEORIGIN). Botão do relógio no topo (`#pontoDesktopBtn`).
 - **Link do Drive do computador**: `linkDoDriveDoComputador` (js/detalhe-modal.js) +
   `linkDoCaminhoLocalNoDrive` (Drive.gs). O link é achado andando pelas pastas pelo NOME.
 - **Abrir a pasta do card no computador**: `abrirPastaDoCardNoComputador` (js/detalhe-modal.js) +
   `ancestraisDaPastaDoCard` (Drive.gs) + `abrir_pasta_no_computador` (main.rs).
+- **Navegador interno** (protótipo 3 aprovado em 2026-10-05): `js/navegador-desktop.js` + comandos
+  `nav_*` (main.rs) + bloco `.nav-*` no fim de css/05-componentes.css. Abas = bolinhas na barra da
+  esquerda; o pill amarelo vira barra de endereço com a tarefa numa cápsula; tela dividida
+  (cheia/metade/terço); painel compacto da tarefa. ⚠️ Uma telinha nativa fica SEMPRE por cima da
+  página (a página não consegue cobri-la) — por isso o site é posicionado a partir do retângulo do
+  `.main` (`navRect`) e ENCOLHE quando um painel lateral abre, em vez de ser coberto. Com um site
+  aberto a barra da esquerda não expande no hover (empurraria a página e o site pularia). Ao mexer
+  em layout do topo/lateral, conferir se `navRect` ainda mede o espaço certo. Ganchos:
+  `navAoMostrarPagina` (pagina-repasse.js) e `navAoAbrirTarefa` (detalhe-modal.js).
 - ⚠️ **`disable_drag_drop_handler()` é obrigatório** — sem ele o arrastar e soltar do próprio site
   (quadro, atendimentos, arquivo no card) quebra no Windows. Foi um bug das versões 0.1 e 0.2.
 - Links externos e as páginas do cliente (aprovar/ajuste/`/adn/`) abrem no navegador, nunca na janela.

@@ -196,6 +196,186 @@ async fn abrir_pasta_no_computador(app: tauri::AppHandle, cadeia: Vec<Passo>) ->
     Err("Não achei essa pasta no Drive do computador. Ela pode ainda estar sincronizando, ou o Drive não está aberto.".to_string())
 }
 
+
+// ===== Navegador interno (2026-10-05) =====
+// Cada site aberto pelo Acesso rápido vive numa telinha nativa dentro da
+// janela do Colmeia (uma por site, criada na primeira vez que a aba é
+// ativada). Elas dividem o mesmo armazenamento do programa — o login de cada
+// site fica guardado. QUEM manda no tamanho e na posição é o site do Colmeia
+// (JS), que mede o espaço livre da tela e avisa pelo `Retangulo`: assim o CSS
+// continua sendo a única fonte da disposição, e dividir a tela é só mandar um
+// retângulo menor. Os sites NÃO recebem nenhum comando do programa (a
+// capability é só da janela do Colmeia).
+#[derive(Default)]
+struct Navegador {
+    titulos: std::sync::Mutex<std::collections::HashMap<String, String>>,
+}
+
+#[derive(serde::Deserialize, Clone, Copy)]
+struct Retangulo {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+#[derive(serde::Serialize)]
+struct EstadoAba {
+    url: String,
+    titulo: String,
+}
+
+// Dentro de uma aba não existe "outra aba": links com target=_blank e
+// window.open viram navegação na própria aba.
+const SCRIPT_ABA: &str = r#"
+(function () {
+  function ir(u) { try { window.location.assign(new URL(u, window.location.href).href); } catch (e) {} }
+  window.open = function (u) { if (u) ir(u); return { closed: false, focus: function () {}, close: function () {} }; };
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a[target="_blank"]');
+    if (a && a.href) { e.preventDefault(); ir(a.href); }
+  }, true);
+})();
+"#;
+
+fn rotulo_aba(id: &str) -> String {
+    let limpo: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
+    format!("aba-{}", limpo)
+}
+
+fn endereco_web(texto: &str) -> Result<Url, String> {
+    let url: Url = texto.parse().map_err(|_| "Endereço inválido.".to_string())?;
+    match url.scheme() {
+        "http" | "https" => Ok(url),
+        _ => Err("Só endereços http e https abrem aqui dentro.".to_string()),
+    }
+}
+
+fn posicionar(wv: &tauri::Webview, r: Retangulo) {
+    let _ = wv.set_position(LogicalPosition::new(r.x, r.y));
+    let _ = wv.set_size(LogicalSize::new(r.w.max(1.0), r.h.max(1.0)));
+}
+
+fn esconder_abas(app: &tauri::AppHandle, menos: Option<&str>) {
+    for (rotulo, wv) in app.webviews() {
+        if rotulo.starts_with("aba-") && Some(rotulo.as_str()) != menos {
+            let _ = wv.hide();
+        }
+    }
+}
+
+// Mostra a aba `id` (criando a telinha na primeira vez, com `url`) e esconde
+// as outras.
+#[tauri::command]
+async fn nav_mostrar(app: tauri::AppHandle, id: String, url: Option<String>, ret: Retangulo) -> Result<(), String> {
+    let alvo = rotulo_aba(&id);
+    esconder_abas(&app, Some(&alvo));
+    if let Some(wv) = app.get_webview(&alvo) {
+        posicionar(&wv, ret);
+        return wv.show().map_err(|e| e.to_string());
+    }
+    let window = app.get_window("main").ok_or("janela não encontrada")?;
+    let inicial = endereco_web(&url.ok_or("faltou o endereço")?)?;
+    let id_titulo = alvo.clone();
+    let app_titulo = app.clone();
+    let app_nav = app.clone();
+    let app_baixar = app.clone();
+    let builder = WebviewBuilder::new(&alvo, WebviewUrl::External(inicial))
+        .initialization_script(SCRIPT_ABA)
+        // Mesmo motivo da janela principal: sem isso o arrastar e soltar
+        // DENTRO dos sites (enviar arquivo, mover cartão) não funciona.
+        .disable_drag_drop_handler()
+        .on_document_title_changed(move |_wv, titulo| {
+            if let Ok(mut t) = app_titulo.state::<Navegador>().titulos.lock() {
+                t.insert(id_titulo.clone(), titulo);
+            }
+        })
+        .on_navigation(move |url| {
+            match url.scheme() {
+                "http" | "https" | "about" | "blob" | "data" => true,
+                // mailto:, tel:, whatsapp:, adbps:... → quem abre é o sistema
+                _ => {
+                    let _ = app_nav.opener().open_url(url.as_str(), None::<&str>);
+                    false
+                }
+            }
+        })
+        .on_download(move |_wv, evento| {
+            // Deixa baixar (pasta Downloads) e, ao terminar, mostra o arquivo.
+            if let tauri::webview::DownloadEvent::Finished { path: Some(p), success: true, .. } = evento {
+                let _ = app_baixar.opener().reveal_item_in_dir(p);
+            }
+            true
+        });
+    let wv = window
+        .add_child(builder, LogicalPosition::new(ret.x, ret.y), LogicalSize::new(ret.w.max(1.0), ret.h.max(1.0)))
+        .map_err(|e| e.to_string())?;
+    wv.show().map_err(|e| e.to_string())
+}
+
+// Volta pro Colmeia: esconde todas as abas (sem fechar — a página continua).
+#[tauri::command]
+async fn nav_esconder(app: tauri::AppHandle) -> Result<(), String> {
+    esconder_abas(&app, None);
+    Ok(())
+}
+
+#[tauri::command]
+async fn nav_fechar(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let alvo = rotulo_aba(&id);
+    if let Some(wv) = app.get_webview(&alvo) {
+        wv.close().map_err(|e| e.to_string())?;
+    }
+    if let Ok(mut t) = app.state::<Navegador>().titulos.lock() {
+        t.remove(&alvo);
+    }
+    Ok(())
+}
+
+// A janela mudou de tamanho (ou a tela foi dividida): reacomoda todas.
+#[tauri::command]
+async fn nav_posicionar(app: tauri::AppHandle, ret: Retangulo) -> Result<(), String> {
+    for (rotulo, wv) in app.webviews() {
+        if rotulo.starts_with("aba-") {
+            posicionar(&wv, ret);
+        }
+    }
+    Ok(())
+}
+
+// Endereço e título atuais da aba (o site do Colmeia pergunta de tempos em
+// tempos pra mostrar na barra de endereço).
+#[tauri::command]
+async fn nav_estado(app: tauri::AppHandle, id: String) -> Result<Option<EstadoAba>, String> {
+    let alvo = rotulo_aba(&id);
+    let Some(wv) = app.get_webview(&alvo) else { return Ok(None) };
+    let url = wv.url().map(|u| u.to_string()).unwrap_or_default();
+    let titulo = app
+        .state::<Navegador>()
+        .titulos
+        .lock()
+        .ok()
+        .and_then(|t| t.get(&alvo).cloned())
+        .unwrap_or_default();
+    Ok(Some(EstadoAba { url, titulo }))
+}
+
+// "voltar" | "avancar" | "recarregar" | "ir" (com `url`)
+#[tauri::command]
+async fn nav_comando(app: tauri::AppHandle, id: String, comando: String, url: Option<String>) -> Result<(), String> {
+    let wv = app.get_webview(&rotulo_aba(&id)).ok_or("Essa aba ainda não foi aberta.")?;
+    match comando.as_str() {
+        "voltar" => wv.eval("history.back()").map_err(|e| e.to_string()),
+        "avancar" => wv.eval("history.forward()").map_err(|e| e.to_string()),
+        "recarregar" => wv.eval("location.reload()").map_err(|e| e.to_string()),
+        "ir" => {
+            let destino = endereco_web(&url.ok_or("faltou o endereço")?)?;
+            wv.navigate(destino).map_err(|e| e.to_string())
+        }
+        _ => Err("Comando desconhecido.".to_string()),
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         // Abrir o programa de novo só traz a janela que já existe pra frente.
@@ -209,7 +389,18 @@ fn main() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![alternar_ponto, escolher_caminho, abrir_pasta_no_computador])
+        .manage(Navegador::default())
+        .invoke_handler(tauri::generate_handler![
+            alternar_ponto,
+            escolher_caminho,
+            abrir_pasta_no_computador,
+            nav_mostrar,
+            nav_esconder,
+            nav_fechar,
+            nav_posicionar,
+            nav_estado,
+            nav_comando
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             let window = WindowBuilder::new(app, "main")

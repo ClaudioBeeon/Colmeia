@@ -1631,3 +1631,110 @@ body.com-aviso-runrun .page { padding-top: 46px; }
 
    "Tirar acesso" continua sendo a única ação daqui que ninguém quer
    clicar sem querer: ver .cfg-btn-secundario.acesso-perigo. */
+
+/* ===== Navegador do programa de desktop (js/navegador-desktop.js) =====
+   Só tem efeito com `body.nav-ativa`, que o JS liga dentro do programa. */
+:root { --nav-reserva: 0px; }
+
+/* As abas, na barra da esquerda, logo abaixo dos ícones do Colmeia. */
+.nav-sites { display: flex; flex-direction: column; gap: 6px; }
+.nav-sites[hidden] { display: none; }
+.nav-sites .nav-sep { height: 1px; background: var(--border); margin: 6px 12px; }
+.nav-site { position: relative; }
+.nav-site .nav-icon-circle { font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.nav-site.active .nav-icon-circle { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--kanban-yellow); }
+/* O × é uma bolinha no canto da aba: aparece ao passar o mouse, com a barra
+   fechada ou aberta. */
+.nav-site .nav-site-x {
+  position: absolute; top: -2px; right: 2px; width: 16px; height: 16px; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; opacity: 0; cursor: pointer;
+  font-size: 12px; line-height: 1; color: var(--text-muted);
+  background: var(--card-bg); border: 1px solid var(--border); transition: opacity .15s;
+}
+.nav-site:hover .nav-site-x { opacity: 1; }
+/* Com um site aberto a barra da esquerda NÃO expande no hover: ela empurra a
+   página, e o site (uma telinha nativa) pularia junto a cada passada do mouse.
+   O nome da aba continua no balãozinho (title). */
+body.nav-ativa .sidebar:hover { width: 64px; background: transparent; border: none; box-shadow: none; }
+body.nav-ativa .sidebar:hover .nav-label { opacity: 0; }
+/* Mais espaço pro endereço. */
+body.nav-ativa .topbar-dark .date-pill,
+body.nav-ativa .topbar-dark .theme-switch { display: none; }
+
+/* Fundo do espaço do site (aparece enquanto a telinha nativa carrega). */
+#navegadorArea {
+  position: fixed; z-index: 5; display: grid; place-items: center;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 22px;
+  color: var(--text-muted); font-size: 14px;
+}
+#navegadorArea[hidden] { display: none; }
+
+/* O pill amarelo vira a barra de endereço. */
+.now-playing-wrap.nav-ativa > :not(.nav-pill) { display: none !important; }
+.nav-pill {
+  position: absolute; inset: 0; display: flex; align-items: center; gap: 8px;
+  padding: 0 5px 0 8px; background: var(--kanban-yellow); color: #14151A; border-radius: 999px;
+  font-family: var(--font-body);
+}
+.nav-pill[hidden] { display: none; }
+.nav-pill-btns { display: flex; flex: none; }
+.nav-pill-btns button, .nav-pill-dividir {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  border: 0; background: none; color: inherit; cursor: pointer; flex: none;
+}
+.nav-pill-btns button:hover, .nav-pill-dividir:hover { background: rgba(20, 21, 26, .12); }
+.nav-pill-dividir.ligado { background: rgba(20, 21, 26, .85); color: var(--kanban-yellow); }
+.nav-pill svg { width: 15px; height: 15px; }
+.nav-pill-end {
+  flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; gap: 7px;
+  padding: 0 12px; border-radius: 999px; background: #fff; margin: 0;
+}
+.nav-pill-end svg { width: 12px; height: 12px; opacity: .6; flex: none; color: #16161A; }
+.nav-pill-end input {
+  flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+  font: inherit; font-size: 13px; color: #16161A; text-overflow: ellipsis;
+}
+.nav-pill-tarefa {
+  display: flex; align-items: center; gap: 7px; flex: none; height: 30px; cursor: pointer;
+  padding: 0 12px 0 3px; border-radius: 999px; background: #14151A; color: #fff;
+}
+.nav-pill-tarefa.sem-tarefa { padding-left: 12px; opacity: .8; }
+.nav-pill-tarefa.sem-tarefa .nav-tk-pp { display: none; }
+.nav-tk-pp { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--kanban-yellow); color: #14151A; }
+.nav-tk-pp svg { width: 11px; height: 11px; }
+.nav-tk-tempo { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Tela cheia: o Colmeia some atrás do site. Dividida: o Colmeia fica ao lado. */
+body.nav-ativa.nav-cheia .main > .page-heading-row,
+body.nav-ativa.nav-cheia .main > .app-page { display: none !important; }
+body.nav-ativa:not(.nav-cheia) .main > .page-heading-row,
+body.nav-ativa:not(.nav-cheia) .main > .app-page { margin-right: var(--nav-reserva); }
+body.nav-ativa:not(.nav-cheia) .task-detail { right: calc(22px + var(--nav-reserva)); }
+/* A linha do título (busca + "Nova tarefa") é mais larga que a metade que sobra:
+   sem cortar, um pedaço do botão amarelo aparecia fora do lugar. */
+body.nav-ativa:not(.nav-cheia) .main > .page-heading-row { overflow: hidden; min-width: 0; }
+
+/* Painel compacto da tarefa (irmão do Acesso rápido). */
+.nav-tarefa-panel { width: 340px; }
+.nav-tarefa-body { padding: 16px; display: grid; gap: 14px; align-content: start; overflow-y: auto; }
+.nt-topo { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--text-muted); }
+.nt-cliente { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; }
+.nt-titulo { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 400; line-height: 1.3; }
+.nt-tempo-linha { display: flex; align-items: center; gap: 10px; }
+.nt-pp { width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; background: #14151A; color: #fff; }
+.nt-pp svg { width: 16px; height: 16px; }
+.nt-tempo { font-size: 26px; font-variant-numeric: tabular-nums; }
+.nt-est { font-size: 13px; color: var(--text-muted); }
+.nt-bloco { display: grid; gap: 6px; }
+.nt-rotulo { display: flex; justify-content: space-between; align-items: center; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.nt-rotulo button { border: 0; background: none; cursor: pointer; color: var(--accent); font: inherit; text-transform: none; letter-spacing: 0; }
+.nt-texto { font-size: 13px; line-height: 1.5; white-space: pre-wrap; max-height: 190px; overflow-y: auto; background: var(--page-bg); border-radius: 12px; padding: 10px 12px; }
+.nt-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.nt-acoes button, .nt-comentar button {
+  border: 1px solid var(--border); background: var(--card-bg); color: var(--text-primary); cursor: pointer;
+  border-radius: 12px; padding: 9px 10px; font: inherit; font-size: 13px;
+}
+.nt-acoes button:hover, .nt-comentar button:hover { background: var(--page-bg); }
+.nt-acoes .principal { grid-column: 1 / -1; background: #14151A; color: #fff; border-color: #14151A; }
+.nt-comentar { display: grid; gap: 8px; }
+.nt-comentar textarea { width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 13px; background: var(--card-bg); color: var(--text-primary); }

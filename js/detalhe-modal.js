@@ -134,6 +134,9 @@ function sugestaoDeProgramaHTML(task) {
 let _elementoFocoAntesDoPainel = null;
 
 function openDetail(idx, entradaAnimacao) {
+  // Programa de desktop: abrir uma tarefa com um site em tela cheia devolve a
+  // janela pro Colmeia (ver js/navegador-desktop.js).
+  if (typeof navAoAbrirTarefa === "function") navAoAbrirTarefa();
   detailIdx = Number(idx);
   childrenOpen = false;
   descMaeAberta = false;

@@ -38,6 +38,21 @@ Drive, da pasta do card até a mais de cima (`ancestraisDaPastaDoCard`, Drive.gs
 o resto pelos nomes, tentando os dois formatos (`<ID>\<Nome>` e `<ID>` direto). Abre no Explorador.
 Só pastas compartilhadas (`.shortcut-targets-by-id`) por enquanto — "Meu Drive" não.
 
+## Navegador interno (Acesso rápido dentro do programa)
+Clicar num site do Acesso rápido abre uma ABA dentro da janela (bolinha na barra da esquerda; × ou
+botão do meio fecha). O pill amarelo vira a barra de endereço (voltar, avançar, recarregar,
+endereço) e a tarefa rodando vai pra uma cápsula preta no fim dele, com play/pause e o tempo.
+- **Dividir a tela:** botão no pill alterna tela cheia → site na metade → site num terço. O Colmeia
+  continua usável ao lado (pra copiar daqui e colar no site).
+- **Painel da tarefa:** clicar na cápsula abre um painel COMPACTO na lateral direita (descrição,
+  copiar título/link, pasta no computador, comentar, abrir a tarefa completa).
+- Cada site é uma telinha nativa (`nav_*` em main.rs), criada na primeira vez que a aba é ativada;
+  o login de cada site fica guardado. Quem manda no tamanho/posição é o site do Colmeia
+  (`js/navegador-desktop.js`, `navRect`): painéis laterais abrindo empurram o `.main` e o site
+  encolhe sozinho. Downloads vão pra pasta Downloads e o arquivo é mostrado ao terminar.
+- Limites: login com Google dentro do site tende a não funcionar (janela embutida); janelas
+  extras (pop-up) viram navegação na própria aba; sem extensões nem gerenciador de senhas.
+
 ## ⚠️ Arrastar e soltar no Windows
 O programa usa `disable_drag_drop_handler()` na janela do Colmeia. Sem isso o Tauri captura todo
 arrastar de arquivo e o arrastar e soltar do PRÓPRIO site (cards do quadro, clientes entre

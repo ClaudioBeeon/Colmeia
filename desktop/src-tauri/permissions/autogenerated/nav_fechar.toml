@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-nav-fechar"
+description = "Enables the nav_fechar command without any pre-configured scope."
+commands.allow = ["nav_fechar"]
+
+[[permission]]
+identifier = "deny-nav-fechar"
+description = "Denies the nav_fechar command without any pre-configured scope."
+commands.deny = ["nav_fechar"]

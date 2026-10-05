@@ -1548,6 +1548,9 @@ function proximoDaSequencia(seq) {
 }
 
 function mostrarPagina(page) {
+  // Programa de desktop: com um site em tela cheia, trocar de página devolve a
+  // janela pro Colmeia (ver js/navegador-desktop.js).
+  if (typeof navAoMostrarPagina === "function") navAoMostrarPagina();
   // Anota que esta tela foi usada (uma vez por sessão, ver contarTelaAberta
   // em js/config.js). Fica aqui porque este é o ponto único por onde toda
   // troca de página passa.

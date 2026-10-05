@@ -52,6 +52,7 @@ const ORDEM_ESPERADA = [
   "js/central-atendimento.js",
   "js/central-atencao.js",
   "js/pagina-painel-designers.js",
+  "js/navegador-desktop.js",
   "js/login-boot.js",
 ];
 
