@@ -53,6 +53,14 @@ endereço) e a tarefa rodando vai pra uma cápsula preta no fim dele, com play/p
 - Limites: login com Google dentro do site tende a não funcionar (janela embutida); janelas
   extras (pop-up) viram navegação na própria aba; sem extensões nem gerenciador de senhas.
 
+## Criar projeto (Photoshop, Illustrator, Premiere…)
+Botão "Criar projeto" no card (bloco "No computador (Drive)"). Escolhe um MODELO da pasta de modelos
+(escolhida uma vez e lembrada neste computador), COPIA pra pasta do card com o título do card como
+nome (`Título.psd`; se já existe vira `Título v2.psd`, nunca sobrescreve) e abre no programa que o
+Windows associa à extensão. Extensões: psd, psb, psdt, ai, indd, prproj, aep, mogrt. O modelo mais
+provável vem primeiro (Stories/Feed/Reels pelo título). Premiere não dá pra criar do zero de forma
+confiável — por isso modelos. `listar_modelos` e `criar_projeto` em main.rs.
+
 ## ⚠️ Arrastar e soltar no Windows
 O programa usa `disable_drag_drop_handler()` na janela do Colmeia. Sem isso o Tauri captura todo
 arrastar de arquivo e o arrastar e soltar do PRÓPRIO site (cards do quadro, clientes entre

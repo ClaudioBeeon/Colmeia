@@ -1,7 +1,7 @@
 {
   "name": "colmeia-desktop",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Colmeia em janela própria (Windows). Só uma moldura em volta do site — ver desktop/LEIAME.md.",
   "scripts": {
     "tauri": "tauri",

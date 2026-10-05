@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-listar-modelos"
+description = "Enables the listar_modelos command without any pre-configured scope."
+commands.allow = ["listar_modelos"]
+
+[[permission]]
+identifier = "deny-listar-modelos"
+description = "Denies the listar_modelos command without any pre-configured scope."
+commands.deny = ["listar_modelos"]

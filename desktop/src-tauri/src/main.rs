@@ -165,8 +165,8 @@ struct Passo {
 // monta o resto pelos nomes. Dois formatos já vistos pro mesmo ID: a pasta
 // aparece DENTRO do diretório do ID (`<ID>\<Nome>`) ou o próprio diretório do
 // ID é a pasta — tenta os dois.
-#[tauri::command]
-async fn abrir_pasta_no_computador(app: tauri::AppHandle, cadeia: Vec<Passo>) -> Result<String, String> {
+// Acha, no computador, a pasta do card a partir da CADEIA de pastas do Drive.
+fn achar_pasta_local(cadeia: &[Passo]) -> Option<std::path::PathBuf> {
     use std::path::PathBuf;
     for letra in 'D'..='Z' {
         let base = PathBuf::from(format!("{}:\\.shortcut-targets-by-id", letra));
@@ -184,18 +184,117 @@ async fn abrir_pasta_no_computador(app: tauri::AppHandle, cadeia: Vec<Passo>) ->
                     alvo = alvo.join(&passo.nome);
                 }
                 if alvo.is_dir() {
-                    let texto = alvo.to_string_lossy().to_string();
-                    app.opener()
-                        .open_path(texto.clone(), None::<&str>)
-                        .map_err(|e| e.to_string())?;
-                    return Ok(texto);
+                    return Some(alvo);
                 }
             }
         }
     }
-    Err("Não achei essa pasta no Drive do computador. Ela pode ainda estar sincronizando, ou o Drive não está aberto.".to_string())
+    None
 }
 
+#[tauri::command]
+async fn abrir_pasta_no_computador(app: tauri::AppHandle, cadeia: Vec<Passo>) -> Result<String, String> {
+    match achar_pasta_local(&cadeia) {
+        Some(alvo) => {
+            let texto = alvo.to_string_lossy().to_string();
+            app.opener().open_path(texto.clone(), None::<&str>).map_err(|e| e.to_string())?;
+            Ok(texto)
+        }
+        None => Err("Não achei essa pasta no Drive do computador. Ela pode ainda estar sincronizando, ou o Drive não está aberto.".to_string()),
+    }
+}
+
+// ===== Criar projeto (Photoshop, Illustrator, Premiere...) a partir de um modelo =====
+// O programa NÃO cria o arquivo do zero: copia um MODELO da pasta de modelos
+// pra pasta do card, com o nome do card, e abre no programa que o Windows
+// associa à extensão. Modelos prontos já nascem com tamanho, guias e perfil de
+// cor certos — e um projeto do Premiere não dá pra gerar do nada de forma
+// confiável.
+const EXTENSOES_DE_PROJETO: [&str; 8] = ["psd", "psb", "psdt", "ai", "indd", "prproj", "aep", "mogrt"];
+
+#[derive(serde::Serialize)]
+struct Modelo {
+    nome: String,
+    caminho: String,
+    ext: String,
+}
+
+// Lista os modelos da pasta (e das subpastas, até 2 níveis).
+fn varrer_modelos(dir: &std::path::Path, nivel: u8, saida: &mut Vec<Modelo>) {
+    let Ok(itens) = std::fs::read_dir(dir) else { return };
+    for item in itens.flatten() {
+        let caminho = item.path();
+        if caminho.is_dir() {
+            if nivel < 2 {
+                varrer_modelos(&caminho, nivel + 1, saida);
+            }
+            continue;
+        }
+        let ext = caminho.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if EXTENSOES_DE_PROJETO.contains(&ext.as_str()) {
+            saida.push(Modelo {
+                nome: caminho.file_stem().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+                caminho: caminho.to_string_lossy().to_string(),
+                ext,
+            });
+        }
+    }
+}
+
+#[tauri::command]
+async fn listar_modelos(pasta: String) -> Result<Vec<Modelo>, String> {
+    let dir = std::path::PathBuf::from(&pasta);
+    if !dir.is_dir() {
+        return Err("A pasta de modelos não foi encontrada. Escolha de novo.".to_string());
+    }
+    let mut lista = Vec::new();
+    varrer_modelos(&dir, 0, &mut lista);
+    lista.sort_by(|a, b| a.nome.to_lowercase().cmp(&b.nome.to_lowercase()));
+    Ok(lista)
+}
+
+// Nome de arquivo válido no Windows: troca os caracteres proibidos, tira
+// ponto/espaço no fim e limita o tamanho.
+fn nome_de_arquivo_seguro(nome: &str) -> String {
+    let trocado: String = nome
+        .chars()
+        .map(|c| if "<>:\"/\\|?*".contains(c) || c.is_control() { '-' } else { c })
+        .collect();
+    let aparado: String = trocado.trim().trim_end_matches(|c| c == '.' || c == ' ').chars().take(120).collect();
+    if aparado.is_empty() { "Projeto".to_string() } else { aparado }
+}
+
+// Nunca sobrescreve: se já existe, vira "nome v2", "nome v3"...
+fn caminho_livre(pasta: &std::path::Path, nome: &str, ext: &str) -> std::path::PathBuf {
+    let primeiro = pasta.join(format!("{}.{}", nome, ext));
+    if !primeiro.exists() {
+        return primeiro;
+    }
+    let mut n = 2;
+    loop {
+        let candidato = pasta.join(format!("{} v{}.{}", nome, n, ext));
+        if !candidato.exists() {
+            return candidato;
+        }
+        n += 1;
+    }
+}
+
+#[tauri::command]
+async fn criar_projeto(app: tauri::AppHandle, cadeia: Vec<Passo>, modelo: String, nome: String) -> Result<String, String> {
+    let origem = std::path::PathBuf::from(&modelo);
+    let ext = origem.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if !origem.is_file() || !EXTENSOES_DE_PROJETO.contains(&ext.as_str()) {
+        return Err("O modelo não foi encontrado.".to_string());
+    }
+    let pasta = achar_pasta_local(&cadeia)
+        .ok_or("Não achei a pasta do card no Drive do computador. Ela pode ainda estar sincronizando, ou o Drive não está aberto.")?;
+    let destino = caminho_livre(&pasta, &nome_de_arquivo_seguro(&nome), &ext);
+    std::fs::copy(&origem, &destino).map_err(|e| format!("Não consegui criar o arquivo: {}", e))?;
+    let texto = destino.to_string_lossy().to_string();
+    app.opener().open_path(texto.clone(), None::<&str>).map_err(|e| format!("O arquivo foi criado, mas não consegui abrir: {}", e))?;
+    Ok(texto)
+}
 
 // ===== Navegador interno (2026-10-05) =====
 // Cada site aberto pelo Acesso rápido vive numa telinha nativa dentro da
@@ -399,7 +498,9 @@ fn main() {
             nav_fechar,
             nav_posicionar,
             nav_estado,
-            nav_comando
+            nav_comando,
+            listar_modelos,
+            criar_projeto
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -6,6 +6,7 @@ fn main() {
             .app_manifest(tauri_build::AppManifest::new().commands(&[
                 "alternar_ponto", "escolher_caminho", "abrir_pasta_no_computador",
                 "nav_mostrar", "nav_esconder", "nav_fechar", "nav_posicionar", "nav_estado", "nav_comando",
+                "listar_modelos", "criar_projeto",
             ])),
     )
     .expect("erro ao preparar o Colmeia");

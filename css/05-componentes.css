@@ -1738,3 +1738,20 @@ body.nav-ativa:not(.nav-cheia) .main > .page-heading-row { overflow: hidden; min
 .nt-acoes .principal { grid-column: 1 / -1; background: #14151A; color: #fff; border-color: #14151A; }
 .nt-comentar { display: grid; gap: 8px; }
 .nt-comentar textarea { width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 13px; background: var(--card-bg); color: var(--text-primary); }
+
+/* ===== Criar projeto a partir de um modelo (js/detalhe-modal.js) ===== */
+.proj-overlay { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; background: rgba(10, 10, 20, .45); }
+.proj-box { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 12px; padding: 22px; background: var(--card-bg); color: var(--text-primary); border-radius: 22px; box-shadow: 0 24px 70px rgba(10, 10, 20, .3); font-family: var(--font-body); }
+.proj-box h3 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
+.proj-sub { margin: 0; font-size: 13px; color: var(--text-muted); overflow-wrap: anywhere; }
+.proj-sub b { color: var(--text-primary); font-weight: 400; }
+.proj-lista { display: grid; gap: 6px; overflow-y: auto; min-height: 0; }
+.proj-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.proj-item:hover { background: var(--page-bg); }
+.proj-item:disabled { opacity: .6; cursor: default; }
+.proj-ext { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.proj-nome { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.proj-sug { flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--kanban-yellow); color: #14151A; }
+.proj-rodape { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.proj-rodape button { border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px; color: var(--text-muted); padding: 6px 4px; }
+.proj-rodape button:hover { color: var(--text-primary); }

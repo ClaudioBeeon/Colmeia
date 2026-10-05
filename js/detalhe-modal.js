@@ -1103,6 +1103,7 @@ function renderDetail() {
             <div class="side-block" id="linkDriveLocalBloco" style="display:none">
               <span class="side-label">No computador (Drive)</span>
               <button type="button" class="pasta-link-manual-btn" id="abrirPastaLocalBtn">Abrir a pasta do card no computador</button>
+              <button type="button" class="pasta-link-manual-btn" id="criarProjetoBtn">Criar projeto (Photoshop, Premiere…)</button>
               <button type="button" class="pasta-link-manual-btn" id="linkDriveLocalArquivoBtn">Link de um arquivo</button>
               <button type="button" class="pasta-link-manual-btn" id="linkDriveLocalPastaBtn">Link de uma pasta</button>
             </div>
@@ -1320,6 +1321,7 @@ function renderDetail() {
   if (linkLocalBloco && window.__TAURI_INTERNALS__) {
     linkLocalBloco.style.display = "";
     document.getElementById("abrirPastaLocalBtn").addEventListener("click", () => abrirPastaDoCardNoComputador(task));
+    document.getElementById("criarProjetoBtn").addEventListener("click", () => criarProjetoDoCard(task));
     document.getElementById("linkDriveLocalArquivoBtn").addEventListener("click", () => linkDoDriveDoComputador(task, false));
     document.getElementById("linkDriveLocalPastaBtn").addEventListener("click", () => linkDoDriveDoComputador(task, true));
   }
@@ -2740,4 +2742,109 @@ async function abrirPastaDoCardNoComputador(task) {
   } catch (err) {
     mostrarToast(typeof err === "string" ? err : "Não consegui abrir a pasta no computador.", "erro");
   }
+}
+
+
+// ===== Criar projeto (Photoshop, Illustrator, Premiere...) — 2026-10-05 =====
+// Só no programa de desktop. COPIA um modelo da pasta de modelos pra pasta do
+// card (no computador, a que o Drive sincroniza), com o nome do card, e abre no
+// programa da Adobe. Nunca sobrescreve: se já existe, vira "nome v2".
+// A pasta de modelos é escolhida UMA vez e lembrada neste computador.
+const CHAVE_PASTA_MODELOS = "colmeia_modelos_pasta_v1";
+function lerPastaDeModelos() { try { return localStorage.getItem(CHAVE_PASTA_MODELOS) || ""; } catch (e) { return ""; } }
+function salvarPastaDeModelos(p) { try { if (p) localStorage.setItem(CHAVE_PASTA_MODELOS, p); else localStorage.removeItem(CHAVE_PASTA_MODELOS); } catch (e) { /* segue sem lembrar */ } }
+
+async function escolherPastaDeModelos() {
+  mostrarToast("Escolha a pasta onde estão os modelos (PSD, AI, Premiere…).");
+  let pasta;
+  try { pasta = await window.__TAURI_INTERNALS__.invoke("escolher_caminho", { pasta: true }); }
+  catch (err) { mostrarToast("Não consegui abrir o seletor de pastas.", "erro"); return ""; }
+  if (pasta) salvarPastaDeModelos(pasta);
+  return pasta || "";
+}
+
+// Qual modelo provavelmente é o certo, pelo título do card.
+function notaDoModelo(tituloDoCard, modelo) {
+  const sem = x => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const t = sem(tituloDoCard), n = sem(modelo.nome);
+  const ehStories = /stor(y|ies)/.test(t), ehFeed = /feed/.test(t), ehVideo = /(reel|video|animacao|motion)/.test(t);
+  if (ehStories && /stor/.test(n)) return 3;
+  if (ehFeed && /feed/.test(n)) return 3;
+  if (ehVideo && (modelo.ext === "prproj" || modelo.ext === "aep")) return 3;
+  if (ehVideo && /(reel|video)/.test(n)) return 2;
+  return 0;
+}
+const ROTULO_EXT = { psd: "Ps", psb: "Ps", psdt: "Ps", ai: "Ai", indd: "Id", prproj: "Pr", aep: "Ae", mogrt: "Ae" };
+const COR_EXT = { Ps: "#001E36;color:#31A8FF", Ai: "#330000;color:#FF9A00", Id: "#49021F;color:#FF3366", Pr: "#00005B;color:#9999FF", Ae: "#00005B;color:#9999FF" };
+
+async function criarProjetoDoCard(task) {
+  const ponte = window.__TAURI_INTERNALS__;
+  if (!ponte) return;
+  if (!task.pastaUrlSalva) {
+    mostrarToast("Esse card ainda não tem pasta linkada. Crie ou linke a pasta primeiro.", "erro");
+    return;
+  }
+  let pasta = lerPastaDeModelos();
+  if (!pasta) { pasta = await escolherPastaDeModelos(); if (!pasta) return; }
+  let modelos;
+  try { modelos = await ponte.invoke("listar_modelos", { pasta }); }
+  catch (err) {
+    salvarPastaDeModelos("");
+    mostrarToast(typeof err === "string" ? err : "Não consegui ler a pasta de modelos.", "erro");
+    return;
+  }
+  abrirEscolhaDeModelo(task, modelos);
+}
+
+function abrirEscolhaDeModelo(task, modelos) {
+  document.getElementById("projModelosOverlay")?.remove();
+  modelos = modelos.map(m => ({ ...m, nota: notaDoModelo(task.title, m) }))
+    .sort((a, b) => b.nota - a.nota || a.nome.localeCompare(b.nome));
+  const ov = document.createElement("div");
+  ov.className = "proj-overlay";
+  ov.id = "projModelosOverlay";
+  ov.innerHTML =
+    `<div class="proj-box" role="dialog" aria-label="Criar projeto">` +
+      `<h3>Criar projeto</h3>` +
+      `<p class="proj-sub">Cópia do modelo na pasta do card, com o nome <b>${escaparHTML(task.title)}</b>.</p>` +
+      (modelos.length
+        ? `<div class="proj-lista">${modelos.map((m, i) => {
+            const r = ROTULO_EXT[m.ext] || m.ext.toUpperCase();
+            return `<button type="button" class="proj-item" data-i="${i}">` +
+              `<span class="proj-ext" style="background:${COR_EXT[r] || "#14151A;color:#fff"}">${escaparHTML(r)}</span>` +
+              `<span class="proj-nome">${escaparHTML(m.nome)}</span>` +
+              (m.nota >= 3 ? `<span class="proj-sug">sugerido</span>` : "") +
+            `</button>`;
+          }).join("")}</div>`
+        : `<p class="quick-access-empty">Não achei modelos (.psd, .ai, .prproj…) nessa pasta.</p>`) +
+      `<div class="proj-rodape"><button type="button" id="projTrocarPasta">Trocar a pasta de modelos</button><button type="button" id="projCancelar">Cancelar</button></div>` +
+    `</div>`;
+  document.body.appendChild(ov);
+  const fechar = () => ov.remove();
+  ov.addEventListener("click", e => { if (e.target === ov) fechar(); });
+  document.getElementById("projCancelar").addEventListener("click", fechar);
+  document.getElementById("projTrocarPasta").addEventListener("click", async () => {
+    fechar();
+    const nova = await escolherPastaDeModelos();
+    if (nova) criarProjetoDoCard(task);
+  });
+  ov.querySelectorAll(".proj-item").forEach(b => b.addEventListener("click", async () => {
+    const modelo = modelos[+b.dataset.i];
+    ov.querySelectorAll("button").forEach(x => { x.disabled = true; });
+    b.querySelector(".proj-nome").textContent = "Criando…";
+    const resp = await chamarBackend({ acao: "ancestraisDaPastaDoCard", pastaUrl: task.pastaUrlSalva });
+    if (caiuARede(resp) || !resp || !resp.ok) {
+      fechar();
+      mostrarToast((resp && resp.error) || "Sem conexão com o servidor agora. Tenta de novo em instantes.", "erro");
+      return;
+    }
+    try {
+      const caminho = await window.__TAURI_INTERNALS__.invoke("criar_projeto", { cadeia: resp.cadeia, modelo: modelo.caminho, nome: task.title });
+      fechar();
+      mostrarToast(`Projeto criado e aberto: ${String(caminho).split("\\").pop()}`, "sucesso");
+    } catch (err) {
+      fechar();
+      mostrarToast(typeof err === "string" ? err : "Não consegui criar o projeto.", "erro");
+    }
+  }));
 }

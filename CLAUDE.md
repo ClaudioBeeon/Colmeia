@@ -2600,11 +2600,14 @@ atualizando sozinho; o instalador só precisa ser refeito quando a moldura muda 
 "Programa desktop" → Run workflow; sai em Releases). A pasta `desktop/` NÃO é publicada no site
 (`montar-frontend.js` só copia o que lista). O site detecta o programa por `window.__TAURI_INTERNALS__`
 e só pode pedir a ele os comandos de `desktop/src-tauri/capabilities/main.json`
-(`alternar_ponto`, `escolher_caminho`, `abrir_pasta_no_computador`, `nav_*`). Sobre isso:
+(`alternar_ponto`, `escolher_caminho`, `abrir_pasta_no_computador`, `nav_*`, `listar_modelos`, `criar_projeto`). Sobre isso:
 - **Painel do ponto** (`app.mywork.com.br/ponto`): telinha nativa dentro da mesma janela. Não dá numa
   iframe (X-Frame-Options: SAMEORIGIN). Botão do relógio no topo (`#pontoDesktopBtn`).
 - **Link do Drive do computador**: `linkDoDriveDoComputador` (js/detalhe-modal.js) +
   `linkDoCaminhoLocalNoDrive` (Drive.gs). O link é achado andando pelas pastas pelo NOME.
+- **Criar projeto a partir de modelo**: `criarProjetoDoCard` (js/detalhe-modal.js) + `listar_modelos`/
+  `criar_projeto` (main.rs). Copia o modelo pra pasta do card, nunca sobrescreve (v2, v3).
+  ⚠️ O arquivo novo cai na pasta sincronizada e a Bee pode avisar "arquivo novo".
 - **Abrir a pasta do card no computador**: `abrirPastaDoCardNoComputador` (js/detalhe-modal.js) +
   `ancestraisDaPastaDoCard` (Drive.gs) + `abrir_pasta_no_computador` (main.rs).
 - **Navegador interno** (protótipo 3 aprovado em 2026-10-05): `js/navegador-desktop.js` + comandos
