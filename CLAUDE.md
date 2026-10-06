@@ -2606,8 +2606,11 @@ e só pode pedir a ele os comandos de `desktop/src-tauri/capabilities/main.json`
 - **Link do Drive do computador**: `linkDoDriveDoComputador` (js/detalhe-modal.js) +
   `linkDoCaminhoLocalNoDrive` (Drive.gs). O link é achado andando pelas pastas pelo NOME.
 - **Criar projeto a partir de modelo**: `criarProjetoDoCard` (js/detalhe-modal.js) + `listar_modelos`/
-  `criar_projeto` (main.rs). Copia o modelo pra pasta do card, nunca sobrescreve (v2, v3).
-  ⚠️ O arquivo novo cai na pasta sincronizada e a Bee pode avisar "arquivo novo".
+  `criar_projeto` (main.rs). Copia o modelo pra subpasta `Arquivos` do card, nunca sobrescreve (v2,
+  v3). Os modelos do Premiere vêm com a ingestão "Copy → Same as Project" ligada (2026-10-06), então
+  os brutos importados também caem em `Arquivos`. ⚠️ A raiz da pasta é só das peças finais — a Bee
+  e a conferência leem só a raiz (`getFiles()`, sem subpastas); não mudar isso pra recursivo, senão
+  todo bruto vira "arquivo novo" e aparece como peça na conferência.
 - **Abrir a pasta do card no computador**: `abrirPastaDoCardNoComputador` (js/detalhe-modal.js) +
   `ancestraisDaPastaDoCard` (Drive.gs) + `abrir_pasta_no_computador` (main.rs).
 - **Navegador interno** (protótipo 3 aprovado em 2026-10-05): `js/navegador-desktop.js` + comandos

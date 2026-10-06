@@ -2820,7 +2820,7 @@ function abrirEscolhaDeModelo(task, modelos) {
   ov.innerHTML =
     `<div class="proj-box" role="dialog" aria-label="Criar projeto">` +
       `<h3>Criar projeto</h3>` +
-      `<p class="proj-sub">Cópia do modelo na pasta do card, com o nome <b>${escaparHTML(task.title)}</b>.</p>` +
+      `<p class="proj-sub">Cópia do modelo na pasta <b>Arquivos</b> do card, com o nome <b>${escaparHTML(task.title)}</b>.</p>` +
       (modelos.length
         ? `<div class="proj-lista">${modelos.map((m, i) => {
             const r = ROTULO_EXT[m.ext] || m.ext.toUpperCase();

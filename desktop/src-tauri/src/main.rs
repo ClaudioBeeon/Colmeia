@@ -311,6 +311,12 @@ async fn criar_projeto(app: tauri::AppHandle, cadeia: Vec<Passo>, modelo: String
     }
     let pasta = achar_pasta_local(&cadeia)
         .ok_or("Não achei a pasta do card no Drive do computador. Ela pode ainda estar sincronizando, ou o Drive não está aberto.")?;
+    // O projeto mora na subpasta "Arquivos" do card, nunca solto nela: a raiz
+    // da pasta é das peças finais (é só ela que a Bee e a conferência leem), e
+    // o Premiere, com a ingestão "Copiar → igual ao projeto" ligada nos
+    // modelos, joga os brutos importados ao lado do projeto — ou seja, aqui.
+    let pasta = pasta.join("Arquivos");
+    std::fs::create_dir_all(&pasta).map_err(|e| format!("Não consegui criar a pasta Arquivos: {}", e))?;
     let destino = caminho_livre(&pasta, &nome_de_arquivo_seguro(&nome), &ext);
     std::fs::copy(&origem, &destino).map_err(|e| format!("Não consegui criar o arquivo: {}", e))?;
     let texto = destino.to_string_lossy().to_string();

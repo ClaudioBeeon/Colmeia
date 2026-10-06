@@ -55,11 +55,14 @@ endereço) e a tarefa rodando vai pra uma cápsula preta no fim dele, com play/p
 
 ## Criar projeto (Photoshop, Illustrator, Premiere…)
 Botão "Criar projeto" no card (bloco "No computador (Drive)"). Escolhe um MODELO da pasta de modelos
-(escolhida uma vez e lembrada neste computador), COPIA pra pasta do card com o título do card como
+(escolhida uma vez e lembrada neste computador), COPIA pra subpasta **Arquivos** da pasta do card (criada se não existir) com o título do card como
 nome (`Título.psd`; se já existe vira `Título v2.psd`, nunca sobrescreve) e abre no programa que o
 Windows associa à extensão. Extensões: psd, psb, psdt, ai, indd, prproj, aep, mogrt. O modelo mais
 provável vem primeiro (Stories/Feed/Reels pelo título). Premiere não dá pra criar do zero de forma
-confiável — por isso modelos. `listar_modelos` e `criar_projeto` em main.rs.
+confiável — por isso modelos. Os modelos do Premiere têm a ingestão ligada (Project Settings → Ingest
+Settings → Copy, Same as Project): todo bruto importado é copiado pra junto do projeto, ou seja, também
+pra `Arquivos`. A raiz da pasta do card fica só pras peças finais — a Bee e a conferência só leem a raiz,
+então projeto e brutos não viram "arquivo novo" nem peça. `listar_modelos` e `criar_projeto` em main.rs.
 
 ## ⚠️ Arrastar e soltar no Windows
 O programa usa `disable_drag_drop_handler()` na janela do Colmeia. Sem isso o Tauri captura todo
