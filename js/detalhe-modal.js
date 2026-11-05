@@ -1095,6 +1095,9 @@ function renderDetail() {
                 <span>Copiar link da pasta</span>
               </button>
               <button type="button" class="pasta-link-manual-btn" id="pastaLinkManualBtn">Linkar pasta certa</button>
+              ${task.type === "video" ? `
+                <button type="button" class="pasta-link-manual-btn" id="prepararEdicaoBtn">Preparar edição de vídeo</button>
+              ` : ""}
             </div>
           ` : ""}
           ${task.id ? `
@@ -1303,6 +1306,11 @@ function renderDetail() {
   if (criarPastaBtn) {
     criarPastaBtn.addEventListener("click", () => confirmarECriarPastaDoCard(task));
     verificarPastaJaSalva(task, criarPastaBtn);
+  }
+
+  const prepararEdicaoBtn = document.getElementById("prepararEdicaoBtn");
+  if (prepararEdicaoBtn && typeof prepararEdicaoDeVideo === "function") {
+    prepararEdicaoBtn.addEventListener("click", () => prepararEdicaoDeVideo(task, prepararEdicaoBtn));
   }
   if (copyLinkPill) {
     copyLinkPill.addEventListener("click", () => {

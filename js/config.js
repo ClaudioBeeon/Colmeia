@@ -530,6 +530,9 @@ const ACOES_DEMORADAS = [
   "devolverParaDesigner",
   "listarPastasClientesDrive",  // varre pastas do Drive
   "buscarAtividadesDrive",      // varre arquivos recentes do Drive
+  // Lê a tarefa + descrição no Runrun.it e copia cada take (makeCopy no
+  // servidor do Drive, mas ainda é uma chamada por take) pra Arquivos\.
+  "prepararPastaDeEdicao",
   "buscarProgressoClientes",
   "buscarTermometroClientes", // varre todas as tarefas dos 3 designers, igual buscarProgressoClientes
   // O calendário nasceu barato (só lia a varredura em cache do quadro),

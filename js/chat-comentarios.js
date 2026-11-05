@@ -1936,6 +1936,47 @@ async function confirmarECriarPastaDoCard(task) {
 }
 
 /**
+ * "Preparar edição de vídeo" — chama prepararPastaDeEdicao (EdicaoVideo.gs):
+ * grava o card.json na pasta do card e copia os takes citados na
+ * descrição pra Arquivos\. Pode ser clicado de novo sem medo (idempotente
+ * do lado do backend) — por isso o texto do botão volta ao normal depois,
+ * em vez de virar "já preparado" como o de criar pasta.
+ */
+async function prepararEdicaoDeVideo(task, btn) {
+  if (!task.id) return;
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = "Preparando...";
+
+  try {
+    const data = await chamarBackend({ acao: "prepararPastaDeEdicao", taskId: task.id });
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+
+    if (!data.ok) {
+      mostrarToast(data.error || "Não consegui preparar a pasta de edição agora.", "erro");
+      return;
+    }
+    const falhas = data.falhas || [];
+    if (falhas.length) {
+      mostrarToast(
+        `card.json gravado. ${data.takesCopiados}/${data.totalTakes} take(s) copiado(s) — ${falhas.join("; ")}`,
+        "erro"
+      );
+    } else if (data.totalTakes === 0) {
+      mostrarToast("card.json gravado. Não achei nenhum take marcado na descrição (procure por \"Take 1:\", \"Take 2:\"...).", "sucesso");
+    } else {
+      mostrarToast(`card.json gravado com ${data.takesCopiados} take(s) em Arquivos\\.`, "sucesso");
+    }
+  } catch (err) {
+    console.error("Falha ao preparar pasta de edição de vídeo:", err);
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    mostrarToast("Falha de conexão. Tenta de novo em alguns segundos.", "erro");
+  }
+}
+
+/**
  * Ao abrir o pop-up da tarefa, checa (leitura rápida na planilha, sem
  * tocar no Drive) se a pasta do card já foi criada antes — assim o
  * botão já nasce como "Acessar pasta do card" em vez de pedir

@@ -520,6 +520,8 @@ function handleRequest(e, method) {
         output = listarPastasDeClientesNoDrive();
       } else if (body.acao === 'criarPastaDoCard') {
         output = criarPastaDoCardNoDrive(body.cliente, body.tituloCard, body.taskId, body.projeto);
+      } else if (body.acao === 'prepararPastaDeEdicao') {
+        output = prepararPastaDeEdicao(body.taskId);
       } else if (body.acao === 'buscarPastaCard') {
         output = buscarPastaSalvaDoCard(body.taskId);
       } else if (body.acao === 'buscarOuHerdarPastaCard') {
